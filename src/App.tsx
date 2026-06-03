@@ -151,7 +151,7 @@ const MiniApp: React.FC = () => (
 );
 
 export default function App() {
-  const { currentView } = useAppStore();
+  const { currentView, setCurrentView } = useAppStore();
 
   useEffect(() => {
     const tg = (window as unknown as { Telegram?: { WebApp?: { ready: () => void; expand: () => void; setHeaderColor: (c: string) => void } } }).Telegram?.WebApp;
@@ -159,6 +159,8 @@ export default function App() {
       tg.ready();
       tg.expand();
       tg.setHeaderColor('#0f0c29');
+      // Always open as Mini App when inside Telegram
+      setCurrentView('miniapp');
     }
   }, []);
 
