@@ -62,7 +62,8 @@ export const AdminSidebar: React.FC = () => {
   const unreadAlerts = notifications.filter(n => !n.isRead && n.type === 'alert').length;
 
   return (
-    <aside className={`fixed left-0 top-0 h-full bg-[#0d1117] border-r border-white/5 z-50 transition-all duration-300 flex flex-col ${adminSidebarOpen ? 'w-64' : 'w-16'}`}>
+    <aside className={`fixed left-0 top-0 h-full bg-[#0d1117] border-r border-white/5 z-50 transition-all duration-300 flex flex-col
+      ${adminSidebarOpen ? 'w-64 translate-x-0' : 'w-16 -translate-x-full lg:translate-x-0'}`}>
       {/* Header */}
       <div className="p-4 border-b border-white/5 flex items-center justify-between">
         {adminSidebarOpen && (

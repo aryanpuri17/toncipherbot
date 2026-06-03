@@ -25,10 +25,8 @@ import { MiniAppShop, MiniAppRewards } from './components/miniapp/MiniAppShop';
 
 import { Bell, Menu } from 'lucide-react';
 
-// Admin Page Router
 const AdminPageContent: React.FC = () => {
   const { adminPage } = useAppStore();
-
   switch (adminPage) {
     case 'overview':      return <AdminOverview />;
     case 'statistics':    return <AdminStatistics />;
@@ -52,10 +50,8 @@ const AdminPageContent: React.FC = () => {
   }
 };
 
-// Mini App Page Router
 const MiniAppPageContent: React.FC = () => {
   const { miniAppPage } = useAppStore();
-
   switch (miniAppPage) {
     case 'dashboard':   return <MiniAppDashboard />;
     case 'wallet':      return <MiniAppWallet />;
@@ -71,37 +67,48 @@ const MiniAppPageContent: React.FC = () => {
   }
 };
 
-// Admin Layout
 const AdminPanel: React.FC = () => {
   const { adminSidebarOpen, notifications, toggleAdminSidebar } = useAppStore();
   const unreadCount = notifications.filter(n => !n.isRead).length;
 
   return (
-    <div className="admin-bg min-h-screen flex">
+    <div className="admin-bg min-h-screen flex overflow-x-hidden">
+      {/* Dark overlay — mobile only, shown when sidebar is open */}
+      {adminSidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/60 z-40 lg:hidden"
+          onClick={toggleAdminSidebar}
+        />
+      )}
+
       <AdminSidebar />
-      <div className={`flex-1 transition-all duration-300 ${adminSidebarOpen ? 'ml-64' : 'ml-16'}`}>
-        <header className="sticky top-0 z-40 bg-[#0a0a1a]/90 backdrop-blur-xl border-b border-white/5">
-          <div className="flex items-center justify-between px-6 py-3">
-            <div className="flex items-center gap-2">
-              <button onClick={toggleAdminSidebar} className="p-2 rounded-lg hover:bg-white/5 text-slate-400 lg:hidden">
-                <Menu className="w-5 h-5" />
-              </button>
-              <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                <span className="text-xs font-medium text-emerald-400">Système en ligne</span>
-              </div>
+
+      {/* Main content — full-width on mobile, shifted on desktop */}
+      <div className={`flex-1 min-w-0 transition-all duration-300 ${adminSidebarOpen ? 'lg:ml-64' : 'lg:ml-16'}`}>
+        {/* Top bar */}
+        <header className="sticky top-0 z-30 bg-[#0a0a1a]/90 backdrop-blur-xl border-b border-white/5">
+          <div className="flex items-center justify-between px-4 py-3">
+            <button
+              onClick={toggleAdminSidebar}
+              className="p-2 rounded-lg hover:bg-white/5 text-slate-400"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+
+            <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="text-xs font-medium text-emerald-400">Système en ligne</span>
             </div>
+
             <div className="flex items-center gap-3 ml-auto">
-              <div className="relative">
-                <button className="p-2 rounded-lg hover:bg-white/5 text-slate-400 relative">
-                  <Bell className="w-5 h-5" />
-                  {unreadCount > 0 && (
-                    <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center">
-                      {unreadCount}
-                    </span>
-                  )}
-                </button>
-              </div>
+              <button className="p-2 rounded-lg hover:bg-white/5 text-slate-400 relative">
+                <Bell className="w-5 h-5" />
+                {unreadCount > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center">
+                    {unreadCount}
+                  </span>
+                )}
+              </button>
               <div className="flex items-center gap-2 pl-3 border-l border-white/10">
                 <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-xs font-bold text-white">
                   A
@@ -114,7 +121,8 @@ const AdminPanel: React.FC = () => {
             </div>
           </div>
         </header>
-        <main className="p-6">
+
+        <main className="p-4 lg:p-6">
           <AdminPageContent />
         </main>
       </div>
@@ -122,32 +130,29 @@ const AdminPanel: React.FC = () => {
   );
 };
 
-// Mini App Layout
-const MiniApp: React.FC = () => {
-  return (
-    <div className="mini-app-bg min-h-screen max-w-lg mx-auto relative">
-      <div className="sticky top-0 z-40 bg-[#0f0c29]/90 backdrop-blur-xl border-b border-white/5 px-4 py-2.5 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <img src="/images/logo.png" alt="TonCipher" className="w-7 h-7 rounded-lg object-cover" />
-          <span className="text-sm font-bold text-white">TonCipher</span>
-        </div>
-        <div className="flex items-center gap-1.5 text-xs text-emerald-400">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-          Connecté
-        </div>
+const MiniApp: React.FC = () => (
+  <div className="mini-app-bg min-h-screen max-w-lg mx-auto relative">
+    {/* Header */}
+    <div className="sticky top-0 z-40 bg-[#0f0c29]/90 backdrop-blur-xl border-b border-white/5 px-4 py-2.5 flex items-center justify-between">
+      <div className="flex items-center gap-2">
+        <img src="/images/logo.png" alt="TonCipher" className="w-7 h-7 rounded-lg object-cover" />
+        <span className="text-sm font-bold text-white">TonCipher</span>
       </div>
-      <div className="px-4 pt-4 pb-24">
-        <MiniAppPageContent />
+      <div className="flex items-center gap-1.5 text-xs text-emerald-400">
+        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+        Connecté
       </div>
-      <MiniAppNav />
     </div>
-  );
-};
+    <div className="px-4 pt-4 pb-24">
+      <MiniAppPageContent />
+    </div>
+    <MiniAppNav />
+  </div>
+);
 
 export default function App() {
   const { currentView } = useAppStore();
 
-  // Integrate with Telegram WebApp
   useEffect(() => {
     const tg = (window as unknown as { Telegram?: { WebApp?: { ready: () => void; expand: () => void; setHeaderColor: (c: string) => void } } }).Telegram?.WebApp;
     if (tg) {
