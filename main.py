@@ -12,7 +12,7 @@ from aiogram.filters import CommandStart
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 
 BOT_TOKEN = os.getenv("BOT_TOKEN", "")
-WEBAPP_URL = os.getenv("WEBAPP_URL", "")   # https://yourapp.up.railway.app
+WEBAPP_URL = os.getenv("WEBAPP_URL", "https://toncipherbot.onrender.com")
 PORT = int(os.getenv("PORT", 8080))
 
 logging.basicConfig(level=logging.INFO)
