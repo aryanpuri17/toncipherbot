@@ -13,7 +13,6 @@ export const TaskModal: React.FC = () => {
     title: task?.title || '',
     description: task?.description || '',
     reward: task?.reward || 0.5,
-    rewardType: task?.rewardType || 'main',
     targetUrl: task?.targetUrl || '',
     targetId: task?.targetId || '',
     requiredCount: task?.requiredCount || 1,
@@ -23,18 +22,35 @@ export const TaskModal: React.FC = () => {
     expiresAt: task?.expiresAt ? task.expiresAt.split('T')[0] : '',
     verificationMethod: task?.verificationMethod || 'auto',
     priority: task?.priority || 1,
-    requiredLevel: task?.requiredLevel || undefined,
     icon: task?.icon || '📋',
     isActive: task?.isActive ?? true,
+    hasPromotion: !!task?.promotion,
+    promotionMultiplier: task?.promotion?.multiplier || 2,
+    promotionEndsAt: task?.promotion?.endsAt ? task.promotion.endsAt.split('T')[0] : '',
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const data = {
-      ...form,
-      expiresAt: form.expiresAt ? new Date(form.expiresAt).toISOString() : undefined,
+      type: form.type as Task['type'],
+      title: form.title,
+      description: form.description,
+      reward: form.reward,
+      rewardType: 'main' as const,
+      targetUrl: form.targetUrl || undefined,
+      targetId: form.targetId || undefined,
       requiredCount: form.type === 'invite_friends' ? form.requiredCount : undefined,
       cooldownHours: form.type === 'daily' ? form.cooldownHours : undefined,
+      maxCompletions: form.maxCompletions,
+      maxPerUser: form.maxPerUser,
+      expiresAt: form.expiresAt ? new Date(form.expiresAt).toISOString() : undefined,
+      verificationMethod: form.verificationMethod as Task['verificationMethod'],
+      priority: form.priority,
+      icon: form.icon,
+      isActive: form.isActive,
+      promotion: form.hasPromotion && form.promotionEndsAt
+        ? { multiplier: form.promotionMultiplier, endsAt: new Date(form.promotionEndsAt).toISOString() }
+        : undefined,
     };
 
     if (isEdit && task) {
@@ -83,18 +99,31 @@ export const TaskModal: React.FC = () => {
         <FormSection title="Récompense">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <FormGroup>
-              <FormLabel required>Montant de la récompense</FormLabel>
+              <FormLabel required>Montant (TON)</FormLabel>
               <FormInput type="number" step="0.01" min="0" value={form.reward} onChange={e => setForm({ ...form, reward: parseFloat(e.target.value) || 0 })} />
             </FormGroup>
             <FormGroup>
-              <FormLabel required>Type de récompense</FormLabel>
-              <FormSelect value={form.rewardType} onChange={e => setForm({ ...form, rewardType: e.target.value as 'main' | 'bonus' | 'xp' })}>
-                <option value="main">Solde principal ($)</option>
-                <option value="bonus">Solde bonus ($)</option>
-                <option value="xp">XP (points d'expérience)</option>
-              </FormSelect>
+              <FormLabel>Priorité d'affichage</FormLabel>
+              <FormInput type="number" min="0" value={form.priority} onChange={e => setForm({ ...form, priority: parseInt(e.target.value) || 0 })} />
             </FormGroup>
           </div>
+
+          {/* Promotion */}
+          <div className="pt-2">
+            <ToggleSwitch enabled={form.hasPromotion} onChange={v => setForm({ ...form, hasPromotion: v })} label="Activer une promotion" />
+          </div>
+          {form.hasPromotion && (
+            <div className="grid grid-cols-2 gap-4 mt-3 p-3 rounded-xl bg-amber-500/5 border border-amber-500/20">
+              <FormGroup>
+                <FormLabel required>Multiplicateur</FormLabel>
+                <FormInput type="number" min="2" step="1" value={form.promotionMultiplier} onChange={e => setForm({ ...form, promotionMultiplier: parseInt(e.target.value) || 2 })} placeholder="Ex: 2 pour ×2" />
+              </FormGroup>
+              <FormGroup>
+                <FormLabel required>Fin de la promo</FormLabel>
+                <FormInput type="date" value={form.promotionEndsAt} onChange={e => setForm({ ...form, promotionEndsAt: e.target.value })} />
+              </FormGroup>
+            </div>
+          )}
         </FormSection>
 
         {(form.type === 'join_channel' || form.type === 'join_group' || form.type === 'start_bot') && (
@@ -105,7 +134,7 @@ export const TaskModal: React.FC = () => {
                 <FormInput value={form.targetUrl} onChange={e => setForm({ ...form, targetUrl: e.target.value })} placeholder="https://t.me/..." />
               </FormGroup>
               <FormGroup>
-                <FormLabel>ID Telegram (pour vérification)</FormLabel>
+                <FormLabel>ID Telegram (vérification)</FormLabel>
                 <FormInput value={form.targetId} onChange={e => setForm({ ...form, targetId: e.target.value })} placeholder="-1001234567890" />
               </FormGroup>
             </div>
@@ -126,25 +155,10 @@ export const TaskModal: React.FC = () => {
             <FormGroup>
               <FormLabel>Méthode de vérification</FormLabel>
               <FormSelect value={form.verificationMethod} onChange={e => setForm({ ...form, verificationMethod: e.target.value as Task['verificationMethod'] })}>
-                <option value="auto">Automatique (Telegram API)</option>
+                <option value="auto">Automatique</option>
                 <option value="api">API externe</option>
-                <option value="manual">Manuelle (admin)</option>
+                <option value="manual">Manuelle</option>
               </FormSelect>
-            </FormGroup>
-            <FormGroup>
-              <FormLabel>Priorité d'affichage</FormLabel>
-              <FormInput type="number" min="0" value={form.priority} onChange={e => setForm({ ...form, priority: parseInt(e.target.value) || 0 })} />
-            </FormGroup>
-            <FormGroup>
-              <FormLabel>Niveau minimum requis</FormLabel>
-              <FormInput type="number" min="0" value={form.requiredLevel || ''} onChange={e => setForm({ ...form, requiredLevel: parseInt(e.target.value) || undefined })} placeholder="Aucun" />
-            </FormGroup>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <FormGroup>
-              <FormLabel>Cooldown (heures)</FormLabel>
-              <FormInput type="number" min="0" value={form.cooldownHours} onChange={e => setForm({ ...form, cooldownHours: parseInt(e.target.value) || 0 })} placeholder="0 = pas de cooldown" />
             </FormGroup>
             <FormGroup>
               <FormLabel>Max complétions (global)</FormLabel>
@@ -155,6 +169,13 @@ export const TaskModal: React.FC = () => {
               <FormInput type="number" min="0" value={form.maxPerUser || ''} onChange={e => setForm({ ...form, maxPerUser: parseInt(e.target.value) || undefined })} placeholder="Illimité" />
             </FormGroup>
           </div>
+
+          {form.type === 'daily' && (
+            <FormGroup>
+              <FormLabel>Cooldown (heures)</FormLabel>
+              <FormInput type="number" min="0" value={form.cooldownHours} onChange={e => setForm({ ...form, cooldownHours: parseInt(e.target.value) || 0 })} />
+            </FormGroup>
+          )}
 
           <FormGroup>
             <FormLabel>Date d'expiration</FormLabel>

@@ -37,7 +37,7 @@ export const MiniAppLeaderboard: React.FC = () => {
               <div key={user.id} className="flex flex-col items-center">
                 <div className={`w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-sm font-bold text-white mb-2 relative ${user.id === currentUser.id ? 'ring-2 ring-blue-400' : ''}`}>
                   {user.firstName[0]}
-                  <span className="absolute -bottom-1 -right-1 text-sm">{medals[i]}</span>
+                  <span className="absolute -bottom-1 -right-1 text-sm">{medals[rank - 1]}</span>
                 </div>
                 <p className="text-xs font-semibold text-white mb-0.5 max-w-[72px] truncate text-center">@{user.username}</p>
                 <p className="text-[10px] text-slate-400 mb-2">{user.tasksCompleted} tâches</p>

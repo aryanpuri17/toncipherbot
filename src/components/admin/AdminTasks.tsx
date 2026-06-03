@@ -1,7 +1,7 @@
 import React from 'react';
 import { useAppStore } from '../../store/appStore';
 import { ToggleSwitch } from '../ui/ToggleSwitch';
-import { Hash, Users, Bot, UserPlus, Calendar, Star, ExternalLink, Edit2, Trash2, Plus } from 'lucide-react';
+import { Hash, Users, Bot, UserPlus, Calendar, Star, ExternalLink, Edit2, Trash2, Plus, Tv, AlertCircle, Flame } from 'lucide-react';
 
 const taskTypeIcons: Record<string, React.ReactNode> = {
   join_channel: <Hash className="w-4 h-4" />,
@@ -10,6 +10,8 @@ const taskTypeIcons: Record<string, React.ReactNode> = {
   invite_friends: <UserPlus className="w-4 h-4" />,
   daily: <Calendar className="w-4 h-4" />,
   special: <Star className="w-4 h-4" />,
+  social: <Star className="w-4 h-4" />,
+  watch_video: <Tv className="w-4 h-4" />,
 };
 
 const taskTypeLabels: Record<string, string> = {
@@ -19,6 +21,8 @@ const taskTypeLabels: Record<string, string> = {
   invite_friends: 'Invitation',
   daily: 'Quotidien',
   special: 'Spécial',
+  social: 'Social',
+  watch_video: 'Vidéo',
 };
 
 const taskTypeColors: Record<string, string> = {
@@ -28,6 +32,8 @@ const taskTypeColors: Record<string, string> = {
   invite_friends: 'bg-emerald-500/20 text-emerald-400',
   daily: 'bg-amber-500/20 text-amber-400',
   special: 'bg-pink-500/20 text-pink-400',
+  social: 'bg-orange-500/20 text-orange-400',
+  watch_video: 'bg-red-500/20 text-red-400',
 };
 
 export const AdminTasks: React.FC = () => {
@@ -46,7 +52,7 @@ export const AdminTasks: React.FC = () => {
       </div>
 
       {/* Task Types Summary */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
         {Object.entries(taskTypeLabels).map(([type, label]) => {
           const count = tasks.filter(t => t.type === type).length;
           return (
@@ -54,7 +60,7 @@ export const AdminTasks: React.FC = () => {
               <div className={`w-8 h-8 rounded-lg ${taskTypeColors[type]} flex items-center justify-center mx-auto mb-2`}>
                 {taskTypeIcons[type]}
               </div>
-              <p className="text-xs text-slate-400">{label}</p>
+              <p className="text-[10px] text-slate-400">{label}</p>
               <p className="text-lg font-bold text-white">{count}</p>
             </div>
           );
@@ -62,68 +68,88 @@ export const AdminTasks: React.FC = () => {
       </div>
 
       {/* Tasks List */}
-      <div className="space-y-3">
-        {tasks.map(task => (
-          <div key={task.id} className="glass-card p-5 hover:border-white/10 transition-all">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-              <div className={`w-10 h-10 rounded-xl ${taskTypeColors[task.type]} flex items-center justify-center flex-shrink-0`}>
-                {taskTypeIcons[task.type]}
-              </div>
+      {tasks.length === 0 ? (
+        <div className="glass-card p-10 text-center">
+          <AlertCircle className="w-10 h-10 text-slate-600 mx-auto mb-3" />
+          <p className="text-sm text-slate-400">Aucune tâche configurée</p>
+          <button onClick={() => openModal('task')} className="mt-4 btn-primary px-4 py-2 rounded-xl text-sm font-medium text-white">
+            Créer la première tâche
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {tasks.map(task => {
+            const isPromoActive = task.promotion && new Date(task.promotion.endsAt) > new Date();
+            return (
+              <div key={task.id} className={`glass-card p-5 hover:border-white/10 transition-all ${isPromoActive ? 'border border-amber-500/20' : ''}`}>
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                  <div className={`w-10 h-10 rounded-xl ${taskTypeColors[task.type] ?? 'bg-white/10 text-slate-400'} flex items-center justify-center flex-shrink-0`}>
+                    {task.icon ? <span className="text-base">{task.icon}</span> : taskTypeIcons[task.type]}
+                  </div>
 
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
-                  <h3 className="text-sm font-semibold text-white">{task.title}</h3>
-                  <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-white/5 text-slate-400">
-                    {taskTypeLabels[task.type]}
-                  </span>
-                </div>
-                <p className="text-xs text-slate-400 mb-2">{task.description}</p>
-                <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
-                  <span>💰 {task.reward.toFixed(2)} ({task.rewardType})</span>
-                  <span>✅ {task.totalCompletions.toLocaleString()} complétions</span>
-                  {task.maxCompletions && <span>📊 Max: {task.maxCompletions}</span>}
-                  {task.cooldownHours && <span>⏱️ Cooldown: {task.cooldownHours}h</span>}
-                  {task.expiresAt && <span>📅 Expire: {new Date(task.expiresAt).toLocaleDateString('fr-FR')}</span>}
-                </div>
-              </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
+                      <h3 className="text-sm font-semibold text-white">{task.title}</h3>
+                      <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-white/5 text-slate-400">
+                        {taskTypeLabels[task.type] ?? task.type}
+                      </span>
+                      {isPromoActive && (
+                        <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 text-[9px] font-bold">
+                          <Flame className="w-2.5 h-2.5" /> PROMO ×{task.promotion!.multiplier}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-slate-400 mb-2">{task.description}</p>
+                    <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
+                      <span className="text-emerald-400 font-semibold">+{task.reward.toFixed(2)} TON</span>
+                      {isPromoActive && <span className="text-amber-400">→ +{(task.reward * task.promotion!.multiplier).toFixed(2)} TON (promo)</span>}
+                      <span>✅ {task.totalCompletions.toLocaleString()} complétions</span>
+                      {task.maxCompletions && <span>📊 Max: {task.maxCompletions}</span>}
+                      {task.cooldownHours && <span>⏱️ Cooldown: {task.cooldownHours}h</span>}
+                      {task.expiresAt && <span>📅 Expire: {new Date(task.expiresAt).toLocaleDateString('fr-FR')}</span>}
+                      {task.promotion && <span className="text-amber-400/70">Promo jusqu'au {new Date(task.promotion.endsAt).toLocaleDateString('fr-FR')}</span>}
+                    </div>
+                  </div>
 
-              <div className="flex items-center gap-2">
-                {task.targetUrl && (
-                  <a href={task.targetUrl} target="_blank" rel="noreferrer" className="p-2 rounded-lg hover:bg-white/5 text-slate-400 hover:text-blue-400 transition-colors">
-                    <ExternalLink className="w-4 h-4" />
-                  </a>
+                  <div className="flex items-center gap-2">
+                    {task.targetUrl && (
+                      <a href={task.targetUrl} target="_blank" rel="noreferrer" className="p-2 rounded-lg hover:bg-white/5 text-slate-400 hover:text-blue-400 transition-colors">
+                        <ExternalLink className="w-4 h-4" />
+                      </a>
+                    )}
+                    <button onClick={() => openModal('task', { task })} className="p-2 rounded-lg hover:bg-white/5 text-slate-400 hover:text-white transition-colors">
+                      <Edit2 className="w-4 h-4" />
+                    </button>
+                    <button onClick={() => deleteTask(task.id)} className="p-2 rounded-lg hover:bg-red-500/10 text-slate-400 hover:text-red-400 transition-colors">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                    <ToggleSwitch
+                      enabled={task.isActive}
+                      onChange={(v) => updateTask(task.id, { isActive: v })}
+                      size="sm"
+                    />
+                  </div>
+                </div>
+
+                {task.maxCompletions && (
+                  <div className="mt-3 pt-3 border-t border-white/5">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs text-slate-500">Progression</span>
+                      <span className="text-xs text-slate-400">{task.totalCompletions}/{task.maxCompletions}</span>
+                    </div>
+                    <div className="progress-bar">
+                      <div
+                        className="progress-bar-fill bg-gradient-to-r from-blue-500 to-purple-500"
+                        style={{ width: `${Math.min((task.totalCompletions / task.maxCompletions) * 100, 100)}%` }}
+                      />
+                    </div>
+                  </div>
                 )}
-                <button onClick={() => openModal('task', { task })} className="p-2 rounded-lg hover:bg-white/5 text-slate-400 hover:text-white transition-colors">
-                  <Edit2 className="w-4 h-4" />
-                </button>
-                <button onClick={() => deleteTask(task.id)} className="p-2 rounded-lg hover:bg-red-500/10 text-slate-400 hover:text-red-400 transition-colors">
-                  <Trash2 className="w-4 h-4" />
-                </button>
-                <ToggleSwitch
-                  enabled={task.isActive}
-                  onChange={(v) => updateTask(task.id, { isActive: v })}
-                  size="sm"
-                />
               </div>
-            </div>
-
-            {task.maxCompletions && (
-              <div className="mt-3 pt-3 border-t border-white/5">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs text-slate-500">Progression</span>
-                  <span className="text-xs text-slate-400">{task.totalCompletions}/{task.maxCompletions}</span>
-                </div>
-                <div className="progress-bar">
-                  <div
-                    className="progress-bar-fill bg-gradient-to-r from-blue-500 to-purple-500"
-                    style={{ width: `${(task.totalCompletions / task.maxCompletions) * 100}%` }}
-                  />
-                </div>
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 };

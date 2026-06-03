@@ -890,7 +890,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   // User CRUD
   addUser: (user) => set((s) => ({ users: [...s.users, { ...user, id: generateId() }] })),
-  updateUser: (id, data) => set((s) => ({ users: s.users.map(u => u.id === id ? { ...u, ...data } : u) })),
+  updateUser: (id, data) => set((s) => ({
+    users: s.users.map(u => u.id === id ? { ...u, ...data } : u),
+    currentUser: s.currentUser.id === id ? { ...s.currentUser, ...data } : s.currentUser,
+  })),
   deleteUser: (id) => set((s) => ({ users: s.users.filter(u => u.id !== id) })),
 
   // Task CRUD
