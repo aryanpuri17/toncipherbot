@@ -98,12 +98,12 @@ export const MiniAppRewards: React.FC = () => {
   const { setMiniAppPage, currentUser: u, claimDailyReward, dailyRewardClaimed } = useAppStore();
 
   const rewards = [
-    { id: '1', title: 'Bonus de bienvenue', amount: 1.00, status: 'claimed', date: '15 Jan 2024', emoji: '🎉' },
-    { id: '2', title: 'Streak 7 jours', amount: 2.00, status: 'claimed', date: '22 Jan 2024', emoji: '🔥' },
-    { id: '3', title: 'Niveau 10 atteint', amount: 5.00, status: 'claimed', date: '15 Mar 2024', emoji: '⬆️' },
-    { id: '4', title: '100 tâches complétées', amount: 10.00, status: 'claimed', date: '01 Jun 2024', emoji: '🎯' },
-    { id: '5', title: 'Récompense quotidienne', amount: 0.10, status: dailyRewardClaimed ? 'claimed' : 'available', emoji: '📅' },
-    { id: '6', title: '200 tâches complétées', amount: 20.00, status: u.tasksCompleted >= 200 ? 'available' : 'locked', emoji: '🎯' },
+    { id: '1', title: 'Récompense quotidienne', amount: 0.10, status: dailyRewardClaimed ? 'claimed' : 'available', emoji: '📅', date: undefined },
+    { id: '2', title: 'Streak 7 jours', amount: 2.00, status: u.streak >= 7 ? 'available' : 'locked', emoji: '🔥', date: undefined },
+    { id: '3', title: 'Streak 14 jours', amount: 5.00, status: u.streak >= 14 ? 'available' : 'locked', emoji: '🔥', date: undefined },
+    { id: '4', title: '10 tâches complétées', amount: 1.00, status: u.tasksCompleted >= 10 ? 'available' : 'locked', emoji: '🎯', date: undefined },
+    { id: '5', title: '50 tâches complétées', amount: 5.00, status: u.tasksCompleted >= 50 ? 'available' : 'locked', emoji: '🎯', date: undefined },
+    { id: '6', title: '100 tâches complétées', amount: 10.00, status: u.tasksCompleted >= 100 ? 'available' : 'locked', emoji: '🏆', date: undefined },
   ];
 
   return (
