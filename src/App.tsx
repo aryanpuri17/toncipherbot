@@ -24,7 +24,44 @@ import { MiniAppProfile } from './components/miniapp/MiniAppProfile';
 import { MiniAppShop, MiniAppRewards } from './components/miniapp/MiniAppShop';
 import { MiniAppCreateTask } from './components/miniapp/MiniAppCreateTask';
 
-import { Bell, Menu } from 'lucide-react';
+import { Bell, Menu, Settings, ChevronRight, Globe, Info } from 'lucide-react';
+
+const MiniAppSettings: React.FC = () => {
+  const { setMiniAppPage } = useAppStore();
+  return (
+    <div className="space-y-5 animate-slide-up">
+      <div className="flex items-center gap-3">
+        <button onClick={() => setMiniAppPage('profile')} className="p-2 rounded-lg hover:bg-white/5 text-slate-400">←</button>
+        <h1 className="text-xl font-bold text-white">Paramètres</h1>
+      </div>
+      <div className="space-y-2">
+        <div className="glass-card-light p-4 flex items-center gap-3">
+          <Globe className="w-5 h-5 text-blue-400" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-white">Langue</p>
+            <p className="text-xs text-slate-400">Français</p>
+          </div>
+          <ChevronRight className="w-4 h-4 text-slate-500" />
+        </div>
+        <div className="glass-card-light p-4 flex items-center gap-3">
+          <Settings className="w-5 h-5 text-slate-400" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-white">Notifications</p>
+            <p className="text-xs text-slate-400">Activées</p>
+          </div>
+          <ChevronRight className="w-4 h-4 text-slate-500" />
+        </div>
+        <div className="glass-card p-4 flex items-center gap-3">
+          <Info className="w-5 h-5 text-purple-400" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-white">À propos</p>
+            <p className="text-xs text-slate-400">TonCipher v1.0</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const AdminPageContent: React.FC = () => {
   const { adminPage } = useAppStore();
@@ -65,6 +102,7 @@ const MiniAppPageContent: React.FC = () => {
     case 'shop':        return <MiniAppShop />;
     case 'rewards':     return <MiniAppRewards />;
     case 'createTask':  return <MiniAppCreateTask />;
+    case 'settings':    return <MiniAppSettings />;
     default:            return <MiniAppDashboard />;
   }
 };

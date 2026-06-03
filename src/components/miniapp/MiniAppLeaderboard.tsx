@@ -50,25 +50,29 @@ export const MiniAppLeaderboard: React.FC = () => {
       </div>
 
       {/* Top 3 */}
-      <div className="flex items-end justify-center gap-3 py-4">
-        {[sorted[1], sorted[0], sorted[2]].map((user, i) => {
-          if (!user) return null;
-          const rank = i === 0 ? 2 : i === 1 ? 1 : 3;
-          const heights = ['h-20', 'h-28', 'h-16'];
-          const medals = ['🥈', '🥇', '🥉'];
-          return (
-            <div key={user.id} className="flex flex-col items-center">
-              <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-sm font-bold text-white mb-2 relative">
-                {user.firstName[0]}
-                <span className="absolute -bottom-1 -right-1 text-sm">{medals[i]}</span>
+      {sorted.length === 0 ? (
+        <div className="text-center py-8 text-slate-500 text-sm">Aucun utilisateur pour l'instant</div>
+      ) : (
+        <div className="flex items-end justify-center gap-3 py-4">
+          {[sorted[1], sorted[0], sorted[2]].map((user, i) => {
+            if (!user) return <div key={i} className="w-20" />;
+            const rank = i === 0 ? 2 : i === 1 ? 1 : 3;
+            const heights = ['h-20', 'h-28', 'h-16'];
+            const medals = ['🥈', '🥇', '🥉'];
+            return (
+              <div key={user.id} className="flex flex-col items-center">
+                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-sm font-bold text-white mb-2 relative">
+                  {user.firstName[0]}
+                  <span className="absolute -bottom-1 -right-1 text-sm">{medals[i]}</span>
+                </div>
+                <p className="text-xs font-semibold text-white mb-1">@{user.username}</p>
+                <p className="text-[10px] text-slate-400 mb-2">{getValue(user)}</p>
+                <div className={`w-20 ${heights[i]} rounded-t-xl bg-gradient-to-t ${rank === 1 ? 'from-amber-500/20 to-amber-500/40' : rank === 2 ? 'from-slate-400/20 to-slate-400/30' : 'from-orange-800/20 to-orange-800/30'}`} />
               </div>
-              <p className="text-xs font-semibold text-white mb-1">@{user.username}</p>
-              <p className="text-[10px] text-slate-400 mb-2">{getValue(user)}</p>
-              <div className={`w-20 ${heights[i]} rounded-t-xl bg-gradient-to-t ${rank === 1 ? 'from-amber-500/20 to-amber-500/40' : rank === 2 ? 'from-slate-400/20 to-slate-400/30' : 'from-orange-800/20 to-orange-800/30'}`} />
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Full List */}
       <div className="space-y-2">

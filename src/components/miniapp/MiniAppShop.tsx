@@ -95,16 +95,21 @@ export const MiniAppShop: React.FC = () => {
 };
 
 export const MiniAppRewards: React.FC = () => {
-  const { setMiniAppPage, currentUser: u, claimDailyReward, dailyRewardClaimed } = useAppStore();
+  const { setMiniAppPage, currentUser: u, claimDailyReward, dailyRewardClaimed, claimMilestone, claimedMilestoneIds } = useAppStore();
 
   const rewards = [
-    { id: '1', title: 'Récompense quotidienne', amount: 0.10, status: dailyRewardClaimed ? 'claimed' : 'available', emoji: '📅', date: undefined },
-    { id: '2', title: 'Streak 7 jours', amount: 2.00, status: u.streak >= 7 ? 'available' : 'locked', emoji: '🔥', date: undefined },
-    { id: '3', title: 'Streak 14 jours', amount: 5.00, status: u.streak >= 14 ? 'available' : 'locked', emoji: '🔥', date: undefined },
-    { id: '4', title: '10 tâches complétées', amount: 1.00, status: u.tasksCompleted >= 10 ? 'available' : 'locked', emoji: '🎯', date: undefined },
-    { id: '5', title: '50 tâches complétées', amount: 5.00, status: u.tasksCompleted >= 50 ? 'available' : 'locked', emoji: '🎯', date: undefined },
-    { id: '6', title: '100 tâches complétées', amount: 10.00, status: u.tasksCompleted >= 100 ? 'available' : 'locked', emoji: '🏆', date: undefined },
+    { id: 'daily', title: 'Récompense quotidienne', amount: 0.10, status: dailyRewardClaimed ? 'claimed' : 'available', emoji: '📅' },
+    { id: 'streak7', title: 'Streak 7 jours', amount: 2.00, status: claimedMilestoneIds.includes('streak7') ? 'claimed' : u.streak >= 7 ? 'available' : 'locked', emoji: '🔥' },
+    { id: 'streak14', title: 'Streak 14 jours', amount: 5.00, status: claimedMilestoneIds.includes('streak14') ? 'claimed' : u.streak >= 14 ? 'available' : 'locked', emoji: '🔥' },
+    { id: 'tasks10', title: '10 tâches complétées', amount: 1.00, status: claimedMilestoneIds.includes('tasks10') ? 'claimed' : u.tasksCompleted >= 10 ? 'available' : 'locked', emoji: '🎯' },
+    { id: 'tasks50', title: '50 tâches complétées', amount: 5.00, status: claimedMilestoneIds.includes('tasks50') ? 'claimed' : u.tasksCompleted >= 50 ? 'available' : 'locked', emoji: '🎯' },
+    { id: 'tasks100', title: '100 tâches complétées', amount: 10.00, status: claimedMilestoneIds.includes('tasks100') ? 'claimed' : u.tasksCompleted >= 100 ? 'available' : 'locked', emoji: '🏆' },
   ];
+
+  const handleClaim = (r: typeof rewards[0]) => {
+    if (r.id === 'daily') { claimDailyReward(); }
+    else { claimMilestone(r.id, r.amount); }
+  };
 
   return (
     <div className="space-y-5 animate-slide-up">
@@ -138,8 +143,8 @@ export const MiniAppRewards: React.FC = () => {
               )}
               {r.status === 'available' && (
                 <button
-                  onClick={() => r.id === '5' && claimDailyReward()}
-                  className="px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-semibold"
+                  onClick={() => handleClaim(r)}
+                  className="px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-semibold hover:bg-emerald-500/20 transition-colors"
                 >
                   Réclamer
                 </button>

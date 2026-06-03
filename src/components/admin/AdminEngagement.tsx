@@ -128,7 +128,7 @@ export const AdminShop: React.FC = () => {
             <h3 className="text-sm font-semibold text-white mb-1">{item.name}</h3>
             <p className="text-xs text-slate-400 mb-3">{item.description}</p>
             <div className="flex items-center justify-between">
-              <span className="text-lg font-bold text-emerald-400">${item.price.toFixed(2)}</span>
+              <span className="text-lg font-bold text-emerald-400">{item.price.toFixed(2)} {item.currency === 'xp' ? 'XP' : item.currency === 'bonus' ? 'Bonus' : 'TON'}</span>
               <span className="text-xs text-slate-500">{item.purchases} achats</span>
             </div>
             {item.maxPurchases && (

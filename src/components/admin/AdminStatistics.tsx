@@ -4,26 +4,48 @@ import { StatCard } from '../ui/StatCard';
 import { Users, DollarSign, ListTodo, Gift, TrendingUp, Activity, Wallet } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 
-const userGrowth = [
-  { month: 'Jul', users: 5200 },
-  { month: 'Aoû', users: 6800 },
-  { month: 'Sep', users: 8400 },
-  { month: 'Oct', users: 10200 },
-  { month: 'Nov', users: 12800 },
-  { month: 'Déc', users: 15420 },
-];
-
-const taskDistribution = [
-  { name: 'Canal', value: 35, color: '#3b82f6' },
-  { name: 'Groupe', value: 25, color: '#8b5cf6' },
-  { name: 'Bot', value: 15, color: '#06b6d4' },
-  { name: 'Invitation', value: 10, color: '#34d399' },
-  { name: 'Quotidien', value: 10, color: '#fbbf24' },
-  { name: 'Spécial', value: 5, color: '#ec4899' },
-];
+const TYPE_COLORS: Record<string, string> = {
+  join_channel: '#3b82f6',
+  join_group: '#8b5cf6',
+  start_bot: '#06b6d4',
+  invite_friends: '#34d399',
+  daily: '#fbbf24',
+  special: '#ec4899',
+  social: '#f97316',
+  watch_video: '#ef4444',
+};
+const TYPE_LABELS: Record<string, string> = {
+  join_channel: 'Canal', join_group: 'Groupe', start_bot: 'Bot',
+  invite_friends: 'Invitation', daily: 'Quotidien', special: 'Spécial',
+  social: 'Social', watch_video: 'Vidéo',
+};
 
 export const AdminStatistics: React.FC = () => {
-  const { platformStats: s } = useAppStore();
+  const { platformStats: s, users, tasks } = useAppStore();
+
+  const userGrowth = React.useMemo(() => {
+    const months = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
+    const now = new Date();
+    return Array.from({ length: 6 }, (_, i) => {
+      const monthIdx = (now.getMonth() - 5 + i + 12) % 12;
+      const year = now.getFullYear() - (now.getMonth() - 5 + i < 0 ? 1 : 0);
+      return {
+        month: months[monthIdx],
+        users: users.filter(u => { const d = new Date(u.createdAt); return d.getMonth() <= monthIdx && d.getFullYear() <= year; }).length,
+      };
+    });
+  }, [users]);
+
+  const taskDistribution = React.useMemo(() => {
+    const counts: Record<string, number> = {};
+    tasks.forEach(t => { counts[t.type] = (counts[t.type] || 0) + t.totalCompletions; });
+    const total = Object.values(counts).reduce((s, v) => s + v, 0) || 1;
+    return Object.entries(counts).map(([type, count]) => ({
+      name: TYPE_LABELS[type] || type,
+      value: Math.round((count / total) * 100),
+      color: TYPE_COLORS[type] || '#94a3b8',
+    }));
+  }, [tasks]);
 
   return (
     <div className="space-y-6 animate-fade-in">

@@ -134,7 +134,7 @@ export const MiniAppProfile: React.FC = () => {
           <span className="text-sm text-white flex-1 text-left">Admin Panel</span>
           <ChevronRight className="w-4 h-4 text-slate-500" />
         </button>
-        <button className="w-full glass-card-light p-3.5 flex items-center gap-3 hover:bg-white/[0.04] transition-colors">
+        <button onClick={() => setMiniAppPage('settings')} className="w-full glass-card-light p-3.5 flex items-center gap-3 hover:bg-white/[0.04] transition-colors">
           <Settings className="w-5 h-5 text-slate-400" />
           <span className="text-sm text-white flex-1 text-left">Paramètres</span>
           <ChevronRight className="w-4 h-4 text-slate-500" />
