@@ -56,7 +56,17 @@ DIST = os.path.join(os.path.dirname(__file__), "dist")
 async def serve_app(request: web.Request) -> web.Response:
     index = os.path.join(DIST, "index.html")
     if os.path.exists(index):
-        return web.FileResponse(index)
+        with open(index, "rb") as f:
+            content = f.read()
+        return web.Response(
+            body=content,
+            content_type="text/html",
+            headers={
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache",
+                "Expires": "0",
+            },
+        )
     return web.Response(text="Building… please wait.", status=503)
 
 
