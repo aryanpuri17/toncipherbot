@@ -154,12 +154,17 @@ export default function App() {
   const { currentView, setCurrentView } = useAppStore();
 
   useEffect(() => {
+    // Admin panel only accessible via URL hash #admin
+    const isAdminRoute = window.location.hash === '#admin';
+    if (!isAdminRoute) {
+      setCurrentView('miniapp');
+    }
+
     const tg = (window as unknown as { Telegram?: { WebApp?: { ready: () => void; expand: () => void; setHeaderColor: (c: string) => void } } }).Telegram?.WebApp;
     if (tg) {
       tg.ready();
       tg.expand();
       tg.setHeaderColor('#0f0c29');
-      // Always open as Mini App when inside Telegram
       setCurrentView('miniapp');
     }
   }, []);

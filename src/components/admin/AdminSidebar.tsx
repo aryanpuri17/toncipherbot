@@ -116,7 +116,7 @@ export const AdminSidebar: React.FC = () => {
       {/* Footer */}
       <div className="p-3 border-t border-white/5">
         <button
-          onClick={() => setCurrentView('miniapp')}
+          onClick={() => { window.location.hash = ''; setCurrentView('miniapp'); }}
           className={`w-full flex items-center gap-3 p-2.5 rounded-lg bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-blue-500/20 text-blue-400 hover:border-blue-500/40 transition-all ${!adminSidebarOpen ? 'justify-center' : ''}`}
         >
           <Smartphone className="w-4 h-4 flex-shrink-0" />
