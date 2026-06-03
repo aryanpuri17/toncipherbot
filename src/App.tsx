@@ -1,0 +1,168 @@
+import React, { useEffect } from 'react';
+import { useAppStore } from './store/appStore';
+
+// Admin Components
+import { AdminSidebar } from './components/admin/AdminSidebar';
+import { AdminOverview } from './components/admin/AdminOverview';
+import { AdminUsers } from './components/admin/AdminUsers';
+import { AdminTasks } from './components/admin/AdminTasks';
+import { AdminCampaigns } from './components/admin/AdminCampaigns';
+import { AdminDeposits, AdminWithdrawals, AdminWallets, AdminCrypto } from './components/admin/AdminFinance';
+import { AdminAntiFraud, AdminLogs, AdminAlerts } from './components/admin/AdminSecurity';
+import { AdminReferrals, AdminShop, AdminGamification, AdminChannels } from './components/admin/AdminEngagement';
+import { AdminStatistics } from './components/admin/AdminStatistics';
+import { AdminConfig, AdminNotifications } from './components/admin/AdminConfig';
+import { ModalManager } from './components/admin/modals';
+
+// Mini App Components
+import { MiniAppNav } from './components/miniapp/MiniAppNav';
+import { MiniAppDashboard } from './components/miniapp/MiniAppDashboard';
+import { MiniAppWallet, MiniAppDeposit, MiniAppWithdraw, MiniAppHistory } from './components/miniapp/MiniAppWallet';
+import { MiniAppTasks } from './components/miniapp/MiniAppTasks';
+import { MiniAppLeaderboard } from './components/miniapp/MiniAppLeaderboard';
+import { MiniAppProfile } from './components/miniapp/MiniAppProfile';
+import { MiniAppShop, MiniAppRewards } from './components/miniapp/MiniAppShop';
+
+import { Bell, Menu } from 'lucide-react';
+
+// Admin Page Router
+const AdminPageContent: React.FC = () => {
+  const { adminPage } = useAppStore();
+
+  switch (adminPage) {
+    case 'overview':      return <AdminOverview />;
+    case 'statistics':    return <AdminStatistics />;
+    case 'users':         return <AdminUsers />;
+    case 'tasks':         return <AdminTasks />;
+    case 'campaigns':     return <AdminCampaigns />;
+    case 'channels':      return <AdminChannels />;
+    case 'wallets':       return <AdminWallets />;
+    case 'deposits':      return <AdminDeposits />;
+    case 'withdrawals':   return <AdminWithdrawals />;
+    case 'crypto':        return <AdminCrypto />;
+    case 'referrals':     return <AdminReferrals />;
+    case 'shop':          return <AdminShop />;
+    case 'gamification':  return <AdminGamification />;
+    case 'antifraud':     return <AdminAntiFraud />;
+    case 'logs':          return <AdminLogs />;
+    case 'alerts':        return <AdminAlerts />;
+    case 'notifications': return <AdminNotifications />;
+    case 'config':        return <AdminConfig />;
+    default:              return <AdminOverview />;
+  }
+};
+
+// Mini App Page Router
+const MiniAppPageContent: React.FC = () => {
+  const { miniAppPage } = useAppStore();
+
+  switch (miniAppPage) {
+    case 'dashboard':   return <MiniAppDashboard />;
+    case 'wallet':      return <MiniAppWallet />;
+    case 'deposit':     return <MiniAppDeposit />;
+    case 'withdraw':    return <MiniAppWithdraw />;
+    case 'history':     return <MiniAppHistory />;
+    case 'tasks':       return <MiniAppTasks />;
+    case 'leaderboard': return <MiniAppLeaderboard />;
+    case 'profile':     return <MiniAppProfile />;
+    case 'shop':        return <MiniAppShop />;
+    case 'rewards':     return <MiniAppRewards />;
+    default:            return <MiniAppDashboard />;
+  }
+};
+
+// Admin Layout
+const AdminPanel: React.FC = () => {
+  const { adminSidebarOpen, notifications, toggleAdminSidebar } = useAppStore();
+  const unreadCount = notifications.filter(n => !n.isRead).length;
+
+  return (
+    <div className="admin-bg min-h-screen flex">
+      <AdminSidebar />
+      <div className={`flex-1 transition-all duration-300 ${adminSidebarOpen ? 'ml-64' : 'ml-16'}`}>
+        <header className="sticky top-0 z-40 bg-[#0a0a1a]/90 backdrop-blur-xl border-b border-white/5">
+          <div className="flex items-center justify-between px-6 py-3">
+            <div className="flex items-center gap-2">
+              <button onClick={toggleAdminSidebar} className="p-2 rounded-lg hover:bg-white/5 text-slate-400 lg:hidden">
+                <Menu className="w-5 h-5" />
+              </button>
+              <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="text-xs font-medium text-emerald-400">Système en ligne</span>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 ml-auto">
+              <div className="relative">
+                <button className="p-2 rounded-lg hover:bg-white/5 text-slate-400 relative">
+                  <Bell className="w-5 h-5" />
+                  {unreadCount > 0 && (
+                    <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center">
+                      {unreadCount}
+                    </span>
+                  )}
+                </button>
+              </div>
+              <div className="flex items-center gap-2 pl-3 border-l border-white/10">
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-xs font-bold text-white">
+                  A
+                </div>
+                <div className="hidden sm:block">
+                  <p className="text-sm font-medium text-white">Admin</p>
+                  <p className="text-[10px] text-slate-500">Super Admin</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </header>
+        <main className="p-6">
+          <AdminPageContent />
+        </main>
+      </div>
+    </div>
+  );
+};
+
+// Mini App Layout
+const MiniApp: React.FC = () => {
+  return (
+    <div className="mini-app-bg min-h-screen max-w-lg mx-auto relative">
+      <div className="sticky top-0 z-40 bg-[#0f0c29]/90 backdrop-blur-xl border-b border-white/5 px-4 py-2.5 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <img src="/images/logo.png" alt="TonCipher" className="w-7 h-7 rounded-lg object-cover" />
+          <span className="text-sm font-bold text-white">TonCipher</span>
+        </div>
+        <div className="flex items-center gap-1.5 text-xs text-emerald-400">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+          Connecté
+        </div>
+      </div>
+      <div className="px-4 pt-4 pb-24">
+        <MiniAppPageContent />
+      </div>
+      <MiniAppNav />
+    </div>
+  );
+};
+
+export default function App() {
+  const { currentView } = useAppStore();
+
+  // Integrate with Telegram WebApp
+  useEffect(() => {
+    const tg = (window as unknown as { Telegram?: { WebApp?: { ready: () => void; expand: () => void; setHeaderColor: (c: string) => void } } }).Telegram?.WebApp;
+    if (tg) {
+      tg.ready();
+      tg.expand();
+      tg.setHeaderColor('#0f0c29');
+    }
+  }, []);
+
+  return currentView === 'admin' ? (
+    <>
+      <AdminPanel />
+      <ModalManager />
+    </>
+  ) : (
+    <MiniApp />
+  );
+}
