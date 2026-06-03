@@ -1,0 +1,8 @@
+[build]
+buildCommand = "npm install && npm run build && pip install -r requirements.txt"
+
+[deploy]
+startCommand = "python main.py"
+healthcheckPath = "/health"
+healthcheckTimeout = 30
+restartPolicyType = "on_failure"
