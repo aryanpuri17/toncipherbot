@@ -3,7 +3,7 @@ import { useAppStore } from '../../store/appStore';
 import { ArrowUpRight, ArrowDownLeft, ListTodo, Gift, Zap, ChevronRight, TrendingUp } from 'lucide-react';
 
 export const MiniAppDashboard: React.FC = () => {
-  const { currentUser: u, setMiniAppPage, tasks } = useAppStore();
+  const { currentUser: u, setMiniAppPage, tasks, claimDailyReward, dailyRewardClaimed } = useAppStore();
   const activeTasks = tasks.filter(t => t.isActive);
 
   return (
@@ -31,11 +31,11 @@ export const MiniAppDashboard: React.FC = () => {
         <div className="relative">
           <p className="text-blue-100 text-sm mb-1">Solde total</p>
           <p className="text-3xl font-bold text-white mb-1">
-            ${(u.balanceMain + u.balanceBonus + u.balanceReferral + u.balanceRewards).toFixed(2)}
+            {(u.balanceMain + u.balanceBonus + u.balanceReferral + u.balanceRewards).toFixed(2)} TON
           </p>
           <div className="flex items-center gap-1 text-emerald-300 text-xs">
             <TrendingUp className="w-3 h-3" />
-            <span>+${u.todayEarnings.toFixed(2)} aujourd'hui</span>
+            <span>+{u.todayEarnings.toFixed(2)} TON aujourd'hui</span>
           </div>
 
           <div className="flex gap-3 mt-4">
@@ -72,16 +72,23 @@ export const MiniAppDashboard: React.FC = () => {
       </div>
 
       {/* Daily Reward */}
-      <button className="w-full glass-card p-4 flex items-center gap-3 hover:border-amber-500/20 transition-all group">
+      <button
+        onClick={() => !dailyRewardClaimed && claimDailyReward()}
+        className={`w-full glass-card p-4 flex items-center gap-3 transition-all group ${dailyRewardClaimed ? 'opacity-60 cursor-default' : 'hover:border-amber-500/20'}`}
+      >
         <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-amber-500/20 to-orange-500/20 flex items-center justify-center">
           <Gift className="w-5 h-5 text-amber-400" />
         </div>
         <div className="flex-1 text-left">
           <p className="text-sm font-semibold text-white">Récompense quotidienne</p>
-          <p className="text-xs text-slate-400">Réclamez votre bonus journalier</p>
+          <p className="text-xs text-slate-400">
+            {dailyRewardClaimed ? 'Déjà réclamée aujourd\'hui ✓' : 'Réclamez votre bonus journalier'}
+          </p>
         </div>
-        <div className="px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20">
-          <span className="text-xs font-semibold text-amber-400">+0.10$</span>
+        <div className={`px-3 py-1.5 rounded-lg border ${dailyRewardClaimed ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-amber-500/10 border-amber-500/20'}`}>
+          <span className={`text-xs font-semibold ${dailyRewardClaimed ? 'text-emerald-400' : 'text-amber-400'}`}>
+            {dailyRewardClaimed ? '✓ Réclamé' : '+0.10 TON'}
+          </span>
         </div>
       </button>
 
@@ -101,9 +108,9 @@ export const MiniAppDashboard: React.FC = () => {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-white truncate">{task.title}</p>
-                <p className="text-xs text-slate-400">{task.description}</p>
+                <p className="text-xs text-slate-400 truncate">{task.description}</p>
               </div>
-              <span className="text-sm font-bold text-emerald-400 flex-shrink-0">+${task.reward.toFixed(2)}</span>
+              <span className="text-sm font-bold text-emerald-400 flex-shrink-0">+{task.reward.toFixed(2)} TON</span>
             </div>
           ))}
         </div>

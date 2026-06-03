@@ -56,11 +56,11 @@ export const MiniAppProfile: React.FC = () => {
       {/* Stats */}
       <div className="grid grid-cols-2 gap-3">
         <div className="glass-card p-4 text-center">
-          <p className="text-2xl font-bold text-white">${u.totalEarnings.toFixed(0)}</p>
+          <p className="text-lg font-bold text-white">{u.totalEarnings.toFixed(0)} TON</p>
           <p className="text-xs text-slate-400">Gains totaux</p>
         </div>
         <div className="glass-card p-4 text-center">
-          <p className="text-2xl font-bold text-emerald-400">${u.todayEarnings.toFixed(2)}</p>
+          <p className="text-lg font-bold text-emerald-400">{u.todayEarnings.toFixed(2)} TON</p>
           <p className="text-xs text-slate-400">Gains du jour</p>
         </div>
         <div className="glass-card p-4 text-center">
