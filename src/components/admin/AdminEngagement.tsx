@@ -1,68 +1,133 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useAppStore } from '../../store/appStore';
 import { ToggleSwitch } from '../ui/ToggleSwitch';
-import { Zap, Hash, Users, Award, TrendingUp, Plus, Edit2, Trash2 } from 'lucide-react';
+import { Zap, Hash, Users, Award, TrendingUp, Plus, Edit2, Trash2, Save, X } from 'lucide-react';
+import type { ReferralMilestone } from '../../store/appStore';
+
+const emptyMilestone = { referralCount: 0, reward: 0, description: '', isActive: true };
 
 export const AdminReferrals: React.FC = () => {
-  const { platformConfig, updatePlatformConfig, users } = useAppStore();
+  const { users, referralMilestones, addReferralMilestone, updateReferralMilestone, deleteReferralMilestone } = useAppStore();
   const topReferrers = [...users].sort((a, b) => b.referralCount - a.referralCount).slice(0, 5);
+  const [editing, setEditing] = useState<string | null>(null);
+  const [form, setForm] = useState<Omit<ReferralMilestone, 'id'>>(emptyMilestone);
+  const [adding, setAdding] = useState(false);
+
+  const startAdd = () => { setAdding(true); setEditing(null); setForm(emptyMilestone); };
+  const startEdit = (m: ReferralMilestone) => { setEditing(m.id); setAdding(false); setForm({ referralCount: m.referralCount, reward: m.reward, description: m.description, isActive: m.isActive }); };
+  const cancel = () => { setAdding(false); setEditing(null); };
+
+  const save = () => {
+    if (adding) {
+      addReferralMilestone(form);
+    } else if (editing) {
+      updateReferralMilestone(editing, form);
+    }
+    cancel();
+  };
 
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
         <h2 className="text-2xl font-bold text-white">Parrainage</h2>
-        <p className="text-slate-400 text-sm mt-1">Configuration du système de parrainage multi-niveaux</p>
+        <p className="text-slate-400 text-sm mt-1">Paliers de primes et top parrains</p>
       </div>
 
-      {/* Config */}
+      {/* Milestones */}
       <div className="glass-card p-5">
-        <h3 className="text-sm font-semibold text-white mb-4">Paramètres de parrainage</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          <div>
-            <label className="block text-xs text-slate-400 mb-1.5">Bonus inscription ($)</label>
-            <input
-              type="number"
-              value={platformConfig.referralBonusSignup}
-              onChange={e => updatePlatformConfig({ referralBonusSignup: parseFloat(e.target.value) || 0 })}
-              className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500/50"
-            />
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-semibold text-white">Paliers de parrainage</h3>
+          <button onClick={startAdd} className="btn-primary px-3 py-1.5 rounded-lg text-xs font-medium text-white flex items-center gap-1.5">
+            <Plus className="w-3.5 h-3.5" /> Ajouter
+          </button>
+        </div>
+
+        {/* Add form */}
+        {adding && (
+          <div className="mb-4 p-4 rounded-xl border border-blue-500/30 bg-blue-500/5 space-y-3">
+            <p className="text-xs font-semibold text-blue-400">Nouveau palier</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs text-slate-400 mb-1">Filleuls requis</label>
+                <input type="number" value={form.referralCount} onChange={e => setForm(f => ({ ...f, referralCount: parseInt(e.target.value) || 0 }))}
+                  className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500/50" />
+              </div>
+              <div>
+                <label className="block text-xs text-slate-400 mb-1">Prime (TON)</label>
+                <input type="number" step="0.01" value={form.reward} onChange={e => setForm(f => ({ ...f, reward: parseFloat(e.target.value) || 0 }))}
+                  className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500/50" />
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs text-slate-400 mb-1">Description</label>
+              <input type="text" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+                className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500/50" placeholder="Ex: Invitez 5 amis" />
+            </div>
+            <div className="flex gap-2">
+              <button onClick={save} className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-emerald-500/20 text-emerald-400 text-xs font-medium hover:bg-emerald-500/30 transition-colors">
+                <Save className="w-3.5 h-3.5" /> Sauvegarder
+              </button>
+              <button onClick={cancel} className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-white/5 text-slate-400 text-xs font-medium hover:bg-white/10 transition-colors">
+                <X className="w-3.5 h-3.5" /> Annuler
+              </button>
+            </div>
           </div>
-          <div>
-            <label className="block text-xs text-slate-400 mb-1.5">Bonus activité ($)</label>
-            <input
-              type="number"
-              value={platformConfig.referralBonusActivity}
-              onChange={e => updatePlatformConfig({ referralBonusActivity: parseFloat(e.target.value) || 0 })}
-              className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500/50"
-            />
-          </div>
-          <div>
-            <label className="block text-xs text-slate-400 mb-1.5">Bonus dépôt ($)</label>
-            <input
-              type="number"
-              value={platformConfig.referralBonusDeposit}
-              onChange={e => updatePlatformConfig({ referralBonusDeposit: parseFloat(e.target.value) || 0 })}
-              className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500/50"
-            />
-          </div>
-          <div>
-            <label className="block text-xs text-slate-400 mb-1.5">Niveaux de parrainage</label>
-            <input
-              type="number"
-              value={platformConfig.referralLevels}
-              onChange={e => updatePlatformConfig({ referralLevels: parseInt(e.target.value) || 1 })}
-              className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500/50"
-            />
-          </div>
-          <div>
-            <label className="block text-xs text-slate-400 mb-1.5">Pourcentage dépôt (%)</label>
-            <input
-              type="number"
-              value={platformConfig.referralBonusDepositPercent}
-              onChange={e => updatePlatformConfig({ referralBonusDepositPercent: parseInt(e.target.value) || 0 })}
-              className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500/50"
-            />
-          </div>
+        )}
+
+        <div className="space-y-2">
+          {referralMilestones.length === 0 && <p className="text-sm text-slate-500 text-center py-4">Aucun palier configuré</p>}
+          {referralMilestones.map(m => (
+            <div key={m.id}>
+              {editing === m.id ? (
+                <div className="p-4 rounded-xl border border-blue-500/30 bg-blue-500/5 space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs text-slate-400 mb-1">Filleuls requis</label>
+                      <input type="number" value={form.referralCount} onChange={e => setForm(f => ({ ...f, referralCount: parseInt(e.target.value) || 0 }))}
+                        className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500/50" />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-slate-400 mb-1">Prime (TON)</label>
+                      <input type="number" step="0.01" value={form.reward} onChange={e => setForm(f => ({ ...f, reward: parseFloat(e.target.value) || 0 }))}
+                        className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500/50" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-400 mb-1">Description</label>
+                    <input type="text" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+                      className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500/50" />
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={save} className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-emerald-500/20 text-emerald-400 text-xs font-medium hover:bg-emerald-500/30 transition-colors">
+                      <Save className="w-3.5 h-3.5" /> Sauvegarder
+                    </button>
+                    <button onClick={cancel} className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-white/5 text-slate-400 text-xs font-medium hover:bg-white/10 transition-colors">
+                      <X className="w-3.5 h-3.5" /> Annuler
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center gap-3 p-3 rounded-lg bg-white/[0.02]">
+                  <div className="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center shrink-0">
+                    <span className="text-sm font-bold text-purple-400">{m.referralCount}</span>
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-white">{m.description || `${m.referralCount} filleuls`}</p>
+                    <p className="text-xs text-slate-500">Prime: {m.reward.toFixed(2)} TON</p>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <button onClick={() => startEdit(m)} className="p-1.5 rounded-lg hover:bg-white/5 text-slate-400 hover:text-white transition-colors">
+                      <Edit2 className="w-3.5 h-3.5" />
+                    </button>
+                    <button onClick={() => deleteReferralMilestone(m.id)} className="p-1.5 rounded-lg hover:bg-red-500/10 text-slate-400 hover:text-red-400 transition-colors">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                    <ToggleSwitch enabled={m.isActive} onChange={(v) => updateReferralMilestone(m.id, { isActive: v })} size="sm" />
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       </div>
 
@@ -70,6 +135,7 @@ export const AdminReferrals: React.FC = () => {
       <div className="glass-card p-5">
         <h3 className="text-sm font-semibold text-white mb-4">Top Parrains</h3>
         <div className="space-y-3">
+          {topReferrers.length === 0 && <p className="text-sm text-slate-500 text-center py-4">Aucun utilisateur pour l'instant</p>}
           {topReferrers.map((user, i) => (
             <div key={user.id} className="flex items-center gap-3 p-3 rounded-lg bg-white/[0.02]">
               <span className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${i === 0 ? 'bg-amber-500/20 text-amber-400' : i === 1 ? 'bg-slate-300/20 text-slate-300' : i === 2 ? 'bg-orange-700/20 text-orange-400' : 'bg-white/5 text-slate-400'}`}>
@@ -81,7 +147,7 @@ export const AdminReferrals: React.FC = () => {
               </div>
               <div className="text-right">
                 <p className="text-sm font-semibold text-purple-400">{user.referralCount} filleuls</p>
-                <p className="text-xs text-slate-500">${user.balanceReferral.toFixed(2)} gagnés</p>
+                <p className="text-xs text-slate-500">{user.totalEarnings.toFixed(2)} TON gagnés</p>
               </div>
             </div>
           ))}
@@ -148,72 +214,21 @@ export const AdminShop: React.FC = () => {
 
 export const AdminGamification: React.FC = () => {
   const { users } = useAppStore();
-  const topUsers = [...users].sort((a, b) => b.xp - a.xp).slice(0, 5);
-
-  const levels = [
-    { level: 1, xpRequired: 0, title: 'Débutant', color: 'text-slate-400' },
-    { level: 5, xpRequired: 1000, title: 'Explorateur', color: 'text-emerald-400' },
-    { level: 10, xpRequired: 3000, title: 'Avancé', color: 'text-blue-400' },
-    { level: 15, xpRequired: 6000, title: 'Expert', color: 'text-purple-400' },
-    { level: 20, xpRequired: 10000, title: 'Maître', color: 'text-amber-400' },
-    { level: 25, xpRequired: 15000, title: 'Légende', color: 'text-red-400' },
-  ];
-
-  const badges = [
-    { id: 'early_adopter', name: 'Early Adopter', icon: '🌟', description: 'Inscrit dans les 100 premiers' },
-    { id: 'task_master', name: 'Task Master', icon: '🎯', description: '100+ tâches complétées' },
-    { id: 'referral_king', name: 'Referral King', icon: '👑', description: '20+ filleuls actifs' },
-    { id: 'whale', name: 'Whale', icon: '🐋', description: '1000$+ de dépôts totaux' },
-    { id: 'streak_champion', name: 'Streak Champion', icon: '🔥', description: '14+ jours consécutifs' },
-  ];
+  const topUsers = [...users].sort((a, b) => b.tasksCompleted - a.tasksCompleted).slice(0, 5);
 
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
-        <h2 className="text-2xl font-bold text-white">Gamification</h2>
-        <p className="text-slate-400 text-sm mt-1">XP, Niveaux, Badges et Classements</p>
+        <h2 className="text-2xl font-bold text-white">Classement</h2>
+        <p className="text-slate-400 text-sm mt-1">Top utilisateurs par tâches complétées</p>
       </div>
 
-      {/* Levels System */}
       <div className="glass-card p-5">
         <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
-          <Zap className="w-4 h-4 text-amber-400" /> Niveaux
-        </h3>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-          {levels.map(l => (
-            <div key={l.level} className="text-center p-3 rounded-lg bg-white/[0.03]">
-              <p className={`text-2xl font-bold ${l.color}`}>{l.level}</p>
-              <p className="text-xs text-white font-medium mt-1">{l.title}</p>
-              <p className="text-[10px] text-slate-500">{l.xpRequired} XP</p>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Badges */}
-      <div className="glass-card p-5">
-        <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
-          <Award className="w-4 h-4 text-purple-400" /> Badges
-        </h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {badges.map(b => (
-            <div key={b.id} className="flex items-center gap-3 p-3 rounded-lg bg-white/[0.03]">
-              <span className="text-2xl">{b.icon}</span>
-              <div>
-                <p className="text-sm font-medium text-white">{b.name}</p>
-                <p className="text-xs text-slate-400">{b.description}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Leaderboard */}
-      <div className="glass-card p-5">
-        <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
-          <TrendingUp className="w-4 h-4 text-emerald-400" /> Classement Global
+          <TrendingUp className="w-4 h-4 text-emerald-400" /> Top Utilisateurs
         </h3>
         <div className="space-y-3">
+          {topUsers.length === 0 && <p className="text-sm text-slate-500 text-center py-4">Aucun utilisateur pour l'instant</p>}
           {topUsers.map((user, i) => (
             <div key={user.id} className="flex items-center gap-3 p-3 rounded-lg bg-white/[0.02]">
               <span className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${i === 0 ? 'bg-amber-500/20 text-amber-400' : i === 1 ? 'bg-slate-300/20 text-slate-300' : i === 2 ? 'bg-orange-700/20 text-orange-400' : 'bg-white/5 text-slate-400'}`}>
@@ -221,11 +236,10 @@ export const AdminGamification: React.FC = () => {
               </span>
               <div className="flex-1">
                 <p className="text-sm font-medium text-white">@{user.username}</p>
-                <p className="text-xs text-slate-500">Niveau {user.level}</p>
+                <p className="text-xs text-slate-500">{user.totalEarnings.toFixed(2)} TON gagnés</p>
               </div>
               <div className="text-right">
-                <p className="text-sm font-semibold text-amber-400">{user.xp.toLocaleString()} XP</p>
-                <p className="text-xs text-slate-500">🔥 {user.streak}j</p>
+                <p className="text-sm font-semibold text-emerald-400">{user.tasksCompleted} tâches</p>
               </div>
             </div>
           ))}
@@ -262,7 +276,7 @@ export const AdminChannels: React.FC = () => {
                   <h3 className="text-sm font-semibold text-white">{ch.name}</h3>
                   {ch.isMandatory && <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-red-500/10 text-red-400 border border-red-500/20">Obligatoire</span>}
                   {ch.botIsAdmin && <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Bot Admin ✓</span>}
-                  {ch.joinReward && ch.joinReward > 0 && <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">+${ch.joinReward}</span>}
+                  {ch.joinReward && ch.joinReward > 0 && <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">+{ch.joinReward} TON</span>}
                 </div>
                 <div className="flex items-center gap-4 text-xs text-slate-500">
                   <span>ID: {ch.telegramId}</span>
