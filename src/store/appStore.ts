@@ -384,6 +384,14 @@ export interface AdminUser {
   lastLogin?: string;
 }
 
+export interface ReferralMilestone {
+  id: string;
+  referralCount: number;
+  reward: number;
+  description: string;
+  isActive: boolean;
+}
+
 export interface PlatformStats {
   totalUsers: number;
   activeUsers: number;
@@ -541,6 +549,13 @@ const mockAdminUsers: AdminUser[] = [
   { id: '1', telegramId: 0, username: 'super_admin', role: 'super_admin', permissions: ['*'], isActive: true, createdAt: new Date().toISOString() },
 ];
 
+const mockReferralMilestones: ReferralMilestone[] = [
+  { id: '1', referralCount: 5, reward: 2.00, description: 'Invitez 5 amis', isActive: true },
+  { id: '2', referralCount: 20, reward: 10.00, description: 'Invitez 20 amis', isActive: true },
+  { id: '3', referralCount: 50, reward: 30.00, description: 'Invitez 50 amis', isActive: true },
+  { id: '4', referralCount: 100, reward: 75.00, description: 'Invitez 100 amis', isActive: true },
+];
+
 const mockPlatformConfig: PlatformConfig = {
   botToken: '',
   botUsername: 'toncipherbot',
@@ -661,13 +676,19 @@ interface AppState {
   platformConfig: PlatformConfig;
   platformStats: PlatformStats;
   logs: LogEntry[];
+  referralMilestones: ReferralMilestone[];
 
   // Mini App State
   completedTaskIds: string[];
+  claimedReferralMilestoneIds: string[];
 
   // Actions - Mini App
   completeTask: (taskId: string) => void;
   submitWithdrawal: (networkId: string, amount: number, address: string) => { success: boolean; error?: string };
+  claimReferralMilestone: (id: string) => void;
+  addReferralMilestone: (milestone: Omit<ReferralMilestone, 'id'>) => void;
+  updateReferralMilestone: (id: string, data: Partial<ReferralMilestone>) => void;
+  deleteReferralMilestone: (id: string) => void;
 
   // Actions - View
   setCurrentView: (view: 'miniapp' | 'admin') => void;
@@ -788,6 +809,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   platformConfig: mockPlatformConfig,
   platformStats: mockStats,
   logs: mockLogs,
+  referralMilestones: mockReferralMilestones,
+
+  claimedReferralMilestoneIds: [],
 
   // Mini App Actions
   completeTask: (taskId) => {
@@ -810,6 +834,23 @@ export const useAppStore = create<AppState>((set, get) => ({
     }));
     get().addTransaction({ userId: state.currentUser.id, type: 'reward', amount: earned, currency: 'TON', status: 'completed', completedAt: new Date().toISOString() });
     get().addNotification({ userId: state.currentUser.id, type: 'reward', title: 'Tâche complétée!', message: `+${earned.toFixed(2)} TON${isPromoActive ? ` (×${multiplier} promo!)` : ''} pour "${task.title}"`, isRead: false });
+  },
+
+  claimReferralMilestone: (id) => {
+    const state = get();
+    if (state.claimedReferralMilestoneIds.includes(id)) return;
+    const milestone = state.referralMilestones.find(m => m.id === id);
+    if (!milestone || !milestone.isActive) return;
+    if (state.currentUser.referralCount < milestone.referralCount) return;
+    set(s => ({
+      claimedReferralMilestoneIds: [...s.claimedReferralMilestoneIds, id],
+      currentUser: {
+        ...s.currentUser,
+        balanceMain: s.currentUser.balanceMain + milestone.reward,
+        totalEarnings: s.currentUser.totalEarnings + milestone.reward,
+      },
+    }));
+    get().addTransaction({ userId: state.currentUser.id, type: 'reward', amount: milestone.reward, currency: 'TON', status: 'completed', completedAt: new Date().toISOString() });
   },
 
   submitWithdrawal: (networkId, amount, address) => {
@@ -921,6 +962,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   addAdminUser: (admin) => set((s) => ({ adminUsers: [...s.adminUsers, { ...admin, id: generateId(), createdAt: new Date().toISOString() }] })),
   updateAdminUser: (id, data) => set((s) => ({ adminUsers: s.adminUsers.map(a => a.id === id ? { ...a, ...data } : a) })),
   deleteAdminUser: (id) => set((s) => ({ adminUsers: s.adminUsers.filter(a => a.id !== id) })),
+
+  // Referral Milestone CRUD
+  addReferralMilestone: (milestone) => set((s) => ({ referralMilestones: [...s.referralMilestones, { ...milestone, id: generateId() }].sort((a, b) => a.referralCount - b.referralCount) })),
+  updateReferralMilestone: (id, data) => set((s) => ({ referralMilestones: s.referralMilestones.map(m => m.id === id ? { ...m, ...data } : m) })),
+  deleteReferralMilestone: (id) => set((s) => ({ referralMilestones: s.referralMilestones.filter(m => m.id !== id) })),
 
   // Others
   updateFraudAlert: (id, data) => set((s) => ({ fraudAlerts: s.fraudAlerts.map(a => a.id === id ? { ...a, ...data } : a) })),
