@@ -10,19 +10,12 @@ export interface User {
   lastName: string;
   avatarUrl?: string;
   balanceMain: number;
-  balanceBonus: number;
-  balanceReferral: number;
-  balanceRewards: number;
   totalEarnings: number;
   todayEarnings: number;
-  xp: number;
-  level: number;
   tasksCompleted: number;
   referralCount: number;
   referralCode: string;
   referredBy?: string;
-  streak: number;
-  badges: string[];
   riskScore: number;
   status: 'active' | 'suspended' | 'banned';
   createdAt: string;
@@ -57,6 +50,7 @@ export interface Task {
   priority: number;
   requiredLevel?: number;
   icon?: string;
+  promotion?: { multiplier: number; endsAt: string };
 }
 
 export interface Transaction {
@@ -423,9 +417,8 @@ export interface LogEntry {
 const mockUsers: User[] = [
   {
     id: '1', telegramId: 0, username: 'vous', firstName: 'Vous', lastName: '',
-    balanceMain: 0, balanceBonus: 0, balanceReferral: 0, balanceRewards: 0,
-    totalEarnings: 0, todayEarnings: 0, xp: 0, level: 1, tasksCompleted: 0,
-    referralCount: 0, referralCode: 'START00', streak: 0, badges: [],
+    balanceMain: 0, totalEarnings: 0, todayEarnings: 0, tasksCompleted: 0,
+    referralCount: 0, referralCode: 'START00',
     riskScore: 0, status: 'active', createdAt: new Date().toISOString(), lastActive: new Date().toISOString(),
     withdrawalBlocked: false, verificationStatus: 'none',
     dailyWithdrawn: 0, dailyTasksCompleted: 0
@@ -671,14 +664,9 @@ interface AppState {
 
   // Mini App State
   completedTaskIds: string[];
-  dailyRewardClaimed: boolean;
-  claimedMilestoneIds: string[];
 
   // Actions - Mini App
   completeTask: (taskId: string) => void;
-  claimDailyReward: () => void;
-  claimMilestone: (id: string, amount: number) => void;
-  purchaseShopItem: (itemId: string) => boolean;
   submitWithdrawal: (networkId: string, amount: number, address: string) => { success: boolean; error?: string };
 
   // Actions - View
@@ -775,8 +763,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   modalOpen: null,
   modalData: null,
   completedTaskIds: [],
-  dailyRewardClaimed: false,
-  claimedMilestoneIds: [],
 
   currentUser: mockUsers[0],
   users: mockUsers,
@@ -808,74 +794,22 @@ export const useAppStore = create<AppState>((set, get) => ({
     const state = get();
     const task = state.tasks.find(t => t.id === taskId);
     if (!task || state.completedTaskIds.includes(taskId)) return;
+    const isPromoActive = task.promotion && new Date(task.promotion.endsAt) > new Date();
+    const multiplier = isPromoActive ? task.promotion!.multiplier : 1;
+    const earned = task.reward * multiplier;
     set(s => ({
       completedTaskIds: [...s.completedTaskIds, taskId],
       tasks: s.tasks.map(t => t.id === taskId ? { ...t, totalCompletions: t.totalCompletions + 1 } : t),
       currentUser: {
         ...s.currentUser,
-        balanceMain: task.rewardType === 'main' ? s.currentUser.balanceMain + task.reward : s.currentUser.balanceMain,
-        balanceBonus: task.rewardType === 'bonus' ? s.currentUser.balanceBonus + task.reward : s.currentUser.balanceBonus,
-        xp: s.currentUser.xp + (task.rewardType === 'xp' ? task.reward : 10),
+        balanceMain: s.currentUser.balanceMain + earned,
         tasksCompleted: s.currentUser.tasksCompleted + 1,
-        todayEarnings: task.rewardType !== 'xp' ? s.currentUser.todayEarnings + task.reward : s.currentUser.todayEarnings,
-        totalEarnings: task.rewardType !== 'xp' ? s.currentUser.totalEarnings + task.reward : s.currentUser.totalEarnings,
-        balanceRewards: task.rewardType === 'main' ? s.currentUser.balanceRewards + task.reward : s.currentUser.balanceRewards,
+        todayEarnings: s.currentUser.todayEarnings + earned,
+        totalEarnings: s.currentUser.totalEarnings + earned,
       },
     }));
-    get().addTransaction({ userId: state.currentUser.id, type: 'reward', amount: task.reward, currency: task.rewardType === 'xp' ? 'XP' : 'TON', status: 'completed', completedAt: new Date().toISOString() });
-    get().addNotification({ userId: state.currentUser.id, type: 'reward', title: 'Tâche complétée!', message: `+${task.reward} ${task.rewardType === 'xp' ? 'XP' : 'TON'} pour "${task.title}"`, isRead: false });
-  },
-
-  claimDailyReward: () => {
-    if (get().dailyRewardClaimed) return;
-    const userId = get().currentUser.id;
-    set(s => ({
-      dailyRewardClaimed: true,
-      currentUser: {
-        ...s.currentUser,
-        balanceMain: s.currentUser.balanceMain + 0.10,
-        balanceRewards: s.currentUser.balanceRewards + 0.10,
-        todayEarnings: s.currentUser.todayEarnings + 0.10,
-        totalEarnings: s.currentUser.totalEarnings + 0.10,
-        streak: s.currentUser.streak + 1,
-      },
-    }));
-    get().addTransaction({ userId, type: 'reward', amount: 0.10, currency: 'TON', status: 'completed', completedAt: new Date().toISOString() });
-  },
-
-  claimMilestone: (id, amount) => {
-    if (get().claimedMilestoneIds.includes(id)) return;
-    const userId = get().currentUser.id;
-    set(s => ({
-      claimedMilestoneIds: [...s.claimedMilestoneIds, id],
-      currentUser: {
-        ...s.currentUser,
-        balanceMain: s.currentUser.balanceMain + amount,
-        balanceRewards: s.currentUser.balanceRewards + amount,
-        totalEarnings: s.currentUser.totalEarnings + amount,
-      },
-    }));
-    get().addTransaction({ userId, type: 'reward', amount, currency: 'TON', status: 'completed', completedAt: new Date().toISOString() });
-  },
-
-  purchaseShopItem: (itemId) => {
-    const state = get();
-    const item = state.shopItems.find(i => i.id === itemId);
-    if (!item || !item.isActive) return false;
-    if (item.maxPurchases && item.purchases >= item.maxPurchases) return false;
-    const balance = item.currency === 'xp' ? state.currentUser.xp : item.currency === 'bonus' ? state.currentUser.balanceBonus : state.currentUser.balanceMain;
-    if (balance < item.price) return false;
-    set(s => ({
-      shopItems: s.shopItems.map(i => i.id === itemId ? { ...i, purchases: i.purchases + 1 } : i),
-      currentUser: {
-        ...s.currentUser,
-        xp: item.currency === 'xp' ? s.currentUser.xp - item.price : s.currentUser.xp,
-        balanceBonus: item.currency === 'bonus' ? s.currentUser.balanceBonus - item.price : s.currentUser.balanceBonus,
-        balanceMain: item.currency === 'main' ? s.currentUser.balanceMain - item.price : s.currentUser.balanceMain,
-      },
-    }));
-    get().addTransaction({ userId: state.currentUser.id, type: 'purchase', amount: item.price, currency: item.currency === 'xp' ? 'XP' : 'TON', status: 'completed', completedAt: new Date().toISOString() });
-    return true;
+    get().addTransaction({ userId: state.currentUser.id, type: 'reward', amount: earned, currency: 'TON', status: 'completed', completedAt: new Date().toISOString() });
+    get().addNotification({ userId: state.currentUser.id, type: 'reward', title: 'Tâche complétée!', message: `+${earned.toFixed(2)} TON${isPromoActive ? ` (×${multiplier} promo!)` : ''} pour "${task.title}"`, isRead: false });
   },
 
   submitWithdrawal: (networkId, amount, address) => {

@@ -11,22 +11,14 @@ export const MiniAppWallet: React.FC = () => {
     <div className="space-y-5 animate-slide-up">
       <h1 className="text-xl font-bold text-white">Wallet</h1>
 
-      {/* Balances */}
-      <div className="space-y-3">
-        {[
-          { label: 'Solde principal', value: u.balanceMain, color: 'from-blue-500/20 to-cyan-500/10', textColor: 'text-blue-400', icon: '💰' },
-          { label: 'Solde bonus', value: u.balanceBonus, color: 'from-purple-500/20 to-pink-500/10', textColor: 'text-purple-400', icon: '🎁' },
-          { label: 'Solde parrainage', value: u.balanceReferral, color: 'from-emerald-500/20 to-teal-500/10', textColor: 'text-emerald-400', icon: '👥' },
-          { label: 'Solde récompenses', value: u.balanceRewards, color: 'from-amber-500/20 to-orange-500/10', textColor: 'text-amber-400', icon: '⭐' },
-        ].map(b => (
-          <div key={b.label} className={`glass-card p-4 bg-gradient-to-r ${b.color} flex items-center gap-3`}>
-            <span className="text-2xl">{b.icon}</span>
-            <div className="flex-1">
-              <p className="text-xs text-slate-400">{b.label}</p>
-              <p className={`text-xl font-bold ${b.textColor}`}>{b.value.toFixed(2)} TON</p>
-            </div>
-          </div>
-        ))}
+      {/* Balance */}
+      <div className="glass-card p-5 bg-gradient-to-r from-blue-500/20 to-cyan-500/10 flex items-center gap-4">
+        <span className="text-3xl">💰</span>
+        <div className="flex-1">
+          <p className="text-xs text-slate-400 mb-0.5">Solde disponible</p>
+          <p className="text-2xl font-bold text-white">{u.balanceMain.toFixed(2)} TON</p>
+          <p className="text-xs text-emerald-400 mt-0.5">Total gagné: {u.totalEarnings.toFixed(2)} TON</p>
+        </div>
       </div>
 
       {/* Actions */}

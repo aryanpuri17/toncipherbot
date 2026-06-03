@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAppStore } from '../../store/appStore';
-import { Hash, Users, Bot, UserPlus, Calendar, Star, CheckCircle, ExternalLink, Plus, AlertCircle } from 'lucide-react';
+import { Hash, Users, Bot, UserPlus, Calendar, Star, CheckCircle, ExternalLink, Plus, AlertCircle, Flame } from 'lucide-react';
 
 const typeConfig: Record<string, { icon: React.ReactNode; color: string; label: string }> = {
   join_channel: { icon: <Hash className="w-4 h-4" />, color: 'bg-blue-500/20 text-blue-400', label: 'Canal' },
@@ -84,19 +84,26 @@ export const MiniAppTasks: React.FC = () => {
           const config = typeConfig[task.type] ?? typeConfig.special;
           const isCompleted = completedTaskIds.includes(task.id);
           const isJustDone = justCompleted === task.id;
+          const isPromoActive = task.promotion && new Date(task.promotion.endsAt) > new Date();
+          const displayReward = task.reward * (isPromoActive ? task.promotion!.multiplier : 1);
 
           return (
-            <div key={task.id} className={`glass-card p-4 transition-all ${isCompleted ? 'opacity-60' : ''}`}>
+            <div key={task.id} className={`glass-card p-4 transition-all ${isCompleted ? 'opacity-60' : ''} ${isPromoActive ? 'border border-amber-500/30' : ''}`}>
               <div className="flex items-start gap-3">
                 <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${config.color}`}>
                   {task.icon ? <span className="text-base">{task.icon}</span> : config.icon}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-0.5">
+                  <div className="flex items-center gap-2 mb-0.5 flex-wrap">
                     <h3 className="text-sm font-semibold text-white">{task.title}</h3>
                     <span className="px-1.5 py-0.5 rounded text-[9px] font-medium bg-white/5 text-slate-400">
                       {config.label}
                     </span>
+                    {isPromoActive && (
+                      <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 text-[9px] font-bold">
+                        <Flame className="w-2.5 h-2.5" /> PROMO ×{task.promotion!.multiplier}
+                      </span>
+                    )}
                   </div>
                   <p className="text-xs text-slate-400 mb-2">{task.description}</p>
 
@@ -110,9 +117,14 @@ export const MiniAppTasks: React.FC = () => {
                   )}
 
                   <div className="flex items-center gap-2">
-                    <span className="text-lg font-bold text-emerald-400">+{task.reward.toFixed(2)} TON</span>
-                    {task.rewardType === 'bonus' && <span className="text-[10px] text-purple-400 font-medium">(Bonus)</span>}
-                    {task.rewardType === 'xp' && <span className="text-[10px] text-amber-400 font-medium">(XP)</span>}
+                    {isPromoActive ? (
+                      <>
+                        <span className="text-lg font-bold text-amber-400">+{displayReward.toFixed(2)} TON</span>
+                        <span className="text-xs text-slate-500 line-through">+{task.reward.toFixed(2)}</span>
+                      </>
+                    ) : (
+                      <span className="text-lg font-bold text-emerald-400">+{displayReward.toFixed(2)} TON</span>
+                    )}
                   </div>
                 </div>
 

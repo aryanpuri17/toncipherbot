@@ -81,7 +81,7 @@ export const AdminReferrals: React.FC = () => {
               </div>
               <div className="text-right">
                 <p className="text-sm font-semibold text-purple-400">{user.referralCount} filleuls</p>
-                <p className="text-xs text-slate-500">${user.balanceReferral.toFixed(2)} gagnés</p>
+                <p className="text-xs text-slate-500">{user.totalEarnings.toFixed(2)} TON gagnés</p>
               </div>
             </div>
           ))}
@@ -148,72 +148,21 @@ export const AdminShop: React.FC = () => {
 
 export const AdminGamification: React.FC = () => {
   const { users } = useAppStore();
-  const topUsers = [...users].sort((a, b) => b.xp - a.xp).slice(0, 5);
-
-  const levels = [
-    { level: 1, xpRequired: 0, title: 'Débutant', color: 'text-slate-400' },
-    { level: 5, xpRequired: 1000, title: 'Explorateur', color: 'text-emerald-400' },
-    { level: 10, xpRequired: 3000, title: 'Avancé', color: 'text-blue-400' },
-    { level: 15, xpRequired: 6000, title: 'Expert', color: 'text-purple-400' },
-    { level: 20, xpRequired: 10000, title: 'Maître', color: 'text-amber-400' },
-    { level: 25, xpRequired: 15000, title: 'Légende', color: 'text-red-400' },
-  ];
-
-  const badges = [
-    { id: 'early_adopter', name: 'Early Adopter', icon: '🌟', description: 'Inscrit dans les 100 premiers' },
-    { id: 'task_master', name: 'Task Master', icon: '🎯', description: '100+ tâches complétées' },
-    { id: 'referral_king', name: 'Referral King', icon: '👑', description: '20+ filleuls actifs' },
-    { id: 'whale', name: 'Whale', icon: '🐋', description: '1000$+ de dépôts totaux' },
-    { id: 'streak_champion', name: 'Streak Champion', icon: '🔥', description: '14+ jours consécutifs' },
-  ];
+  const topUsers = [...users].sort((a, b) => b.tasksCompleted - a.tasksCompleted).slice(0, 5);
 
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
-        <h2 className="text-2xl font-bold text-white">Gamification</h2>
-        <p className="text-slate-400 text-sm mt-1">XP, Niveaux, Badges et Classements</p>
+        <h2 className="text-2xl font-bold text-white">Classement</h2>
+        <p className="text-slate-400 text-sm mt-1">Top utilisateurs par tâches complétées</p>
       </div>
 
-      {/* Levels System */}
       <div className="glass-card p-5">
         <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
-          <Zap className="w-4 h-4 text-amber-400" /> Niveaux
-        </h3>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-          {levels.map(l => (
-            <div key={l.level} className="text-center p-3 rounded-lg bg-white/[0.03]">
-              <p className={`text-2xl font-bold ${l.color}`}>{l.level}</p>
-              <p className="text-xs text-white font-medium mt-1">{l.title}</p>
-              <p className="text-[10px] text-slate-500">{l.xpRequired} XP</p>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Badges */}
-      <div className="glass-card p-5">
-        <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
-          <Award className="w-4 h-4 text-purple-400" /> Badges
-        </h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {badges.map(b => (
-            <div key={b.id} className="flex items-center gap-3 p-3 rounded-lg bg-white/[0.03]">
-              <span className="text-2xl">{b.icon}</span>
-              <div>
-                <p className="text-sm font-medium text-white">{b.name}</p>
-                <p className="text-xs text-slate-400">{b.description}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Leaderboard */}
-      <div className="glass-card p-5">
-        <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
-          <TrendingUp className="w-4 h-4 text-emerald-400" /> Classement Global
+          <TrendingUp className="w-4 h-4 text-emerald-400" /> Top Utilisateurs
         </h3>
         <div className="space-y-3">
+          {topUsers.length === 0 && <p className="text-sm text-slate-500 text-center py-4">Aucun utilisateur pour l'instant</p>}
           {topUsers.map((user, i) => (
             <div key={user.id} className="flex items-center gap-3 p-3 rounded-lg bg-white/[0.02]">
               <span className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${i === 0 ? 'bg-amber-500/20 text-amber-400' : i === 1 ? 'bg-slate-300/20 text-slate-300' : i === 2 ? 'bg-orange-700/20 text-orange-400' : 'bg-white/5 text-slate-400'}`}>
@@ -221,11 +170,10 @@ export const AdminGamification: React.FC = () => {
               </span>
               <div className="flex-1">
                 <p className="text-sm font-medium text-white">@{user.username}</p>
-                <p className="text-xs text-slate-500">Niveau {user.level}</p>
+                <p className="text-xs text-slate-500">{user.totalEarnings.toFixed(2)} TON gagnés</p>
               </div>
               <div className="text-right">
-                <p className="text-sm font-semibold text-amber-400">{user.xp.toLocaleString()} XP</p>
-                <p className="text-xs text-slate-500">🔥 {user.streak}j</p>
+                <p className="text-sm font-semibold text-emerald-400">{user.tasksCompleted} tâches</p>
               </div>
             </div>
           ))}
@@ -262,7 +210,7 @@ export const AdminChannels: React.FC = () => {
                   <h3 className="text-sm font-semibold text-white">{ch.name}</h3>
                   {ch.isMandatory && <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-red-500/10 text-red-400 border border-red-500/20">Obligatoire</span>}
                   {ch.botIsAdmin && <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Bot Admin ✓</span>}
-                  {ch.joinReward && ch.joinReward > 0 && <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">+${ch.joinReward}</span>}
+                  {ch.joinReward && ch.joinReward > 0 && <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">+{ch.joinReward} TON</span>}
                 </div>
                 <div className="flex items-center gap-4 text-xs text-slate-500">
                   <span>ID: {ch.telegramId}</span>

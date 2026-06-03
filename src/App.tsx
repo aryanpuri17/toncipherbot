@@ -21,7 +21,7 @@ import { MiniAppWallet, MiniAppDeposit, MiniAppWithdraw, MiniAppHistory } from '
 import { MiniAppTasks } from './components/miniapp/MiniAppTasks';
 import { MiniAppLeaderboard } from './components/miniapp/MiniAppLeaderboard';
 import { MiniAppProfile } from './components/miniapp/MiniAppProfile';
-import { MiniAppShop, MiniAppRewards } from './components/miniapp/MiniAppShop';
+import { MiniAppShop } from './components/miniapp/MiniAppShop';
 import { MiniAppCreateTask } from './components/miniapp/MiniAppCreateTask';
 
 import { Bell, Menu, Settings, ChevronRight, Globe, Info } from 'lucide-react';
@@ -99,8 +99,6 @@ const MiniAppPageContent: React.FC = () => {
     case 'tasks':       return <MiniAppTasks />;
     case 'leaderboard': return <MiniAppLeaderboard />;
     case 'profile':     return <MiniAppProfile />;
-    case 'shop':        return <MiniAppShop />;
-    case 'rewards':     return <MiniAppRewards />;
     case 'createTask':  return <MiniAppCreateTask />;
     case 'settings':    return <MiniAppSettings />;
     default:            return <MiniAppDashboard />;

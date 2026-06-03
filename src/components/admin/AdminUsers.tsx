@@ -65,7 +65,7 @@ export const AdminUsers: React.FC = () => {
                 <tr className="border-b border-white/5">
                   <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Utilisateur</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Solde</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Niveau</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Tâches</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Risque</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Statut</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Actions</th>
@@ -90,10 +90,7 @@ export const AdminUsers: React.FC = () => {
                       <p className="text-xs text-slate-500">Total: {user.totalEarnings.toFixed(2)} TON</p>
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-semibold text-purple-400">Nv.{user.level}</span>
-                        <span className="text-xs text-slate-500">{user.xp} XP</span>
-                      </div>
+                      <span className="text-sm font-semibold text-purple-400">{user.tasksCompleted}</span>
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
@@ -146,16 +143,8 @@ export const AdminUsers: React.FC = () => {
 
             <div className="space-y-3">
               <div className="flex justify-between items-center p-2.5 rounded-lg bg-white/[0.03]">
-                <span className="text-xs text-slate-400">Solde principal</span>
+                <span className="text-xs text-slate-400">Solde</span>
                 <span className="text-sm font-semibold text-emerald-400">{selected.balanceMain.toFixed(2)} TON</span>
-              </div>
-              <div className="flex justify-between items-center p-2.5 rounded-lg bg-white/[0.03]">
-                <span className="text-xs text-slate-400">Solde bonus</span>
-                <span className="text-sm font-semibold text-blue-400">{selected.balanceBonus.toFixed(2)} TON</span>
-              </div>
-              <div className="flex justify-between items-center p-2.5 rounded-lg bg-white/[0.03]">
-                <span className="text-xs text-slate-400">Solde parrainage</span>
-                <span className="text-sm font-semibold text-purple-400">{selected.balanceReferral.toFixed(2)} TON</span>
               </div>
               <div className="flex justify-between items-center p-2.5 rounded-lg bg-white/[0.03]">
                 <span className="text-xs text-slate-400">Gains totaux</span>
@@ -163,11 +152,7 @@ export const AdminUsers: React.FC = () => {
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-2">
-              <div className="text-center p-2 rounded-lg bg-white/[0.03]">
-                <p className="text-lg font-bold text-white">{selected.level}</p>
-                <p className="text-[10px] text-slate-500">Niveau</p>
-              </div>
+            <div className="grid grid-cols-2 gap-2">
               <div className="text-center p-2 rounded-lg bg-white/[0.03]">
                 <p className="text-lg font-bold text-white">{selected.tasksCompleted}</p>
                 <p className="text-[10px] text-slate-500">Tâches</p>
@@ -184,25 +169,9 @@ export const AdminUsers: React.FC = () => {
                 <span className="text-xs text-slate-400">Score de risque: {selected.riskScore}/100</span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-xs text-slate-400">Streak: 🔥 {selected.streak} jours</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-slate-400">Code: {selected.referralCode}</span>
+                <span className="text-xs text-slate-400">Code parrainage: {selected.referralCode}</span>
               </div>
             </div>
-
-            {selected.badges.length > 0 && (
-              <div>
-                <p className="text-xs text-slate-400 mb-2">Badges</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {selected.badges.map(b => (
-                    <span key={b} className="px-2 py-1 rounded-md bg-purple-500/10 border border-purple-500/20 text-purple-400 text-[10px] font-medium">
-                      {b.replace(/_/g, ' ')}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
 
             <div className="flex gap-2">
               {selected.status === 'active' ? (
