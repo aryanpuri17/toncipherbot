@@ -22,6 +22,7 @@ import { MiniAppTasks } from './components/miniapp/MiniAppTasks';
 import { MiniAppLeaderboard } from './components/miniapp/MiniAppLeaderboard';
 import { MiniAppProfile } from './components/miniapp/MiniAppProfile';
 import { MiniAppShop, MiniAppRewards } from './components/miniapp/MiniAppShop';
+import { MiniAppCreateTask } from './components/miniapp/MiniAppCreateTask';
 
 import { Bell, Menu } from 'lucide-react';
 
@@ -63,6 +64,7 @@ const MiniAppPageContent: React.FC = () => {
     case 'profile':     return <MiniAppProfile />;
     case 'shop':        return <MiniAppShop />;
     case 'rewards':     return <MiniAppRewards />;
+    case 'createTask':  return <MiniAppCreateTask />;
     default:            return <MiniAppDashboard />;
   }
 };

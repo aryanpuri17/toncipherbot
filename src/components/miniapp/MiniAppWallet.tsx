@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAppStore } from '../../store/appStore';
-import { ArrowDownLeft, ArrowUpRight, TrendingUp, Copy, CheckCircle, ChevronRight } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, TrendingUp, Copy, CheckCircle, ChevronRight, AlertCircle } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 
 export const MiniAppWallet: React.FC = () => {
@@ -23,7 +23,7 @@ export const MiniAppWallet: React.FC = () => {
             <span className="text-2xl">{b.icon}</span>
             <div className="flex-1">
               <p className="text-xs text-slate-400">{b.label}</p>
-              <p className={`text-xl font-bold ${b.textColor}`}>${b.value.toFixed(2)}</p>
+              <p className={`text-xl font-bold ${b.textColor}`}>{b.value.toFixed(2)} TON</p>
             </div>
           </div>
         ))}
@@ -55,13 +55,13 @@ export const MiniAppWallet: React.FC = () => {
               </div>
               <div className="flex-1">
                 <p className="text-sm font-medium text-white">
-                  {tx.type === 'deposit' ? 'Dépôt' : tx.type === 'withdrawal' ? 'Retrait' : 'Récompense'}
+                  {tx.type === 'deposit' ? 'Dépôt' : tx.type === 'withdrawal' ? 'Retrait' : tx.type === 'purchase' ? 'Achat' : 'Récompense'}
                 </p>
                 <p className="text-xs text-slate-500">{tx.network || 'Interne'} • {new Date(tx.createdAt).toLocaleDateString('fr-FR')}</p>
               </div>
               <div className="text-right">
-                <p className={`text-sm font-semibold ${tx.type === 'withdrawal' ? 'text-orange-400' : 'text-emerald-400'}`}>
-                  {tx.type === 'withdrawal' ? '-' : '+'}{tx.amount.toFixed(2)} {tx.currency}
+                <p className={`text-sm font-semibold ${tx.type === 'withdrawal' || tx.type === 'purchase' ? 'text-orange-400' : 'text-emerald-400'}`}>
+                  {tx.type === 'withdrawal' || tx.type === 'purchase' ? '-' : '+'}{tx.amount.toFixed(2)} {tx.currency}
                 </p>
                 <p className={`text-[10px] font-medium ${tx.status === 'completed' ? 'text-emerald-400' : tx.status === 'pending' ? 'text-amber-400' : 'text-blue-400'}`}>
                   {tx.status === 'completed' ? '✓ Complété' : tx.status === 'pending' ? '⏳ En attente' : '🔄 Confirmation'}
@@ -69,6 +69,9 @@ export const MiniAppWallet: React.FC = () => {
               </div>
             </div>
           ))}
+          {userTx.length === 0 && (
+            <p className="text-center text-sm text-slate-500 py-6">Aucune transaction</p>
+          )}
         </div>
       </div>
     </div>
@@ -76,21 +79,28 @@ export const MiniAppWallet: React.FC = () => {
 };
 
 export const MiniAppDeposit: React.FC = () => {
-  const [selectedNetwork, setSelectedNetwork] = useState('TON');
+  const { cryptoNetworks } = useAppStore();
+  const [selectedId, setSelectedId] = useState('1');
   const [copied, setCopied] = useState(false);
 
-  const networks = [
-    { id: 'TON', name: 'TON', icon: '💎', address: 'EQD...xK9mP2qZ', min: 1, max: 10000 },
-    { id: 'TRC20', name: 'USDT TRC20', icon: '💵', address: 'TKx...9PzR4mN', min: 5, max: 50000 },
-    { id: 'BEP20', name: 'USDT BEP20', icon: '💵', address: '0x7...f89D3eK', min: 5, max: 50000 },
-  ];
+  const depositNetworks = cryptoNetworks.filter(n => n.isActive && n.isDepositEnabled);
+  const selected = depositNetworks.find(n => n.id === selectedId) ?? depositNetworks[0];
 
-  const selected = networks.find(n => n.id === selectedNetwork)!;
+  const address = selected?.hotWalletAddress || '';
+  const hasAddress = address.length > 0;
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(selected.address);
+    if (!hasAddress) return;
+    navigator.clipboard.writeText(address);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const networkIcon = (symbol: string, network: string) => {
+    if (symbol === 'TON') return '💎';
+    if (network === 'POLYGON') return '🟣';
+    if (network === 'BEP20') return '🟡';
+    return '💵';
   };
 
   return (
@@ -106,74 +116,121 @@ export const MiniAppDeposit: React.FC = () => {
       <div>
         <p className="text-xs text-slate-400 mb-2">Sélectionnez le réseau</p>
         <div className="grid grid-cols-3 gap-2">
-          {networks.map(net => (
+          {depositNetworks.map(net => (
             <button
               key={net.id}
-              onClick={() => setSelectedNetwork(net.id)}
-              className={`p-3 rounded-xl text-center transition-all ${selectedNetwork === net.id ? 'bg-blue-500/15 border border-blue-500/40 text-white' : 'glass-card-light text-slate-400 hover:text-white'}`}
+              onClick={() => setSelectedId(net.id)}
+              className={`p-3 rounded-xl text-center transition-all ${selectedId === net.id ? 'bg-blue-500/15 border border-blue-500/40 text-white' : 'glass-card-light text-slate-400 hover:text-white'}`}
             >
-              <span className="text-xl block mb-1">{net.icon}</span>
-              <span className="text-xs font-medium">{net.name}</span>
+              <span className="text-xl block mb-1">{networkIcon(net.symbol, net.network)}</span>
+              <span className="text-xs font-medium">{net.symbol}</span>
+              <span className="text-[9px] text-slate-500 block">{net.network}</span>
             </button>
           ))}
         </div>
       </div>
 
-      {/* QR Code */}
+      {/* QR Code / Address */}
       <div className="glass-card p-5 flex flex-col items-center">
-        <div className="bg-white p-3 rounded-xl mb-4">
-          <QRCodeSVG value={selected.address} size={160} />
-        </div>
-        <p className="text-xs text-slate-400 mb-2">Adresse de dépôt {selected.name}</p>
-        <div className="flex items-center gap-2 w-full">
-          <div className="flex-1 px-3 py-2.5 bg-white/5 rounded-lg text-xs text-white font-mono truncate">
-            {selected.address}
+        {hasAddress ? (
+          <>
+            <div className="bg-white p-3 rounded-xl mb-4">
+              <QRCodeSVG value={address} size={160} />
+            </div>
+            <p className="text-xs text-slate-400 mb-2">Adresse de dépôt {selected.name}</p>
+            <div className="flex items-center gap-2 w-full">
+              <div className="flex-1 px-3 py-2.5 bg-white/5 rounded-lg text-xs text-white font-mono truncate">
+                {address}
+              </div>
+              <button onClick={handleCopy} className="p-2.5 rounded-lg bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 transition-colors">
+                {copied ? <CheckCircle className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+              </button>
+            </div>
+          </>
+        ) : (
+          <div className="flex flex-col items-center gap-3 py-4">
+            <AlertCircle className="w-10 h-10 text-amber-400" />
+            <p className="text-sm text-amber-400 font-medium text-center">Adresse non configurée</p>
+            <p className="text-xs text-slate-400 text-center">L'administrateur doit configurer l'adresse du wallet dans le panneau admin → Crypto & Réseaux.</p>
           </div>
-          <button onClick={handleCopy} className="p-2.5 rounded-lg bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 transition-colors">
-            {copied ? <CheckCircle className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-          </button>
-        </div>
+        )}
       </div>
 
       {/* Info */}
-      <div className="glass-card-light p-4 space-y-2">
-        <div className="flex justify-between text-xs">
-          <span className="text-slate-400">Dépôt minimum</span>
-          <span className="text-white font-medium">{selected.min} {selected.id === 'TON' ? 'TON' : 'USDT'}</span>
+      {selected && (
+        <div className="glass-card-light p-4 space-y-2">
+          <div className="flex justify-between text-xs">
+            <span className="text-slate-400">Dépôt minimum</span>
+            <span className="text-white font-medium">{selected.minDeposit} {selected.symbol}</span>
+          </div>
+          <div className="flex justify-between text-xs">
+            <span className="text-slate-400">Dépôt maximum</span>
+            <span className="text-white font-medium">{selected.maxDeposit.toLocaleString()} {selected.symbol}</span>
+          </div>
+          <div className="flex justify-between text-xs">
+            <span className="text-slate-400">Confirmations requises</span>
+            <span className="text-white font-medium">{selected.requiredConfirmations}</span>
+          </div>
+          <div className="flex justify-between text-xs">
+            <span className="text-slate-400">Détection</span>
+            <span className="text-emerald-400 font-medium">Automatique ✓</span>
+          </div>
         </div>
-        <div className="flex justify-between text-xs">
-          <span className="text-slate-400">Dépôt maximum</span>
-          <span className="text-white font-medium">{selected.max.toLocaleString()} {selected.id === 'TON' ? 'TON' : 'USDT'}</span>
-        </div>
-        <div className="flex justify-between text-xs">
-          <span className="text-slate-400">Confirmations requises</span>
-          <span className="text-white font-medium">{selected.id === 'TON' ? '12' : selected.id === 'TRC20' ? '20' : '15'}</span>
-        </div>
-        <div className="flex justify-between text-xs">
-          <span className="text-slate-400">Détection</span>
-          <span className="text-emerald-400 font-medium">Automatique ✓</span>
-        </div>
-      </div>
+      )}
 
-      <div className="glass-card-light p-3 border-amber-500/20 bg-amber-500/5">
-        <p className="text-xs text-amber-400">⚠️ Envoyez uniquement du {selected.id === 'TON' ? 'TON' : 'USDT'} sur le réseau {selected.id}. Tout autre actif sera perdu.</p>
-      </div>
+      {hasAddress && (
+        <div className="glass-card-light p-3 border-amber-500/20 bg-amber-500/5">
+          <p className="text-xs text-amber-400">⚠️ Envoyez uniquement du {selected.symbol} sur le réseau {selected.network}. Tout autre actif sera perdu.</p>
+        </div>
+      )}
     </div>
   );
 };
 
 export const MiniAppWithdraw: React.FC = () => {
-  const [selectedNetwork, setSelectedNetwork] = useState('TON');
+  const { cryptoNetworks, currentUser, submitWithdrawal } = useAppStore();
+  const [selectedId, setSelectedId] = useState('1');
   const [amount, setAmount] = useState('');
   const [address, setAddress] = useState('');
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState(false);
 
-  const networks = [
-    { id: 'TON', name: 'TON', icon: '💎', fee: 0.5, min: 5, max: 5000, dailyLimit: 10000 },
-    { id: 'TRC20', name: 'USDT TRC20', icon: '💵', fee: 1.0, min: 10, max: 25000, dailyLimit: 50000 },
-    { id: 'BEP20', name: 'USDT BEP20', icon: '💵', fee: 0.5, min: 10, max: 25000, dailyLimit: 50000 },
-  ];
+  const withdrawNetworks = cryptoNetworks.filter(n => n.isActive && n.isWithdrawalEnabled);
+  const selected = withdrawNetworks.find(n => n.id === selectedId) ?? withdrawNetworks[0];
 
-  const selected = networks.find(n => n.id === selectedNetwork)!;
+  const networkIcon = (symbol: string, network: string) => {
+    if (symbol === 'TON') return '💎';
+    if (network === 'POLYGON') return '🟣';
+    if (network === 'BEP20') return '🟡';
+    return '💵';
+  };
+
+  const parsedAmount = parseFloat(amount) || 0;
+  const netReceived = parsedAmount - (selected?.withdrawalFee ?? 0);
+
+  const handleSubmit = () => {
+    setError('');
+    if (!selected) return;
+    const result = submitWithdrawal(selected.id, parsedAmount, address);
+    if (result.success) {
+      setSuccess(true);
+    } else {
+      setError(result.error ?? 'Erreur inconnue');
+    }
+  };
+
+  if (success) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4 animate-slide-up">
+        <div className="text-5xl">✅</div>
+        <h2 className="text-xl font-bold text-white">Retrait soumis!</h2>
+        <p className="text-sm text-slate-400 text-center">Votre retrait de {parsedAmount} {selected?.symbol} est en cours de traitement.</p>
+        <button onClick={() => useAppStore.getState().setMiniAppPage('wallet')} className="btn-primary px-6 py-3 rounded-xl text-sm font-semibold text-white">
+          Retour au wallet
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5 animate-slide-up">
@@ -184,18 +241,25 @@ export const MiniAppWithdraw: React.FC = () => {
         <h1 className="text-xl font-bold text-white">Retirer</h1>
       </div>
 
+      {/* Balance available */}
+      <div className="glass-card-light p-3 flex items-center justify-between">
+        <span className="text-xs text-slate-400">Solde disponible</span>
+        <span className="text-sm font-bold text-blue-400">{currentUser.balanceMain.toFixed(2)} TON</span>
+      </div>
+
       {/* Network */}
       <div>
         <p className="text-xs text-slate-400 mb-2">Réseau</p>
         <div className="grid grid-cols-3 gap-2">
-          {networks.map(net => (
+          {withdrawNetworks.map(net => (
             <button
               key={net.id}
-              onClick={() => setSelectedNetwork(net.id)}
-              className={`p-3 rounded-xl text-center transition-all ${selectedNetwork === net.id ? 'bg-blue-500/15 border border-blue-500/40 text-white' : 'glass-card-light text-slate-400'}`}
+              onClick={() => { setSelectedId(net.id); setError(''); }}
+              className={`p-3 rounded-xl text-center transition-all ${selectedId === net.id ? 'bg-blue-500/15 border border-blue-500/40 text-white' : 'glass-card-light text-slate-400'}`}
             >
-              <span className="text-xl block mb-1">{net.icon}</span>
-              <span className="text-xs font-medium">{net.name}</span>
+              <span className="text-xl block mb-1">{networkIcon(net.symbol, net.network)}</span>
+              <span className="text-xs font-medium">{net.symbol}</span>
+              <span className="text-[9px] text-slate-500 block">{net.network}</span>
             </button>
           ))}
         </div>
@@ -203,12 +267,20 @@ export const MiniAppWithdraw: React.FC = () => {
 
       {/* Amount */}
       <div>
-        <p className="text-xs text-slate-400 mb-2">Montant</p>
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-xs text-slate-400">Montant</p>
+          <button
+            onClick={() => setAmount(currentUser.balanceMain.toFixed(2))}
+            className="text-xs text-blue-400"
+          >
+            Max
+          </button>
+        </div>
         <input
           type="number"
           value={amount}
-          onChange={e => setAmount(e.target.value)}
-          placeholder={`Min: ${selected.min}`}
+          onChange={e => { setAmount(e.target.value); setError(''); }}
+          placeholder={selected ? `Min: ${selected.minWithdrawal}` : ''}
           className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white text-lg font-semibold placeholder:text-slate-600 focus:outline-none focus:border-blue-500/50"
         />
       </div>
@@ -219,34 +291,47 @@ export const MiniAppWithdraw: React.FC = () => {
         <input
           type="text"
           value={address}
-          onChange={e => setAddress(e.target.value)}
+          onChange={e => { setAddress(e.target.value); setError(''); }}
           placeholder="Collez votre adresse ici"
           className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white text-sm font-mono placeholder:text-slate-600 focus:outline-none focus:border-blue-500/50"
         />
       </div>
 
       {/* Info */}
-      <div className="glass-card-light p-4 space-y-2">
-        <div className="flex justify-between text-xs">
-          <span className="text-slate-400">Frais de réseau</span>
-          <span className="text-orange-400 font-medium">{selected.fee} {selected.id === 'TON' ? 'TON' : 'USDT'}</span>
+      {selected && (
+        <div className="glass-card-light p-4 space-y-2">
+          <div className="flex justify-between text-xs">
+            <span className="text-slate-400">Frais de réseau</span>
+            <span className="text-orange-400 font-medium">{selected.withdrawalFee} {selected.symbol}</span>
+          </div>
+          <div className="flex justify-between text-xs">
+            <span className="text-slate-400">Vous recevrez</span>
+            <span className="text-emerald-400 font-medium">{netReceived > 0 ? netReceived.toFixed(2) : '0.00'} {selected.symbol}</span>
+          </div>
+          <div className="flex justify-between text-xs">
+            <span className="text-slate-400">Limite journalière</span>
+            <span className="text-white font-medium">{selected.dailyWithdrawalLimit.toLocaleString()} {selected.symbol}</span>
+          </div>
+          <div className="flex justify-between text-xs">
+            <span className="text-slate-400">Traitement</span>
+            <span className="text-blue-400 font-medium">Automatique ⚡</span>
+          </div>
         </div>
-        <div className="flex justify-between text-xs">
-          <span className="text-slate-400">Vous recevrez</span>
-          <span className="text-emerald-400 font-medium">{amount ? (parseFloat(amount) - selected.fee).toFixed(2) : '0.00'} {selected.id === 'TON' ? 'TON' : 'USDT'}</span>
-        </div>
-        <div className="flex justify-between text-xs">
-          <span className="text-slate-400">Limite journalière</span>
-          <span className="text-white font-medium">{selected.dailyLimit.toLocaleString()}</span>
-        </div>
-        <div className="flex justify-between text-xs">
-          <span className="text-slate-400">Traitement</span>
-          <span className="text-blue-400 font-medium">Automatique ⚡</span>
-        </div>
-      </div>
+      )}
 
-      <button className="w-full btn-accent py-3.5 rounded-xl text-sm font-semibold text-white">
-        Retirer {amount || '0.00'} {selected.id === 'TON' ? 'TON' : 'USDT'}
+      {error && (
+        <div className="glass-card-light p-3 border-red-500/20 bg-red-500/5 flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
+          <p className="text-xs text-red-400">{error}</p>
+        </div>
+      )}
+
+      <button
+        onClick={handleSubmit}
+        disabled={!parsedAmount || !address.trim()}
+        className="w-full btn-accent py-3.5 rounded-xl text-sm font-semibold text-white disabled:opacity-40 disabled:cursor-not-allowed"
+      >
+        Retirer {parsedAmount > 0 ? parsedAmount.toFixed(2) : '0.00'} {selected?.symbol ?? 'TON'}
       </button>
     </div>
   );
@@ -269,18 +354,18 @@ export const MiniAppHistory: React.FC = () => {
         {userTx.map(tx => (
           <div key={tx.id} className="glass-card p-4">
             <div className="flex items-center gap-3">
-              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${tx.type === 'deposit' ? 'bg-emerald-500/20 text-emerald-400' : tx.type === 'withdrawal' ? 'bg-orange-500/20 text-orange-400' : 'bg-blue-500/20 text-blue-400'}`}>
-                {tx.type === 'deposit' ? <ArrowDownLeft className="w-5 h-5" /> : tx.type === 'withdrawal' ? <ArrowUpRight className="w-5 h-5" /> : <TrendingUp className="w-5 h-5" />}
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${tx.type === 'deposit' ? 'bg-emerald-500/20 text-emerald-400' : tx.type === 'withdrawal' || tx.type === 'purchase' ? 'bg-orange-500/20 text-orange-400' : 'bg-blue-500/20 text-blue-400'}`}>
+                {tx.type === 'deposit' ? <ArrowDownLeft className="w-5 h-5" /> : tx.type === 'withdrawal' || tx.type === 'purchase' ? <ArrowUpRight className="w-5 h-5" /> : <TrendingUp className="w-5 h-5" />}
               </div>
               <div className="flex-1">
                 <p className="text-sm font-semibold text-white">
-                  {tx.type === 'deposit' ? 'Dépôt' : tx.type === 'withdrawal' ? 'Retrait' : 'Récompense'}
+                  {tx.type === 'deposit' ? 'Dépôt' : tx.type === 'withdrawal' ? 'Retrait' : tx.type === 'purchase' ? 'Achat boutique' : 'Récompense'}
                 </p>
                 <p className="text-xs text-slate-500">{new Date(tx.createdAt).toLocaleString('fr-FR')}</p>
               </div>
               <div className="text-right">
-                <p className={`text-base font-bold ${tx.type === 'withdrawal' ? 'text-orange-400' : 'text-emerald-400'}`}>
-                  {tx.type === 'withdrawal' ? '-' : '+'}{tx.amount.toFixed(2)}
+                <p className={`text-base font-bold ${tx.type === 'withdrawal' || tx.type === 'purchase' ? 'text-orange-400' : 'text-emerald-400'}`}>
+                  {tx.type === 'withdrawal' || tx.type === 'purchase' ? '-' : '+'}{tx.amount.toFixed(2)}
                 </p>
                 <p className="text-[10px] text-slate-500">{tx.currency}</p>
               </div>
@@ -292,6 +377,9 @@ export const MiniAppHistory: React.FC = () => {
             )}
           </div>
         ))}
+        {userTx.length === 0 && (
+          <p className="text-center text-sm text-slate-500 py-10">Aucune transaction</p>
+        )}
       </div>
     </div>
   );
