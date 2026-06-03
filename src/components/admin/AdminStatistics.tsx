@@ -37,11 +37,11 @@ export const AdminStatistics: React.FC = () => {
     const months = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
     const now = new Date();
     return Array.from({ length: 6 }, (_, i) => {
-      const monthIdx = (now.getMonth() - 5 + i + 12) % 12;
-      const year = now.getFullYear() - (now.getMonth() - 5 + i < 0 ? 1 : 0);
+      const offset = i - 5;
+      const d = new Date(now.getFullYear(), now.getMonth() + offset + 1, 0); // last day of that month
       return {
-        month: months[monthIdx],
-        users: users.filter(u => { const d = new Date(u.createdAt); return d.getMonth() <= monthIdx && d.getFullYear() <= year; }).length,
+        month: months[d.getMonth()],
+        users: users.filter(u => new Date(u.createdAt) <= d).length,
       };
     });
   }, [users]);

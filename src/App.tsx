@@ -21,7 +21,6 @@ import { MiniAppWallet, MiniAppDeposit, MiniAppWithdraw, MiniAppHistory } from '
 import { MiniAppTasks } from './components/miniapp/MiniAppTasks';
 import { MiniAppLeaderboard } from './components/miniapp/MiniAppLeaderboard';
 import { MiniAppProfile } from './components/miniapp/MiniAppProfile';
-import { MiniAppShop } from './components/miniapp/MiniAppShop';
 import { MiniAppCreateTask } from './components/miniapp/MiniAppCreateTask';
 import { MiniAppReferral } from './components/miniapp/MiniAppReferral';
 

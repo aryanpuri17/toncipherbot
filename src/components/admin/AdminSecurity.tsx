@@ -74,6 +74,12 @@ export const AdminAntiFraud: React.FC = () => {
 
       {/* Alerts List */}
       <div className="space-y-3">
+        {fraudAlerts.length === 0 && (
+          <div className="glass-card p-8 text-center">
+            <Shield className="w-8 h-8 text-slate-600 mx-auto mb-2" />
+            <p className="text-sm text-slate-500">Aucune alerte de fraude détectée</p>
+          </div>
+        )}
         {fraudAlerts.map(alert => (
           <div key={alert.id} className={`glass-card p-5 ${alert.severity === 'critical' ? 'border-red-500/20' : alert.severity === 'high' ? 'border-orange-500/20' : ''}`}>
             <div className="flex flex-col sm:flex-row items-start gap-4">
@@ -167,6 +173,11 @@ export const AdminLogs: React.FC = () => {
 
       <div className="glass-card overflow-hidden">
         <div className="space-y-0">
+          {filtered.length === 0 && (
+            <div className="px-4 py-10 text-center text-sm text-slate-500">
+              {search || typeFilter !== 'all' ? 'Aucun log correspondant à la recherche' : 'Aucun log pour l\'instant'}
+            </div>
+          )}
           {filtered.map(log => (
             <div key={log.id} className="flex items-start gap-3 px-4 py-3 border-b border-white/[0.03] hover:bg-white/[0.02] transition-colors">
               <div className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase flex-shrink-0 mt-0.5 ${typeColors[log.type]}`}>
@@ -199,6 +210,11 @@ export const AdminAlerts: React.FC = () => {
       </div>
 
       <div className="space-y-3">
+        {adminNotifs.length === 0 && (
+          <div className="glass-card p-8 text-center">
+            <p className="text-sm text-slate-500">Aucune alerte système pour l'instant</p>
+          </div>
+        )}
         {adminNotifs.map(n => (
           <div key={n.id} className={`glass-card p-4 flex items-start gap-3 cursor-pointer transition-all ${!n.isRead ? 'border-blue-500/20 bg-blue-500/5' : ''}`} onClick={() => markNotificationRead(n.id)}>
             <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${n.type === 'alert' ? 'bg-red-500/20 text-red-400' : n.type === 'system' ? 'bg-blue-500/20 text-blue-400' : 'bg-emerald-500/20 text-emerald-400'}`}>

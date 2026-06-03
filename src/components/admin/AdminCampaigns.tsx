@@ -51,6 +51,11 @@ export const AdminCampaigns: React.FC = () => {
 
       {/* Campaigns */}
       <div className="space-y-4">
+        {campaigns.length === 0 && (
+          <div className="glass-card p-10 text-center">
+            <p className="text-sm text-slate-500">Aucune campagne pour l'instant</p>
+          </div>
+        )}
         {campaigns.map(campaign => (
           <div key={campaign.id} className="glass-card p-5">
             <div className="flex flex-col sm:flex-row items-start gap-4">
@@ -88,12 +93,12 @@ export const AdminCampaigns: React.FC = () => {
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-xs text-slate-500">Budget utilisé</span>
-                    <span className="text-xs text-slate-400">{((campaign.spent / campaign.budget) * 100).toFixed(0)}%</span>
+                    <span className="text-xs text-slate-400">{campaign.budget > 0 ? ((campaign.spent / campaign.budget) * 100).toFixed(0) : 0}%</span>
                   </div>
                   <div className="progress-bar">
                     <div
-                      className={`progress-bar-fill ${campaign.spent / campaign.budget > 0.8 ? 'bg-gradient-to-r from-orange-500 to-red-500' : 'bg-gradient-to-r from-blue-500 to-purple-500'}`}
-                      style={{ width: `${(campaign.spent / campaign.budget) * 100}%` }}
+                      className={`progress-bar-fill ${campaign.budget > 0 && campaign.spent / campaign.budget > 0.8 ? 'bg-gradient-to-r from-orange-500 to-red-500' : 'bg-gradient-to-r from-blue-500 to-purple-500'}`}
+                      style={{ width: campaign.budget > 0 ? `${Math.min((campaign.spent / campaign.budget) * 100, 100)}%` : '0%' }}
                     />
                   </div>
                 </div>

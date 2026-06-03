@@ -29,7 +29,7 @@ export const CampaignModal: React.FC = () => {
     e.preventDefault();
     const data = {
       ...form,
-      advertiserId: 'adv_' + Date.now(),
+      advertiserId: campaign?.advertiserId || ('adv_' + Date.now()),
     };
 
     if (isEdit && campaign) {
