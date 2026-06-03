@@ -6,6 +6,12 @@ import { Key, Hash, Wallet, Bell, Server, MessageSquare, Terminal, Shield, Users
 export const AdminConfig: React.FC = () => {
   const { platformConfig, updatePlatformConfig } = useAppStore();
   const [activeTab, setActiveTab] = useState('bot');
+  const [saved, setSaved] = useState(false);
+
+  const handleSave = () => {
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2500);
+  };
 
   const tabs = [
     { id: 'bot', label: 'Bot', icon: <Terminal className="w-4 h-4" /> },
@@ -402,8 +408,9 @@ export const AdminConfig: React.FC = () => {
       )}
 
       {/* Save Button */}
-      <div className="flex justify-end">
-        <button className="btn-primary px-6 py-3 rounded-xl text-sm font-semibold text-white">
+      <div className="flex justify-end items-center gap-3">
+        {saved && <span className="text-sm text-emerald-400 font-medium">✓ Configuration sauvegardée</span>}
+        <button onClick={handleSave} className={`px-6 py-3 rounded-xl text-sm font-semibold text-white transition-all ${saved ? 'bg-emerald-600/80' : 'btn-primary'}`}>
           💾 Sauvegarder la configuration
         </button>
       </div>

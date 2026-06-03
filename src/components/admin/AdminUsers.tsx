@@ -86,8 +86,8 @@ export const AdminUsers: React.FC = () => {
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <p className="text-sm font-semibold text-emerald-400">${user.balanceMain.toFixed(2)}</p>
-                      <p className="text-xs text-slate-500">Total: ${user.totalEarnings.toFixed(2)}</p>
+                      <p className="text-sm font-semibold text-emerald-400">{user.balanceMain.toFixed(2)} TON</p>
+                      <p className="text-xs text-slate-500">Total: {user.totalEarnings.toFixed(2)} TON</p>
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
@@ -147,19 +147,19 @@ export const AdminUsers: React.FC = () => {
             <div className="space-y-3">
               <div className="flex justify-between items-center p-2.5 rounded-lg bg-white/[0.03]">
                 <span className="text-xs text-slate-400">Solde principal</span>
-                <span className="text-sm font-semibold text-emerald-400">${selected.balanceMain.toFixed(2)}</span>
+                <span className="text-sm font-semibold text-emerald-400">{selected.balanceMain.toFixed(2)} TON</span>
               </div>
               <div className="flex justify-between items-center p-2.5 rounded-lg bg-white/[0.03]">
                 <span className="text-xs text-slate-400">Solde bonus</span>
-                <span className="text-sm font-semibold text-blue-400">${selected.balanceBonus.toFixed(2)}</span>
+                <span className="text-sm font-semibold text-blue-400">{selected.balanceBonus.toFixed(2)} TON</span>
               </div>
               <div className="flex justify-between items-center p-2.5 rounded-lg bg-white/[0.03]">
                 <span className="text-xs text-slate-400">Solde parrainage</span>
-                <span className="text-sm font-semibold text-purple-400">${selected.balanceReferral.toFixed(2)}</span>
+                <span className="text-sm font-semibold text-purple-400">{selected.balanceReferral.toFixed(2)} TON</span>
               </div>
               <div className="flex justify-between items-center p-2.5 rounded-lg bg-white/[0.03]">
                 <span className="text-xs text-slate-400">Gains totaux</span>
-                <span className="text-sm font-semibold text-white">${selected.totalEarnings.toFixed(2)}</span>
+                <span className="text-sm font-semibold text-white">{selected.totalEarnings.toFixed(2)} TON</span>
               </div>
             </div>
 

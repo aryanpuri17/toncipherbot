@@ -8,33 +8,32 @@ import {
 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 
-const chartData = [
-  { name: 'Lun', users: 120, deposits: 4500, tasks: 450 },
-  { name: 'Mar', users: 145, deposits: 5200, tasks: 520 },
-  { name: 'Mer', users: 110, deposits: 3800, tasks: 380 },
-  { name: 'Jeu', users: 190, deposits: 6100, tasks: 610 },
-  { name: 'Ven', users: 170, deposits: 5800, tasks: 580 },
-  { name: 'Sam', users: 200, deposits: 7200, tasks: 720 },
-  { name: 'Dim', users: 127, deposits: 4800, tasks: 480 },
-];
-
-const revenueData = [
-  { name: 'Jan', revenue: 12000 },
-  { name: 'Fév', revenue: 15000 },
-  { name: 'Mar', revenue: 18000 },
-  { name: 'Avr', revenue: 22000 },
-  { name: 'Mai', revenue: 28000 },
-  { name: 'Jun', revenue: 32000 },
-  { name: 'Jul', revenue: 35000 },
-  { name: 'Aoû', revenue: 38000 },
-  { name: 'Sep', revenue: 36000 },
-  { name: 'Oct', revenue: 40000 },
-  { name: 'Nov', revenue: 42000 },
-  { name: 'Déc', revenue: 45678 },
-];
-
 export const AdminOverview: React.FC = () => {
   const { platformStats: s, transactions, fraudAlerts, users } = useAppStore();
+
+  const chartData = React.useMemo(() => {
+    const days = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(); d.setDate(d.getDate() - (6 - i));
+      const start = new Date(d); start.setHours(0, 0, 0, 0);
+      const end = new Date(d); end.setHours(23, 59, 59, 999);
+      return {
+        name: days[d.getDay()],
+        users: users.filter(u => { const j = new Date(u.createdAt); return j >= start && j <= end; }).length,
+        deposits: transactions.filter(tx => tx.type === 'deposit' && new Date(tx.createdAt) >= start && new Date(tx.createdAt) <= end).reduce((s, tx) => s + tx.amount, 0),
+        tasks: transactions.filter(tx => tx.type === 'reward' && new Date(tx.createdAt) >= start && new Date(tx.createdAt) <= end).length,
+      };
+    });
+  }, [users, transactions]);
+
+  const revenueData = React.useMemo(() => {
+    const months = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
+    const now = new Date();
+    return months.map((name, i) => ({
+      name,
+      revenue: transactions.filter(tx => tx.type === 'deposit' && new Date(tx.createdAt).getFullYear() === now.getFullYear() && new Date(tx.createdAt).getMonth() === i).reduce((s, tx) => s + tx.amount, 0),
+    }));
+  }, [transactions]);
 
   const recentTx = transactions.slice(0, 5);
   const recentAlerts = fraudAlerts.slice(0, 3);
@@ -183,7 +182,9 @@ export const AdminOverview: React.FC = () => {
         <div className="glass-card p-5">
           <h3 className="text-sm font-semibold text-white mb-4">Transactions récentes</h3>
           <div className="space-y-3">
-            {recentTx.map(tx => {
+            {recentTx.length === 0 ? (
+              <p className="text-sm text-slate-500 text-center py-4">Aucune transaction pour l'instant</p>
+            ) : recentTx.map(tx => {
               const user = users.find(u => u.id === tx.userId);
               return (
                 <div key={tx.id} className="flex items-center justify-between p-3 rounded-lg bg-white/[0.02] hover:bg-white/[0.04] transition-colors">
@@ -212,6 +213,7 @@ export const AdminOverview: React.FC = () => {
         <div className="glass-card p-5">
           <h3 className="text-sm font-semibold text-white mb-4">Alertes anti-fraude</h3>
           <div className="space-y-3">
+            {recentAlerts.length === 0 && <p className="text-sm text-slate-500 text-center py-4">Aucune alerte active</p>}
             {recentAlerts.map(alert => (
               <div key={alert.id} className="p-3 rounded-lg bg-white/[0.02] hover:bg-white/[0.04] transition-colors">
                 <div className="flex items-start justify-between mb-2">

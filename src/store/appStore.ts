@@ -422,111 +422,41 @@ export interface LogEntry {
 
 const mockUsers: User[] = [
   {
-    id: '1', telegramId: 123456789, username: 'alexcrypto', firstName: 'Alex', lastName: 'Dupont',
-    balanceMain: 245.80, balanceBonus: 50.00, balanceReferral: 32.50, balanceRewards: 15.00,
-    totalEarnings: 892.30, todayEarnings: 12.50, xp: 4250, level: 12, tasksCompleted: 156,
-    referralCount: 23, referralCode: 'ALEX2024', streak: 7, badges: ['early_adopter', 'task_master', 'referral_king'],
-    riskScore: 5, status: 'active', createdAt: '2024-01-15T10:00:00Z', lastActive: '2024-12-20T14:30:00Z',
-    ip: '192.168.1.1', deviceHash: 'abc123', withdrawalBlocked: false, verificationStatus: 'verified',
-    dailyWithdrawn: 50, dailyTasksCompleted: 5
-  },
-  {
-    id: '2', telegramId: 987654321, username: 'mariecoin', firstName: 'Marie', lastName: 'Laurent',
-    balanceMain: 120.40, balanceBonus: 25.00, balanceReferral: 15.00, balanceRewards: 8.50,
-    totalEarnings: 456.90, todayEarnings: 8.20, xp: 2100, level: 7, tasksCompleted: 89,
-    referralCount: 12, referralCode: 'MARIE24', streak: 3, badges: ['early_adopter'],
-    riskScore: 12, status: 'active', createdAt: '2024-02-20T08:00:00Z', lastActive: '2024-12-20T12:15:00Z',
-    ip: '10.0.0.1', deviceHash: 'def456', withdrawalBlocked: false, verificationStatus: 'pending',
-    dailyWithdrawn: 0, dailyTasksCompleted: 3
-  },
-  {
-    id: '3', telegramId: 111222333, username: 'paultrader', firstName: 'Paul', lastName: 'Martin',
-    balanceMain: 890.00, balanceBonus: 100.00, balanceReferral: 75.00, balanceRewards: 45.00,
-    totalEarnings: 2340.50, todayEarnings: 45.00, xp: 8900, level: 22, tasksCompleted: 312,
-    referralCount: 67, referralCode: 'PAUL777', streak: 15, badges: ['early_adopter', 'task_master', 'referral_king', 'whale', 'streak_champion'],
-    riskScore: 3, status: 'active', createdAt: '2024-01-05T06:00:00Z', lastActive: '2024-12-20T16:00:00Z',
-    ip: '172.16.0.1', deviceHash: 'ghi789', withdrawalBlocked: false, verificationStatus: 'verified',
-    dailyWithdrawn: 200, dailyTasksCompleted: 10
-  },
-  {
-    id: '4', telegramId: 444555666, username: 'suspicious_user', firstName: 'Jean', lastName: 'Suspect',
-    balanceMain: 5000.00, balanceBonus: 500.00, balanceReferral: 2000.00, balanceRewards: 300.00,
-    totalEarnings: 12000.00, todayEarnings: 500.00, xp: 1200, level: 4, tasksCompleted: 45,
-    referralCount: 200, referralCode: 'JEAN00', streak: 1, badges: [],
-    riskScore: 85, status: 'suspended', createdAt: '2024-11-01T10:00:00Z', lastActive: '2024-12-19T23:45:00Z',
-    ip: '10.0.0.1', deviceHash: 'def456', withdrawalBlocked: true, verificationStatus: 'none',
+    id: '1', telegramId: 0, username: 'vous', firstName: 'Vous', lastName: '',
+    balanceMain: 0, balanceBonus: 0, balanceReferral: 0, balanceRewards: 0,
+    totalEarnings: 0, todayEarnings: 0, xp: 0, level: 1, tasksCompleted: 0,
+    referralCount: 0, referralCode: 'START00', streak: 0, badges: [],
+    riskScore: 0, status: 'active', createdAt: new Date().toISOString(), lastActive: new Date().toISOString(),
+    withdrawalBlocked: false, verificationStatus: 'none',
     dailyWithdrawn: 0, dailyTasksCompleted: 0
-  },
-  {
-    id: '5', telegramId: 777888999, username: 'sophie_earn', firstName: 'Sophie', lastName: 'Bernard',
-    balanceMain: 55.20, balanceBonus: 10.00, balanceReferral: 5.00, balanceRewards: 2.00,
-    totalEarnings: 120.20, todayEarnings: 3.50, xp: 800, level: 3, tasksCompleted: 28,
-    referralCount: 4, referralCode: 'SOPH99', streak: 2, badges: [],
-    riskScore: 8, status: 'active', createdAt: '2024-06-15T14:00:00Z', lastActive: '2024-12-20T10:00:00Z',
-    ip: '192.168.2.1', deviceHash: 'jkl012', withdrawalBlocked: false, verificationStatus: 'none',
-    dailyWithdrawn: 10, dailyTasksCompleted: 2
   },
 ];
 
 const mockTasks: Task[] = [
-  { id: '1', type: 'join_channel', title: 'Rejoindre CryptoNews FR', description: 'Rejoignez notre canal d\'actualités crypto', reward: 0.50, rewardType: 'main', targetUrl: 'https://t.me/cryptonews_fr', targetId: '-1001234567890', isActive: true, totalCompletions: 1250, createdAt: '2024-01-01T00:00:00Z', verificationMethod: 'auto', priority: 1, icon: '📢' },
-  { id: '2', type: 'join_group', title: 'Rejoindre Discussion Crypto', description: 'Participez au groupe de discussion', reward: 0.30, rewardType: 'main', targetUrl: 'https://t.me/crypto_discuss', targetId: '-1009876543210', isActive: true, totalCompletions: 890, createdAt: '2024-01-15T00:00:00Z', verificationMethod: 'auto', priority: 2, icon: '👥' },
-  { id: '3', type: 'start_bot', title: 'Démarrer Trading Bot', description: 'Lancez notre bot de trading automatique', reward: 1.00, rewardType: 'main', targetUrl: 'https://t.me/trading_bot', targetId: 'trading_bot', isActive: true, totalCompletions: 456, createdAt: '2024-02-01T00:00:00Z', verificationMethod: 'api', priority: 3, icon: '🤖' },
-  { id: '4', type: 'invite_friends', title: 'Inviter 5 amis', description: 'Invitez 5 amis pour gagner un bonus', reward: 5.00, rewardType: 'main', requiredCount: 5, isActive: true, totalCompletions: 123, createdAt: '2024-03-01T00:00:00Z', verificationMethod: 'auto', priority: 4, icon: '👥' },
-  { id: '5', type: 'daily', title: 'Mission Quotidienne', description: 'Connectez-vous chaque jour pour gagner', reward: 0.10, rewardType: 'main', cooldownHours: 24, isActive: true, totalCompletions: 8900, createdAt: '2024-01-01T00:00:00Z', verificationMethod: 'auto', priority: 0, maxPerUser: 1, icon: '📅' },
-  { id: '6', type: 'special', title: 'Événement Nouvel An', description: 'Mission spéciale de fin d\'année', reward: 10.00, rewardType: 'bonus', isActive: true, totalCompletions: 45, maxCompletions: 100, expiresAt: '2025-01-01T00:00:00Z', createdAt: '2024-12-15T00:00:00Z', verificationMethod: 'manual', priority: 10, requiredLevel: 5, icon: '🎉' },
+  { id: '1', type: 'daily', title: 'Mission Quotidienne', description: 'Connectez-vous chaque jour pour gagner', reward: 0.10, rewardType: 'main', cooldownHours: 24, isActive: true, totalCompletions: 0, createdAt: new Date().toISOString(), verificationMethod: 'auto', priority: 0, maxPerUser: 1, icon: '📅' },
 ];
 
-const mockTransactions: Transaction[] = [
-  { id: '1', orderId: 'ORD001', userId: '1', type: 'deposit', amount: 50.00, currency: 'USDT', network: 'TRC20', status: 'completed', txHash: '0xabc123...def456', address: 'TKx...9Pz', confirmations: 20, requiredConfirmations: 20, createdAt: '2024-12-18T10:00:00Z', completedAt: '2024-12-18T10:15:00Z' },
-  { id: '2', orderId: 'ORD002', userId: '1', type: 'withdrawal', amount: 25.00, currency: 'USDT', network: 'TRC20', status: 'completed', txHash: '0xdef456...ghi789', address: 'TYx...3Kz', fee: 1.00, createdAt: '2024-12-19T14:00:00Z', completedAt: '2024-12-19T14:30:00Z' },
-  { id: '3', orderId: 'ORD003', userId: '2', type: 'deposit', amount: 100.00, currency: 'TON', network: 'TON', status: 'confirming', confirmations: 3, requiredConfirmations: 12, createdAt: '2024-12-20T08:00:00Z' },
-  { id: '4', orderId: 'ORD004', userId: '3', type: 'withdrawal', amount: 200.00, currency: 'USDT', network: 'BEP20', status: 'pending', address: '0x742...f89', createdAt: '2024-12-20T09:00:00Z' },
-  { id: '5', orderId: 'ORD005', userId: '1', type: 'reward', amount: 0.50, currency: 'USDT', status: 'completed', createdAt: '2024-12-20T11:00:00Z', completedAt: '2024-12-20T11:00:00Z' },
-  { id: '6', orderId: 'ORD006', userId: '4', type: 'withdrawal', amount: 1500.00, currency: 'USDT', network: 'TRC20', status: 'review', address: 'TZx...7Mz', createdAt: '2024-12-20T12:00:00Z', adminNote: 'Montant élevé - vérification requise' },
-  { id: '7', orderId: 'ORD007', userId: '5', type: 'deposit', amount: 20.00, currency: 'TON', network: 'TON', status: 'completed', txHash: '0xjkl012...mno345', confirmations: 12, requiredConfirmations: 12, createdAt: '2024-12-19T16:00:00Z', completedAt: '2024-12-19T16:20:00Z' },
-];
+const mockTransactions: Transaction[] = [];
 
-const mockCampaigns: Campaign[] = [
-  { id: '1', advertiserId: 'adv1', advertiserName: 'CryptoExchange Pro', type: 'channel', targetUrl: 'https://t.me/crypto_exchange', targetName: 'CryptoExchange Channel', budget: 500, spent: 125, rewardPerAction: 0.50, totalActions: 250, maxActions: 1000, status: 'active', startDate: '2024-12-01', endDate: '2024-12-31', createdAt: '2024-11-28T00:00:00Z', requireVerification: true, minUserLevel: 3 },
-  { id: '2', advertiserId: 'adv2', advertiserName: 'DeFi Labs', type: 'bot', targetUrl: 'https://t.me/defi_bot', targetName: 'DeFi Trading Bot', budget: 1000, spent: 780, rewardPerAction: 1.00, totalActions: 780, maxActions: 1000, status: 'active', startDate: '2024-12-10', endDate: '2025-01-10', createdAt: '2024-12-08T00:00:00Z', requireVerification: false },
-  { id: '3', advertiserId: 'adv3', advertiserName: 'NFT World', type: 'group', targetUrl: 'https://t.me/nft_world', targetName: 'NFT Discussion Group', budget: 300, spent: 300, rewardPerAction: 0.30, totalActions: 1000, maxActions: 1000, status: 'completed', startDate: '2024-11-01', endDate: '2024-11-30', createdAt: '2024-10-28T00:00:00Z', requireVerification: true },
-];
+const mockCampaigns: Campaign[] = [];
 
-const mockChannels: Channel[] = [
-  { id: '1', telegramId: '-1001234567890', name: 'TonCipher Officiel', username: 'toncipherofficial', type: 'channel', memberCount: 15420, isMandatory: true, isActive: true, botIsAdmin: true, verificationEnabled: true, joinReward: 0.10, priority: 1 },
-  { id: '2', telegramId: '-1009876543210', name: 'TonCipher Discussion', username: 'toncipher_discuss', type: 'group', memberCount: 8350, isMandatory: true, isActive: true, botIsAdmin: true, verificationEnabled: true, joinReward: 0.05, priority: 2 },
-  { id: '3', telegramId: '-1005555555555', name: 'TonCipher News', username: 'toncipher_news', type: 'channel', memberCount: 3200, isMandatory: false, isActive: true, botIsAdmin: true, verificationEnabled: false, priority: 3 },
-  { id: '4', telegramId: '-1006666666666', name: 'TonCipher VIP', username: 'toncipher_vip', type: 'group', memberCount: 450, isMandatory: false, isActive: false, botIsAdmin: false, verificationEnabled: false, priority: 4 },
-];
+const mockChannels: Channel[] = [];
 
 const mockShopItems: ShopItem[] = [
-  { id: '1', name: 'Double XP (24h)', description: 'Multipliez vos gains d\'XP par 2 pendant 24 heures', price: 5.00, currency: 'main', type: 'multiplier', value: 2, duration: 24, isActive: true, purchases: 234, icon: '⚡', category: 'boosters' },
-  { id: '2', name: 'Pack Bonus 50', description: 'Recevez 50 crédits bonus instantanément', price: 10.00, currency: 'main', type: 'bonus_pack', value: 50, isActive: true, purchases: 567, icon: '🎁', category: 'packs' },
-  { id: '3', name: 'Triple Récompenses (12h)', description: 'Triplez vos récompenses de tâches', price: 15.00, currency: 'main', type: 'multiplier', value: 3, duration: 12, isActive: true, purchases: 89, icon: '🚀', category: 'boosters' },
-  { id: '4', name: 'Statut Premium (7j)', description: 'Accédez aux tâches premium pendant 7 jours', price: 25.00, currency: 'main', type: 'premium', value: 1, duration: 168, isActive: true, purchases: 45, icon: '👑', category: 'premium' },
-  { id: '5', name: 'Badge Exclusif', description: 'Obtenez un badge rare pour votre profil', price: 100.00, currency: 'bonus', type: 'badge', value: 1, isActive: true, purchases: 12, maxPurchases: 50, icon: '💎', category: 'collectibles' },
+  { id: '1', name: 'Double XP (24h)', description: 'Multipliez vos gains d\'XP par 2 pendant 24 heures', price: 5.00, currency: 'main', type: 'multiplier', value: 2, duration: 24, isActive: true, purchases: 0, icon: '⚡', category: 'boosters' },
+  { id: '2', name: 'Pack Bonus 50', description: 'Recevez 50 crédits bonus instantanément', price: 10.00, currency: 'main', type: 'bonus_pack', value: 50, isActive: true, purchases: 0, icon: '🎁', category: 'packs' },
+  { id: '3', name: 'Triple Récompenses (12h)', description: 'Triplez vos récompenses de tâches', price: 15.00, currency: 'main', type: 'multiplier', value: 3, duration: 12, isActive: true, purchases: 0, icon: '🚀', category: 'boosters' },
+  { id: '4', name: 'Statut Premium (7j)', description: 'Accédez aux tâches premium pendant 7 jours', price: 25.00, currency: 'main', type: 'premium', value: 1, duration: 168, isActive: true, purchases: 0, icon: '👑', category: 'premium' },
+  { id: '5', name: 'Badge Exclusif', description: 'Obtenez un badge rare pour votre profil', price: 100.00, currency: 'bonus', type: 'badge', value: 1, isActive: true, purchases: 0, maxPurchases: 50, icon: '💎', category: 'collectibles' },
 ];
 
-const mockNotifications: Notification[] = [
-  { id: '1', userId: '1', type: 'deposit', title: 'Dépôt confirmé', message: 'Votre dépôt de 50 USDT a été crédité', isRead: true, createdAt: '2024-12-18T10:15:00Z' },
-  { id: '2', userId: '1', type: 'reward', title: 'Récompense reçue', message: 'Vous avez gagné 0.50 USDT pour une tâche', isRead: false, createdAt: '2024-12-20T11:00:00Z' },
-  { id: '3', type: 'alert', title: 'Activité suspecte détectée', message: 'L\'utilisateur suspicious_user a un score de risque élevé', isRead: false, createdAt: '2024-12-20T12:00:00Z' },
-  { id: '4', type: 'system', title: 'Nouvelle campagne', message: 'DeFi Labs a créé une nouvelle campagne', isRead: false, createdAt: '2024-12-20T08:00:00Z' },
-  { id: '5', userId: '2', type: 'level', title: 'Niveau supérieur!', message: 'Félicitations! Vous êtes passé au niveau 7', isRead: false, createdAt: '2024-12-19T15:00:00Z' },
-];
+const mockNotifications: Notification[] = [];
 
-const mockFraudAlerts: FraudAlert[] = [
-  { id: '1', userId: '4', username: 'suspicious_user', type: 'multi_account', severity: 'critical', description: 'Même device hash et IP que mariecoin - probable multi-compte', action: 'suspended', riskScore: 85, createdAt: '2024-12-19T23:45:00Z', evidence: ['device_hash: def456', 'ip: 10.0.0.1'] },
-  { id: '2', userId: '4', username: 'suspicious_user', type: 'fake_referral', severity: 'high', description: '200 filleuls en 50 jours avec très peu de tâches - pattern anormal', action: 'review', riskScore: 85, createdAt: '2024-12-18T14:00:00Z' },
-  { id: '3', userId: '2', username: 'mariecoin', type: 'vpn', severity: 'medium', description: 'Connexion détectée depuis un VPN connu', action: 'review', riskScore: 12, createdAt: '2024-12-20T12:15:00Z' },
-  { id: '4', userId: '5', username: 'sophie_earn', type: 'task_abuse', severity: 'low', description: 'Tentative de double complétion de tâche détectée et bloquée', action: 'none', riskScore: 8, createdAt: '2024-12-20T10:30:00Z' },
-];
+const mockFraudAlerts: FraudAlert[] = [];
 
 const mockCryptoNetworks: CryptoNetwork[] = [
-  { id: '1', name: 'Toncoin', symbol: 'TON', network: 'TON', isActive: true, isDepositEnabled: true, isWithdrawalEnabled: true, minDeposit: 1, maxDeposit: 10000, minWithdrawal: 5, maxWithdrawal: 5000, withdrawalFee: 0.5, withdrawalFeeType: 'fixed', requiredConfirmations: 12, dailyWithdrawalLimit: 10000, autoWithdrawal: true, autoWithdrawalThreshold: 100, hotWalletBalance: 15420.50, coldWalletBalance: 85000.00, hotWalletAddress: 'EQC...hot', coldWalletAddress: 'EQC...cold', explorerUrl: 'https://tonscan.org/tx/', decimals: 9, priority: 1 },
-  { id: '2', name: 'Tether TRC20', symbol: 'USDT', network: 'TRC20', isActive: true, isDepositEnabled: true, isWithdrawalEnabled: true, minDeposit: 5, maxDeposit: 50000, minWithdrawal: 10, maxWithdrawal: 25000, withdrawalFee: 1.0, withdrawalFeeType: 'fixed', requiredConfirmations: 20, dailyWithdrawalLimit: 50000, autoWithdrawal: true, autoWithdrawalThreshold: 500, hotWalletBalance: 45230.00, coldWalletBalance: 250000.00, hotWalletAddress: 'TKx...hot', coldWalletAddress: 'TKx...cold', explorerUrl: 'https://tronscan.org/#/transaction/', decimals: 6, priority: 2 },
-  { id: '3', name: 'Tether BEP20', symbol: 'USDT', network: 'BEP20', isActive: true, isDepositEnabled: true, isWithdrawalEnabled: false, minDeposit: 5, maxDeposit: 50000, minWithdrawal: 10, maxWithdrawal: 25000, withdrawalFee: 0.5, withdrawalFeeType: 'fixed', requiredConfirmations: 15, dailyWithdrawalLimit: 50000, autoWithdrawal: false, autoWithdrawalThreshold: 500, hotWalletBalance: 28500.00, coldWalletBalance: 150000.00, hotWalletAddress: '0x7...hot', coldWalletAddress: '0x7...cold', explorerUrl: 'https://bscscan.com/tx/', decimals: 18, contractAddress: '0x55d398326f99059ff775485246999027b3197955', priority: 3 },
+  { id: '1', name: 'Toncoin', symbol: 'TON', network: 'TON', isActive: true, isDepositEnabled: true, isWithdrawalEnabled: true, minDeposit: 1, maxDeposit: 10000, minWithdrawal: 5, maxWithdrawal: 5000, withdrawalFee: 0.5, withdrawalFeeType: 'fixed', requiredConfirmations: 12, dailyWithdrawalLimit: 10000, autoWithdrawal: true, autoWithdrawalThreshold: 100, hotWalletBalance: 0, coldWalletBalance: 0, hotWalletAddress: '', coldWalletAddress: '', explorerUrl: 'https://tonscan.org/tx/', decimals: 9, priority: 1 },
+  { id: '2', name: 'Tether Polygon', symbol: 'USDT', network: 'POLYGON', isActive: true, isDepositEnabled: true, isWithdrawalEnabled: true, minDeposit: 5, maxDeposit: 50000, minWithdrawal: 10, maxWithdrawal: 25000, withdrawalFee: 1.0, withdrawalFeeType: 'fixed', requiredConfirmations: 20, dailyWithdrawalLimit: 50000, autoWithdrawal: true, autoWithdrawalThreshold: 500, hotWalletBalance: 0, coldWalletBalance: 0, hotWalletAddress: '', coldWalletAddress: '', explorerUrl: 'https://polygonscan.com/tx/', decimals: 6, contractAddress: '0xc2132D05D31c914a87C6611C10748AEb04B58e8F', priority: 2 },
 ];
 
 const mockLevelConfigs: LevelConfig[] = [
@@ -615,17 +545,15 @@ const mockPaymentProviders: PaymentProvider[] = [
 ];
 
 const mockAdminUsers: AdminUser[] = [
-  { id: '1', telegramId: 123456789, username: 'super_admin', role: 'super_admin', permissions: ['*'], isActive: true, createdAt: '2024-01-01T00:00:00Z', lastLogin: '2024-12-20T10:00:00Z' },
-  { id: '2', telegramId: 111222333, username: 'admin_user', role: 'admin', permissions: ['users', 'tasks', 'campaigns', 'withdrawals'], isActive: true, createdAt: '2024-02-01T00:00:00Z', lastLogin: '2024-12-20T09:00:00Z' },
-  { id: '3', telegramId: 444555666, username: 'moderator', role: 'moderator', permissions: ['users', 'tasks'], isActive: true, createdAt: '2024-03-01T00:00:00Z' },
+  { id: '1', telegramId: 0, username: 'super_admin', role: 'super_admin', permissions: ['*'], isActive: true, createdAt: new Date().toISOString() },
 ];
 
 const mockPlatformConfig: PlatformConfig = {
-  botToken: '7234567890:AAH...masked',
+  botToken: '',
   botUsername: 'toncipherbot',
-  apiId: '12345678',
-  apiHash: 'a1b2c3d4e5f6...masked',
-  databaseUrl: 'postgresql://...masked',
+  apiId: '',
+  apiHash: '',
+  databaseUrl: '',
   mainChannel: '@toncipherofficial',
   mainGroup: '@teletask_discuss',
   supportBot: '@teletask_support',
@@ -684,30 +612,23 @@ const mockPlatformConfig: PlatformConfig = {
 };
 
 const mockStats: PlatformStats = {
-  totalUsers: 15420,
-  activeUsers: 3250,
-  newUsersToday: 127,
-  totalDeposits: 456789.50,
-  totalWithdrawals: 312456.80,
-  platformRevenue: 45678.90,
-  activeCampaigns: 5,
-  totalRewardsDistributed: 89234.50,
-  totalTasks: 45,
-  completedTasksToday: 2340,
-  totalReferrals: 4567,
-  fraudAlertsToday: 3,
-  pendingWithdrawals: 12,
-  pendingDeposits: 3,
+  totalUsers: 0,
+  activeUsers: 0,
+  newUsersToday: 0,
+  totalDeposits: 0,
+  totalWithdrawals: 0,
+  platformRevenue: 0,
+  activeCampaigns: 0,
+  totalRewardsDistributed: 0,
+  totalTasks: 0,
+  completedTasksToday: 0,
+  totalReferrals: 0,
+  fraudAlertsToday: 0,
+  pendingWithdrawals: 0,
+  pendingDeposits: 0,
 };
 
-const mockLogs: LogEntry[] = [
-  { id: '1', type: 'info', category: 'auth', message: 'User alexcrypto logged in', userId: '1', createdAt: '2024-12-20T14:30:00Z' },
-  { id: '2', type: 'warning', category: 'antifraud', message: 'VPN connection detected for mariecoin', userId: '2', createdAt: '2024-12-20T12:15:00Z' },
-  { id: '3', type: 'error', category: 'payment', message: 'Withdrawal processing failed - retrying (attempt 2/3)', userId: '3', createdAt: '2024-12-20T09:05:00Z' },
-  { id: '4', type: 'security', category: 'antifraud', message: 'User suspicious_user suspended - multi-account detected', userId: '4', createdAt: '2024-12-19T23:45:00Z' },
-  { id: '5', type: 'financial', category: 'payment', message: 'Deposit of 50 USDT confirmed for alexcrypto', userId: '1', createdAt: '2024-12-18T10:15:00Z' },
-  { id: '6', type: 'admin', category: 'config', message: 'Platform config updated by super_admin', adminId: '1', createdAt: '2024-12-20T10:00:00Z' },
-];
+const mockLogs: LogEntry[] = [];
 
 // ===================== STORE =====================
 
@@ -747,6 +668,18 @@ interface AppState {
   platformConfig: PlatformConfig;
   platformStats: PlatformStats;
   logs: LogEntry[];
+
+  // Mini App State
+  completedTaskIds: string[];
+  dailyRewardClaimed: boolean;
+  claimedMilestoneIds: string[];
+
+  // Actions - Mini App
+  completeTask: (taskId: string) => void;
+  claimDailyReward: () => void;
+  claimMilestone: (id: string, amount: number) => void;
+  purchaseShopItem: (itemId: string) => boolean;
+  submitWithdrawal: (networkId: string, amount: number, address: string) => { success: boolean; error?: string };
 
   // Actions - View
   setCurrentView: (view: 'miniapp' | 'admin') => void;
@@ -834,13 +767,16 @@ interface AppState {
 
 const generateId = () => Math.random().toString(36).substr(2, 9);
 
-export const useAppStore = create<AppState>((set) => ({
+export const useAppStore = create<AppState>((set, get) => ({
   currentView: 'miniapp',
   miniAppPage: 'dashboard',
   adminPage: 'overview',
   adminSidebarOpen: false,
   modalOpen: null,
   modalData: null,
+  completedTaskIds: [],
+  dailyRewardClaimed: false,
+  claimedMilestoneIds: [],
 
   currentUser: mockUsers[0],
   users: mockUsers,
@@ -866,6 +802,95 @@ export const useAppStore = create<AppState>((set) => ({
   platformConfig: mockPlatformConfig,
   platformStats: mockStats,
   logs: mockLogs,
+
+  // Mini App Actions
+  completeTask: (taskId) => {
+    const state = get();
+    const task = state.tasks.find(t => t.id === taskId);
+    if (!task || state.completedTaskIds.includes(taskId)) return;
+    set(s => ({
+      completedTaskIds: [...s.completedTaskIds, taskId],
+      tasks: s.tasks.map(t => t.id === taskId ? { ...t, totalCompletions: t.totalCompletions + 1 } : t),
+      currentUser: {
+        ...s.currentUser,
+        balanceMain: task.rewardType === 'main' ? s.currentUser.balanceMain + task.reward : s.currentUser.balanceMain,
+        balanceBonus: task.rewardType === 'bonus' ? s.currentUser.balanceBonus + task.reward : s.currentUser.balanceBonus,
+        xp: s.currentUser.xp + (task.rewardType === 'xp' ? task.reward : 10),
+        tasksCompleted: s.currentUser.tasksCompleted + 1,
+        todayEarnings: task.rewardType !== 'xp' ? s.currentUser.todayEarnings + task.reward : s.currentUser.todayEarnings,
+        totalEarnings: task.rewardType !== 'xp' ? s.currentUser.totalEarnings + task.reward : s.currentUser.totalEarnings,
+        balanceRewards: task.rewardType === 'main' ? s.currentUser.balanceRewards + task.reward : s.currentUser.balanceRewards,
+      },
+    }));
+    get().addTransaction({ userId: state.currentUser.id, type: 'reward', amount: task.reward, currency: task.rewardType === 'xp' ? 'XP' : 'TON', status: 'completed', completedAt: new Date().toISOString() });
+    get().addNotification({ userId: state.currentUser.id, type: 'reward', title: 'Tâche complétée!', message: `+${task.reward} ${task.rewardType === 'xp' ? 'XP' : 'TON'} pour "${task.title}"`, isRead: false });
+  },
+
+  claimDailyReward: () => {
+    if (get().dailyRewardClaimed) return;
+    const userId = get().currentUser.id;
+    set(s => ({
+      dailyRewardClaimed: true,
+      currentUser: {
+        ...s.currentUser,
+        balanceMain: s.currentUser.balanceMain + 0.10,
+        balanceRewards: s.currentUser.balanceRewards + 0.10,
+        todayEarnings: s.currentUser.todayEarnings + 0.10,
+        totalEarnings: s.currentUser.totalEarnings + 0.10,
+        streak: s.currentUser.streak + 1,
+      },
+    }));
+    get().addTransaction({ userId, type: 'reward', amount: 0.10, currency: 'TON', status: 'completed', completedAt: new Date().toISOString() });
+  },
+
+  claimMilestone: (id, amount) => {
+    if (get().claimedMilestoneIds.includes(id)) return;
+    const userId = get().currentUser.id;
+    set(s => ({
+      claimedMilestoneIds: [...s.claimedMilestoneIds, id],
+      currentUser: {
+        ...s.currentUser,
+        balanceMain: s.currentUser.balanceMain + amount,
+        balanceRewards: s.currentUser.balanceRewards + amount,
+        totalEarnings: s.currentUser.totalEarnings + amount,
+      },
+    }));
+    get().addTransaction({ userId, type: 'reward', amount, currency: 'TON', status: 'completed', completedAt: new Date().toISOString() });
+  },
+
+  purchaseShopItem: (itemId) => {
+    const state = get();
+    const item = state.shopItems.find(i => i.id === itemId);
+    if (!item || !item.isActive) return false;
+    if (item.maxPurchases && item.purchases >= item.maxPurchases) return false;
+    const balance = item.currency === 'xp' ? state.currentUser.xp : item.currency === 'bonus' ? state.currentUser.balanceBonus : state.currentUser.balanceMain;
+    if (balance < item.price) return false;
+    set(s => ({
+      shopItems: s.shopItems.map(i => i.id === itemId ? { ...i, purchases: i.purchases + 1 } : i),
+      currentUser: {
+        ...s.currentUser,
+        xp: item.currency === 'xp' ? s.currentUser.xp - item.price : s.currentUser.xp,
+        balanceBonus: item.currency === 'bonus' ? s.currentUser.balanceBonus - item.price : s.currentUser.balanceBonus,
+        balanceMain: item.currency === 'main' ? s.currentUser.balanceMain - item.price : s.currentUser.balanceMain,
+      },
+    }));
+    get().addTransaction({ userId: state.currentUser.id, type: 'purchase', amount: item.price, currency: item.currency === 'xp' ? 'XP' : 'TON', status: 'completed', completedAt: new Date().toISOString() });
+    return true;
+  },
+
+  submitWithdrawal: (networkId, amount, address) => {
+    const state = get();
+    const network = state.cryptoNetworks.find(n => n.id === networkId);
+    if (!network) return { success: false, error: 'Réseau invalide' };
+    if (!network.isWithdrawalEnabled) return { success: false, error: 'Retraits désactivés pour ce réseau' };
+    if (amount < network.minWithdrawal) return { success: false, error: `Minimum: ${network.minWithdrawal} ${network.symbol}` };
+    if (amount > network.maxWithdrawal) return { success: false, error: `Maximum: ${network.maxWithdrawal} ${network.symbol}` };
+    if (state.currentUser.balanceMain < amount) return { success: false, error: 'Solde insuffisant' };
+    if (!address || address.trim().length < 10) return { success: false, error: 'Adresse invalide' };
+    set(s => ({ currentUser: { ...s.currentUser, balanceMain: s.currentUser.balanceMain - amount } }));
+    get().addTransaction({ userId: state.currentUser.id, type: 'withdrawal', amount, currency: network.symbol, network: network.network, address: address.trim(), status: 'pending', fee: network.withdrawalFee });
+    return { success: true };
+  },
 
   // View Actions
   setCurrentView: (view) => set({ currentView: view }),
