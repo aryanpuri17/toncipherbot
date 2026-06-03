@@ -21,7 +21,17 @@ const TYPE_LABELS: Record<string, string> = {
 };
 
 export const AdminStatistics: React.FC = () => {
-  const { platformStats: s, users, tasks } = useAppStore();
+  const { users, tasks, transactions } = useAppStore();
+
+  const totalUsers = users.length;
+  const activeUsers = users.filter(u => u.status === 'active').length;
+  const totalDeposits = transactions.filter(t => t.type === 'deposit' && t.status === 'completed').reduce((sum, t) => sum + t.amount, 0);
+  const totalWithdrawals = transactions.filter(t => t.type === 'withdrawal' && ['completed', 'processing'].includes(t.status)).reduce((sum, t) => sum + t.amount, 0);
+  const platformRevenue = transactions.filter(t => t.fee && t.fee > 0).reduce((sum, t) => sum + (t.fee || 0), 0);
+  const totalRewardsDistributed = transactions.filter(t => t.type === 'reward' && t.status === 'completed').reduce((sum, t) => sum + t.amount, 0);
+  const today = new Date().toDateString();
+  const completedTasksToday = transactions.filter(t => t.type === 'reward' && new Date(t.createdAt).toDateString() === today).length;
+  const totalReferrals = users.reduce((sum, u) => sum + u.referralCount, 0);
 
   const userGrowth = React.useMemo(() => {
     const months = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
@@ -56,10 +66,10 @@ export const AdminStatistics: React.FC = () => {
 
       {/* Main Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title="Total utilisateurs" value={s.totalUsers.toLocaleString()} icon={<Users className="w-5 h-5" />} trend={{ value: 12.5, positive: true }} color="blue" />
-        <StatCard title="Utilisateurs actifs" value={s.activeUsers.toLocaleString()} icon={<Activity className="w-5 h-5" />} trend={{ value: 8.2, positive: true }} color="green" />
-        <StatCard title="Revenus" value={`$${(s.platformRevenue / 1000).toFixed(1)}K`} icon={<DollarSign className="w-5 h-5" />} trend={{ value: 15.2, positive: true }} color="purple" />
-        <StatCard title="Récompenses" value={`$${(s.totalRewardsDistributed / 1000).toFixed(1)}K`} icon={<Gift className="w-5 h-5" />} trend={{ value: 10.4, positive: true }} color="orange" />
+        <StatCard title="Total utilisateurs" value={totalUsers.toLocaleString()} icon={<Users className="w-5 h-5" />} color="blue" />
+        <StatCard title="Utilisateurs actifs" value={activeUsers.toLocaleString()} icon={<Activity className="w-5 h-5" />} color="green" />
+        <StatCard title="Revenus" value={`${platformRevenue.toFixed(2)} TON`} icon={<DollarSign className="w-5 h-5" />} color="purple" />
+        <StatCard title="Récompenses" value={`${totalRewardsDistributed.toFixed(2)} TON`} icon={<Gift className="w-5 h-5" />} color="orange" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -105,10 +115,10 @@ export const AdminStatistics: React.FC = () => {
 
       {/* Financial Overview */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title="Dépôts totaux" value={`$${s.totalDeposits.toLocaleString()}`} icon={<Wallet className="w-5 h-5" />} color="green" />
-        <StatCard title="Retraits totaux" value={`$${s.totalWithdrawals.toLocaleString()}`} icon={<Wallet className="w-5 h-5" />} color="orange" />
-        <StatCard title="Tâches totales" value={s.totalTasks} subtitle={`${s.completedTasksToday} aujourd'hui`} icon={<ListTodo className="w-5 h-5" />} color="blue" />
-        <StatCard title="Parrainages" value={s.totalReferrals.toLocaleString()} icon={<TrendingUp className="w-5 h-5" />} color="purple" />
+        <StatCard title="Dépôts totaux" value={`${totalDeposits.toFixed(2)} TON`} icon={<Wallet className="w-5 h-5" />} color="green" />
+        <StatCard title="Retraits totaux" value={`${totalWithdrawals.toFixed(2)} TON`} icon={<Wallet className="w-5 h-5" />} color="orange" />
+        <StatCard title="Tâches aujourd'hui" value={completedTasksToday} subtitle={`${tasks.filter(t => t.isActive).length} tâches actives`} icon={<ListTodo className="w-5 h-5" />} color="blue" />
+        <StatCard title="Parrainages totaux" value={totalReferrals.toLocaleString()} icon={<TrendingUp className="w-5 h-5" />} color="purple" />
       </div>
     </div>
   );

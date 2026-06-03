@@ -689,6 +689,7 @@ interface AppState {
   addReferralMilestone: (milestone: Omit<ReferralMilestone, 'id'>) => void;
   updateReferralMilestone: (id: string, data: Partial<ReferralMilestone>) => void;
   deleteReferralMilestone: (id: string) => void;
+  initFromTelegram: (user: { id: number; first_name: string; last_name?: string; username?: string; photo_url?: string }) => void;
 
   // Actions - View
   setCurrentView: (view: 'miniapp' | 'admin') => void;
@@ -835,6 +836,18 @@ export const useAppStore = create<AppState>((set, get) => ({
     get().addTransaction({ userId: state.currentUser.id, type: 'reward', amount: earned, currency: 'TON', status: 'completed', completedAt: new Date().toISOString() });
     get().addNotification({ userId: state.currentUser.id, type: 'reward', title: 'Tâche complétée!', message: `+${earned.toFixed(2)} TON${isPromoActive ? ` (×${multiplier} promo!)` : ''} pour "${task.title}"`, isRead: false });
   },
+
+  initFromTelegram: (tgUser) => set(s => ({
+    currentUser: {
+      ...s.currentUser,
+      telegramId: tgUser.id,
+      firstName: tgUser.first_name,
+      lastName: tgUser.last_name || '',
+      username: tgUser.username || `user${tgUser.id}`,
+      avatarUrl: tgUser.photo_url,
+      referralCode: tgUser.id.toString(),
+    },
+  })),
 
   claimReferralMilestone: (id) => {
     const state = get();

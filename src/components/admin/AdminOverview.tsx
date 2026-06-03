@@ -9,7 +9,19 @@ import {
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 
 export const AdminOverview: React.FC = () => {
-  const { platformStats: s, transactions, fraudAlerts, users } = useAppStore();
+  const { transactions, fraudAlerts, users, tasks, campaigns } = useAppStore();
+
+  const today = new Date().toDateString();
+  const totalUsers = users.length;
+  const activeUsers = users.filter(u => u.status === 'active').length;
+  const newUsersToday = users.filter(u => new Date(u.createdAt).toDateString() === today).length;
+  const totalDeposits = transactions.filter(t => t.type === 'deposit' && t.status === 'completed').reduce((sum, t) => sum + t.amount, 0);
+  const totalWithdrawals = transactions.filter(t => t.type === 'withdrawal' && ['completed', 'processing'].includes(t.status)).reduce((sum, t) => sum + t.amount, 0);
+  const platformRevenue = transactions.filter(t => t.fee && t.fee > 0).reduce((sum, t) => sum + (t.fee || 0), 0);
+  const activeCampaigns = campaigns.filter(c => c.status === 'active').length;
+  const completedTasksToday = transactions.filter(t => t.type === 'reward' && new Date(t.createdAt).toDateString() === today).length;
+  const totalActiveTasks = tasks.filter(t => t.isActive).length;
+  const openFraudAlerts = fraudAlerts.filter(a => a.action === 'review').length;
 
   const chartData = React.useMemo(() => {
     const days = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
@@ -49,34 +61,30 @@ export const AdminOverview: React.FC = () => {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           title="Utilisateurs totaux"
-          value={s.totalUsers.toLocaleString()}
-          subtitle={`+${s.newUsersToday} aujourd'hui`}
+          value={totalUsers.toLocaleString()}
+          subtitle={`+${newUsersToday} aujourd'hui`}
           icon={<Users className="w-5 h-5" />}
-          trend={{ value: 12.5, positive: true }}
           color="blue"
         />
         <StatCard
           title="Dépôts totaux"
-          value={`$${(s.totalDeposits / 1000).toFixed(1)}K`}
+          value={`${(totalDeposits / 1000).toFixed(2)}K TON`}
           subtitle="Tous réseaux confondus"
           icon={<ArrowDownToLine className="w-5 h-5" />}
-          trend={{ value: 8.3, positive: true }}
           color="green"
         />
         <StatCard
           title="Retraits totaux"
-          value={`$${(s.totalWithdrawals / 1000).toFixed(1)}K`}
+          value={`${(totalWithdrawals / 1000).toFixed(2)}K TON`}
           subtitle="Traitement automatique"
           icon={<ArrowUpFromLine className="w-5 h-5" />}
-          trend={{ value: 5.1, positive: true }}
           color="orange"
         />
         <StatCard
           title="Revenus plateforme"
-          value={`$${(s.platformRevenue / 1000).toFixed(1)}K`}
+          value={`${platformRevenue.toFixed(2)} TON`}
           subtitle="Frais et commissions"
           icon={<DollarSign className="w-5 h-5" />}
-          trend={{ value: 15.2, positive: true }}
           color="purple"
         />
       </div>
@@ -85,27 +93,27 @@ export const AdminOverview: React.FC = () => {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           title="Utilisateurs actifs"
-          value={s.activeUsers.toLocaleString()}
-          subtitle={`${((s.activeUsers / s.totalUsers) * 100).toFixed(1)}% du total`}
+          value={activeUsers.toLocaleString()}
+          subtitle={totalUsers > 0 ? `${((activeUsers / totalUsers) * 100).toFixed(0)}% du total` : '0 actifs'}
           icon={<Activity className="w-5 h-5" />}
           color="cyan"
         />
         <StatCard
           title="Campagnes actives"
-          value={s.activeCampaigns}
+          value={activeCampaigns}
           icon={<Megaphone className="w-5 h-5" />}
           color="purple"
         />
         <StatCard
           title="Tâches aujourd'hui"
-          value={s.completedTasksToday.toLocaleString()}
-          subtitle={`${s.totalTasks} tâches actives`}
+          value={completedTasksToday.toLocaleString()}
+          subtitle={`${totalActiveTasks} tâches actives`}
           icon={<ListTodo className="w-5 h-5" />}
           color="green"
         />
         <StatCard
           title="Alertes fraude"
-          value={s.fraudAlertsToday}
+          value={openFraudAlerts}
           subtitle="Surveillance 24/7"
           icon={<Shield className="w-5 h-5" />}
           color="red"

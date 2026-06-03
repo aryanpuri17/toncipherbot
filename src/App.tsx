@@ -191,21 +191,26 @@ const MiniApp: React.FC = () => (
 );
 
 export default function App() {
-  const { currentView, setCurrentView } = useAppStore();
+  const { currentView, setCurrentView, initFromTelegram } = useAppStore();
 
   useEffect(() => {
-    // Admin panel only accessible via URL hash #admin
     const isAdminRoute = window.location.hash === '#admin';
     if (!isAdminRoute) {
       setCurrentView('miniapp');
     }
 
-    const tg = (window as unknown as { Telegram?: { WebApp?: { ready: () => void; expand: () => void; setHeaderColor: (c: string) => void } } }).Telegram?.WebApp;
+    type TgUser = { id: number; first_name: string; last_name?: string; username?: string; photo_url?: string };
+    type TgWebApp = { ready: () => void; expand: () => void; setHeaderColor: (c: string) => void; initDataUnsafe?: { user?: TgUser } };
+    const tg = (window as unknown as { Telegram?: { WebApp?: TgWebApp } }).Telegram?.WebApp;
     if (tg) {
       tg.ready();
       tg.expand();
       tg.setHeaderColor('#0f0c29');
       setCurrentView('miniapp');
+      const tgUser = tg.initDataUnsafe?.user;
+      if (tgUser) {
+        initFromTelegram(tgUser);
+      }
     }
   }, []);
 
