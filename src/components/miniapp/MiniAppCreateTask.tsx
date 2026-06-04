@@ -3,22 +3,24 @@ import { useAppStore } from '../../store/appStore';
 import { AlertCircle } from 'lucide-react';
 
 export const MiniAppCreateTask: React.FC = () => {
-  const { setMiniAppPage, addTask, currentUser, updateUser } = useAppStore();
+  const { setMiniAppPage, addTask, currentUser, updateUser, platformConfig, addPlatformRevenue } = useAppStore();
   const [form, setForm] = useState({
     title: '',
     description: '',
     type: 'join_channel',
     targetUrl: '',
     reward: '0.10',
-    maxCompletions: '100',
+    budget: '10.00',
   });
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState('');
 
+  const feeRate = platformConfig.taskCreationFeeRate ?? 0.15;
   const reward = parseFloat(form.reward) || 0;
-  const maxComp = parseInt(form.maxCompletions) || 0;
-  const totalCost = reward * maxComp;
-  const isValidCost = !isNaN(totalCost) && totalCost > 0;
+  const budget = parseFloat(form.budget) || 0;
+  const netBudget = budget * (1 - feeRate);
+  const effectiveCompletions = reward > 0 ? Math.floor(netBudget / reward) : 0;
+  const isValid = reward >= 0.01 && budget > 0 && effectiveCompletions >= 1;
 
   const typeIcons: Record<string, string> = {
     join_channel: '📢',
@@ -36,14 +38,18 @@ export const MiniAppCreateTask: React.FC = () => {
       setError("L'URL doit commencer par https://t.me/");
       return;
     }
-    if (reward < 0.01) { setError('Récompense minimum: 0.01 TON'); return; }
-    if (maxComp < 1) { setError('Nombre de complétions minimum: 1'); return; }
-    if (currentUser.balanceMain < totalCost) {
-      setError(`Solde insuffisant. Coût total: ${totalCost.toFixed(2)} TON`);
+    if (reward < 0.01) { setError('Récompense minimum: 0.01 TON par utilisateur'); return; }
+    if (budget <= 0) { setError('Budget invalide'); return; }
+    if (effectiveCompletions < 1) { setError('Budget insuffisant pour couvrir au moins une récompense'); return; }
+    if (currentUser.balanceMain < budget) {
+      setError(`Solde insuffisant. Budget requis: ${budget.toFixed(2)} TON`);
       return;
     }
 
-    updateUser(currentUser.id, { balanceMain: currentUser.balanceMain - totalCost });
+    const platformFee = budget - netBudget;
+
+    updateUser(currentUser.id, { balanceMain: currentUser.balanceMain - budget });
+    addPlatformRevenue(platformFee);
 
     addTask({
       type: form.type as 'join_channel' | 'join_group' | 'start_bot' | 'social',
@@ -53,7 +59,7 @@ export const MiniAppCreateTask: React.FC = () => {
       rewardType: 'main',
       targetUrl: form.targetUrl.trim() || undefined,
       isActive: true,
-      maxCompletions: maxComp,
+      maxCompletions: effectiveCompletions,
       verificationMethod: 'auto',
       priority: 5,
       icon: typeIcons[form.type] ?? '⭐',
@@ -68,8 +74,8 @@ export const MiniAppCreateTask: React.FC = () => {
         <div className="text-5xl">✅</div>
         <h2 className="text-xl font-bold text-white">Tâche créée!</h2>
         <p className="text-sm text-slate-400 text-center px-4">
-          {totalCost.toFixed(2)} TON déduits de votre solde.<br />
-          Votre tâche est maintenant visible par tous les utilisateurs.
+          {budget.toFixed(2)} TON déduits de votre solde.<br />
+          {effectiveCompletions} utilisateurs pourront compléter votre tâche.
         </p>
         <button
           onClick={() => setMiniAppPage('tasks')}
@@ -153,10 +159,10 @@ export const MiniAppCreateTask: React.FC = () => {
           </div>
         )}
 
-        {/* Reward & Max completions */}
+        {/* Reward & Budget */}
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <p className="text-xs text-slate-400 mb-2">Récompense (TON)</p>
+            <p className="text-xs text-slate-400 mb-2">Récompense / personne (TON)</p>
             <input
               type="number"
               step="0.01"
@@ -167,27 +173,39 @@ export const MiniAppCreateTask: React.FC = () => {
             />
           </div>
           <div>
-            <p className="text-xs text-slate-400 mb-2">Nb. complétions</p>
+            <p className="text-xs text-slate-400 mb-2">Budget total (TON)</p>
             <input
               type="number"
-              min="1"
-              value={form.maxCompletions}
-              onChange={e => setForm({ ...form, maxCompletions: e.target.value })}
+              step="0.10"
+              min="0.10"
+              value={form.budget}
+              onChange={e => setForm({ ...form, budget: e.target.value })}
               className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white text-sm font-mono focus:outline-none focus:border-blue-500/50"
             />
           </div>
         </div>
       </div>
 
-      {/* Cost Summary */}
+      {/* Summary */}
       <div className="glass-card-light p-4 space-y-2">
         <div className="flex justify-between text-xs">
-          <span className="text-slate-400">Coût total ({reward.toFixed(2)} × {maxComp})</span>
-          <span className="text-amber-400 font-semibold">{isValidCost ? totalCost.toFixed(2) : '—'} TON</span>
+          <span className="text-slate-400">Récompense par utilisateur</span>
+          <span className="text-white font-semibold">{reward > 0 ? reward.toFixed(2) : '—'} TON</span>
+        </div>
+        <div className="flex justify-between text-xs">
+          <span className="text-slate-400">Complétions estimées</span>
+          <span className={`font-bold ${effectiveCompletions >= 1 ? 'text-emerald-400' : 'text-red-400'}`}>
+            {effectiveCompletions >= 1 ? `${effectiveCompletions} utilisateurs` : '—'}
+          </span>
+        </div>
+        <div className="h-px bg-white/5 my-1" />
+        <div className="flex justify-between text-xs">
+          <span className="text-slate-400">Budget total à débiter</span>
+          <span className="text-amber-400 font-semibold">{budget > 0 ? budget.toFixed(2) : '—'} TON</span>
         </div>
         <div className="flex justify-between text-xs">
           <span className="text-slate-400">Votre solde</span>
-          <span className={`font-semibold ${currentUser.balanceMain >= totalCost ? 'text-emerald-400' : 'text-red-400'}`}>
+          <span className={`font-semibold ${currentUser.balanceMain >= budget ? 'text-emerald-400' : 'text-red-400'}`}>
             {currentUser.balanceMain.toFixed(2)} TON
           </span>
         </div>
@@ -202,9 +220,10 @@ export const MiniAppCreateTask: React.FC = () => {
 
       <button
         onClick={handleSubmit}
-        className="w-full btn-primary py-3.5 rounded-xl text-sm font-semibold text-white"
+        disabled={!isValid || currentUser.balanceMain < budget}
+        className="w-full btn-primary py-3.5 rounded-xl text-sm font-semibold text-white disabled:opacity-40 disabled:cursor-not-allowed"
       >
-        Créer la tâche — {isValidCost ? totalCost.toFixed(2) : '0.00'} TON
+        Créer la tâche — {budget > 0 ? budget.toFixed(2) : '0.00'} TON
       </button>
     </div>
   );

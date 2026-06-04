@@ -347,6 +347,7 @@ export interface PlatformConfig {
   taskCooldownGlobal: number; // minutes
   maxDailyTasks: number;
   bonusTaskMultiplier: number;
+  taskCreationFeeRate: number; // e.g. 0.15 = 15%
   
   // Deposits
   depositBonusPercent: number;
@@ -601,6 +602,7 @@ const mockPlatformConfig: PlatformConfig = {
   taskCooldownGlobal: 5,
   maxDailyTasks: 50,
   bonusTaskMultiplier: 1.5,
+  taskCreationFeeRate: 0.15,
   depositBonusPercent: 5,
   firstDepositBonus: 10,
   minDepositForBonus: 50,
@@ -774,6 +776,7 @@ interface AppState {
   markNotificationRead: (id: string) => void;
   addNotification: (n: Omit<Notification, 'id' | 'createdAt'>) => void;
   updatePlatformConfig: (data: Partial<PlatformConfig>) => void;
+  addPlatformRevenue: (amount: number) => void;
   addLog: (log: Omit<LogEntry, 'id' | 'createdAt'>) => void;
 }
 
@@ -1057,5 +1060,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   markNotificationRead: (id) => set((s) => ({ notifications: s.notifications.map(n => n.id === id ? { ...n, isRead: true } : n) })),
   addNotification: (n) => set((s) => ({ notifications: [{ ...n, id: generateId(), createdAt: new Date().toISOString() }, ...s.notifications] })),
   updatePlatformConfig: (data) => set((s) => ({ platformConfig: { ...s.platformConfig, ...data } })),
+  addPlatformRevenue: (amount) => set((s) => ({ platformStats: { ...s.platformStats, platformRevenue: s.platformStats.platformRevenue + amount } })),
   addLog: (log) => set((s) => ({ logs: [{ ...log, id: generateId(), createdAt: new Date().toISOString() }, ...s.logs] })),
 }));
