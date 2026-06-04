@@ -1,8 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAppStore } from '../../store/appStore';
 import { useTonConnectUI, useTonWallet } from '@tonconnect/ui-react';
 import { ArrowDownLeft, ArrowUpRight, TrendingUp, Copy, CheckCircle, ChevronRight, AlertCircle, Wallet, Unlink } from 'lucide-react';
-import { QRCodeSVG } from 'qrcode.react';
 
 export const MiniAppWallet: React.FC = () => {
   const { currentUser: u, transactions, setMiniAppPage } = useAppStore();
@@ -72,7 +71,7 @@ export const MiniAppWallet: React.FC = () => {
 };
 
 export const MiniAppDeposit: React.FC = () => {
-  const { cryptoNetworks, platformConfig, addTransaction, currentUser } = useAppStore();
+  const { cryptoNetworks, addTransaction, currentUser } = useAppStore();
   const [tonConnectUI] = useTonConnectUI();
   const tonWallet = useTonWallet();
   const [selectedId, setSelectedId] = useState('1');
@@ -240,48 +239,40 @@ export const MiniAppDeposit: React.FC = () => {
         </div>
       )}
 
-      {/* Manual deposit (QR + address) */}
-      <div className="glass-card p-5 space-y-4">
-        <h3 className="text-sm font-semibold text-white">
-          {isTON ? 'Ou dépôt manuel (adresse)' : `Dépôt ${selected?.symbol ?? ''}`}
-        </h3>
+      {/* Manual deposit for non-TON networks */}
+      {!isTON && (
+        <div className="glass-card p-5 space-y-4">
+          <h3 className="text-sm font-semibold text-white">Dépôt {selected?.symbol ?? ''}</h3>
 
-        {hasAddress ? (
-          <>
-            <div className="flex flex-col items-center">
-              <div className="bg-white p-3 rounded-xl mb-4">
-                <QRCodeSVG value={address} size={150} />
-              </div>
-              <p className="text-xs text-slate-400 mb-2">Adresse de dépôt {selected?.name}</p>
-              <div className="flex items-center gap-2 w-full">
+          {hasAddress ? (
+            <>
+              <p className="text-xs text-slate-400">
+                Envoyez vos {selected?.symbol} sur le réseau{' '}
+                <span className="text-white font-medium">{selected?.network}</span> à l'adresse ci-dessous :
+              </p>
+              <div className="flex items-center gap-2">
                 <div className="flex-1 px-3 py-2.5 bg-white/5 rounded-lg text-xs text-white font-mono truncate">{address}</div>
                 <button onClick={handleCopy} className="p-2.5 rounded-lg bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 transition-colors">
                   {copied ? <CheckCircle className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                 </button>
               </div>
-            </div>
-            <div className="space-y-2">
               <div className="flex justify-between text-xs">
                 <span className="text-slate-400">Dépôt minimum</span>
                 <span className="text-white font-medium">{selected?.minDeposit} {selected?.symbol}</span>
               </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-slate-400">Confirmations</span>
-                <span className="text-white font-medium">{selected?.requiredConfirmations}</span>
+              <div className="p-3 rounded-lg bg-amber-500/5 border border-amber-500/20">
+                <p className="text-xs text-amber-400">⚠️ Envoyez uniquement du {selected?.symbol} sur le réseau {selected?.network}. Le dépôt sera validé manuellement par l'administrateur.</p>
               </div>
+            </>
+          ) : (
+            <div className="flex flex-col items-center gap-3 py-4">
+              <AlertCircle className="w-10 h-10 text-amber-400" />
+              <p className="text-sm text-amber-400 font-medium text-center">Adresse non configurée</p>
+              <p className="text-xs text-slate-400 text-center">L'administrateur doit configurer l'adresse du wallet dans Admin → Crypto & Réseaux.</p>
             </div>
-            <div className="p-3 rounded-lg bg-amber-500/5 border border-amber-500/20">
-              <p className="text-xs text-amber-400">⚠️ Envoyez uniquement du {selected?.symbol} sur le réseau {selected?.network}.</p>
-            </div>
-          </>
-        ) : (
-          <div className="flex flex-col items-center gap-3 py-4">
-            <AlertCircle className="w-10 h-10 text-amber-400" />
-            <p className="text-sm text-amber-400 font-medium text-center">Adresse non configurée</p>
-            <p className="text-xs text-slate-400 text-center">L'administrateur doit configurer l'adresse du wallet dans Admin → Crypto & Réseaux.</p>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };
@@ -298,6 +289,12 @@ export const MiniAppWithdraw: React.FC = () => {
 
   const connectedAddress = tonWallet?.account.address ?? '';
   const isTON = cryptoNetworks.find(n => n.id === selectedId)?.symbol === 'TON';
+
+  useEffect(() => {
+    if (isTON && connectedAddress) {
+      setAddress(connectedAddress);
+    }
+  }, [isTON, connectedAddress]);
 
   const withdrawNetworks = cryptoNetworks.filter(n => n.isActive && n.isWithdrawalEnabled);
   const selected = withdrawNetworks.find(n => n.id === selectedId) ?? withdrawNetworks[0];
@@ -374,22 +371,14 @@ export const MiniAppWithdraw: React.FC = () => {
         <div className="glass-card-light p-4 space-y-3">
           <p className="text-xs font-semibold text-slate-400">Wallet TonKeeper</p>
           {tonWallet ? (
-            <div className="space-y-2">
-              <div className="flex items-center justify-between p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-emerald-400" />
-                  <span className="text-xs text-emerald-400 font-mono">{connectedAddress.slice(0, 8)}...{connectedAddress.slice(-4)}</span>
-                </div>
-                <button onClick={() => tonConnectUI.disconnect()} className="text-[10px] text-slate-400 hover:text-red-400 flex items-center gap-1 transition-colors">
-                  <Unlink className="w-3 h-3" /> Déconnecter
-                </button>
+            <div className="flex items-center justify-between p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-emerald-400" />
+                <span className="text-xs text-emerald-400 font-mono">{connectedAddress.slice(0, 8)}...{connectedAddress.slice(-4)}</span>
               </div>
-              {!address && (
-                <button onClick={() => setAddress(connectedAddress)}
-                  className="w-full py-2 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-medium hover:bg-blue-500/20 transition-colors">
-                  Utiliser cette adresse →
-                </button>
-              )}
+              <button onClick={() => tonConnectUI.disconnect()} className="text-[10px] text-slate-400 hover:text-red-400 flex items-center gap-1 transition-colors">
+                <Unlink className="w-3 h-3" /> Déconnecter
+              </button>
             </div>
           ) : (
             <button onClick={() => tonConnectUI.openModal()}
@@ -449,7 +438,7 @@ export const MiniAppWithdraw: React.FC = () => {
           </div>
           <div className="flex justify-between text-xs">
             <span className="text-slate-400">Traitement</span>
-            <span className="text-blue-400 font-medium">Automatique ⚡</span>
+            <span className="text-amber-400 font-medium">Validation admin requise 🔐</span>
           </div>
         </div>
       )}
