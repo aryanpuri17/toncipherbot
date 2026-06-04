@@ -448,7 +448,7 @@ const mockShopItems: ShopItem[] = [
   { id: '2', name: 'Pack Bonus 50', description: 'Recevez 50 crédits bonus instantanément', price: 10.00, currency: 'main', type: 'bonus_pack', value: 50, isActive: true, purchases: 0, icon: '🎁', category: 'packs' },
   { id: '3', name: 'Triple Récompenses (12h)', description: 'Triplez vos récompenses de tâches', price: 15.00, currency: 'main', type: 'multiplier', value: 3, duration: 12, isActive: true, purchases: 0, icon: '🚀', category: 'boosters' },
   { id: '4', name: 'Statut Premium (7j)', description: 'Accédez aux tâches premium pendant 7 jours', price: 25.00, currency: 'main', type: 'premium', value: 1, duration: 168, isActive: true, purchases: 0, icon: '👑', category: 'premium' },
-  { id: '5', name: 'Badge Exclusif', description: 'Obtenez un badge rare pour votre profil', price: 100.00, currency: 'bonus', type: 'badge', value: 1, isActive: true, purchases: 0, maxPurchases: 50, icon: '💎', category: 'collectibles' },
+  { id: '5', name: 'Badge Exclusif', description: 'Obtenez un badge rare pour votre profil', price: 100.00, currency: 'main', type: 'badge', value: 1, isActive: true, purchases: 0, maxPurchases: 50, icon: '💎', category: 'collectibles' },
 ];
 
 const mockNotifications: Notification[] = [];
@@ -838,17 +838,20 @@ export const useAppStore = create<AppState>((set, get) => ({
     get().addNotification({ userId: state.currentUser.id, type: 'reward', title: 'Tâche complétée!', message: `+${earned.toFixed(2)} TON${isPromoActive ? ` (×${multiplier} promo!)` : ''} pour "${task.title}"`, isRead: false });
   },
 
-  initFromTelegram: (tgUser) => set(s => ({
-    currentUser: {
-      ...s.currentUser,
+  initFromTelegram: (tgUser) => set(s => {
+    const tgData = {
       telegramId: tgUser.id,
       firstName: tgUser.first_name,
       lastName: tgUser.last_name || '',
       username: tgUser.username || `user${tgUser.id}`,
       avatarUrl: tgUser.photo_url,
       referralCode: tgUser.id.toString(),
-    },
-  })),
+    };
+    return {
+      currentUser: { ...s.currentUser, ...tgData },
+      users: s.users.map(u => u.id === s.currentUser.id ? { ...u, ...tgData } : u),
+    };
+  }),
 
   claimReferralMilestone: (id) => {
     const state = get();
