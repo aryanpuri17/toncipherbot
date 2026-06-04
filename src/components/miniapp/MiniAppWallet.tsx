@@ -119,11 +119,8 @@ export const MiniAppDeposit: React.FC = () => {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const networkIcon = (symbol: string, network: string) => {
+  const networkIcon = (symbol: string) => {
     if (symbol === 'TON') return '💎';
-    if (symbol === 'USDT' && network === 'TON') return '💵';
-    if (network === 'POLYGON') return '🟣';
-    if (network === 'BEP20') return '🟡';
     return '💵';
   };
 
@@ -230,7 +227,7 @@ export const MiniAppDeposit: React.FC = () => {
             <button key={net.id}
               onClick={() => { setSelectedId(net.id); setTxStatus('idle'); setTxError(''); setDepositAmount(''); }}
               className={`p-3 rounded-xl text-center transition-all ${selectedId === net.id ? 'bg-blue-500/15 border border-blue-500/40 text-white' : 'glass-card-light text-slate-400 hover:text-white'}`}>
-              <span className="text-xl block mb-1">{networkIcon(net.symbol, net.network)}</span>
+              <span className="text-xl block mb-1">{networkIcon(net.symbol)}</span>
               <span className="text-xs font-medium">{net.symbol}</span>
               <span className="text-[9px] text-slate-500 block">{net.network}</span>
             </button>
@@ -460,21 +457,20 @@ export const MiniAppWithdraw: React.FC = () => {
   const [success, setSuccess] = useState(false);
 
   const connectedAddress = tonWallet?.account.address ?? '';
-  const isTON = cryptoNetworks.find(n => n.id === selectedId)?.symbol === 'TON';
+  // Both TON and USDT/TON use a TON address for withdrawal
+  const isOnTONNetwork = cryptoNetworks.find(n => n.id === selectedId)?.network === 'TON';
 
   useEffect(() => {
-    if (isTON && connectedAddress) {
+    if (isOnTONNetwork && connectedAddress) {
       setAddress(connectedAddress);
     }
-  }, [isTON, connectedAddress]);
+  }, [isOnTONNetwork, connectedAddress]);
 
   const withdrawNetworks = cryptoNetworks.filter(n => n.isActive && n.isWithdrawalEnabled);
   const selected = withdrawNetworks.find(n => n.id === selectedId) ?? withdrawNetworks[0];
 
-  const networkIcon = (symbol: string, network: string) => {
+  const networkIcon = (symbol: string) => {
     if (symbol === 'TON') return '💎';
-    if (network === 'POLYGON') return '🟣';
-    if (network === 'BEP20') return '🟡';
     return '💵';
   };
 
@@ -517,7 +513,7 @@ export const MiniAppWithdraw: React.FC = () => {
       {/* Balance available */}
       <div className="glass-card-light p-3 flex items-center justify-between">
         <span className="text-xs text-slate-400">Solde disponible</span>
-        <span className="text-sm font-bold text-blue-400">{currentUser.balanceMain.toFixed(2)} TON</span>
+        <span className="text-sm font-bold text-blue-400">{currentUser.balanceMain.toFixed(2)} {selected?.symbol ?? 'TON'}</span>
       </div>
 
       {/* Network */}
@@ -530,7 +526,7 @@ export const MiniAppWithdraw: React.FC = () => {
               onClick={() => { setSelectedId(net.id); setError(''); setAddress(''); }}
               className={`p-3 rounded-xl text-center transition-all ${selectedId === net.id ? 'bg-blue-500/15 border border-blue-500/40 text-white' : 'glass-card-light text-slate-400'}`}
             >
-              <span className="text-xl block mb-1">{networkIcon(net.symbol, net.network)}</span>
+              <span className="text-xl block mb-1">{networkIcon(net.symbol)}</span>
               <span className="text-xs font-medium">{net.symbol}</span>
               <span className="text-[9px] text-slate-500 block">{net.network}</span>
             </button>
@@ -538,8 +534,8 @@ export const MiniAppWithdraw: React.FC = () => {
         </div>
       </div>
 
-      {/* TON Connect wallet for address auto-fill */}
-      {isTON && (
+      {/* TonKeeper wallet auto-fill — for all TON-network withdrawals (TON + USDT/TON) */}
+      {isOnTONNetwork && (
         <div className="glass-card-light p-4 space-y-3">
           <p className="text-xs font-semibold text-slate-400">Wallet TonKeeper</p>
           {tonWallet ? (
