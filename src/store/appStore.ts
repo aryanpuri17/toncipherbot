@@ -893,7 +893,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       currentUser: { ...s.currentUser, ...updatedUser },
       users: s.users.map(u => u.id === state.currentUser.id ? { ...u, ...updatedUser } : u),
     }));
-    get().addTransaction({ userId: state.currentUser.id, type: 'reward', amount: earned, currency: 'TON', status: 'completed', completedAt: new Date().toISOString() });
+    const rewardCurrency = task.rewardType === 'main' ? 'TON' : task.rewardType.toUpperCase();
+    get().addTransaction({ userId: state.currentUser.id, type: 'reward', amount: earned, currency: rewardCurrency, status: 'completed', completedAt: new Date().toISOString() });
     get().addNotification({ userId: state.currentUser.id, type: 'reward', title: 'Tâche complétée!', message: `+${earned.toFixed(2)} TON${isPromoActive ? ` (×${multiplier} promo!)` : ''} pour "${task.title}"`, isRead: false });
   },
 

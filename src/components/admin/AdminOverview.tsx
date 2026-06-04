@@ -166,11 +166,11 @@ export const AdminOverview: React.FC = () => {
             <BarChart data={revenueData}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
               <XAxis dataKey="name" tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${v / 1000}K`} />
+              <YAxis tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => `${v / 1000}K TON`} />
               <Tooltip
                 contentStyle={{ background: '#1e293b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', fontSize: '12px' }}
                 labelStyle={{ color: '#94a3b8' }}
-                formatter={(value) => [`$${Number(value).toLocaleString()}`, 'Revenus']}
+                formatter={(value) => [`${Number(value).toLocaleString()} TON`, 'Revenus']}
               />
               <Bar dataKey="revenue" fill="url(#barGradient)" radius={[4, 4, 0, 0]} />
               <defs>
@@ -206,8 +206,8 @@ export const AdminOverview: React.FC = () => {
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className={`text-sm font-semibold ${tx.type === 'deposit' || tx.type === 'reward' ? 'text-emerald-400' : 'text-orange-400'}`}>
-                      {tx.type === 'deposit' || tx.type === 'reward' ? '+' : '-'}{tx.amount.toFixed(2)} {tx.currency}
+                    <p className={`text-sm font-semibold ${['deposit', 'reward', 'admin_credit', 'bonus'].includes(tx.type) ? 'text-emerald-400' : 'text-orange-400'}`}>
+                      {['deposit', 'reward', 'admin_credit', 'bonus'].includes(tx.type) ? '+' : '-'}{tx.amount.toFixed(2)} {tx.currency}
                     </p>
                     <StatusBadge status={tx.status} />
                   </div>

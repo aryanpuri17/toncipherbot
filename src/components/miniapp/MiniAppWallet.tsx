@@ -74,7 +74,10 @@ export const MiniAppDeposit: React.FC = () => {
   const { cryptoNetworks, addTransaction, currentUser } = useAppStore();
   const [tonConnectUI] = useTonConnectUI();
   const tonWallet = useTonWallet();
-  const [selectedId, setSelectedId] = useState('1');
+  const [selectedId, setSelectedId] = useState(() => {
+    const nets = useAppStore.getState().cryptoNetworks.filter(n => n.isActive && n.isDepositEnabled);
+    return nets[0]?.id ?? '1';
+  });
   const [copied, setCopied] = useState(false);
   const [depositAmount, setDepositAmount] = useState('');
   const [txStatus, setTxStatus] = useState<'idle' | 'pending' | 'success' | 'error'>('idle');
@@ -450,7 +453,10 @@ export const MiniAppWithdraw: React.FC = () => {
   const { cryptoNetworks, currentUser, submitWithdrawal } = useAppStore();
   const [tonConnectUI] = useTonConnectUI();
   const tonWallet = useTonWallet();
-  const [selectedId, setSelectedId] = useState('1');
+  const [selectedId, setSelectedId] = useState(() => {
+    const nets = useAppStore.getState().cryptoNetworks.filter(n => n.isActive && n.isWithdrawalEnabled);
+    return nets[0]?.id ?? '1';
+  });
   const [amount, setAmount] = useState('');
   const [address, setAddress] = useState('');
   const [error, setError] = useState('');

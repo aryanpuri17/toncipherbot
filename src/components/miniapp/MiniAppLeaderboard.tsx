@@ -36,7 +36,7 @@ export const MiniAppLeaderboard: React.FC = () => {
             return (
               <div key={user.id} className="flex flex-col items-center">
                 <div className={`w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-sm font-bold text-white mb-2 relative ${user.id === currentUser.id ? 'ring-2 ring-blue-400' : ''}`}>
-                  {user.firstName[0]}
+                  {user.firstName?.charAt(0) ?? '?'}
                   <span className="absolute -bottom-1 -right-1 text-sm">{medals[rank - 1]}</span>
                 </div>
                 <p className="text-xs font-semibold text-white mb-0.5 max-w-[72px] truncate text-center">@{user.username}</p>
@@ -58,7 +58,7 @@ export const MiniAppLeaderboard: React.FC = () => {
                 {i < 3 ? medals[i] : i + 1}
               </span>
               <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-xs font-bold text-white flex-shrink-0">
-                {user.firstName[0]}
+                {user.firstName?.charAt(0) ?? '?'}
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-white truncate">

@@ -15,7 +15,7 @@ export const MiniAppDashboard: React.FC = () => {
           <h1 className="text-xl font-bold text-white">{u.firstName}</h1>
         </div>
         <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-sm font-bold text-white">
-          {u.firstName[0]}
+          {u.firstName?.charAt(0) ?? '?'}
         </div>
       </div>
 

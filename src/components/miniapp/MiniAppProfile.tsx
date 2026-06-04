@@ -10,7 +10,7 @@ export const MiniAppProfile: React.FC = () => {
       {/* Profile Header */}
       <div className="text-center pt-2">
         <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-2xl font-bold text-white mx-auto mb-3">
-          {u.firstName[0]}
+          {u.firstName?.charAt(0) ?? '?'}
         </div>
         <h1 className="text-lg font-bold text-white">{u.firstName} {u.lastName}</h1>
         <p className="text-sm text-slate-400">@{u.username}</p>
