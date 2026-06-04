@@ -1,9 +1,12 @@
 import React, { useState } from 'react';
 import { useAppStore } from '../../store/appStore';
-import { Copy, Check, Users, Gift, Lock, ChevronRight, Share2 } from 'lucide-react';
+import { Copy, Check, Users, Gift, Lock, ChevronRight, Share2, TrendingUp, Percent, Zap } from 'lucide-react';
 
 export const MiniAppReferral: React.FC = () => {
-  const { setMiniAppPage, currentUser, referralMilestones, claimedReferralMilestoneIds, claimReferralMilestone, platformConfig } = useAppStore();
+  const {
+    setMiniAppPage, currentUser, referralMilestones, claimedReferralMilestoneIds,
+    claimReferralMilestone, platformConfig, referralConfigs, transactions,
+  } = useAppStore();
   const [copied, setCopied] = useState(false);
 
   const referralLink = `${platformConfig.referralLinkPrefix}${currentUser.referralCode}`;
@@ -26,6 +29,14 @@ export const MiniAppReferral: React.FC = () => {
 
   const activeMilestones = referralMilestones.filter(m => m.isActive).sort((a, b) => a.referralCount - b.referralCount);
 
+  const activityRate = referralConfigs.find(r => r.level === 1 && r.bonusType === 'activity')?.percentage ?? 0;
+  const depositRate  = referralConfigs.find(r => r.level === 1 && r.bonusType === 'deposit')?.percentage ?? 0;
+  const signupBonus  = platformConfig.referralBonusSignup;
+
+  const referralEarnings = transactions
+    .filter(t => t.type === 'referral' && t.userId === currentUser.id)
+    .reduce((sum, t) => sum + t.amount, 0);
+
   return (
     <div className="space-y-5 animate-slide-up">
       <div className="flex items-center gap-3">
@@ -33,14 +44,62 @@ export const MiniAppReferral: React.FC = () => {
         <h1 className="text-xl font-bold text-white">Parrainage</h1>
       </div>
 
-      {/* Referral count */}
-      <div className="glass-card p-5 flex items-center gap-4">
-        <div className="w-12 h-12 rounded-xl bg-purple-500/20 flex items-center justify-center">
-          <Users className="w-6 h-6 text-purple-400" />
+      {/* Stats row */}
+      <div className="grid grid-cols-2 gap-3">
+        <div className="glass-card p-4 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center flex-shrink-0">
+            <Users className="w-5 h-5 text-purple-400" />
+          </div>
+          <div>
+            <p className="text-2xl font-bold text-white">{currentUser.referralCount}</p>
+            <p className="text-xs text-slate-400">Filleuls invités</p>
+          </div>
         </div>
-        <div>
-          <p className="text-2xl font-bold text-white">{currentUser.referralCount}</p>
-          <p className="text-sm text-slate-400">filleuls invités</p>
+        <div className="glass-card p-4 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
+            <TrendingUp className="w-5 h-5 text-emerald-400" />
+          </div>
+          <div>
+            <p className="text-xl font-bold text-emerald-400">{referralEarnings.toFixed(2)}</p>
+            <p className="text-xs text-slate-400">TON gagnés</p>
+          </div>
+        </div>
+      </div>
+
+      {/* How it works */}
+      <div className="glass-card p-4 space-y-3">
+        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Vos gains de parrainage</p>
+        <div className="space-y-2">
+          <div className="flex items-center gap-3 p-2.5 rounded-lg bg-white/[0.03]">
+            <div className="w-7 h-7 rounded-lg bg-amber-500/20 flex items-center justify-center flex-shrink-0">
+              <Zap className="w-3.5 h-3.5 text-amber-400" />
+            </div>
+            <div className="flex-1">
+              <p className="text-xs font-medium text-white">Bonus d'inscription</p>
+              <p className="text-[10px] text-slate-500">Par filleul qui s'inscrit</p>
+            </div>
+            <span className="text-sm font-bold text-amber-400">+{signupBonus.toFixed(2)} TON</span>
+          </div>
+          <div className="flex items-center gap-3 p-2.5 rounded-lg bg-white/[0.03]">
+            <div className="w-7 h-7 rounded-lg bg-blue-500/20 flex items-center justify-center flex-shrink-0">
+              <Percent className="w-3.5 h-3.5 text-blue-400" />
+            </div>
+            <div className="flex-1">
+              <p className="text-xs font-medium text-white">Revenus d'activité</p>
+              <p className="text-[10px] text-slate-500">Sur les gains de tâches de vos filleuls</p>
+            </div>
+            <span className="text-sm font-bold text-blue-400">{activityRate}%</span>
+          </div>
+          <div className="flex items-center gap-3 p-2.5 rounded-lg bg-white/[0.03]">
+            <div className="w-7 h-7 rounded-lg bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
+              <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
+            </div>
+            <div className="flex-1">
+              <p className="text-xs font-medium text-white">Commission sur dépôts</p>
+              <p className="text-[10px] text-slate-500">Sur chaque dépôt de vos filleuls</p>
+            </div>
+            <span className="text-sm font-bold text-emerald-400">{depositRate}%</span>
+          </div>
         </div>
       </div>
 

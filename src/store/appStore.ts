@@ -52,6 +52,7 @@ export interface Task {
   requiredLevel?: number;
   icon?: string;
   promotion?: { multiplier: number; endsAt: string };
+  isPromoTask?: boolean;
 }
 
 export interface Transaction {
@@ -397,6 +398,31 @@ export interface ReferralMilestone {
   isActive: boolean;
 }
 
+export interface PromoCode {
+  id: string;
+  code: string;
+  reward: number;
+  currency: 'main';
+  maxUses: number;
+  currentUses: number;
+  isActive: boolean;
+  expiresAt?: string;
+  description: string;
+  createdAt: string;
+}
+
+export interface TaskSubmission {
+  id: string;
+  taskId: string;
+  userId: string;
+  username: string;
+  proofText: string;
+  status: 'pending' | 'approved' | 'rejected';
+  adminNote?: string;
+  createdAt: string;
+  reviewedAt?: string;
+}
+
 export interface PlatformStats {
   totalUsers: number;
   activeUsers: number;
@@ -475,7 +501,16 @@ const mockTasks: Task[] = [
   { id: '2', type: 'join_channel', title: 'Rejoindre TonCipher Official', description: 'Abonnez-vous à notre canal principal pour rester informé', reward: 0.0425, rewardType: 'main', targetUrl: 'https://t.me/toncipherofficial', isActive: true, totalCompletions: 234, maxCompletions: 1000, createdAt: new Date(Date.now() - 5 * 86400000).toISOString(), verificationMethod: 'auto', priority: 8, icon: '📢', createdByUserId: 'platform' },
   { id: '3', type: 'join_group', title: 'Rejoindre la communauté', description: 'Participez à notre groupe de discussion officiel', reward: 0.0425, rewardType: 'main', targetUrl: 'https://t.me/toncipherchat', isActive: true, totalCompletions: 98, maxCompletions: 500, createdAt: new Date(Date.now() - 3 * 86400000).toISOString(), verificationMethod: 'auto', priority: 7, icon: '👥', createdByUserId: 'platform' },
   { id: '4', type: 'start_bot', title: 'Démarrer @toncipherbot', description: 'Lancez le bot TonCipher et cliquez sur Start', reward: 0.0212, rewardType: 'main', targetUrl: 'https://t.me/toncipherbot', isActive: true, totalCompletions: 45, maxCompletions: 200, createdAt: new Date(Date.now() - 1 * 86400000).toISOString(), verificationMethod: 'auto', priority: 5, icon: '🤖', createdByUserId: 'platform' },
+  { id: '5', type: 'special', title: '🏆 Challenge Parrainage', description: 'Invitez 3 amis à rejoindre TonCipher. Envoyez une capture d\'écran de votre section Parrainage avec 3+ filleuls visibles.', reward: 1.50, rewardType: 'main', isActive: true, totalCompletions: 12, maxCompletions: 50, createdAt: new Date(Date.now() - 2 * 86400000).toISOString(), verificationMethod: 'manual', priority: 10, isPromoTask: true, icon: '🏆', createdByUserId: 'platform' },
+  { id: '6', type: 'special', title: '📢 Partage Communauté', description: 'Partagez TonCipher dans un groupe Telegram de 100+ membres. Envoyez la capture d\'écran de votre message publié avec le lien visible.', reward: 0.80, rewardType: 'main', isActive: true, totalCompletions: 5, maxCompletions: 100, createdAt: new Date(Date.now() - 1 * 86400000).toISOString(), verificationMethod: 'manual', priority: 9, isPromoTask: true, icon: '📢', createdByUserId: 'platform' },
 ];
+
+const mockPromoCodes: PromoCode[] = [
+  { id: '1', code: 'LAUNCH50', reward: 0.50, currency: 'main', maxUses: 500, currentUses: 127, isActive: true, description: 'Code de lancement officiel', createdAt: new Date(Date.now() - 10 * 86400000).toISOString() },
+  { id: '2', code: 'VIP200', reward: 2.00, currency: 'main', maxUses: 20, currentUses: 3, isActive: true, expiresAt: new Date(Date.now() + 7 * 86400000).toISOString(), description: 'Code VIP exclusif — 7 jours', createdAt: new Date().toISOString() },
+];
+
+const mockTaskSubmissions: TaskSubmission[] = [];
 
 const mockTransactions: Transaction[] = [];
 
@@ -721,10 +756,13 @@ interface AppState {
   platformStats: PlatformStats;
   logs: LogEntry[];
   referralMilestones: ReferralMilestone[];
+  promoCodes: PromoCode[];
+  taskSubmissions: TaskSubmission[];
 
   // Mini App State
   completedTaskIds: string[];
   claimedReferralMilestoneIds: string[];
+  usedPromoCodeIds: string[];
 
   // Actions - Mini App
   confirmDeposit: (txId: string, txHash: string) => void;
@@ -820,6 +858,13 @@ interface AppState {
   updatePlatformConfig: (data: Partial<PlatformConfig>) => void;
   addPlatformRevenue: (amount: number) => void;
   addLog: (log: Omit<LogEntry, 'id' | 'createdAt'>) => void;
+
+  redeemPromoCode: (code: string) => { success: boolean; error?: string; reward?: number };
+  submitTaskProof: (taskId: string, proofText: string) => { success: boolean; error?: string };
+  reviewTaskSubmission: (submissionId: string, status: 'approved' | 'rejected', adminNote?: string) => void;
+  addPromoCode: (code: Omit<PromoCode, 'id' | 'createdAt' | 'currentUses'>) => void;
+  updatePromoCode: (id: string, data: Partial<PromoCode>) => void;
+  deletePromoCode: (id: string) => void;
 }
 
 const generateId = () => Math.random().toString(36).substr(2, 9);
@@ -858,8 +903,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   platformStats: mockStats,
   logs: mockLogs,
   referralMilestones: mockReferralMilestones,
+  promoCodes: mockPromoCodes,
+  taskSubmissions: mockTaskSubmissions,
 
   claimedReferralMilestoneIds: [],
+  usedPromoCodeIds: [],
 
   // Mini App Actions
   confirmDeposit: (txId, txHash) => {
@@ -1104,4 +1152,80 @@ export const useAppStore = create<AppState>((set, get) => ({
   updatePlatformConfig: (data) => set((s) => ({ platformConfig: { ...s.platformConfig, ...data } })),
   addPlatformRevenue: (amount) => set((s) => ({ platformStats: { ...s.platformStats, platformRevenue: s.platformStats.platformRevenue + amount } })),
   addLog: (log) => set((s) => ({ logs: [{ ...log, id: generateId(), createdAt: new Date().toISOString() }, ...s.logs] })),
+
+  redeemPromoCode: (code) => {
+    const state = get();
+    const promo = state.promoCodes.find(p => p.code.toUpperCase() === code.toUpperCase().trim());
+    if (!promo) return { success: false, error: 'Code invalide.' };
+    if (!promo.isActive) return { success: false, error: 'Ce code n\'est plus actif.' };
+    if (promo.expiresAt && new Date(promo.expiresAt) < new Date()) return { success: false, error: 'Code expiré.' };
+    if (promo.currentUses >= promo.maxUses) return { success: false, error: 'Ce code a atteint sa limite d\'utilisation.' };
+    if (state.usedPromoCodeIds.includes(promo.id)) return { success: false, error: 'Vous avez déjà utilisé ce code.' };
+    const earned = promo.reward;
+    const balanceUpdate = { balanceMain: state.currentUser.balanceMain + earned, totalEarnings: state.currentUser.totalEarnings + earned };
+    set(s => ({
+      usedPromoCodeIds: [...s.usedPromoCodeIds, promo.id],
+      promoCodes: s.promoCodes.map(p => p.id === promo.id ? { ...p, currentUses: p.currentUses + 1 } : p),
+      currentUser: { ...s.currentUser, ...balanceUpdate },
+      users: s.users.map(u => u.id === state.currentUser.id ? { ...u, ...balanceUpdate } : u),
+    }));
+    get().addTransaction({ userId: state.currentUser.id, type: 'bonus', amount: earned, currency: 'TON', status: 'completed', completedAt: new Date().toISOString() });
+    get().addNotification({ userId: state.currentUser.id, type: 'reward', title: 'Code promo activé! 🎉', message: `+${earned.toFixed(2)} TON crédité via le code "${promo.code}".`, isRead: false });
+    return { success: true, reward: earned };
+  },
+
+  submitTaskProof: (taskId, proofText) => {
+    const state = get();
+    const task = state.tasks.find(t => t.id === taskId);
+    if (!task) return { success: false, error: 'Tâche introuvable.' };
+    if (!proofText.trim()) return { success: false, error: 'La preuve ne peut pas être vide.' };
+    const existing = state.taskSubmissions.find(s => s.taskId === taskId && s.userId === state.currentUser.id);
+    if (existing?.status === 'pending') return { success: false, error: 'Une soumission est déjà en attente de validation.' };
+    if (existing?.status === 'approved') return { success: false, error: 'Votre preuve a déjà été validée.' };
+    set(s => ({
+      taskSubmissions: [{
+        id: generateId(),
+        taskId,
+        userId: state.currentUser.id,
+        username: state.currentUser.username,
+        proofText: proofText.trim(),
+        status: 'pending' as const,
+        createdAt: new Date().toISOString(),
+      }, ...s.taskSubmissions],
+    }));
+    return { success: true };
+  },
+
+  reviewTaskSubmission: (submissionId, status, adminNote) => {
+    const state = get();
+    const submission = state.taskSubmissions.find(s => s.id === submissionId);
+    if (!submission || submission.status !== 'pending') return;
+    set(s => ({
+      taskSubmissions: s.taskSubmissions.map(sub =>
+        sub.id === submissionId ? { ...sub, status, adminNote, reviewedAt: new Date().toISOString() } : sub
+      ),
+    }));
+    const task = state.tasks.find(t => t.id === submission.taskId);
+    const user = state.users.find(u => u.id === submission.userId);
+    if (status === 'approved' && task && user) {
+      const balanceUpdate = {
+        balanceMain: user.balanceMain + task.reward,
+        totalEarnings: user.totalEarnings + task.reward,
+        tasksCompleted: user.tasksCompleted + 1,
+      };
+      set(s => ({
+        tasks: s.tasks.map(t => t.id === submission.taskId ? { ...t, totalCompletions: t.totalCompletions + 1 } : t),
+        users: s.users.map(u => u.id === submission.userId ? { ...u, ...balanceUpdate } : u),
+        currentUser: s.currentUser.id === submission.userId ? { ...s.currentUser, ...balanceUpdate } : s.currentUser,
+      }));
+      get().addTransaction({ userId: submission.userId, type: 'reward', amount: task.reward, currency: 'TON', status: 'completed', completedAt: new Date().toISOString() });
+      get().addNotification({ userId: submission.userId, type: 'reward', title: 'Tâche promo validée! 🎉', message: `+${task.reward.toFixed(2)} TON crédité pour "${task.title}".`, isRead: false });
+    } else if (status === 'rejected') {
+      get().addNotification({ userId: submission.userId, type: 'alert', title: 'Preuve refusée', message: `Votre soumission pour "${task?.title}" a été refusée.${adminNote ? ` Motif: ${adminNote}` : ''}`, isRead: false });
+    }
+  },
+
+  addPromoCode: (code) => set((s) => ({ promoCodes: [...s.promoCodes, { ...code, id: generateId(), createdAt: new Date().toISOString(), currentUses: 0 }] })),
+  updatePromoCode: (id, data) => set((s) => ({ promoCodes: s.promoCodes.map(p => p.id === id ? { ...p, ...data } : p) })),
+  deletePromoCode: (id) => set((s) => ({ promoCodes: s.promoCodes.filter(p => p.id !== id) })),
 }));

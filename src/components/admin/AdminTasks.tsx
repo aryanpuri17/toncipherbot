@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useAppStore } from '../../store/appStore';
 import { ToggleSwitch } from '../ui/ToggleSwitch';
-import { Hash, Users, Bot, UserPlus, Calendar, Star, ExternalLink, Edit2, Trash2, Plus, Tv, AlertCircle, Flame } from 'lucide-react';
+import { Hash, Users, Bot, UserPlus, Calendar, Star, ExternalLink, Edit2, Trash2, Plus, Tv, AlertCircle, Flame, CheckCircle, XCircle, Clock, FileText } from 'lucide-react';
 
 const taskTypeIcons: Record<string, React.ReactNode> = {
   join_channel: <Hash className="w-4 h-4" />,
@@ -37,7 +37,27 @@ const taskTypeColors: Record<string, string> = {
 };
 
 export const AdminTasks: React.FC = () => {
-  const { tasks, updateTask, deleteTask, openModal } = useAppStore();
+  const { tasks, updateTask, deleteTask, openModal, taskSubmissions, reviewTaskSubmission } = useAppStore();
+  const [rejectNotes, setRejectNotes] = useState<Record<string, string>>({});
+  const [rejectOpen,  setRejectOpen]  = useState<string | null>(null);
+
+  const pendingSubmissions = taskSubmissions.filter(s => s.status === 'pending');
+  const allSubmissions     = taskSubmissions;
+
+  const handleApprove = (id: string) => reviewTaskSubmission(id, 'approved');
+  const handleReject  = (id: string) => {
+    reviewTaskSubmission(id, 'rejected', rejectNotes[id]?.trim() || undefined);
+    setRejectOpen(null);
+    setRejectNotes(prev => { const n = { ...prev }; delete n[id]; return n; });
+  };
+
+  function timeAgo(iso: string) {
+    const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+    if (diff < 60) return 'À l\'instant';
+    if (diff < 3600) return `Il y a ${Math.floor(diff / 60)} min`;
+    if (diff < 86400) return `Il y a ${Math.floor(diff / 3600)} h`;
+    return `Il y a ${Math.floor(diff / 86400)} j`;
+  }
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -150,6 +170,117 @@ export const AdminTasks: React.FC = () => {
           })}
         </div>
       )}
+
+      {/* ── Promo Task Submissions ── */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-bold text-white">Soumissions de preuves</h3>
+            <p className="text-slate-400 text-sm mt-0.5">
+              {pendingSubmissions.length} en attente · {allSubmissions.length} total
+            </p>
+          </div>
+          {pendingSubmissions.length > 0 && (
+            <span className="px-2.5 py-1 rounded-full bg-amber-500/15 border border-amber-500/20 text-amber-400 text-xs font-semibold">
+              {pendingSubmissions.length} à traiter
+            </span>
+          )}
+        </div>
+
+        {allSubmissions.length === 0 ? (
+          <div className="glass-card p-8 text-center">
+            <FileText className="w-8 h-8 text-slate-600 mx-auto mb-3" />
+            <p className="text-sm text-slate-400">Aucune soumission pour l'instant</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {allSubmissions.map(sub => {
+              const task = tasks.find(t => t.id === sub.taskId);
+              const isRejectOpen = rejectOpen === sub.id;
+
+              return (
+                <div key={sub.id} className={`glass-card p-4 space-y-3 border ${sub.status === 'approved' ? 'border-emerald-500/20' : sub.status === 'rejected' ? 'border-red-500/15 opacity-70' : 'border-amber-500/20'}`}>
+                  {/* Header */}
+                  <div className="flex items-start gap-3">
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${sub.status === 'approved' ? 'bg-emerald-500/20' : sub.status === 'rejected' ? 'bg-red-500/20' : 'bg-amber-500/20'}`}>
+                      {sub.status === 'approved' ? <CheckCircle className="w-4 h-4 text-emerald-400" /> : sub.status === 'rejected' ? <XCircle className="w-4 h-4 text-red-400" /> : <Clock className="w-4 h-4 text-amber-400" />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-semibold text-white">@{sub.username}</span>
+                        <span className="text-[10px] text-slate-500">→</span>
+                        <span className="text-xs text-slate-300 truncate">{task?.title ?? sub.taskId}</span>
+                      </div>
+                      <p className="text-[10px] text-slate-500 mt-0.5">{timeAgo(sub.createdAt)}</p>
+                    </div>
+                    <div>
+                      {sub.status === 'approved' && <span className="text-xs font-medium text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded-lg">Approuvé</span>}
+                      {sub.status === 'rejected' && <span className="text-xs font-medium text-red-400 bg-red-500/10 px-2 py-1 rounded-lg">Refusé</span>}
+                      {sub.status === 'pending' && <span className="text-xs font-medium text-amber-400 bg-amber-500/10 px-2 py-1 rounded-lg">En attente</span>}
+                    </div>
+                  </div>
+
+                  {/* Proof text */}
+                  <div className="p-3 rounded-lg bg-white/[0.03] border border-white/8">
+                    <p className="text-[10px] text-slate-500 mb-1 uppercase tracking-wider">Preuve soumise</p>
+                    <p className="text-xs text-slate-300 leading-relaxed break-all">{sub.proofText}</p>
+                  </div>
+
+                  {sub.adminNote && (
+                    <p className="text-xs text-slate-500">Note admin: <span className="text-slate-400">{sub.adminNote}</span></p>
+                  )}
+
+                  {/* Actions — pending only */}
+                  {sub.status === 'pending' && (
+                    <div className="space-y-2">
+                      {!isRejectOpen ? (
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleApprove(sub.id)}
+                            className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-semibold hover:bg-emerald-500/25 transition-all"
+                          >
+                            <CheckCircle className="w-3.5 h-3.5" /> Approuver
+                          </button>
+                          <button
+                            onClick={() => setRejectOpen(sub.id)}
+                            className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-semibold hover:bg-red-500/20 transition-all"
+                          >
+                            <XCircle className="w-3.5 h-3.5" /> Refuser
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          <input
+                            type="text"
+                            value={rejectNotes[sub.id] ?? ''}
+                            onChange={e => setRejectNotes(prev => ({ ...prev, [sub.id]: e.target.value }))}
+                            placeholder="Motif du refus (optionnel)..."
+                            className="w-full px-3 py-2 bg-white/5 border border-red-500/20 rounded-xl text-white text-xs focus:outline-none focus:border-red-500/40"
+                          />
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => handleReject(sub.id)}
+                              className="flex-1 py-2 rounded-xl bg-red-500/15 border border-red-500/30 text-red-400 text-xs font-semibold hover:bg-red-500/25 transition-all"
+                            >
+                              Confirmer le refus
+                            </button>
+                            <button
+                              onClick={() => setRejectOpen(null)}
+                              className="flex-1 py-2 rounded-xl bg-white/5 text-slate-400 text-xs font-medium hover:bg-white/10 transition-all"
+                            >
+                              Annuler
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 };
