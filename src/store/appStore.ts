@@ -1022,13 +1022,15 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   submitWithdrawal: (networkId, amount, address) => {
     const state = get();
+    if (state.currentUser.status !== 'active') return { success: false, error: 'Compte suspendu ou banni. Contactez le support.' };
+    if (state.currentUser.withdrawalBlocked) return { success: false, error: 'Retraits bloqués sur ce compte. Contactez le support.' };
     const network = state.cryptoNetworks.find(n => n.id === networkId);
     if (!network) return { success: false, error: 'Réseau invalide' };
     if (!network.isWithdrawalEnabled) return { success: false, error: 'Retraits désactivés pour ce réseau' };
     if (amount < network.minWithdrawal) return { success: false, error: `Minimum: ${network.minWithdrawal} ${network.symbol}` };
     if (amount > network.maxWithdrawal) return { success: false, error: `Maximum: ${network.maxWithdrawal} ${network.symbol}` };
     if (state.currentUser.balanceMain < amount) return { success: false, error: 'Solde insuffisant' };
-    if (!address || address.trim().length < 10) return { success: false, error: 'Adresse invalide' };
+    if (!address || address.trim().length < 20) return { success: false, error: 'Adresse invalide (trop courte)' };
     set(s => ({
       currentUser: { ...s.currentUser, balanceMain: s.currentUser.balanceMain - amount },
       users: s.users.map(u => u.id === state.currentUser.id ? { ...u, balanceMain: u.balanceMain - amount } : u),

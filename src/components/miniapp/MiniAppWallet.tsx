@@ -529,7 +529,7 @@ export const MiniAppWithdraw: React.FC = () => {
           {withdrawNetworks.map(net => (
             <button
               key={net.id}
-              onClick={() => { setSelectedId(net.id); setError(''); setAddress(''); }}
+              onClick={() => { setSelectedId(net.id); setError(''); setAddress(''); setAmount(''); }}
               className={`p-3 rounded-xl text-center transition-all ${selectedId === net.id ? 'bg-blue-500/15 border border-blue-500/40 text-white' : 'glass-card-light text-slate-400'}`}
             >
               <span className="text-xl block mb-1">{networkIcon(net.symbol)}</span>
