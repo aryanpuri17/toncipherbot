@@ -28,8 +28,6 @@ export function useDepositMonitor(): void {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const poll = async () => {
-    if (document.visibilityState === 'hidden') return;
-
     const state = useAppStore.getState();
 
     // Scan ALL users' pending deposits across the whole store
@@ -133,7 +131,15 @@ export function useDepositMonitor(): void {
   useEffect(() => {
     poll();
     timerRef.current = setInterval(poll, POLL_MS);
-    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+
+    // Poll immediately when user returns to the app
+    const onVisible = () => { if (document.visibilityState === 'visible') poll(); };
+    document.addEventListener('visibilitychange', onVisible);
+
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 }
