@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAppStore } from '../../store/appStore';
-import { Copy, Check, Users, Gift, Lock, ChevronRight } from 'lucide-react';
+import { Copy, Check, Users, Gift, Lock, ChevronRight, Share2 } from 'lucide-react';
 
 export const MiniAppReferral: React.FC = () => {
   const { setMiniAppPage, currentUser, referralMilestones, claimedReferralMilestoneIds, claimReferralMilestone, platformConfig } = useAppStore();
@@ -12,6 +12,16 @@ export const MiniAppReferral: React.FC = () => {
     navigator.clipboard.writeText(referralLink).catch(() => {});
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleShare = () => {
+    const text = encodeURIComponent(`🎯 Rejoins TonCipher et gagne du TON en complétant des tâches simples!\n${referralLink}`);
+    const tg = (window as unknown as { Telegram?: { WebApp?: { openTelegramLink?: (url: string) => void } } }).Telegram?.WebApp;
+    if (tg?.openTelegramLink) {
+      tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(referralLink)}&text=${text}`);
+    } else {
+      window.open(`https://t.me/share/url?url=${encodeURIComponent(referralLink)}&text=${text}`, '_blank');
+    }
   };
 
   const activeMilestones = referralMilestones.filter(m => m.isActive).sort((a, b) => a.referralCount - b.referralCount);
@@ -41,13 +51,20 @@ export const MiniAppReferral: React.FC = () => {
           <p className="flex-1 text-xs text-slate-300 truncate font-mono">{referralLink}</p>
           <button
             onClick={handleCopy}
-            className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${copied ? 'bg-emerald-500/20 text-emerald-400' : 'bg-blue-500/20 text-blue-400 hover:bg-blue-500/30'}`}
+            className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${copied ? 'bg-emerald-500/20 text-emerald-400' : 'bg-white/5 text-slate-400 hover:bg-white/10'}`}
           >
             {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
             {copied ? 'Copié!' : 'Copier'}
           </button>
         </div>
-        <p className="text-xs text-slate-500">Partagez ce lien — chaque inscription via votre lien compte comme un filleul.</p>
+        <button
+          onClick={handleShare}
+          className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-blue-500/15 border border-blue-500/30 text-blue-400 text-sm font-semibold hover:bg-blue-500/25 transition-all"
+        >
+          <Share2 className="w-4 h-4" />
+          Partager sur Telegram
+        </button>
+        <p className="text-xs text-slate-500 text-center">Chaque inscription via votre lien compte comme un filleul.</p>
       </div>
 
       {/* Milestones */}

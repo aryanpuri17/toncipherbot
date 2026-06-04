@@ -46,6 +46,7 @@ export interface Task {
   expiresAt?: string;
   createdAt: string;
   campaignId?: string;
+  createdByUserId?: string;
   verificationMethod: 'auto' | 'manual' | 'api';
   priority: number;
   requiredLevel?: number;
@@ -435,10 +436,45 @@ const mockUsers: User[] = [
     withdrawalBlocked: false, verificationStatus: 'none',
     dailyWithdrawn: 0, dailyTasksCompleted: 0
   },
+  {
+    id: '2', telegramId: 112233, username: 'alice_ton', firstName: 'Alice', lastName: 'M.',
+    balanceMain: 12.5, totalEarnings: 28.75, todayEarnings: 1.20, tasksCompleted: 47,
+    referralCount: 8, referralCode: 'ALICE01',
+    riskScore: 0, status: 'active', createdAt: new Date(Date.now() - 30 * 86400000).toISOString(), lastActive: new Date().toISOString(),
+    withdrawalBlocked: false, verificationStatus: 'none',
+    dailyWithdrawn: 0, dailyTasksCompleted: 3
+  },
+  {
+    id: '3', telegramId: 445566, username: 'crypto_bob', firstName: 'Bob', lastName: 'K.',
+    balanceMain: 5.0, totalEarnings: 11.40, todayEarnings: 0.42, tasksCompleted: 23,
+    referralCount: 2, referralCode: 'BOBK22',
+    riskScore: 5, status: 'active', createdAt: new Date(Date.now() - 15 * 86400000).toISOString(), lastActive: new Date().toISOString(),
+    withdrawalBlocked: false, verificationStatus: 'none',
+    dailyWithdrawn: 0, dailyTasksCompleted: 1
+  },
+  {
+    id: '4', telegramId: 778899, username: 'sofia_w', firstName: 'Sofia', lastName: 'W.',
+    balanceMain: 31.2, totalEarnings: 67.00, todayEarnings: 2.55, tasksCompleted: 112,
+    referralCount: 21, referralCode: 'SOFIAW',
+    riskScore: 0, status: 'active', createdAt: new Date(Date.now() - 60 * 86400000).toISOString(), lastActive: new Date().toISOString(),
+    withdrawalBlocked: false, verificationStatus: 'verified',
+    dailyWithdrawn: 0, dailyTasksCompleted: 5
+  },
+  {
+    id: '5', telegramId: 321654, username: 'max_earn', firstName: 'Max', lastName: 'D.',
+    balanceMain: 8.9, totalEarnings: 19.30, todayEarnings: 0.85, tasksCompleted: 38,
+    referralCount: 5, referralCode: 'MAXD55',
+    riskScore: 0, status: 'active', createdAt: new Date(Date.now() - 20 * 86400000).toISOString(), lastActive: new Date().toISOString(),
+    withdrawalBlocked: false, verificationStatus: 'none',
+    dailyWithdrawn: 0, dailyTasksCompleted: 2
+  },
 ];
 
 const mockTasks: Task[] = [
-  { id: '1', type: 'daily', title: 'Mission Quotidienne', description: 'Connectez-vous chaque jour pour gagner', reward: 0.10, rewardType: 'main', cooldownHours: 24, isActive: true, totalCompletions: 0, createdAt: new Date().toISOString(), verificationMethod: 'auto', priority: 0, maxPerUser: 1, icon: '📅' },
+  { id: '1', type: 'daily', title: 'Mission Quotidienne', description: 'Connectez-vous chaque jour pour gagner', reward: 0.10, rewardType: 'main', cooldownHours: 24, isActive: true, totalCompletions: 0, createdAt: new Date().toISOString(), verificationMethod: 'auto', priority: 0, maxPerUser: 1, icon: '📅', createdByUserId: 'platform' },
+  { id: '2', type: 'join_channel', title: 'Rejoindre TonCipher Official', description: 'Abonnez-vous à notre canal principal pour rester informé', reward: 0.0425, rewardType: 'main', targetUrl: 'https://t.me/toncipherofficial', isActive: true, totalCompletions: 234, maxCompletions: 1000, createdAt: new Date(Date.now() - 5 * 86400000).toISOString(), verificationMethod: 'auto', priority: 8, icon: '📢', createdByUserId: 'platform' },
+  { id: '3', type: 'join_group', title: 'Rejoindre la communauté', description: 'Participez à notre groupe de discussion officiel', reward: 0.0425, rewardType: 'main', targetUrl: 'https://t.me/toncipherchat', isActive: true, totalCompletions: 98, maxCompletions: 500, createdAt: new Date(Date.now() - 3 * 86400000).toISOString(), verificationMethod: 'auto', priority: 7, icon: '👥', createdByUserId: 'platform' },
+  { id: '4', type: 'start_bot', title: 'Démarrer @toncipherbot', description: 'Lancez le bot TonCipher et cliquez sur Start', reward: 0.0212, rewardType: 'main', targetUrl: 'https://t.me/toncipherbot', isActive: true, totalCompletions: 45, maxCompletions: 200, createdAt: new Date(Date.now() - 1 * 86400000).toISOString(), verificationMethod: 'auto', priority: 5, icon: '🤖', createdByUserId: 'platform' },
 ];
 
 const mockTransactions: Transaction[] = [];
@@ -974,7 +1010,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   deleteUser: (id) => set((s) => ({ users: s.users.filter(u => u.id !== id) })),
 
   // Task CRUD
-  addTask: (task) => set((s) => ({ tasks: [...s.tasks, { ...task, id: generateId(), createdAt: new Date().toISOString(), totalCompletions: 0 }] })),
+  addTask: (task) => set((s) => ({ tasks: [...s.tasks, { ...task, id: generateId(), createdAt: new Date().toISOString(), totalCompletions: 0, createdByUserId: s.currentUser.id }] })),
   updateTask: (id, data) => set((s) => ({ tasks: s.tasks.map(t => t.id === id ? { ...t, ...data } : t) })),
   deleteTask: (id) => set((s) => ({ tasks: s.tasks.filter(t => t.id !== id) })),
 
