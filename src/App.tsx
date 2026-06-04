@@ -9,7 +9,7 @@ import { AdminTasks } from './components/admin/AdminTasks';
 import { AdminCampaigns } from './components/admin/AdminCampaigns';
 import { AdminDeposits, AdminWithdrawals, AdminWallets, AdminCrypto } from './components/admin/AdminFinance';
 import { AdminAntiFraud, AdminLogs, AdminAlerts } from './components/admin/AdminSecurity';
-import { AdminReferrals, AdminShop, AdminGamification, AdminChannels } from './components/admin/AdminEngagement';
+import { AdminReferrals, AdminShop, AdminGamification, AdminChannels, AdminPromoCodes } from './components/admin/AdminEngagement';
 import { AdminStatistics } from './components/admin/AdminStatistics';
 import { AdminConfig, AdminNotifications } from './components/admin/AdminConfig';
 import { ModalManager } from './components/admin/modals';
@@ -25,6 +25,7 @@ import { MiniAppCreateTask } from './components/miniapp/MiniAppCreateTask';
 import { MiniAppMyTasks } from './components/miniapp/MiniAppMyTasks';
 import { MiniAppReferral } from './components/miniapp/MiniAppReferral';
 import { MiniAppNotifications } from './components/miniapp/MiniAppNotifications';
+import { MiniAppShop } from './components/miniapp/MiniAppShop';
 
 import { Bell, Menu, Settings, ChevronRight, Globe, Info, Wallet, Shield } from 'lucide-react';
 import { useTonConnectUI, useTonWallet } from '@tonconnect/ui-react';
@@ -99,6 +100,7 @@ const AdminPageContent: React.FC = () => {
     case 'referrals':     return <AdminReferrals />;
     case 'shop':          return <AdminShop />;
     case 'gamification':  return <AdminGamification />;
+    case 'promoCodes':    return <AdminPromoCodes />;
     case 'antifraud':     return <AdminAntiFraud />;
     case 'logs':          return <AdminLogs />;
     case 'alerts':        return <AdminAlerts />;
@@ -123,6 +125,7 @@ const MiniAppPageContent: React.FC = () => {
     case 'myTasks':       return <MiniAppMyTasks />;
     case 'referral':      return <MiniAppReferral />;
     case 'notifications': return <MiniAppNotifications />;
+    case 'shop':          return <MiniAppShop />;
     case 'settings':      return <MiniAppSettings />;
     default:              return <MiniAppDashboard />;
   }

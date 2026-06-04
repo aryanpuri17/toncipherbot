@@ -27,6 +27,7 @@ export const TaskModal: React.FC = () => {
     hasPromotion: !!task?.promotion,
     promotionMultiplier: task?.promotion?.multiplier || 2,
     promotionEndsAt: task?.promotion?.endsAt ? task.promotion.endsAt.split('T')[0] : '',
+    isPromoTask: task?.isPromoTask ?? false,
   });
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -51,6 +52,7 @@ export const TaskModal: React.FC = () => {
       promotion: form.hasPromotion && form.promotionEndsAt
         ? { multiplier: form.promotionMultiplier, endsAt: new Date(form.promotionEndsAt).toISOString() }
         : undefined,
+      isPromoTask: form.isPromoTask,
     };
 
     if (isEdit && task) {
@@ -182,8 +184,9 @@ export const TaskModal: React.FC = () => {
             <FormInput type="date" value={form.expiresAt} onChange={e => setForm({ ...form, expiresAt: e.target.value })} />
           </FormGroup>
 
-          <div className="flex items-center gap-4 pt-2">
+          <div className="flex items-center gap-6 pt-2 flex-wrap">
             <ToggleSwitch enabled={form.isActive} onChange={v => setForm({ ...form, isActive: v })} label="Tâche active" />
+            <ToggleSwitch enabled={form.isPromoTask} onChange={v => setForm({ ...form, isPromoTask: v })} label="🎯 Tâche promo (vérification manuelle)" />
           </div>
         </FormSection>
 

@@ -635,48 +635,90 @@ export const MiniAppWithdraw: React.FC = () => {
   );
 };
 
+const TX_LABELS: Record<string, string> = {
+  deposit:      'Dépôt',
+  withdrawal:   'Retrait',
+  reward:       'Récompense tâche',
+  referral:     'Bonus parrainage',
+  bonus:        'Bonus promo',
+  purchase:     'Achat boutique',
+  fee:          'Frais',
+  admin_credit: 'Crédit admin',
+  admin_debit:  'Débit admin',
+};
+
+const TX_FILTER_GROUPS: { id: string; label: string; types: string[] }[] = [
+  { id: 'all',      label: 'Tout',       types: [] },
+  { id: 'in',       label: '⬇ Entrants', types: ['deposit', 'reward', 'referral', 'bonus', 'admin_credit'] },
+  { id: 'out',      label: '⬆ Sortants', types: ['withdrawal', 'purchase', 'fee', 'admin_debit'] },
+  { id: 'rewards',  label: '🎯 Tâches',  types: ['reward'] },
+  { id: 'deposits', label: '💎 Dépôts',  types: ['deposit'] },
+];
+
 export const MiniAppHistory: React.FC = () => {
   const { currentUser: u, transactions } = useAppStore();
+  const [filter, setFilter] = useState<string>('all');
+
   const userTx = transactions.filter(t => t.userId === u.id);
+  const group   = TX_FILTER_GROUPS.find(g => g.id === filter)!;
+  const visible = group.types.length === 0 ? userTx : userTx.filter(t => group.types.includes(t.type));
+
+  const isDebit = (type: string) => ['withdrawal', 'purchase', 'fee', 'admin_debit'].includes(type);
 
   return (
     <div className="space-y-5 animate-slide-up">
       <div className="flex items-center gap-3">
-        <button onClick={() => useAppStore.getState().setMiniAppPage('wallet')} className="p-2 rounded-lg hover:bg-white/5 text-slate-400">
-          ←
-        </button>
-        <h1 className="text-xl font-bold text-white">Historique</h1>
+        <button onClick={() => useAppStore.getState().setMiniAppPage('wallet')} className="p-2 rounded-lg hover:bg-white/5 text-slate-400">←</button>
+        <div>
+          <h1 className="text-xl font-bold text-white">Historique</h1>
+          <p className="text-xs text-slate-400">{userTx.length} transaction{userTx.length !== 1 ? 's' : ''}</p>
+        </div>
+      </div>
+
+      {/* Filter chips */}
+      <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 no-scrollbar">
+        {TX_FILTER_GROUPS.map(g => (
+          <button
+            key={g.id}
+            onClick={() => setFilter(g.id)}
+            className={`px-3 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition-all ${filter === g.id ? 'bg-blue-500/15 text-blue-400 border border-blue-500/30' : 'bg-white/5 text-slate-400 border border-transparent'}`}
+          >
+            {g.label}
+          </button>
+        ))}
       </div>
 
       <div className="space-y-2">
-        {userTx.map(tx => (
+        {visible.map(tx => (
           <div key={tx.id} className="glass-card p-4">
             <div className="flex items-center gap-3">
-              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${tx.type === 'deposit' ? 'bg-emerald-500/20 text-emerald-400' : tx.type === 'withdrawal' || tx.type === 'purchase' ? 'bg-orange-500/20 text-orange-400' : 'bg-blue-500/20 text-blue-400'}`}>
-                {tx.type === 'deposit' ? <ArrowDownLeft className="w-5 h-5" /> : tx.type === 'withdrawal' || tx.type === 'purchase' ? <ArrowUpRight className="w-5 h-5" /> : <TrendingUp className="w-5 h-5" />}
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${tx.type === 'deposit' ? 'bg-emerald-500/20 text-emerald-400' : isDebit(tx.type) ? 'bg-orange-500/20 text-orange-400' : 'bg-blue-500/20 text-blue-400'}`}>
+                {tx.type === 'deposit'
+                  ? <ArrowDownLeft className="w-5 h-5" />
+                  : isDebit(tx.type)
+                  ? <ArrowUpRight className="w-5 h-5" />
+                  : <TrendingUp className="w-5 h-5" />}
               </div>
-              <div className="flex-1">
-                <p className="text-sm font-semibold text-white">
-                  {tx.type === 'deposit' ? 'Dépôt' : tx.type === 'withdrawal' ? 'Retrait' : tx.type === 'purchase' ? 'Achat boutique' : 'Récompense'}
-                </p>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-white">{TX_LABELS[tx.type] ?? tx.type}</p>
                 <p className="text-xs text-slate-500">{new Date(tx.createdAt).toLocaleString('fr-FR')}</p>
               </div>
-              <div className="text-right">
-                <p className={`text-base font-bold ${tx.type === 'withdrawal' || tx.type === 'purchase' ? 'text-orange-400' : 'text-emerald-400'}`}>
-                  {tx.type === 'withdrawal' || tx.type === 'purchase' ? '-' : '+'}{tx.amount.toFixed(2)}
+              <div className="text-right flex-shrink-0">
+                <p className={`text-base font-bold ${isDebit(tx.type) ? 'text-orange-400' : 'text-emerald-400'}`}>
+                  {isDebit(tx.type) ? '−' : '+'}{tx.amount.toFixed(2)}
                 </p>
                 <p className="text-[10px] text-slate-500">{tx.currency}</p>
               </div>
             </div>
             {tx.txHash && (
               <div className="mt-2 pt-2 border-t border-white/5">
-                <p className="text-[10px] text-slate-500 font-mono">TX: {tx.txHash}</p>
+                <p className="text-[10px] text-slate-500 font-mono truncate">TX: {tx.txHash}</p>
               </div>
             )}
           </div>
         ))}
-        {userTx.length === 0 && (
-          <p className="text-center text-sm text-slate-500 py-10">Aucune transaction</p>
+        {visible.length === 0 && (
+          <p className="text-center text-sm text-slate-500 py-10">Aucune transaction dans cette catégorie</p>
         )}
       </div>
     </div>

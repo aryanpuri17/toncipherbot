@@ -1,6 +1,6 @@
 import React from 'react';
 import { useAppStore } from '../../store/appStore';
-import { Users, Settings, ChevronRight } from 'lucide-react';
+import { Users, Settings, ChevronRight, Store } from 'lucide-react';
 
 export const MiniAppProfile: React.FC = () => {
   const { currentUser: u, setMiniAppPage, setCurrentView } = useAppStore();
@@ -41,6 +41,11 @@ export const MiniAppProfile: React.FC = () => {
         <button onClick={() => setMiniAppPage('referral')} className="w-full glass-card-light p-3.5 flex items-center gap-3 hover:bg-white/[0.04] transition-colors">
           <Users className="w-5 h-5 text-purple-400" />
           <span className="text-sm text-white flex-1 text-left">Parrainage & Primes</span>
+          <ChevronRight className="w-4 h-4 text-slate-500" />
+        </button>
+        <button onClick={() => setMiniAppPage('shop')} className="w-full glass-card-light p-3.5 flex items-center gap-3 hover:bg-white/[0.04] transition-colors">
+          <Store className="w-5 h-5 text-amber-400" />
+          <span className="text-sm text-white flex-1 text-left">Boutique</span>
           <ChevronRight className="w-4 h-4 text-slate-500" />
         </button>
         <button onClick={() => { window.location.hash = '#admin'; setCurrentView('admin'); }} className="w-full glass-card-light p-3.5 flex items-center gap-3 hover:bg-white/[0.04] transition-colors">

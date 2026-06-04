@@ -519,7 +519,7 @@ const mockCampaigns: Campaign[] = [];
 const mockChannels: Channel[] = [];
 
 const mockShopItems: ShopItem[] = [
-  { id: '1', name: 'Double XP (24h)', description: 'Multipliez vos gains d\'XP par 2 pendant 24 heures', price: 5.00, currency: 'main', type: 'multiplier', value: 2, duration: 24, isActive: true, purchases: 0, icon: '⚡', category: 'boosters' },
+  { id: '1', name: 'Double Récompenses (24h)', description: 'Multipliez vos récompenses de tâches par 2 pendant 24 heures', price: 5.00, currency: 'main', type: 'multiplier', value: 2, duration: 24, isActive: true, purchases: 0, icon: '⚡', category: 'boosters' },
   { id: '2', name: 'Pack Bonus 50', description: 'Recevez 50 crédits bonus instantanément', price: 10.00, currency: 'main', type: 'bonus_pack', value: 50, isActive: true, purchases: 0, icon: '🎁', category: 'packs' },
   { id: '3', name: 'Triple Récompenses (12h)', description: 'Triplez vos récompenses de tâches', price: 15.00, currency: 'main', type: 'multiplier', value: 3, duration: 12, isActive: true, purchases: 0, icon: '🚀', category: 'boosters' },
   { id: '4', name: 'Statut Premium (7j)', description: 'Accédez aux tâches premium pendant 7 jours', price: 25.00, currency: 'main', type: 'premium', value: 1, duration: 168, isActive: true, purchases: 0, icon: '👑', category: 'premium' },
@@ -865,6 +865,7 @@ interface AppState {
   addPromoCode: (code: Omit<PromoCode, 'id' | 'createdAt' | 'currentUses'>) => void;
   updatePromoCode: (id: string, data: Partial<PromoCode>) => void;
   deletePromoCode: (id: string) => void;
+  buyShopItem: (itemId: string) => { success: boolean; error?: string };
 }
 
 const generateId = () => Math.random().toString(36).substr(2, 9);
@@ -1228,4 +1229,21 @@ export const useAppStore = create<AppState>((set, get) => ({
   addPromoCode: (code) => set((s) => ({ promoCodes: [...s.promoCodes, { ...code, id: generateId(), createdAt: new Date().toISOString(), currentUses: 0 }] })),
   updatePromoCode: (id, data) => set((s) => ({ promoCodes: s.promoCodes.map(p => p.id === id ? { ...p, ...data } : p) })),
   deletePromoCode: (id) => set((s) => ({ promoCodes: s.promoCodes.filter(p => p.id !== id) })),
+
+  buyShopItem: (itemId) => {
+    const state = get();
+    const item = state.shopItems.find(i => i.id === itemId);
+    if (!item || !item.isActive) return { success: false, error: 'Article introuvable.' };
+    if (item.maxPurchases != null && item.purchases >= item.maxPurchases) return { success: false, error: 'Stock épuisé.' };
+    if (state.currentUser.balanceMain < item.price) return { success: false, error: `Solde insuffisant. Requis: ${item.price.toFixed(2)} TON.` };
+    const balanceUpdate = { balanceMain: state.currentUser.balanceMain - item.price };
+    set(s => ({
+      currentUser: { ...s.currentUser, ...balanceUpdate },
+      users: s.users.map(u => u.id === state.currentUser.id ? { ...u, ...balanceUpdate } : u),
+      shopItems: s.shopItems.map(i => i.id === itemId ? { ...i, purchases: i.purchases + 1 } : i),
+    }));
+    get().addTransaction({ userId: state.currentUser.id, type: 'purchase', amount: item.price, currency: 'TON', status: 'completed', completedAt: new Date().toISOString() });
+    get().addNotification({ userId: state.currentUser.id, type: 'system', title: 'Achat effectué! ✅', message: `${item.icon} ${item.name} activé${item.duration ? ` pour ${item.duration}h` : ''}.`, isRead: false });
+    return { success: true };
+  },
 }));

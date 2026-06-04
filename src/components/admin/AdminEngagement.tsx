@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { useAppStore } from '../../store/appStore';
 import { ToggleSwitch } from '../ui/ToggleSwitch';
-import { Zap, Hash, Users, Award, TrendingUp, Plus, Edit2, Trash2, Save, X } from 'lucide-react';
-import type { ReferralMilestone } from '../../store/appStore';
+import { Zap, Hash, Users, Award, TrendingUp, Plus, Edit2, Trash2, Save, X, Tag, AlertCircle } from 'lucide-react';
+import type { ReferralMilestone, PromoCode } from '../../store/appStore';
 
 const emptyMilestone = { referralCount: 0, reward: 0, description: '', isActive: true };
 
@@ -311,6 +311,160 @@ export const AdminChannels: React.FC = () => {
           </div>
         ))}
       </div>
+    </div>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────
+// Admin Promo Codes
+// ─────────────────────────────────────────────────────────────
+
+const emptyCode: Omit<PromoCode, 'id' | 'createdAt' | 'currentUses'> = {
+  code: '', reward: 0.50, currency: 'main', maxUses: 100, isActive: true, description: '', expiresAt: undefined,
+};
+
+export const AdminPromoCodes: React.FC = () => {
+  const { promoCodes, addPromoCode, updatePromoCode, deletePromoCode } = useAppStore();
+  const [adding,  setAdding]  = useState(false);
+  const [editing, setEditing] = useState<string | null>(null);
+  const [form,    setForm]    = useState<typeof emptyCode>(emptyCode);
+  const [confirm, setConfirm] = useState<string | null>(null);
+
+  const startAdd  = () => { setAdding(true); setEditing(null); setForm(emptyCode); };
+  const startEdit = (p: PromoCode) => {
+    setEditing(p.id); setAdding(false);
+    setForm({ code: p.code, reward: p.reward, currency: 'main', maxUses: p.maxUses, isActive: p.isActive, description: p.description, expiresAt: p.expiresAt ? p.expiresAt.split('T')[0] : undefined });
+  };
+  const cancel = () => { setAdding(false); setEditing(null); };
+
+  const save = () => {
+    if (!form.code.trim()) return;
+    const payload = { ...form, code: form.code.toUpperCase().trim(), expiresAt: form.expiresAt ? new Date(form.expiresAt).toISOString() : undefined };
+    if (adding)       addPromoCode(payload);
+    else if (editing) updatePromoCode(editing, payload);
+    cancel();
+  };
+
+  return (
+    <div className="space-y-6 animate-fade-in">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold text-white">Codes Promo</h2>
+          <p className="text-slate-400 text-sm mt-1">{promoCodes.length} code{promoCodes.length !== 1 ? 's' : ''} configuré{promoCodes.length !== 1 ? 's' : ''}</p>
+        </div>
+        <button onClick={startAdd} className="btn-primary px-4 py-2.5 rounded-xl text-sm font-medium text-white flex items-center gap-2">
+          <Plus className="w-4 h-4" /> Nouveau code
+        </button>
+      </div>
+
+      {/* Add / Edit form */}
+      {(adding || editing) && (
+        <div className="glass-card p-5 space-y-4 border border-blue-500/20">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-white">{adding ? 'Nouveau code promo' : 'Modifier le code'}</h3>
+            <button onClick={cancel} className="text-slate-500 hover:text-white"><X className="w-4 h-4" /></button>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="text-xs text-slate-400 mb-1 block">Code *</label>
+              <input value={form.code} onChange={e => setForm({ ...form, code: e.target.value.toUpperCase() })}
+                placeholder="EX: SUMMER50"
+                className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white text-sm font-mono tracking-widest focus:outline-none focus:border-blue-500/50" />
+            </div>
+            <div>
+              <label className="text-xs text-slate-400 mb-1 block">Récompense (TON) *</label>
+              <input type="number" step="0.01" min="0.01" value={form.reward}
+                onChange={e => setForm({ ...form, reward: parseFloat(e.target.value) || 0 })}
+                className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white text-sm focus:outline-none focus:border-blue-500/50" />
+            </div>
+            <div>
+              <label className="text-xs text-slate-400 mb-1 block">Utilisations max *</label>
+              <input type="number" min="1" value={form.maxUses}
+                onChange={e => setForm({ ...form, maxUses: parseInt(e.target.value) || 1 })}
+                className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white text-sm focus:outline-none focus:border-blue-500/50" />
+            </div>
+            <div>
+              <label className="text-xs text-slate-400 mb-1 block">Expiration (optionnel)</label>
+              <input type="date" value={form.expiresAt ?? ''}
+                onChange={e => setForm({ ...form, expiresAt: e.target.value || undefined })}
+                className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white text-sm focus:outline-none focus:border-blue-500/50" />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="text-xs text-slate-400 mb-1 block">Description interne</label>
+              <input value={form.description} onChange={e => setForm({ ...form, description: e.target.value })}
+                placeholder="Ex: Code de lancement officiel"
+                className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white text-sm focus:outline-none focus:border-blue-500/50" />
+            </div>
+          </div>
+          <div className="flex items-center justify-between pt-1">
+            <ToggleSwitch enabled={form.isActive} onChange={v => setForm({ ...form, isActive: v })} label="Code actif" />
+            <div className="flex gap-2">
+              <button onClick={cancel} className="px-4 py-2 rounded-xl bg-white/5 text-slate-400 text-sm hover:bg-white/10 transition-all">Annuler</button>
+              <button onClick={save} disabled={!form.code.trim()} className="px-4 py-2 rounded-xl btn-primary text-sm font-semibold text-white disabled:opacity-40 flex items-center gap-1.5">
+                <Save className="w-3.5 h-3.5" /> {adding ? 'Créer' : 'Enregistrer'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* List */}
+      {promoCodes.length === 0 && !adding ? (
+        <div className="glass-card p-10 text-center">
+          <AlertCircle className="w-10 h-10 text-slate-600 mx-auto mb-3" />
+          <p className="text-sm text-slate-400">Aucun code promo configuré</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {promoCodes.map(p => {
+            const isExpired   = p.expiresAt ? new Date(p.expiresAt) < new Date() : false;
+            const isExhausted = p.currentUses >= p.maxUses;
+            const pct         = Math.min((p.currentUses / p.maxUses) * 100, 100);
+            return (
+              <div key={p.id} className={`glass-card p-5 ${(!p.isActive || isExpired || isExhausted) ? 'opacity-60' : ''}`}>
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                  <div className="w-10 h-10 rounded-xl bg-amber-500/20 flex items-center justify-center flex-shrink-0">
+                    <Tag className="w-5 h-5 text-amber-400" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
+                      <span className="text-sm font-bold text-white font-mono tracking-wider">{p.code}</span>
+                      <span className="text-sm font-semibold text-emerald-400">+{p.reward.toFixed(2)} TON</span>
+                      {isExpired   && <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-500/20 text-red-400">Expiré</span>}
+                      {isExhausted && !isExpired && <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-orange-500/20 text-orange-400">Épuisé</span>}
+                      {!p.isActive && <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-white/10 text-slate-400">Inactif</span>}
+                    </div>
+                    {p.description && <p className="text-xs text-slate-400 mb-1">{p.description}</p>}
+                    <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
+                      <span>{p.currentUses}/{p.maxUses} utilisations</span>
+                      {p.expiresAt && <span>Expire: {new Date(p.expiresAt).toLocaleDateString('fr-FR')}</span>}
+                    </div>
+                    <div className="mt-2 h-1 rounded-full bg-white/10 overflow-hidden max-w-xs">
+                      <div className="h-full rounded-full bg-amber-500 transition-all" style={{ width: `${pct}%` }} />
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => startEdit(p)} className="p-2 rounded-lg hover:bg-white/5 text-slate-400 hover:text-white transition-colors">
+                      <Edit2 className="w-4 h-4" />
+                    </button>
+                    {confirm === p.id ? (
+                      <div className="flex gap-1">
+                        <button onClick={() => { deletePromoCode(p.id); setConfirm(null); }} className="px-2 py-1 rounded-lg bg-red-500/15 text-red-400 text-xs font-semibold hover:bg-red-500/25">Suppr.</button>
+                        <button onClick={() => setConfirm(null)} className="px-2 py-1 rounded-lg bg-white/5 text-slate-400 text-xs hover:bg-white/10">Annuler</button>
+                      </div>
+                    ) : (
+                      <button onClick={() => setConfirm(p.id)} className="p-2 rounded-lg hover:bg-red-500/10 text-slate-400 hover:text-red-400 transition-colors">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                    <ToggleSwitch enabled={p.isActive} onChange={v => updatePromoCode(p.id, { isActive: v })} size="sm" />
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 };

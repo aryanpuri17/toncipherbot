@@ -15,7 +15,10 @@ const subPageToNav: Record<string, string> = {
   withdraw: 'wallet',
   history: 'wallet',
   createTask: 'tasks',
+  myTasks: 'tasks',
   referral: 'profile',
+  shop: 'profile',
+  notifications: 'profile',
   settings: 'profile',
 };
 
