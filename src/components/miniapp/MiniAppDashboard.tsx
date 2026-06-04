@@ -3,7 +3,7 @@ import { useAppStore } from '../../store/appStore';
 import { ArrowUpRight, ArrowDownLeft, ListTodo, ChevronRight, TrendingUp, Flame, Gift, Loader2, Users } from 'lucide-react';
 
 export const MiniAppDashboard: React.FC = () => {
-  const { currentUser: u, setMiniAppPage, tasks, completedTaskIds, redeemPromoCode } = useAppStore();
+  const { currentUser: u, setMiniAppPage, tasks, completedTaskIds, redeemPromoCode, platformConfig } = useAppStore();
   const activeTasks = tasks.filter(t => t.isActive && !completedTaskIds.includes(t.id) && !t.isPromoTask);
 
   const [promoCode, setPromoCode] = useState('');
@@ -72,12 +72,12 @@ export const MiniAppDashboard: React.FC = () => {
           <p className="text-sm font-semibold text-white">Invitez vos amis</p>
           <p className="text-xs text-purple-300">
             {u.referralCount > 0
-              ? `${u.referralCount} ami${u.referralCount !== 1 ? 's' : ''} invité${u.referralCount !== 1 ? 's' : ''} · ${(u.referralCount * 1).toFixed(2)} TON gagnés`
-              : 'Gagnez 1 TON par ami qui s\'inscrit'}
+              ? `${u.referralCount} ami${u.referralCount !== 1 ? 's' : ''} invité${u.referralCount !== 1 ? 's' : ''} · ${(u.referralCount * platformConfig.referralBonusSignup).toFixed(2)} TON gagnés`
+              : `Gagnez ${platformConfig.referralBonusSignup.toFixed(2)} TON par ami qui s'inscrit`}
           </p>
         </div>
         <div className="shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-lg bg-purple-500/20 border border-purple-500/30">
-          <span className="text-xs font-bold text-purple-300">+1 TON</span>
+          <span className="text-xs font-bold text-purple-300">+{platformConfig.referralBonusSignup.toFixed(0)} TON</span>
           <ChevronRight className="w-3.5 h-3.5 text-purple-400" />
         </div>
       </button>

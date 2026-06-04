@@ -2,16 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { useAppStore } from '../../store/appStore';
 import {
   Copy, Check, Users, Gift, Lock, Share2, TrendingUp,
-  Trophy, ChevronRight, Zap,
+  Trophy, ChevronRight,
 } from 'lucide-react';
 
-// ── Leaderboard types & sub-component ──────────────────────────────────────────
+// ── Leaderboard sub-component ──────────────────────────────────────────────────
 
 type LbUser = { telegramId: number; username: string; firstName: string; referralCount: number };
 
 const Leaderboard: React.FC = () => {
   const { currentUser } = useAppStore();
-  const [data, setData]     = useState<LbUser[]>([]);
+  const [data, setData]       = useState<LbUser[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -21,9 +21,9 @@ const Leaderboard: React.FC = () => {
       .catch(() => setLoading(false));
   }, []);
 
-  const medals    = ['🥇', '🥈', '🥉'];
+  const medals      = ['🥇', '🥈', '🥉'];
   const podiumOrder = [data[1], data[0], data[2]];
-  const heights   = ['h-20', 'h-28', 'h-16'];
+  const heights     = ['h-20', 'h-28', 'h-16'];
   const currentRank = data.findIndex(u => u.telegramId === currentUser.telegramId) + 1;
   const currentInList = data.some(u => u.telegramId === currentUser.telegramId);
 
@@ -44,7 +44,6 @@ const Leaderboard: React.FC = () => {
 
   return (
     <div className="space-y-4">
-      {/* Rank indicator */}
       <div className="text-center">
         <p className="text-sm text-slate-400">
           {currentRank > 0 ? `Votre rang : #${currentRank}` : 'Invitez des amis pour apparaître ici'}
@@ -133,13 +132,20 @@ export const MiniAppReferral: React.FC = () => {
     referralMilestones,
     claimedReferralMilestoneIds,
     claimReferralMilestone,
-    transactions,
+    lastSyncedReferralBalance,
   } = useAppStore();
 
-  const [tab, setTab]     = useState<'invite' | 'classement'>(
+  // Default to 'classement' if navigated here as the old leaderboard route
+  const [tab, setTab] = useState<'invite' | 'classement'>(
     miniAppPage === 'leaderboard' ? 'classement' : 'invite'
   );
   const [copied, setCopied] = useState(false);
+
+  // Keep tab in sync if miniAppPage changes while component is already mounted
+  useEffect(() => {
+    if (miniAppPage === 'leaderboard') setTab('classement');
+    else if (miniAppPage === 'referral') setTab('invite');
+  }, [miniAppPage]);
 
   const referralLink = `https://t.me/${platformConfig.botUsername}/${platformConfig.appShortName}?startapp=r_${currentUser.telegramId || currentUser.referralCode}`;
 
@@ -157,15 +163,16 @@ export const MiniAppReferral: React.FC = () => {
     else window.open(shareUrl, '_blank');
   };
 
-  const referralEarnings = transactions
-    .filter(t => t.type === 'referral' && t.userId === currentUser.id)
-    .reduce((sum, t) => sum + t.amount, 0);
+  const BONUS_TON = platformConfig.referralBonusSignup;
+
+  // Use the real backend balance if available, fallback to count × bonus
+  const totalEarned = lastSyncedReferralBalance > 0
+    ? lastSyncedReferralBalance
+    : currentUser.referralCount * BONUS_TON;
 
   const activeMilestones = referralMilestones
     .filter(m => m.isActive)
     .sort((a, b) => a.referralCount - b.referralCount);
-
-  const BONUS_TON = platformConfig.referralBonusSignup;
 
   return (
     <div className="space-y-4 animate-slide-up">
@@ -188,7 +195,7 @@ export const MiniAppReferral: React.FC = () => {
       {/* ── INVITE TAB ── */}
       {tab === 'invite' && (
         <div className="space-y-4">
-          {/* Hero card */}
+          {/* Hero card — uses real API balance */}
           <div className="relative overflow-hidden rounded-2xl p-5 bg-gradient-to-br from-purple-600/80 via-blue-600/70 to-cyan-500/60">
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_30%,rgba(255,255,255,0.08),transparent)]" />
             <div className="relative">
@@ -201,7 +208,7 @@ export const MiniAppReferral: React.FC = () => {
                 </div>
                 <div className="w-px bg-white/20" />
                 <div className="text-center">
-                  <p className="text-3xl font-bold text-emerald-300">{(currentUser.referralCount * BONUS_TON).toFixed(2)}</p>
+                  <p className="text-3xl font-bold text-emerald-300">{totalEarned.toFixed(2)}</p>
                   <p className="text-purple-200 text-xs mt-0.5">TON gagnés</p>
                 </div>
                 <div className="w-px bg-white/20" />
@@ -231,8 +238,8 @@ export const MiniAppReferral: React.FC = () => {
             </button>
           </div>
 
-          {/* Referral link */}
-          <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-white/[0.04] border border-white/8">
+          {/* Referral link display */}
+          <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-white/[0.04] border border-white/10">
             <p className="flex-1 text-[11px] text-slate-400 truncate font-mono">{referralLink}</p>
             <button
               onClick={handleCopy}

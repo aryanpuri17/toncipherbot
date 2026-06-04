@@ -19,7 +19,6 @@ import { MiniAppNav } from './components/miniapp/MiniAppNav';
 import { MiniAppDashboard } from './components/miniapp/MiniAppDashboard';
 import { MiniAppWallet, MiniAppDeposit, MiniAppWithdraw, MiniAppHistory } from './components/miniapp/MiniAppWallet';
 import { MiniAppTasks } from './components/miniapp/MiniAppTasks';
-import { MiniAppLeaderboard } from './components/miniapp/MiniAppLeaderboard';
 import { MiniAppProfile } from './components/miniapp/MiniAppProfile';
 import { MiniAppCreateTask } from './components/miniapp/MiniAppCreateTask';
 import { MiniAppMyTasks } from './components/miniapp/MiniAppMyTasks';
@@ -27,7 +26,7 @@ import { MiniAppReferral } from './components/miniapp/MiniAppReferral';
 import { MiniAppNotifications } from './components/miniapp/MiniAppNotifications';
 import { MiniAppShop } from './components/miniapp/MiniAppShop';
 
-import { Bell, Menu, Settings, ChevronRight, Globe, Info, Wallet, Shield } from 'lucide-react';
+import { Bell, Menu, ChevronRight, Globe, Info, Wallet, Shield } from 'lucide-react';
 import { useTonConnectUI, useTonWallet } from '@tonconnect/ui-react';
 import { useDepositMonitor } from './hooks/useDepositMonitor';
 
