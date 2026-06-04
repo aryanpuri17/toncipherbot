@@ -1,10 +1,30 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useAppStore } from '../../store/appStore';
-import { ArrowUpRight, ArrowDownLeft, ListTodo, ChevronRight, TrendingUp, Flame } from 'lucide-react';
+import { ArrowUpRight, ArrowDownLeft, ListTodo, ChevronRight, TrendingUp, Flame, Gift, Loader2 } from 'lucide-react';
 
 export const MiniAppDashboard: React.FC = () => {
-  const { currentUser: u, setMiniAppPage, tasks, completedTaskIds } = useAppStore();
-  const activeTasks = tasks.filter(t => t.isActive && !completedTaskIds.includes(t.id));
+  const { currentUser: u, setMiniAppPage, tasks, completedTaskIds, redeemPromoCode } = useAppStore();
+  const activeTasks = tasks.filter(t => t.isActive && !completedTaskIds.includes(t.id) && !t.isPromoTask);
+
+  const [promoCode, setPromoCode] = useState('');
+  const [promoLoading, setPromoLoading] = useState(false);
+  const [promoResult, setPromoResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  const handleRedeemPromo = () => {
+    if (!promoCode.trim() || promoLoading) return;
+    setPromoLoading(true);
+    const result = redeemPromoCode(promoCode.trim());
+    setTimeout(() => {
+      setPromoLoading(false);
+      setPromoResult(
+        result.success
+          ? { success: true, message: `+${result.reward?.toFixed(2)} TON crédité sur votre compte!` }
+          : { success: false, message: result.error ?? 'Erreur inconnue.' }
+      );
+      if (result.success) setPromoCode('');
+      setTimeout(() => setPromoResult(null), 4000);
+    }, 700);
+  };
 
   return (
     <div className="space-y-5 animate-slide-up">
@@ -15,7 +35,7 @@ export const MiniAppDashboard: React.FC = () => {
           <h1 className="text-xl font-bold text-white">{u.firstName}</h1>
         </div>
         <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-sm font-bold text-white">
-          {u.firstName[0]}
+          {u.firstName?.charAt(0) ?? '?'}
         </div>
       </div>
 
@@ -50,6 +70,36 @@ export const MiniAppDashboard: React.FC = () => {
           <p className="text-xl font-bold text-emerald-400">{u.totalEarnings.toFixed(2)} TON</p>
           <p className="text-xs text-slate-400">Total gagné</p>
         </div>
+      </div>
+
+      {/* Promo Code */}
+      <div className="glass-card p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <Gift className="w-4 h-4 text-amber-400" />
+          <p className="text-sm font-semibold text-white">Code promo</p>
+        </div>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={promoCode}
+            onChange={e => { setPromoCode(e.target.value.toUpperCase()); setPromoResult(null); }}
+            onKeyDown={e => e.key === 'Enter' && handleRedeemPromo()}
+            placeholder="Entrez votre code..."
+            className="flex-1 px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white text-sm font-mono tracking-widest placeholder:normal-case placeholder:tracking-normal focus:outline-none focus:border-amber-500/50 transition-colors"
+          />
+          <button
+            onClick={handleRedeemPromo}
+            disabled={!promoCode.trim() || promoLoading}
+            className="px-4 py-2.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-400 text-xs font-semibold hover:bg-amber-500/25 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5"
+          >
+            {promoLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Activer'}
+          </button>
+        </div>
+        {promoResult && (
+          <p className={`text-xs font-medium ${promoResult.success ? 'text-emerald-400' : 'text-red-400'}`}>
+            {promoResult.success ? '✓' : '✗'} {promoResult.message}
+          </p>
+        )}
       </div>
 
       {/* Active Tasks Preview */}

@@ -18,6 +18,9 @@ const statusColors: Record<string, string> = {
   expired: 'bg-gray-500/20 text-gray-400 border-gray-500/30',
   review: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
   none: 'bg-gray-500/20 text-gray-400 border-gray-500/30',
+  flag: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
+  withdrawal_blocked: 'bg-red-500/20 text-red-400 border-red-500/30',
+  processing: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
   low: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
   medium: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
   high: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
@@ -37,6 +40,9 @@ const statusLabels: Record<string, string> = {
   expired: 'Expiré',
   review: 'En revue',
   none: 'Aucune',
+  flag: 'Signalé',
+  withdrawal_blocked: 'Retrait bloqué',
+  processing: 'En cours',
   low: 'Faible',
   medium: 'Moyen',
   high: 'Élevé',
@@ -48,7 +54,7 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, size = 'sm' })
   const label = statusLabels[status] || status;
   return (
     <span className={`inline-flex items-center border rounded-full font-semibold ${colorClass} ${size === 'sm' ? 'px-2 py-0.5 text-[10px]' : 'px-3 py-1 text-xs'}`}>
-      <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${status === 'active' || status === 'completed' || status === 'low' ? 'bg-emerald-400' : status === 'pending' || status === 'medium' ? 'bg-amber-400' : status === 'confirming' ? 'bg-blue-400' : status === 'critical' || status === 'banned' || status === 'failed' ? 'bg-red-400' : 'bg-gray-400'}`} />
+      <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${status === 'active' || status === 'completed' || status === 'low' ? 'bg-emerald-400' : status === 'pending' || status === 'medium' || status === 'flag' ? 'bg-amber-400' : status === 'confirming' || status === 'processing' || status === 'review' ? 'bg-blue-400' : status === 'critical' || status === 'banned' || status === 'failed' || status === 'withdrawal_blocked' ? 'bg-red-400' : 'bg-gray-400'}`} />
       {label}
     </span>
   );

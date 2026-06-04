@@ -3,7 +3,7 @@ import { useAppStore } from '../../store/appStore';
 import {
   LayoutDashboard, Users, ListTodo, Megaphone, Wallet, ArrowDownToLine,
   ArrowUpFromLine, Shield, Bell, Settings, BarChart3, Store, Gift,
-  Hash, Globe, FileText, AlertTriangle, Zap, ChevronLeft, ChevronRight, Smartphone
+  Hash, Globe, FileText, AlertTriangle, Zap, ChevronLeft, ChevronRight, Smartphone, Tag
 } from 'lucide-react';
 
 const menuSections = [
@@ -35,9 +35,10 @@ const menuSections = [
   {
     title: 'ENGAGEMENT',
     items: [
-      { id: 'referrals', label: 'Parrainage', icon: Gift },
-      { id: 'shop', label: 'Boutique', icon: Store },
-      { id: 'gamification', label: 'Gamification', icon: Zap },
+      { id: 'referrals',   label: 'Parrainage',   icon: Gift },
+      { id: 'shop',        label: 'Boutique',      icon: Store },
+      { id: 'promoCodes',  label: 'Codes Promo',   icon: Tag },
+      { id: 'gamification',label: 'Gamification',  icon: Zap },
     ]
   },
   {

@@ -46,11 +46,13 @@ export interface Task {
   expiresAt?: string;
   createdAt: string;
   campaignId?: string;
+  createdByUserId?: string;
   verificationMethod: 'auto' | 'manual' | 'api';
   priority: number;
   requiredLevel?: number;
   icon?: string;
   promotion?: { multiplier: number; endsAt: string };
+  isPromoTask?: boolean;
 }
 
 export interface Transaction {
@@ -347,6 +349,10 @@ export interface PlatformConfig {
   taskCooldownGlobal: number; // minutes
   maxDailyTasks: number;
   bonusTaskMultiplier: number;
+  taskCreationFeeRate: number; // e.g. 0.15 = 15%
+  taskPricePerExecution: number; // fixed cost charged to task creator per execution
+  taskMinExecutions: number;
+  taskMaxExecutions: number;
   
   // Deposits
   depositBonusPercent: number;
@@ -392,6 +398,31 @@ export interface ReferralMilestone {
   isActive: boolean;
 }
 
+export interface PromoCode {
+  id: string;
+  code: string;
+  reward: number;
+  currency: 'main';
+  maxUses: number;
+  currentUses: number;
+  isActive: boolean;
+  expiresAt?: string;
+  description: string;
+  createdAt: string;
+}
+
+export interface TaskSubmission {
+  id: string;
+  taskId: string;
+  userId: string;
+  username: string;
+  proofText: string;
+  status: 'pending' | 'approved' | 'rejected';
+  adminNote?: string;
+  createdAt: string;
+  reviewedAt?: string;
+}
+
 export interface PlatformStats {
   totalUsers: number;
   activeUsers: number;
@@ -431,11 +462,55 @@ const mockUsers: User[] = [
     withdrawalBlocked: false, verificationStatus: 'none',
     dailyWithdrawn: 0, dailyTasksCompleted: 0
   },
+  {
+    id: '2', telegramId: 112233, username: 'alice_ton', firstName: 'Alice', lastName: 'M.',
+    balanceMain: 12.5, totalEarnings: 28.75, todayEarnings: 1.20, tasksCompleted: 47,
+    referralCount: 8, referralCode: 'ALICE01',
+    riskScore: 0, status: 'active', createdAt: new Date(Date.now() - 30 * 86400000).toISOString(), lastActive: new Date().toISOString(),
+    withdrawalBlocked: false, verificationStatus: 'none',
+    dailyWithdrawn: 0, dailyTasksCompleted: 3
+  },
+  {
+    id: '3', telegramId: 445566, username: 'crypto_bob', firstName: 'Bob', lastName: 'K.',
+    balanceMain: 5.0, totalEarnings: 11.40, todayEarnings: 0.42, tasksCompleted: 23,
+    referralCount: 2, referralCode: 'BOBK22',
+    riskScore: 5, status: 'active', createdAt: new Date(Date.now() - 15 * 86400000).toISOString(), lastActive: new Date().toISOString(),
+    withdrawalBlocked: false, verificationStatus: 'none',
+    dailyWithdrawn: 0, dailyTasksCompleted: 1
+  },
+  {
+    id: '4', telegramId: 778899, username: 'sofia_w', firstName: 'Sofia', lastName: 'W.',
+    balanceMain: 31.2, totalEarnings: 67.00, todayEarnings: 2.55, tasksCompleted: 112,
+    referralCount: 21, referralCode: 'SOFIAW',
+    riskScore: 0, status: 'active', createdAt: new Date(Date.now() - 60 * 86400000).toISOString(), lastActive: new Date().toISOString(),
+    withdrawalBlocked: false, verificationStatus: 'verified',
+    dailyWithdrawn: 0, dailyTasksCompleted: 5
+  },
+  {
+    id: '5', telegramId: 321654, username: 'max_earn', firstName: 'Max', lastName: 'D.',
+    balanceMain: 8.9, totalEarnings: 19.30, todayEarnings: 0.85, tasksCompleted: 38,
+    referralCount: 5, referralCode: 'MAXD55',
+    riskScore: 0, status: 'active', createdAt: new Date(Date.now() - 20 * 86400000).toISOString(), lastActive: new Date().toISOString(),
+    withdrawalBlocked: false, verificationStatus: 'none',
+    dailyWithdrawn: 0, dailyTasksCompleted: 2
+  },
 ];
 
 const mockTasks: Task[] = [
-  { id: '1', type: 'daily', title: 'Mission Quotidienne', description: 'Connectez-vous chaque jour pour gagner', reward: 0.10, rewardType: 'main', cooldownHours: 24, isActive: true, totalCompletions: 0, createdAt: new Date().toISOString(), verificationMethod: 'auto', priority: 0, maxPerUser: 1, icon: '📅' },
+  { id: '1', type: 'daily', title: 'Mission Quotidienne', description: 'Connectez-vous chaque jour pour gagner', reward: 0.10, rewardType: 'main', cooldownHours: 24, isActive: true, totalCompletions: 0, createdAt: new Date().toISOString(), verificationMethod: 'auto', priority: 0, maxPerUser: 1, icon: '📅', createdByUserId: 'platform' },
+  { id: '2', type: 'join_channel', title: 'Rejoindre TonCipher Official', description: 'Abonnez-vous à notre canal principal pour rester informé', reward: 0.0425, rewardType: 'main', targetUrl: 'https://t.me/toncipherofficial', isActive: true, totalCompletions: 234, maxCompletions: 1000, createdAt: new Date(Date.now() - 5 * 86400000).toISOString(), verificationMethod: 'auto', priority: 8, icon: '📢', createdByUserId: 'platform' },
+  { id: '3', type: 'join_group', title: 'Rejoindre la communauté', description: 'Participez à notre groupe de discussion officiel', reward: 0.0425, rewardType: 'main', targetUrl: 'https://t.me/toncipherchat', isActive: true, totalCompletions: 98, maxCompletions: 500, createdAt: new Date(Date.now() - 3 * 86400000).toISOString(), verificationMethod: 'auto', priority: 7, icon: '👥', createdByUserId: 'platform' },
+  { id: '4', type: 'start_bot', title: 'Démarrer @toncipherbot', description: 'Lancez le bot TonCipher et cliquez sur Start', reward: 0.0212, rewardType: 'main', targetUrl: 'https://t.me/toncipherbot', isActive: true, totalCompletions: 45, maxCompletions: 200, createdAt: new Date(Date.now() - 1 * 86400000).toISOString(), verificationMethod: 'auto', priority: 5, icon: '🤖', createdByUserId: 'platform' },
+  { id: '5', type: 'special', title: '🏆 Challenge Parrainage', description: 'Invitez 3 amis à rejoindre TonCipher. Envoyez une capture d\'écran de votre section Parrainage avec 3+ filleuls visibles.', reward: 1.50, rewardType: 'main', isActive: true, totalCompletions: 12, maxCompletions: 50, createdAt: new Date(Date.now() - 2 * 86400000).toISOString(), verificationMethod: 'manual', priority: 10, isPromoTask: true, icon: '🏆', createdByUserId: 'platform' },
+  { id: '6', type: 'special', title: '📢 Partage Communauté', description: 'Partagez TonCipher dans un groupe Telegram de 100+ membres. Envoyez la capture d\'écran de votre message publié avec le lien visible.', reward: 0.80, rewardType: 'main', isActive: true, totalCompletions: 5, maxCompletions: 100, createdAt: new Date(Date.now() - 1 * 86400000).toISOString(), verificationMethod: 'manual', priority: 9, isPromoTask: true, icon: '📢', createdByUserId: 'platform' },
 ];
+
+const mockPromoCodes: PromoCode[] = [
+  { id: '1', code: 'LAUNCH50', reward: 0.50, currency: 'main', maxUses: 500, currentUses: 127, isActive: true, description: 'Code de lancement officiel', createdAt: new Date(Date.now() - 10 * 86400000).toISOString() },
+  { id: '2', code: 'VIP200', reward: 2.00, currency: 'main', maxUses: 20, currentUses: 3, isActive: true, expiresAt: new Date(Date.now() + 7 * 86400000).toISOString(), description: 'Code VIP exclusif — 7 jours', createdAt: new Date().toISOString() },
+];
+
+const mockTaskSubmissions: TaskSubmission[] = [];
 
 const mockTransactions: Transaction[] = [];
 
@@ -444,11 +519,11 @@ const mockCampaigns: Campaign[] = [];
 const mockChannels: Channel[] = [];
 
 const mockShopItems: ShopItem[] = [
-  { id: '1', name: 'Double XP (24h)', description: 'Multipliez vos gains d\'XP par 2 pendant 24 heures', price: 5.00, currency: 'main', type: 'multiplier', value: 2, duration: 24, isActive: true, purchases: 0, icon: '⚡', category: 'boosters' },
+  { id: '1', name: 'Double Récompenses (24h)', description: 'Multipliez vos récompenses de tâches par 2 pendant 24 heures', price: 5.00, currency: 'main', type: 'multiplier', value: 2, duration: 24, isActive: true, purchases: 0, icon: '⚡', category: 'boosters' },
   { id: '2', name: 'Pack Bonus 50', description: 'Recevez 50 crédits bonus instantanément', price: 10.00, currency: 'main', type: 'bonus_pack', value: 50, isActive: true, purchases: 0, icon: '🎁', category: 'packs' },
   { id: '3', name: 'Triple Récompenses (12h)', description: 'Triplez vos récompenses de tâches', price: 15.00, currency: 'main', type: 'multiplier', value: 3, duration: 12, isActive: true, purchases: 0, icon: '🚀', category: 'boosters' },
   { id: '4', name: 'Statut Premium (7j)', description: 'Accédez aux tâches premium pendant 7 jours', price: 25.00, currency: 'main', type: 'premium', value: 1, duration: 168, isActive: true, purchases: 0, icon: '👑', category: 'premium' },
-  { id: '5', name: 'Badge Exclusif', description: 'Obtenez un badge rare pour votre profil', price: 100.00, currency: 'bonus', type: 'badge', value: 1, isActive: true, purchases: 0, maxPurchases: 50, icon: '💎', category: 'collectibles' },
+  { id: '5', name: 'Badge Exclusif', description: 'Obtenez un badge rare pour votre profil', price: 100.00, currency: 'main', type: 'badge', value: 1, isActive: true, purchases: 0, maxPurchases: 50, icon: '💎', category: 'collectibles' },
 ];
 
 const mockNotifications: Notification[] = [];
@@ -457,7 +532,7 @@ const mockFraudAlerts: FraudAlert[] = [];
 
 const mockCryptoNetworks: CryptoNetwork[] = [
   { id: '1', name: 'Toncoin', symbol: 'TON', network: 'TON', isActive: true, isDepositEnabled: true, isWithdrawalEnabled: true, minDeposit: 1, maxDeposit: 10000, minWithdrawal: 5, maxWithdrawal: 5000, withdrawalFee: 0.5, withdrawalFeeType: 'fixed', requiredConfirmations: 12, dailyWithdrawalLimit: 10000, autoWithdrawal: true, autoWithdrawalThreshold: 100, hotWalletBalance: 0, coldWalletBalance: 0, hotWalletAddress: '', coldWalletAddress: '', explorerUrl: 'https://tonscan.org/tx/', decimals: 9, priority: 1 },
-  { id: '2', name: 'Tether Polygon', symbol: 'USDT', network: 'POLYGON', isActive: true, isDepositEnabled: true, isWithdrawalEnabled: true, minDeposit: 5, maxDeposit: 50000, minWithdrawal: 10, maxWithdrawal: 25000, withdrawalFee: 1.0, withdrawalFeeType: 'fixed', requiredConfirmations: 20, dailyWithdrawalLimit: 50000, autoWithdrawal: true, autoWithdrawalThreshold: 500, hotWalletBalance: 0, coldWalletBalance: 0, hotWalletAddress: '', coldWalletAddress: '', explorerUrl: 'https://polygonscan.com/tx/', decimals: 6, contractAddress: '0xc2132D05D31c914a87C6611C10748AEb04B58e8F', priority: 2 },
+  { id: '2', name: 'Tether USD (TON)', symbol: 'USDT', network: 'TON', isActive: true, isDepositEnabled: true, isWithdrawalEnabled: true, minDeposit: 5, maxDeposit: 50000, minWithdrawal: 10, maxWithdrawal: 25000, withdrawalFee: 1.0, withdrawalFeeType: 'fixed', requiredConfirmations: 12, dailyWithdrawalLimit: 50000, autoWithdrawal: false, autoWithdrawalThreshold: 500, hotWalletBalance: 0, coldWalletBalance: 0, hotWalletAddress: '', coldWalletAddress: '', explorerUrl: 'https://tonscan.org/tx/', decimals: 6, contractAddress: '0:b113a994b5024a16719f69139328eb759596c38a25f5972a7e5b7892d4b7a09e', priority: 2 },
 ];
 
 const mockLevelConfigs: LevelConfig[] = [
@@ -566,7 +641,7 @@ const mockPlatformConfig: PlatformConfig = {
   mainGroup: '@teletask_discuss',
   supportBot: '@teletask_support',
   announcementChannel: '@teletask_news',
-  mainWallet: 'EQC...main_wallet',
+  mainWallet: '',
   hotWalletThreshold: 10000,
   coldWalletThreshold: 100000,
   referralBonusSignup: 1.00,
@@ -601,6 +676,10 @@ const mockPlatformConfig: PlatformConfig = {
   taskCooldownGlobal: 5,
   maxDailyTasks: 50,
   bonusTaskMultiplier: 1.5,
+  taskCreationFeeRate: 0.15,
+  taskPricePerExecution: 0.05,
+  taskMinExecutions: 100,
+  taskMaxExecutions: 100000,
   depositBonusPercent: 5,
   firstDepositBonus: 10,
   minDepositForBonus: 50,
@@ -677,18 +756,24 @@ interface AppState {
   platformStats: PlatformStats;
   logs: LogEntry[];
   referralMilestones: ReferralMilestone[];
+  promoCodes: PromoCode[];
+  taskSubmissions: TaskSubmission[];
 
   // Mini App State
   completedTaskIds: string[];
   claimedReferralMilestoneIds: string[];
+  usedPromoCodeIds: string[];
 
   // Actions - Mini App
+  confirmDeposit: (txId: string, txHash: string) => void;
+  creditDeposit: (userId: string, amount: number, currency: string, txHash: string, network: string) => void;
   completeTask: (taskId: string) => void;
   submitWithdrawal: (networkId: string, amount: number, address: string) => { success: boolean; error?: string };
   claimReferralMilestone: (id: string) => void;
   addReferralMilestone: (milestone: Omit<ReferralMilestone, 'id'>) => void;
   updateReferralMilestone: (id: string, data: Partial<ReferralMilestone>) => void;
   deleteReferralMilestone: (id: string) => void;
+  initFromTelegram: (user: { id: number; first_name: string; last_name?: string; username?: string; photo_url?: string }) => void;
 
   // Actions - View
   setCurrentView: (view: 'miniapp' | 'admin') => void;
@@ -771,7 +856,16 @@ interface AppState {
   markNotificationRead: (id: string) => void;
   addNotification: (n: Omit<Notification, 'id' | 'createdAt'>) => void;
   updatePlatformConfig: (data: Partial<PlatformConfig>) => void;
+  addPlatformRevenue: (amount: number) => void;
   addLog: (log: Omit<LogEntry, 'id' | 'createdAt'>) => void;
+
+  redeemPromoCode: (code: string) => { success: boolean; error?: string; reward?: number };
+  submitTaskProof: (taskId: string, proofText: string) => { success: boolean; error?: string };
+  reviewTaskSubmission: (submissionId: string, status: 'approved' | 'rejected', adminNote?: string) => void;
+  addPromoCode: (code: Omit<PromoCode, 'id' | 'createdAt' | 'currentUses'>) => void;
+  updatePromoCode: (id: string, data: Partial<PromoCode>) => void;
+  deletePromoCode: (id: string) => void;
+  buyShopItem: (itemId: string) => { success: boolean; error?: string };
 }
 
 const generateId = () => Math.random().toString(36).substr(2, 9);
@@ -810,10 +904,70 @@ export const useAppStore = create<AppState>((set, get) => ({
   platformStats: mockStats,
   logs: mockLogs,
   referralMilestones: mockReferralMilestones,
+  promoCodes: mockPromoCodes,
+  taskSubmissions: mockTaskSubmissions,
 
   claimedReferralMilestoneIds: [],
+  usedPromoCodeIds: [],
 
   // Mini App Actions
+  confirmDeposit: (txId, txHash) => {
+    const state = get();
+    const tx = state.transactions.find(t => t.id === txId);
+    if (!tx || tx.status === 'completed') return;
+    const user = state.users.find(u => u.id === tx.userId);
+    if (!user) return;
+    const balanceUpdate = {
+      balanceMain: user.balanceMain + tx.amount,
+      totalEarnings: user.totalEarnings + tx.amount,
+    };
+    set(s => ({
+      transactions: s.transactions.map(t =>
+        t.id === txId ? { ...t, status: 'completed', txHash, completedAt: new Date().toISOString() } : t
+      ),
+      users: s.users.map(u => u.id === tx.userId ? { ...u, ...balanceUpdate } : u),
+      currentUser: s.currentUser.id === tx.userId ? { ...s.currentUser, ...balanceUpdate } : s.currentUser,
+    }));
+    get().addNotification({
+      userId: tx.userId,
+      type: 'deposit',
+      title: 'Dépôt confirmé! 🎉',
+      message: `+${tx.amount.toFixed(2)} ${tx.currency} crédité sur votre compte.`,
+      isRead: false,
+    });
+  },
+
+  creditDeposit: (userId, amount, currency, txHash, network) => {
+    const state = get();
+    const user = state.users.find(u => u.id === userId);
+    if (!user) return;
+    const balanceUpdate = {
+      balanceMain: user.balanceMain + amount,
+      totalEarnings: user.totalEarnings + amount,
+    };
+    set(s => ({
+      users: s.users.map(u => u.id === userId ? { ...u, ...balanceUpdate } : u),
+      currentUser: s.currentUser.id === userId ? { ...s.currentUser, ...balanceUpdate } : s.currentUser,
+    }));
+    get().addTransaction({
+      userId,
+      type: 'deposit',
+      amount,
+      currency,
+      network,
+      status: 'completed',
+      txHash,
+      completedAt: new Date().toISOString(),
+    });
+    get().addNotification({
+      userId,
+      type: 'deposit',
+      title: 'Dépôt reçu! 🎉',
+      message: `+${amount.toFixed(2)} ${currency} crédité automatiquement.`,
+      isRead: false,
+    });
+  },
+
   completeTask: (taskId) => {
     const state = get();
     const task = state.tasks.find(t => t.id === taskId);
@@ -821,20 +975,37 @@ export const useAppStore = create<AppState>((set, get) => ({
     const isPromoActive = task.promotion && new Date(task.promotion.endsAt) > new Date();
     const multiplier = isPromoActive ? task.promotion!.multiplier : 1;
     const earned = task.reward * multiplier;
+    const updatedUser = {
+      balanceMain: state.currentUser.balanceMain + earned,
+      tasksCompleted: state.currentUser.tasksCompleted + 1,
+      todayEarnings: state.currentUser.todayEarnings + earned,
+      totalEarnings: state.currentUser.totalEarnings + earned,
+    };
     set(s => ({
       completedTaskIds: [...s.completedTaskIds, taskId],
       tasks: s.tasks.map(t => t.id === taskId ? { ...t, totalCompletions: t.totalCompletions + 1 } : t),
-      currentUser: {
-        ...s.currentUser,
-        balanceMain: s.currentUser.balanceMain + earned,
-        tasksCompleted: s.currentUser.tasksCompleted + 1,
-        todayEarnings: s.currentUser.todayEarnings + earned,
-        totalEarnings: s.currentUser.totalEarnings + earned,
-      },
+      currentUser: { ...s.currentUser, ...updatedUser },
+      users: s.users.map(u => u.id === state.currentUser.id ? { ...u, ...updatedUser } : u),
     }));
-    get().addTransaction({ userId: state.currentUser.id, type: 'reward', amount: earned, currency: 'TON', status: 'completed', completedAt: new Date().toISOString() });
+    const rewardCurrency = task.rewardType === 'main' ? 'TON' : task.rewardType.toUpperCase();
+    get().addTransaction({ userId: state.currentUser.id, type: 'reward', amount: earned, currency: rewardCurrency, status: 'completed', completedAt: new Date().toISOString() });
     get().addNotification({ userId: state.currentUser.id, type: 'reward', title: 'Tâche complétée!', message: `+${earned.toFixed(2)} TON${isPromoActive ? ` (×${multiplier} promo!)` : ''} pour "${task.title}"`, isRead: false });
   },
+
+  initFromTelegram: (tgUser) => set(s => {
+    const tgData = {
+      telegramId: tgUser.id,
+      firstName: tgUser.first_name,
+      lastName: tgUser.last_name || '',
+      username: tgUser.username || `user${tgUser.id}`,
+      avatarUrl: tgUser.photo_url,
+      referralCode: tgUser.id.toString(),
+    };
+    return {
+      currentUser: { ...s.currentUser, ...tgData },
+      users: s.users.map(u => u.id === s.currentUser.id ? { ...u, ...tgData } : u),
+    };
+  }),
 
   claimReferralMilestone: (id) => {
     const state = get();
@@ -842,13 +1013,14 @@ export const useAppStore = create<AppState>((set, get) => ({
     const milestone = state.referralMilestones.find(m => m.id === id);
     if (!milestone || !milestone.isActive) return;
     if (state.currentUser.referralCount < milestone.referralCount) return;
+    const milestoneUpdate = {
+      balanceMain: state.currentUser.balanceMain + milestone.reward,
+      totalEarnings: state.currentUser.totalEarnings + milestone.reward,
+    };
     set(s => ({
       claimedReferralMilestoneIds: [...s.claimedReferralMilestoneIds, id],
-      currentUser: {
-        ...s.currentUser,
-        balanceMain: s.currentUser.balanceMain + milestone.reward,
-        totalEarnings: s.currentUser.totalEarnings + milestone.reward,
-      },
+      currentUser: { ...s.currentUser, ...milestoneUpdate },
+      users: s.users.map(u => u.id === state.currentUser.id ? { ...u, ...milestoneUpdate } : u),
     }));
     get().addTransaction({ userId: state.currentUser.id, type: 'reward', amount: milestone.reward, currency: 'TON', status: 'completed', completedAt: new Date().toISOString() });
   },
@@ -862,7 +1034,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (amount > network.maxWithdrawal) return { success: false, error: `Maximum: ${network.maxWithdrawal} ${network.symbol}` };
     if (state.currentUser.balanceMain < amount) return { success: false, error: 'Solde insuffisant' };
     if (!address || address.trim().length < 10) return { success: false, error: 'Adresse invalide' };
-    set(s => ({ currentUser: { ...s.currentUser, balanceMain: s.currentUser.balanceMain - amount } }));
+    set(s => ({
+      currentUser: { ...s.currentUser, balanceMain: s.currentUser.balanceMain - amount },
+      users: s.users.map(u => u.id === state.currentUser.id ? { ...u, balanceMain: u.balanceMain - amount } : u),
+    }));
     get().addTransaction({ userId: state.currentUser.id, type: 'withdrawal', amount, currency: network.symbol, network: network.network, address: address.trim(), status: 'pending', fee: network.withdrawalFee });
     return { success: true };
   },
@@ -877,11 +1052,14 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   // User CRUD
   addUser: (user) => set((s) => ({ users: [...s.users, { ...user, id: generateId() }] })),
-  updateUser: (id, data) => set((s) => ({ users: s.users.map(u => u.id === id ? { ...u, ...data } : u) })),
+  updateUser: (id, data) => set((s) => ({
+    users: s.users.map(u => u.id === id ? { ...u, ...data } : u),
+    currentUser: s.currentUser.id === id ? { ...s.currentUser, ...data } : s.currentUser,
+  })),
   deleteUser: (id) => set((s) => ({ users: s.users.filter(u => u.id !== id) })),
 
   // Task CRUD
-  addTask: (task) => set((s) => ({ tasks: [...s.tasks, { ...task, id: generateId(), createdAt: new Date().toISOString(), totalCompletions: 0 }] })),
+  addTask: (task) => set((s) => ({ tasks: [...s.tasks, { ...task, id: generateId(), createdAt: new Date().toISOString(), totalCompletions: 0, createdByUserId: s.currentUser.id }] })),
   updateTask: (id, data) => set((s) => ({ tasks: s.tasks.map(t => t.id === id ? { ...t, ...data } : t) })),
   deleteTask: (id) => set((s) => ({ tasks: s.tasks.filter(t => t.id !== id) })),
 
@@ -973,5 +1151,99 @@ export const useAppStore = create<AppState>((set, get) => ({
   markNotificationRead: (id) => set((s) => ({ notifications: s.notifications.map(n => n.id === id ? { ...n, isRead: true } : n) })),
   addNotification: (n) => set((s) => ({ notifications: [{ ...n, id: generateId(), createdAt: new Date().toISOString() }, ...s.notifications] })),
   updatePlatformConfig: (data) => set((s) => ({ platformConfig: { ...s.platformConfig, ...data } })),
+  addPlatformRevenue: (amount) => set((s) => ({ platformStats: { ...s.platformStats, platformRevenue: s.platformStats.platformRevenue + amount } })),
   addLog: (log) => set((s) => ({ logs: [{ ...log, id: generateId(), createdAt: new Date().toISOString() }, ...s.logs] })),
+
+  redeemPromoCode: (code) => {
+    const state = get();
+    const promo = state.promoCodes.find(p => p.code.toUpperCase() === code.toUpperCase().trim());
+    if (!promo) return { success: false, error: 'Code invalide.' };
+    if (!promo.isActive) return { success: false, error: 'Ce code n\'est plus actif.' };
+    if (promo.expiresAt && new Date(promo.expiresAt) < new Date()) return { success: false, error: 'Code expiré.' };
+    if (promo.currentUses >= promo.maxUses) return { success: false, error: 'Ce code a atteint sa limite d\'utilisation.' };
+    if (state.usedPromoCodeIds.includes(promo.id)) return { success: false, error: 'Vous avez déjà utilisé ce code.' };
+    const earned = promo.reward;
+    const balanceUpdate = { balanceMain: state.currentUser.balanceMain + earned, totalEarnings: state.currentUser.totalEarnings + earned };
+    set(s => ({
+      usedPromoCodeIds: [...s.usedPromoCodeIds, promo.id],
+      promoCodes: s.promoCodes.map(p => p.id === promo.id ? { ...p, currentUses: p.currentUses + 1 } : p),
+      currentUser: { ...s.currentUser, ...balanceUpdate },
+      users: s.users.map(u => u.id === state.currentUser.id ? { ...u, ...balanceUpdate } : u),
+    }));
+    get().addTransaction({ userId: state.currentUser.id, type: 'bonus', amount: earned, currency: 'TON', status: 'completed', completedAt: new Date().toISOString() });
+    get().addNotification({ userId: state.currentUser.id, type: 'reward', title: 'Code promo activé! 🎉', message: `+${earned.toFixed(2)} TON crédité via le code "${promo.code}".`, isRead: false });
+    return { success: true, reward: earned };
+  },
+
+  submitTaskProof: (taskId, proofText) => {
+    const state = get();
+    const task = state.tasks.find(t => t.id === taskId);
+    if (!task) return { success: false, error: 'Tâche introuvable.' };
+    if (!proofText.trim()) return { success: false, error: 'La preuve ne peut pas être vide.' };
+    const existing = state.taskSubmissions.find(s => s.taskId === taskId && s.userId === state.currentUser.id);
+    if (existing?.status === 'pending') return { success: false, error: 'Une soumission est déjà en attente de validation.' };
+    if (existing?.status === 'approved') return { success: false, error: 'Votre preuve a déjà été validée.' };
+    set(s => ({
+      taskSubmissions: [{
+        id: generateId(),
+        taskId,
+        userId: state.currentUser.id,
+        username: state.currentUser.username,
+        proofText: proofText.trim(),
+        status: 'pending' as const,
+        createdAt: new Date().toISOString(),
+      }, ...s.taskSubmissions],
+    }));
+    return { success: true };
+  },
+
+  reviewTaskSubmission: (submissionId, status, adminNote) => {
+    const state = get();
+    const submission = state.taskSubmissions.find(s => s.id === submissionId);
+    if (!submission || submission.status !== 'pending') return;
+    set(s => ({
+      taskSubmissions: s.taskSubmissions.map(sub =>
+        sub.id === submissionId ? { ...sub, status, adminNote, reviewedAt: new Date().toISOString() } : sub
+      ),
+    }));
+    const task = state.tasks.find(t => t.id === submission.taskId);
+    const user = state.users.find(u => u.id === submission.userId);
+    if (status === 'approved' && task && user) {
+      const balanceUpdate = {
+        balanceMain: user.balanceMain + task.reward,
+        totalEarnings: user.totalEarnings + task.reward,
+        tasksCompleted: user.tasksCompleted + 1,
+      };
+      set(s => ({
+        tasks: s.tasks.map(t => t.id === submission.taskId ? { ...t, totalCompletions: t.totalCompletions + 1 } : t),
+        users: s.users.map(u => u.id === submission.userId ? { ...u, ...balanceUpdate } : u),
+        currentUser: s.currentUser.id === submission.userId ? { ...s.currentUser, ...balanceUpdate } : s.currentUser,
+      }));
+      get().addTransaction({ userId: submission.userId, type: 'reward', amount: task.reward, currency: 'TON', status: 'completed', completedAt: new Date().toISOString() });
+      get().addNotification({ userId: submission.userId, type: 'reward', title: 'Tâche promo validée! 🎉', message: `+${task.reward.toFixed(2)} TON crédité pour "${task.title}".`, isRead: false });
+    } else if (status === 'rejected') {
+      get().addNotification({ userId: submission.userId, type: 'alert', title: 'Preuve refusée', message: `Votre soumission pour "${task?.title}" a été refusée.${adminNote ? ` Motif: ${adminNote}` : ''}`, isRead: false });
+    }
+  },
+
+  addPromoCode: (code) => set((s) => ({ promoCodes: [...s.promoCodes, { ...code, id: generateId(), createdAt: new Date().toISOString(), currentUses: 0 }] })),
+  updatePromoCode: (id, data) => set((s) => ({ promoCodes: s.promoCodes.map(p => p.id === id ? { ...p, ...data } : p) })),
+  deletePromoCode: (id) => set((s) => ({ promoCodes: s.promoCodes.filter(p => p.id !== id) })),
+
+  buyShopItem: (itemId) => {
+    const state = get();
+    const item = state.shopItems.find(i => i.id === itemId);
+    if (!item || !item.isActive) return { success: false, error: 'Article introuvable.' };
+    if (item.maxPurchases != null && item.purchases >= item.maxPurchases) return { success: false, error: 'Stock épuisé.' };
+    if (state.currentUser.balanceMain < item.price) return { success: false, error: `Solde insuffisant. Requis: ${item.price.toFixed(2)} TON.` };
+    const balanceUpdate = { balanceMain: state.currentUser.balanceMain - item.price };
+    set(s => ({
+      currentUser: { ...s.currentUser, ...balanceUpdate },
+      users: s.users.map(u => u.id === state.currentUser.id ? { ...u, ...balanceUpdate } : u),
+      shopItems: s.shopItems.map(i => i.id === itemId ? { ...i, purchases: i.purchases + 1 } : i),
+    }));
+    get().addTransaction({ userId: state.currentUser.id, type: 'purchase', amount: item.price, currency: 'TON', status: 'completed', completedAt: new Date().toISOString() });
+    get().addNotification({ userId: state.currentUser.id, type: 'system', title: 'Achat effectué! ✅', message: `${item.icon} ${item.name} activé${item.duration ? ` pour ${item.duration}h` : ''}.`, isRead: false });
+    return { success: true };
+  },
 }));

@@ -10,15 +10,28 @@ const navItems = [
   { id: 'profile', label: 'Profil', icon: User },
 ];
 
+const subPageToNav: Record<string, string> = {
+  deposit: 'wallet',
+  withdraw: 'wallet',
+  history: 'wallet',
+  createTask: 'tasks',
+  myTasks: 'tasks',
+  referral: 'profile',
+  shop: 'profile',
+  notifications: 'profile',
+  settings: 'profile',
+};
+
 export const MiniAppNav: React.FC = () => {
   const { miniAppPage, setMiniAppPage } = useAppStore();
+  const activeNav = subPageToNav[miniAppPage] ?? miniAppPage;
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 bg-[#0d0d1a]/95 backdrop-blur-xl border-t border-white/5">
       <div className="flex items-center justify-around max-w-lg mx-auto px-2 py-1">
         {navItems.map(item => {
           const Icon = item.icon;
-          const isActive = miniAppPage === item.id;
+          const isActive = activeNav === item.id;
           return (
             <button
               key={item.id}

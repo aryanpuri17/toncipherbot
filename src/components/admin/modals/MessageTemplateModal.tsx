@@ -69,7 +69,7 @@ export const MessageTemplateModal: React.FC = () => {
               value={form.content} 
               onChange={e => setForm({ ...form, content: e.target.value })} 
               rows={8} 
-              placeholder="👋 Bienvenue {firstName}!&#10;&#10;🎁 Votre bonus: {welcomeBonus}$"
+              placeholder={"👋 Bienvenue {firstName}!\n\n🎁 Votre bonus: {welcomeBonus}$"}
               required 
               className="font-mono text-sm"
             />

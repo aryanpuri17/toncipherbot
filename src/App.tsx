@@ -9,7 +9,7 @@ import { AdminTasks } from './components/admin/AdminTasks';
 import { AdminCampaigns } from './components/admin/AdminCampaigns';
 import { AdminDeposits, AdminWithdrawals, AdminWallets, AdminCrypto } from './components/admin/AdminFinance';
 import { AdminAntiFraud, AdminLogs, AdminAlerts } from './components/admin/AdminSecurity';
-import { AdminReferrals, AdminShop, AdminGamification, AdminChannels } from './components/admin/AdminEngagement';
+import { AdminReferrals, AdminShop, AdminGamification, AdminChannels, AdminPromoCodes } from './components/admin/AdminEngagement';
 import { AdminStatistics } from './components/admin/AdminStatistics';
 import { AdminConfig, AdminNotifications } from './components/admin/AdminConfig';
 import { ModalManager } from './components/admin/modals';
@@ -21,14 +21,18 @@ import { MiniAppWallet, MiniAppDeposit, MiniAppWithdraw, MiniAppHistory } from '
 import { MiniAppTasks } from './components/miniapp/MiniAppTasks';
 import { MiniAppLeaderboard } from './components/miniapp/MiniAppLeaderboard';
 import { MiniAppProfile } from './components/miniapp/MiniAppProfile';
-import { MiniAppShop } from './components/miniapp/MiniAppShop';
 import { MiniAppCreateTask } from './components/miniapp/MiniAppCreateTask';
+import { MiniAppMyTasks } from './components/miniapp/MiniAppMyTasks';
 import { MiniAppReferral } from './components/miniapp/MiniAppReferral';
+import { MiniAppNotifications } from './components/miniapp/MiniAppNotifications';
+import { MiniAppShop } from './components/miniapp/MiniAppShop';
 
-import { Bell, Menu, Settings, ChevronRight, Globe, Info } from 'lucide-react';
+import { Bell, Menu, Settings, ChevronRight, Globe, Info, Wallet, Shield } from 'lucide-react';
+import { useTonConnectUI, useTonWallet } from '@tonconnect/ui-react';
+import { useDepositMonitor } from './hooks/useDepositMonitor';
 
 const MiniAppSettings: React.FC = () => {
-  const { setMiniAppPage } = useAppStore();
+  const { setMiniAppPage, platformConfig } = useAppStore();
   return (
     <div className="space-y-5 animate-slide-up">
       <div className="flex items-center gap-3">
@@ -44,20 +48,36 @@ const MiniAppSettings: React.FC = () => {
           </div>
           <ChevronRight className="w-4 h-4 text-slate-500" />
         </div>
-        <div className="glass-card-light p-4 flex items-center gap-3">
-          <Settings className="w-5 h-5 text-slate-400" />
-          <div className="flex-1">
+        <button
+          onClick={() => setMiniAppPage('notifications')}
+          className="w-full glass-card-light p-4 flex items-center gap-3 hover:bg-white/[0.04] transition-colors"
+        >
+          <Bell className="w-5 h-5 text-purple-400" />
+          <div className="flex-1 text-left">
             <p className="text-sm font-medium text-white">Notifications</p>
-            <p className="text-xs text-slate-400">Activées</p>
+            <p className="text-xs text-slate-400">Voir toutes les notifications</p>
+          </div>
+          <ChevronRight className="w-4 h-4 text-slate-500" />
+        </button>
+        <div className="glass-card-light p-4 flex items-center gap-3">
+          <Shield className="w-5 h-5 text-emerald-400" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-white">Sécurité</p>
+            <p className="text-xs text-slate-400">2FA non configuré</p>
           </div>
           <ChevronRight className="w-4 h-4 text-slate-500" />
         </div>
-        <div className="glass-card p-4 flex items-center gap-3">
-          <Info className="w-5 h-5 text-purple-400" />
-          <div className="flex-1">
-            <p className="text-sm font-medium text-white">À propos</p>
-            <p className="text-xs text-slate-400">TonCipher v1.0</p>
+        <div className="glass-card p-4 space-y-2">
+          <div className="flex items-center gap-3">
+            <Info className="w-5 h-5 text-slate-400" />
+            <div>
+              <p className="text-sm font-medium text-white">À propos</p>
+              <p className="text-xs text-slate-400">TonCipher v1.0 — @{platformConfig.botUsername}</p>
+            </div>
           </div>
+          {platformConfig.mainChannel && (
+            <p className="text-xs text-slate-500 pl-8">Canal: {platformConfig.mainChannel}</p>
+          )}
         </div>
       </div>
     </div>
@@ -80,6 +100,7 @@ const AdminPageContent: React.FC = () => {
     case 'referrals':     return <AdminReferrals />;
     case 'shop':          return <AdminShop />;
     case 'gamification':  return <AdminGamification />;
+    case 'promoCodes':    return <AdminPromoCodes />;
     case 'antifraud':     return <AdminAntiFraud />;
     case 'logs':          return <AdminLogs />;
     case 'alerts':        return <AdminAlerts />;
@@ -92,18 +113,21 @@ const AdminPageContent: React.FC = () => {
 const MiniAppPageContent: React.FC = () => {
   const { miniAppPage } = useAppStore();
   switch (miniAppPage) {
-    case 'dashboard':   return <MiniAppDashboard />;
-    case 'wallet':      return <MiniAppWallet />;
-    case 'deposit':     return <MiniAppDeposit />;
-    case 'withdraw':    return <MiniAppWithdraw />;
-    case 'history':     return <MiniAppHistory />;
-    case 'tasks':       return <MiniAppTasks />;
-    case 'leaderboard': return <MiniAppLeaderboard />;
-    case 'profile':     return <MiniAppProfile />;
-    case 'createTask':  return <MiniAppCreateTask />;
-    case 'referral':    return <MiniAppReferral />;
-    case 'settings':    return <MiniAppSettings />;
-    default:            return <MiniAppDashboard />;
+    case 'dashboard':     return <MiniAppDashboard />;
+    case 'wallet':        return <MiniAppWallet />;
+    case 'deposit':       return <MiniAppDeposit />;
+    case 'withdraw':      return <MiniAppWithdraw />;
+    case 'history':       return <MiniAppHistory />;
+    case 'tasks':         return <MiniAppTasks />;
+    case 'leaderboard':   return <MiniAppLeaderboard />;
+    case 'profile':       return <MiniAppProfile />;
+    case 'createTask':    return <MiniAppCreateTask />;
+    case 'myTasks':       return <MiniAppMyTasks />;
+    case 'referral':      return <MiniAppReferral />;
+    case 'notifications': return <MiniAppNotifications />;
+    case 'shop':          return <MiniAppShop />;
+    case 'settings':      return <MiniAppSettings />;
+    default:              return <MiniAppDashboard />;
   }
 };
 
@@ -170,42 +194,91 @@ const AdminPanel: React.FC = () => {
   );
 };
 
-const MiniApp: React.FC = () => (
-  <div className="mini-app-bg min-h-screen max-w-lg mx-auto relative">
-    {/* Header */}
+const MiniAppHeader: React.FC = () => {
+  const [tonConnectUI] = useTonConnectUI();
+  const tonWallet = useTonWallet();
+  const { notifications, currentUser, setMiniAppPage } = useAppStore();
+  const isConnected = !!tonWallet;
+  const shortAddr = tonWallet?.account.address
+    ? `${tonWallet.account.address.slice(0, 4)}…${tonWallet.account.address.slice(-4)}`
+    : '';
+
+  const unreadCount = notifications.filter(n => !n.isRead && (!n.userId || n.userId === currentUser.id)).length;
+
+  return (
     <div className="sticky top-0 z-40 bg-[#0f0c29]/90 backdrop-blur-xl border-b border-white/5 px-4 py-2.5 flex items-center justify-between">
       <div className="flex items-center gap-2">
         <img src="/images/logo.png" alt="TonCipher" className="w-7 h-7 rounded-lg object-cover" />
         <span className="text-sm font-bold text-white">TonCipher</span>
       </div>
-      <div className="flex items-center gap-1.5 text-xs text-emerald-400">
-        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-        Connecté
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => setMiniAppPage('notifications')}
+          className="relative p-2 rounded-lg hover:bg-white/5 text-slate-400 transition-colors"
+        >
+          <Bell className="w-4.5 h-4.5" />
+          {unreadCount > 0 && (
+            <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-blue-500 text-white text-[9px] font-bold flex items-center justify-center">
+              {unreadCount > 9 ? '9+' : unreadCount}
+            </span>
+          )}
+        </button>
+        {isConnected ? (
+          <button
+            onClick={() => tonConnectUI.openModal()}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-medium hover:bg-emerald-500/20 transition-colors"
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+            {shortAddr}
+          </button>
+        ) : (
+          <button
+            onClick={() => tonConnectUI.openModal()}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-medium hover:bg-blue-500/20 transition-colors"
+          >
+            <Wallet className="w-3.5 h-3.5" />
+            Connecter
+          </button>
+        )}
       </div>
     </div>
-    <div className="px-4 pt-4 pb-24">
-      <MiniAppPageContent />
+  );
+};
+
+const MiniApp: React.FC = () => {
+  useDepositMonitor(); // polls TonAPI every 30s to auto-confirm pending deposits
+  return (
+    <div className="mini-app-bg min-h-screen max-w-lg mx-auto relative">
+      <MiniAppHeader />
+      <div className="px-4 pt-4 pb-24">
+        <MiniAppPageContent />
+      </div>
+      <MiniAppNav />
     </div>
-    <MiniAppNav />
-  </div>
-);
+  );
+};
 
 export default function App() {
-  const { currentView, setCurrentView } = useAppStore();
+  const { currentView, setCurrentView, initFromTelegram } = useAppStore();
 
   useEffect(() => {
-    // Admin panel only accessible via URL hash #admin
     const isAdminRoute = window.location.hash === '#admin';
     if (!isAdminRoute) {
       setCurrentView('miniapp');
     }
 
-    const tg = (window as unknown as { Telegram?: { WebApp?: { ready: () => void; expand: () => void; setHeaderColor: (c: string) => void } } }).Telegram?.WebApp;
+    type TgUser = { id: number; first_name: string; last_name?: string; username?: string; photo_url?: string };
+    type TgWebApp = { ready: () => void; expand: () => void; setHeaderColor: (c: string) => void; initDataUnsafe?: { user?: TgUser } };
+    const tg = (window as unknown as { Telegram?: { WebApp?: TgWebApp } }).Telegram?.WebApp;
     if (tg) {
       tg.ready();
       tg.expand();
       tg.setHeaderColor('#0f0c29');
       setCurrentView('miniapp');
+      const tgUser = tg.initDataUnsafe?.user;
+      if (tgUser) {
+        initFromTelegram(tgUser);
+      }
     }
   }, []);
 

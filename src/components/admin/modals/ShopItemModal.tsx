@@ -82,9 +82,7 @@ export const ShopItemModal: React.FC = () => {
             <FormGroup>
               <FormLabel required>Devise</FormLabel>
               <FormSelect value={form.currency} onChange={e => setForm({ ...form, currency: e.target.value as 'main' | 'bonus' | 'xp' })}>
-                <option value="main">Solde principal</option>
-                <option value="bonus">Solde bonus</option>
-                <option value="xp">XP</option>
+                <option value="main">TON (solde principal)</option>
               </FormSelect>
             </FormGroup>
             <FormGroup>
