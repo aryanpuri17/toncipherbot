@@ -822,16 +822,17 @@ export const useAppStore = create<AppState>((set, get) => ({
     const isPromoActive = task.promotion && new Date(task.promotion.endsAt) > new Date();
     const multiplier = isPromoActive ? task.promotion!.multiplier : 1;
     const earned = task.reward * multiplier;
+    const updatedUser = {
+      balanceMain: state.currentUser.balanceMain + earned,
+      tasksCompleted: state.currentUser.tasksCompleted + 1,
+      todayEarnings: state.currentUser.todayEarnings + earned,
+      totalEarnings: state.currentUser.totalEarnings + earned,
+    };
     set(s => ({
       completedTaskIds: [...s.completedTaskIds, taskId],
       tasks: s.tasks.map(t => t.id === taskId ? { ...t, totalCompletions: t.totalCompletions + 1 } : t),
-      currentUser: {
-        ...s.currentUser,
-        balanceMain: s.currentUser.balanceMain + earned,
-        tasksCompleted: s.currentUser.tasksCompleted + 1,
-        todayEarnings: s.currentUser.todayEarnings + earned,
-        totalEarnings: s.currentUser.totalEarnings + earned,
-      },
+      currentUser: { ...s.currentUser, ...updatedUser },
+      users: s.users.map(u => u.id === state.currentUser.id ? { ...u, ...updatedUser } : u),
     }));
     get().addTransaction({ userId: state.currentUser.id, type: 'reward', amount: earned, currency: 'TON', status: 'completed', completedAt: new Date().toISOString() });
     get().addNotification({ userId: state.currentUser.id, type: 'reward', title: 'Tâche complétée!', message: `+${earned.toFixed(2)} TON${isPromoActive ? ` (×${multiplier} promo!)` : ''} pour "${task.title}"`, isRead: false });
@@ -855,13 +856,14 @@ export const useAppStore = create<AppState>((set, get) => ({
     const milestone = state.referralMilestones.find(m => m.id === id);
     if (!milestone || !milestone.isActive) return;
     if (state.currentUser.referralCount < milestone.referralCount) return;
+    const milestoneUpdate = {
+      balanceMain: state.currentUser.balanceMain + milestone.reward,
+      totalEarnings: state.currentUser.totalEarnings + milestone.reward,
+    };
     set(s => ({
       claimedReferralMilestoneIds: [...s.claimedReferralMilestoneIds, id],
-      currentUser: {
-        ...s.currentUser,
-        balanceMain: s.currentUser.balanceMain + milestone.reward,
-        totalEarnings: s.currentUser.totalEarnings + milestone.reward,
-      },
+      currentUser: { ...s.currentUser, ...milestoneUpdate },
+      users: s.users.map(u => u.id === state.currentUser.id ? { ...u, ...milestoneUpdate } : u),
     }));
     get().addTransaction({ userId: state.currentUser.id, type: 'reward', amount: milestone.reward, currency: 'TON', status: 'completed', completedAt: new Date().toISOString() });
   },
@@ -875,7 +877,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (amount > network.maxWithdrawal) return { success: false, error: `Maximum: ${network.maxWithdrawal} ${network.symbol}` };
     if (state.currentUser.balanceMain < amount) return { success: false, error: 'Solde insuffisant' };
     if (!address || address.trim().length < 10) return { success: false, error: 'Adresse invalide' };
-    set(s => ({ currentUser: { ...s.currentUser, balanceMain: s.currentUser.balanceMain - amount } }));
+    set(s => ({
+      currentUser: { ...s.currentUser, balanceMain: s.currentUser.balanceMain - amount },
+      users: s.users.map(u => u.id === state.currentUser.id ? { ...u, balanceMain: u.balanceMain - amount } : u),
+    }));
     get().addTransaction({ userId: state.currentUser.id, type: 'withdrawal', amount, currency: network.symbol, network: network.network, address: address.trim(), status: 'pending', fee: network.withdrawalFee });
     return { success: true };
   },
