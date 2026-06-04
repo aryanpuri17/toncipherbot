@@ -24,7 +24,8 @@ import { MiniAppProfile } from './components/miniapp/MiniAppProfile';
 import { MiniAppCreateTask } from './components/miniapp/MiniAppCreateTask';
 import { MiniAppReferral } from './components/miniapp/MiniAppReferral';
 
-import { Bell, Menu, Settings, ChevronRight, Globe, Info } from 'lucide-react';
+import { Bell, Menu, Settings, ChevronRight, Globe, Info, Wallet } from 'lucide-react';
+import { useTonConnectUI, useTonWallet } from '@tonconnect/ui-react';
 
 const MiniAppSettings: React.FC = () => {
   const { setMiniAppPage } = useAppStore();
@@ -169,19 +170,44 @@ const AdminPanel: React.FC = () => {
   );
 };
 
-const MiniApp: React.FC = () => (
-  <div className="mini-app-bg min-h-screen max-w-lg mx-auto relative">
-    {/* Header */}
+const MiniAppHeader: React.FC = () => {
+  const [tonConnectUI] = useTonConnectUI();
+  const tonWallet = useTonWallet();
+  const isConnected = !!tonWallet;
+  const shortAddr = tonWallet?.account.address
+    ? `${tonWallet.account.address.slice(0, 4)}…${tonWallet.account.address.slice(-4)}`
+    : '';
+
+  return (
     <div className="sticky top-0 z-40 bg-[#0f0c29]/90 backdrop-blur-xl border-b border-white/5 px-4 py-2.5 flex items-center justify-between">
       <div className="flex items-center gap-2">
         <img src="/images/logo.png" alt="TonCipher" className="w-7 h-7 rounded-lg object-cover" />
         <span className="text-sm font-bold text-white">TonCipher</span>
       </div>
-      <div className="flex items-center gap-1.5 text-xs text-emerald-400">
-        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-        Connecté
-      </div>
+      {isConnected ? (
+        <button
+          onClick={() => tonConnectUI.openModal()}
+          className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-medium hover:bg-emerald-500/20 transition-colors"
+        >
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+          {shortAddr}
+        </button>
+      ) : (
+        <button
+          onClick={() => tonConnectUI.openModal()}
+          className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-medium hover:bg-blue-500/20 transition-colors"
+        >
+          <Wallet className="w-3.5 h-3.5" />
+          Connecter
+        </button>
+      )}
     </div>
+  );
+};
+
+const MiniApp: React.FC = () => (
+  <div className="mini-app-bg min-h-screen max-w-lg mx-auto relative">
+    <MiniAppHeader />
     <div className="px-4 pt-4 pb-24">
       <MiniAppPageContent />
     </div>
