@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAppStore } from '../../store/appStore';
 import { ToggleSwitch } from '../ui/ToggleSwitch';
-import { Key, Hash, Wallet, Bell, Server, MessageSquare, Terminal, Shield, Users, Zap, Gift, CreditCard, Plus, Edit2, Trash2 } from 'lucide-react';
+import { Key, Hash, Wallet, Bell, Server, Terminal, Shield, Users, Gift, CreditCard } from 'lucide-react';
 
 export const AdminConfig: React.FC = () => {
   const { platformConfig, updatePlatformConfig } = useAppStore();
@@ -14,18 +14,16 @@ export const AdminConfig: React.FC = () => {
   };
 
   const tabs = [
-    { id: 'bot', label: 'Bot', icon: <Terminal className="w-4 h-4" /> },
-    { id: 'telegram', label: 'Telegram', icon: <Hash className="w-4 h-4" /> },
-    { id: 'wallet', label: 'Wallet', icon: <Wallet className="w-4 h-4" /> },
-    { id: 'referral', label: 'Parrainage', icon: <Gift className="w-4 h-4" /> },
-    { id: 'xp', label: 'XP & Niveaux', icon: <Zap className="w-4 h-4" /> },
-    { id: 'streak', label: 'Streak', icon: <Zap className="w-4 h-4" /> },
-    { id: 'antifraud', label: 'Anti-Fraude', icon: <Shield className="w-4 h-4" /> },
-    { id: 'withdrawals', label: 'Retraits', icon: <CreditCard className="w-4 h-4" /> },
-    { id: 'tasks', label: 'Tâches', icon: <Users className="w-4 h-4" /> },
-    { id: 'deposits', label: 'Dépôts', icon: <Wallet className="w-4 h-4" /> },
-    { id: 'system', label: 'Système', icon: <Server className="w-4 h-4" /> },
-    { id: 'notifications', label: 'Notifications', icon: <Bell className="w-4 h-4" /> },
+    { id: 'bot',           label: 'Bot',          icon: <Terminal className="w-4 h-4" /> },
+    { id: 'telegram',      label: 'Telegram',     icon: <Hash className="w-4 h-4" /> },
+    { id: 'wallet',        label: 'Wallet',       icon: <Wallet className="w-4 h-4" /> },
+    { id: 'referral',      label: 'Parrainage',   icon: <Gift className="w-4 h-4" /> },
+    { id: 'antifraud',     label: 'Anti-Fraude',  icon: <Shield className="w-4 h-4" /> },
+    { id: 'withdrawals',   label: 'Retraits',     icon: <CreditCard className="w-4 h-4" /> },
+    { id: 'tasks',         label: 'Tâches',       icon: <Users className="w-4 h-4" /> },
+    { id: 'deposits',      label: 'Dépôts',       icon: <Wallet className="w-4 h-4" /> },
+    { id: 'system',        label: 'Système',      icon: <Server className="w-4 h-4" /> },
+    { id: 'notifications', label: 'Notifications',icon: <Bell className="w-4 h-4" /> },
   ];
 
   return (
@@ -166,67 +164,15 @@ export const AdminConfig: React.FC = () => {
                 <input type="number" min="4" max="16" value={platformConfig.referralCodeLength} onChange={e => updatePlatformConfig({ referralCodeLength: parseInt(e.target.value) || 8 })} className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white" />
               </div>
             </div>
-            <div className="mt-4">
-              <label className="block text-xs text-slate-400 mb-1.5">Préfixe du lien de parrainage</label>
-              <input type="text" value={platformConfig.referralLinkPrefix} onChange={e => updatePlatformConfig({ referralLinkPrefix: e.target.value })} className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white" />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* XP Settings */}
-      {activeTab === 'xp' && (
-        <div className="space-y-6">
-          <div className="glass-card p-5">
-            <h3 className="text-sm font-semibold text-white mb-4">Système XP & Niveaux</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div>
-                <label className="block text-xs text-slate-400 mb-1.5">XP par tâche</label>
-                <input type="number" min="0" value={platformConfig.xpPerTask} onChange={e => updatePlatformConfig({ xpPerTask: parseInt(e.target.value) || 0 })} className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white" />
+            <div className="mt-4 space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="block text-xs text-slate-400">Lien de parrainage actuel</label>
+                <span className="text-[10px] text-blue-400">Dérivé du nom du bot automatiquement</span>
               </div>
-              <div>
-                <label className="block text-xs text-slate-400 mb-1.5">XP par filleul</label>
-                <input type="number" min="0" value={platformConfig.xpPerReferral} onChange={e => updatePlatformConfig({ xpPerReferral: parseInt(e.target.value) || 0 })} className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white" />
+              <div className="px-3 py-2 bg-white/[0.03] border border-white/5 rounded-lg text-xs text-slate-300 font-mono break-all">
+                https://t.me/<span className="text-blue-400">{platformConfig.botUsername}</span>?start=CODE_PARRAIN
               </div>
-              <div>
-                <label className="block text-xs text-slate-400 mb-1.5">XP par $ déposé</label>
-                <input type="number" min="0" value={platformConfig.xpPerDeposit} onChange={e => updatePlatformConfig({ xpPerDeposit: parseInt(e.target.value) || 0 })} className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white" />
-              </div>
-              <div>
-                <label className="block text-xs text-slate-400 mb-1.5">Multiplicateur XP global</label>
-                <input type="number" step="0.1" min="0.1" value={platformConfig.xpMultiplier} onChange={e => updatePlatformConfig({ xpMultiplier: parseFloat(e.target.value) || 1 })} className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white" />
-              </div>
-              <div>
-                <label className="block text-xs text-slate-400 mb-1.5">Niveau maximum</label>
-                <input type="number" min="1" value={platformConfig.maxLevel} onChange={e => updatePlatformConfig({ maxLevel: parseInt(e.target.value) || 50 })} className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white" />
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Streak Settings */}
-      {activeTab === 'streak' && (
-        <div className="space-y-6">
-          <div className="glass-card p-5">
-            <h3 className="text-sm font-semibold text-white mb-4">Système de Streak</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs text-slate-400 mb-1.5">Bonus par jour de streak ($)</label>
-                <input type="number" step="0.01" min="0" value={platformConfig.streakBonusPerDay} onChange={e => updatePlatformConfig({ streakBonusPerDay: parseFloat(e.target.value) || 0 })} className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white" />
-              </div>
-              <div>
-                <label className="block text-xs text-slate-400 mb-1.5">Multiplicateur par streak</label>
-                <input type="number" step="0.01" min="1" value={platformConfig.streakMultiplier} onChange={e => updatePlatformConfig({ streakMultiplier: parseFloat(e.target.value) || 1 })} className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white" />
-              </div>
-              <div>
-                <label className="block text-xs text-slate-400 mb-1.5">Bonus streak maximum ($)</label>
-                <input type="number" step="0.01" min="0" value={platformConfig.maxStreakBonus} onChange={e => updatePlatformConfig({ maxStreakBonus: parseFloat(e.target.value) || 0 })} className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white" />
-              </div>
-              <div>
-                <label className="block text-xs text-slate-400 mb-1.5">Reset streak après (heures)</label>
-                <input type="number" min="24" value={platformConfig.streakResetHours} onChange={e => updatePlatformConfig({ streakResetHours: parseInt(e.target.value) || 48 })} className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white" />
-              </div>
+              <p className="text-[10px] text-slate-500">Changez le "Bot Username" dans l'onglet Bot pour mettre à jour ce lien.</p>
             </div>
           </div>
         </div>

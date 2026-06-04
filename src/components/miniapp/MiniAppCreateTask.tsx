@@ -29,7 +29,6 @@ export const MiniAppCreateTask: React.FC = () => {
 
   const execCount   = Math.max(0, parseInt(executions) || 0);
   const totalCost   = execCount * priceFixed;
-  // worker receives priceFixed minus the platform's cut
   const workerReward = parseFloat((priceFixed * (1 - feeRate)).toFixed(6));
   const platformFee  = totalCost * feeRate;
   const needsAdminBot = type === 'join_channel' || type === 'join_group';
@@ -185,6 +184,7 @@ export const MiniAppCreateTask: React.FC = () => {
             className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white text-sm font-mono focus:outline-none focus:border-blue-500/50"
           />
         </div>
+
       </div>
 
       {/* Cost summary */}
@@ -194,12 +194,16 @@ export const MiniAppCreateTask: React.FC = () => {
           <span className="text-white font-semibold">{priceFixed.toFixed(4)} TON</span>
         </div>
         <div className="flex justify-between text-xs">
+          <span className="text-slate-400">Récompense par utilisateur</span>
+          <span className="text-emerald-400 font-semibold">+{workerReward.toFixed(4)} TON</span>
+        </div>
+        <div className="flex justify-between text-xs">
           <span className="text-slate-400">Nombre d'exécutions</span>
           <span className="text-white font-semibold">{execCount > 0 ? execCount.toLocaleString() : '—'}</span>
         </div>
         <div className="h-px bg-white/8 my-1" />
         <div className="flex justify-between text-xs">
-          <span className="text-slate-400 font-medium">Coût d'ajout de la tâche</span>
+          <span className="text-slate-400 font-medium">Coût total de la campagne</span>
           <span className="text-amber-400 font-bold text-sm">
             {execCount > 0 ? totalCost.toFixed(4) : '—'} TON
           </span>
