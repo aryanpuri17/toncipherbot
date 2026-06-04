@@ -463,38 +463,6 @@ const mockUsers: User[] = [
     withdrawalBlocked: false, verificationStatus: 'none',
     dailyWithdrawn: 0, dailyTasksCompleted: 0
   },
-  {
-    id: '2', telegramId: 112233, username: 'alice_ton', firstName: 'Alice', lastName: 'M.',
-    balanceMain: 12.5, totalEarnings: 28.75, todayEarnings: 1.20, tasksCompleted: 47,
-    referralCount: 8, referralCode: 'ALICE01',
-    riskScore: 0, status: 'active', createdAt: new Date(Date.now() - 30 * 86400000).toISOString(), lastActive: new Date().toISOString(),
-    withdrawalBlocked: false, verificationStatus: 'none',
-    dailyWithdrawn: 0, dailyTasksCompleted: 3
-  },
-  {
-    id: '3', telegramId: 445566, username: 'crypto_bob', firstName: 'Bob', lastName: 'K.',
-    balanceMain: 5.0, totalEarnings: 11.40, todayEarnings: 0.42, tasksCompleted: 23,
-    referralCount: 2, referralCode: 'BOBK22',
-    riskScore: 5, status: 'active', createdAt: new Date(Date.now() - 15 * 86400000).toISOString(), lastActive: new Date().toISOString(),
-    withdrawalBlocked: false, verificationStatus: 'none',
-    dailyWithdrawn: 0, dailyTasksCompleted: 1
-  },
-  {
-    id: '4', telegramId: 778899, username: 'sofia_w', firstName: 'Sofia', lastName: 'W.',
-    balanceMain: 31.2, totalEarnings: 67.00, todayEarnings: 2.55, tasksCompleted: 112,
-    referralCount: 21, referralCode: 'SOFIAW',
-    riskScore: 0, status: 'active', createdAt: new Date(Date.now() - 60 * 86400000).toISOString(), lastActive: new Date().toISOString(),
-    withdrawalBlocked: false, verificationStatus: 'verified',
-    dailyWithdrawn: 0, dailyTasksCompleted: 5
-  },
-  {
-    id: '5', telegramId: 321654, username: 'max_earn', firstName: 'Max', lastName: 'D.',
-    balanceMain: 8.9, totalEarnings: 19.30, todayEarnings: 0.85, tasksCompleted: 38,
-    referralCount: 5, referralCode: 'MAXD55',
-    riskScore: 0, status: 'active', createdAt: new Date(Date.now() - 20 * 86400000).toISOString(), lastActive: new Date().toISOString(),
-    withdrawalBlocked: false, verificationStatus: 'none',
-    dailyWithdrawn: 0, dailyTasksCompleted: 2
-  },
 ];
 
 const mockTasks: Task[] = [
@@ -776,6 +744,7 @@ interface AppState {
   updateReferralMilestone: (id: string, data: Partial<ReferralMilestone>) => void;
   deleteReferralMilestone: (id: string) => void;
   initFromTelegram: (user: { id: number; first_name: string; last_name?: string; username?: string; photo_url?: string }) => void;
+  syncUserFromApi: (data: { referralCount: number }) => void;
   processIncomingReferral: (referrerId: string) => void;
 
   // Actions - View
@@ -1010,8 +979,13 @@ export const useAppStore = create<AppState>((set, get) => ({
     };
   }),
 
+  syncUserFromApi: (data) => set(s => ({
+    currentUser: { ...s.currentUser, referralCount: data.referralCount },
+    users: s.users.map(u => u.id === s.currentUser.id ? { ...u, referralCount: data.referralCount } : u),
+  })),
+
   processIncomingReferral: (_referrerId) => {
-    // placeholder — crediting the referrer requires a backend database
+    // API call is handled in App.tsx; this is a no-op placeholder
   },
 
   claimReferralMilestone: (id) => {
