@@ -733,6 +733,7 @@ interface AppState {
   completedTaskIds: string[];
   claimedReferralMilestoneIds: string[];
   usedPromoCodeIds: string[];
+  lastSyncedReferralBalance: number;
 
   // Actions - Mini App
   confirmDeposit: (txId: string, txHash: string) => void;
@@ -744,7 +745,7 @@ interface AppState {
   updateReferralMilestone: (id: string, data: Partial<ReferralMilestone>) => void;
   deleteReferralMilestone: (id: string) => void;
   initFromTelegram: (user: { id: number; first_name: string; last_name?: string; username?: string; photo_url?: string }) => void;
-  syncUserFromApi: (data: { referralCount: number }) => void;
+  syncUserFromApi: (data: { referralCount: number; referralBalance: number; flagged: boolean }) => void;
   processIncomingReferral: (referrerId: string) => void;
 
   // Actions - View
@@ -881,6 +882,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   claimedReferralMilestoneIds: [],
   usedPromoCodeIds: [],
+  lastSyncedReferralBalance: 0,
 
   // Mini App Actions
   confirmDeposit: (txId, txHash) => {
@@ -979,10 +981,22 @@ export const useAppStore = create<AppState>((set, get) => ({
     };
   }),
 
-  syncUserFromApi: (data) => set(s => ({
-    currentUser: { ...s.currentUser, referralCount: data.referralCount },
-    users: s.users.map(u => u.id === s.currentUser.id ? { ...u, referralCount: data.referralCount } : u),
-  })),
+  syncUserFromApi: (data) => set(s => {
+    // Compute bonus delta: only add what hasn't been applied yet (preserves local task earnings)
+    const delta = Math.max(0, data.referralBalance - s.lastSyncedReferralBalance);
+    const updatedUser = {
+      ...s.currentUser,
+      referralCount:  data.referralCount,
+      balanceMain:    s.currentUser.balanceMain + delta,
+      totalEarnings:  s.currentUser.totalEarnings + delta,
+      todayEarnings:  s.currentUser.todayEarnings + delta,
+    };
+    return {
+      currentUser: updatedUser,
+      users: s.users.map(u => u.id === s.currentUser.id ? updatedUser : u),
+      lastSyncedReferralBalance: data.referralBalance,
+    };
+  }),
 
   processIncomingReferral: (_referrerId) => {
     // API call is handled in App.tsx; this is a no-op placeholder
