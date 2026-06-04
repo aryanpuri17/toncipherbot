@@ -2,13 +2,12 @@ import React, { useState } from 'react';
 import { useAppStore } from '../../store/appStore';
 import { AlertCircle, Info } from 'lucide-react';
 
-type TaskType = 'join_channel' | 'join_group' | 'start_bot' | 'social';
+type TaskType = 'join_channel' | 'join_group' | 'start_bot';
 
 const TASK_TYPES: { value: TaskType; icon: string; label: string }[] = [
   { value: 'join_channel', icon: '📢', label: 'Canal Telegram' },
   { value: 'join_group',   icon: '👥', label: 'Groupe Telegram' },
   { value: 'start_bot',    icon: '🤖', label: 'Démarrer un bot' },
-  { value: 'social',       icon: '⭐', label: 'Action sociale' },
 ];
 
 export const MiniAppCreateTask: React.FC = () => {
@@ -38,8 +37,8 @@ export const MiniAppCreateTask: React.FC = () => {
   const handleSubmit = () => {
     setError('');
     if (!title.trim()) { setError('Le titre est requis'); return; }
-    if (type !== 'social' && !targetUrl.trim()) { setError("L'URL Telegram est requise"); return; }
-    if (type !== 'social' && !targetUrl.startsWith('https://t.me/')) {
+    if (!targetUrl.trim()) { setError("L'URL Telegram est requise"); return; }
+    if (!targetUrl.startsWith('https://t.me/')) {
       setError("L'URL doit commencer par https://t.me/");
       return;
     }
@@ -64,7 +63,7 @@ export const MiniAppCreateTask: React.FC = () => {
       maxCompletions: execCount,
       verificationMethod: 'auto',
       priority: 5,
-      icon: TASK_TYPES.find(t => t.value === type)?.icon ?? '⭐',
+      icon: TASK_TYPES.find(t => t.value === type)!.icon,
     });
 
     setSubmitted(true);
@@ -157,20 +156,18 @@ export const MiniAppCreateTask: React.FC = () => {
         </div>
 
         {/* URL */}
-        {type !== 'social' && (
-          <div>
-            <p className="text-xs text-slate-400 mb-2">
-              Lien {type === 'join_channel' ? 'du canal' : type === 'join_group' ? 'du groupe' : 'du bot'} *
-            </p>
-            <input
-              type="url"
-              value={targetUrl}
-              onChange={e => setTargetUrl(e.target.value)}
-              placeholder="https://t.me/votre_canal"
-              className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white text-sm font-mono placeholder:text-slate-600 focus:outline-none focus:border-blue-500/50"
-            />
-          </div>
-        )}
+        <div>
+          <p className="text-xs text-slate-400 mb-2">
+            Lien {type === 'join_channel' ? 'du canal' : type === 'join_group' ? 'du groupe' : 'du bot'} *
+          </p>
+          <input
+            type="url"
+            value={targetUrl}
+            onChange={e => setTargetUrl(e.target.value)}
+            placeholder="https://t.me/votre_canal"
+            className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white text-sm font-mono placeholder:text-slate-600 focus:outline-none focus:border-blue-500/50"
+          />
+        </div>
 
         {/* Executions */}
         <div>
