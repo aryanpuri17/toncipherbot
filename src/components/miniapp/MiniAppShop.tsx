@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { useAppStore } from '../../store/appStore';
-import { Store, ShoppingCart } from 'lucide-react';
+import { useAppStore, ShopItem } from '../../store/appStore';
+import { Store, ShoppingCart, X, AlertCircle } from 'lucide-react';
 
 const categoryLabels: Record<string, string> = {
   boosters:    '⚡ Boosters',
@@ -12,8 +12,9 @@ const categoryLabels: Record<string, string> = {
 export const MiniAppShop: React.FC = () => {
   const { shopItems, currentUser, setMiniAppPage, buyShopItem } = useAppStore();
   const [activeCategory, setActiveCategory] = useState<string>('all');
-  const [buying,    setBuying]    = useState<string | null>(null);
-  const [buyResult, setBuyResult] = useState<{ id: string; success: boolean; message: string } | null>(null);
+  const [buying,      setBuying]      = useState<string | null>(null);
+  const [buyResult,   setBuyResult]   = useState<{ id: string; success: boolean; message: string } | null>(null);
+  const [confirmItem, setConfirmItem] = useState<ShopItem | null>(null);
 
   const activeItems = shopItems.filter(i => i.isActive);
   const categories  = ['all', ...Array.from(new Set(activeItems.map(i => i.category)))];
@@ -21,6 +22,7 @@ export const MiniAppShop: React.FC = () => {
 
   const handleBuy = (itemId: string) => {
     if (buying) return;
+    setConfirmItem(null);
     setBuying(itemId);
     const result = buyShopItem(itemId);
     setTimeout(() => {
@@ -46,6 +48,65 @@ export const MiniAppShop: React.FC = () => {
           </p>
         </div>
       </div>
+
+      {/* Confirmation dialog */}
+      {confirmItem && (
+        <div className="glass-card p-4 space-y-4 border border-amber-500/30 animate-slide-up">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-bold text-white">Confirmer l'achat</p>
+            <button onClick={() => setConfirmItem(null)} className="p-1 rounded-lg hover:bg-white/5 text-slate-400">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="flex items-center gap-3 p-3 rounded-xl bg-white/3">
+            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500/15 to-purple-500/15 border border-white/10 flex items-center justify-center text-2xl flex-shrink-0">
+              {confirmItem.icon}
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-white">{confirmItem.name}</p>
+              <p className="text-xs text-slate-400">{confirmItem.description}</p>
+            </div>
+          </div>
+          <div className="flex items-center justify-between px-1">
+            <div>
+              <p className="text-xs text-slate-500">Prix</p>
+              <p className="text-lg font-bold text-amber-400">{confirmItem.price.toFixed(2)} TON</p>
+            </div>
+            <div className="text-right">
+              <p className="text-xs text-slate-500">Solde après achat</p>
+              <p className={`text-sm font-semibold ${currentUser.balanceMain - confirmItem.price < 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                {(currentUser.balanceMain - confirmItem.price).toFixed(2)} TON
+              </p>
+            </div>
+          </div>
+          {currentUser.balanceMain < confirmItem.price && (
+            <div className="flex items-center gap-2 p-2.5 rounded-lg bg-red-500/5 border border-red-500/20">
+              <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
+              <p className="text-xs text-red-400">Solde insuffisant pour cet achat</p>
+            </div>
+          )}
+          <div className="flex gap-3">
+            <button
+              onClick={() => setConfirmItem(null)}
+              className="flex-1 py-2.5 rounded-xl bg-white/5 border border-white/10 text-slate-300 text-sm font-medium hover:bg-white/10 transition-colors"
+            >
+              Annuler
+            </button>
+            <button
+              onClick={() => handleBuy(confirmItem.id)}
+              disabled={currentUser.balanceMain < confirmItem.price || !!buying}
+              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl btn-primary text-sm font-semibold text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+            >
+              {buying === confirmItem.id ? (
+                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              ) : (
+                <ShoppingCart className="w-4 h-4" />
+              )}
+              Confirmer l'achat
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Category tabs */}
       <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 no-scrollbar">
@@ -109,8 +170,8 @@ export const MiniAppShop: React.FC = () => {
                   )}
                 </div>
                 <button
-                  onClick={() => handleBuy(item.id)}
-                  disabled={!canAfford || isSoldOut || !!buying}
+                  onClick={() => { if (!isSoldOut && !buying) setConfirmItem(item); }}
+                  disabled={isSoldOut || !!buying}
                   className="flex items-center gap-1.5 px-4 py-2 rounded-xl btn-primary text-xs font-semibold text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all"
                 >
                   {isBuying ? (

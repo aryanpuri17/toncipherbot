@@ -166,125 +166,6 @@ export const MiniAppTasks: React.FC = () => {
         </div>
       </div>
 
-      {/* ── Promo Tasks ── */}
-      {promoTasks.length > 0 && (
-        <div className="space-y-3">
-          <div className="flex items-center gap-2 px-1">
-            <span className="text-sm font-bold text-white">🎯 Tâches Promo</span>
-            <span className="px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-400 text-[10px] font-semibold">Vérif. manuelle</span>
-          </div>
-          <p className="text-[10px] text-slate-500 px-1">Créées par l'équipe. Complétez la condition et soumettez votre preuve pour être récompensé.</p>
-
-          {promoTasks.map(task => {
-            const userSubmission = taskSubmissions.find(
-              s => s.taskId === task.id && s.userId === currentUser.id
-            );
-            const isApproved = userSubmission?.status === 'approved';
-            const isPending  = userSubmission?.status === 'pending';
-            const isRejected = userSubmission?.status === 'rejected';
-            const isOpen     = proofOpen === task.id;
-            const thisResult = proofResult?.taskId === task.id ? proofResult : null;
-
-            return (
-              <div key={task.id} className={`glass-card p-4 space-y-3 border ${isApproved ? 'border-emerald-500/25' : 'border-purple-500/20'}`}>
-                <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center flex-shrink-0 text-base">
-                    {task.icon ?? '🎯'}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap mb-0.5">
-                      <h3 className="text-sm font-semibold text-white">{task.title}</h3>
-                      <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-purple-500/20 text-purple-400">PROMO</span>
-                    </div>
-                    <p className="text-xs text-slate-400 leading-relaxed">{task.description}</p>
-                  </div>
-                  <span className="text-sm font-bold text-emerald-400 flex-shrink-0">+{task.reward.toFixed(2)} TON</span>
-                </div>
-
-                {task.maxCompletions && (
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1 h-1 rounded-full bg-white/10 overflow-hidden">
-                      <div
-                        className="h-full rounded-full bg-gradient-to-r from-purple-500 to-pink-500"
-                        style={{ width: `${Math.min((task.totalCompletions / task.maxCompletions) * 100, 100)}%` }}
-                      />
-                    </div>
-                    <span className="text-[10px] text-slate-500 flex-shrink-0">{task.totalCompletions}/{task.maxCompletions} places</span>
-                  </div>
-                )}
-
-                {isApproved && (
-                  <div className="flex items-center gap-2 p-2.5 rounded-lg bg-emerald-500/5 border border-emerald-500/20">
-                    <CheckCircle className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-                    <p className="text-xs font-semibold text-emerald-400">Validée — récompense créditée</p>
-                  </div>
-                )}
-
-                {isPending && (
-                  <div className="flex items-center gap-2 p-2.5 rounded-lg bg-amber-500/5 border border-amber-500/20">
-                    <Clock className="w-4 h-4 text-amber-400 flex-shrink-0" />
-                    <p className="text-xs font-semibold text-amber-400">En attente de validation par l'équipe</p>
-                  </div>
-                )}
-
-                {isRejected && (
-                  <div className="p-2.5 rounded-lg bg-red-500/5 border border-red-500/20 space-y-1">
-                    <p className="text-xs font-semibold text-red-400">Preuve refusée</p>
-                    {userSubmission?.adminNote && (
-                      <p className="text-[10px] text-red-400/70">Motif: {userSubmission.adminNote}</p>
-                    )}
-                  </div>
-                )}
-
-                {thisResult && (
-                  <p className={`text-xs font-medium ${thisResult.success ? 'text-emerald-400' : 'text-red-400'}`}>
-                    {thisResult.success ? '✓' : '✗'} {thisResult.message}
-                  </p>
-                )}
-
-                {!isApproved && !isPending && !isOpen && (
-                  <button
-                    onClick={() => { setProofOpen(task.id); setProofText(''); setProofResult(null); }}
-                    className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-purple-500/15 border border-purple-500/30 text-purple-400 text-xs font-semibold hover:bg-purple-500/25 transition-all"
-                  >
-                    <FileText className="w-3.5 h-3.5" />
-                    {isRejected ? 'Soumettre à nouveau' : 'Soumettre ma preuve'}
-                  </button>
-                )}
-
-                {isOpen && (
-                  <div className="space-y-2 border-t border-white/5 pt-3">
-                    <div className="flex items-center justify-between">
-                      <p className="text-xs font-semibold text-white">Votre preuve</p>
-                      <button onClick={() => { setProofOpen(null); setProofText(''); }} className="text-slate-500 hover:text-white">
-                        <X className="w-4 h-4" />
-                      </button>
-                    </div>
-                    <textarea
-                      value={proofText}
-                      onChange={e => setProofText(e.target.value)}
-                      placeholder="Décrivez votre preuve ou collez un lien (capture d'écran URL, message Telegram, etc.)..."
-                      rows={3}
-                      className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white text-xs resize-none focus:outline-none focus:border-purple-500/50 transition-colors placeholder:text-slate-600"
-                    />
-                    <button
-                      onClick={() => handleSubmitProof(task.id)}
-                      disabled={!proofText.trim() || proofSubmitting}
-                      className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl btn-primary text-xs font-semibold text-white disabled:opacity-40 disabled:cursor-not-allowed"
-                    >
-                      {proofSubmitting
-                        ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Envoi en cours...</>
-                        : <><Send className="w-3.5 h-3.5" /> Envoyer ma preuve</>
-                      }
-                    </button>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-
       {/* ── Filters ── */}
       <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 no-scrollbar">
         {filters.map(f => (
@@ -430,6 +311,133 @@ export const MiniAppTasks: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* ── Promo Tasks (bottom) ── */}
+      {promoTasks.length > 0 && (
+        <div className="space-y-3 pt-2">
+          {/* Visual separator */}
+          <div className="flex items-center gap-3">
+            <div className="flex-1 h-px bg-white/8" />
+            <span className="text-[10px] text-slate-600 font-medium tracking-wider uppercase">Tâches spéciales</span>
+            <div className="flex-1 h-px bg-white/8" />
+          </div>
+
+          <div className="flex items-center gap-2 px-1">
+            <span className="text-sm font-bold text-white">🎯 Tâches Promo</span>
+            <span className="px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-400 text-[10px] font-semibold">Vérif. manuelle</span>
+          </div>
+          <p className="text-[10px] text-slate-500 px-1">Créées par l'équipe. Complétez la condition et soumettez votre preuve pour être récompensé.</p>
+
+          {promoTasks.map(task => {
+            const userSubmission = taskSubmissions.find(
+              s => s.taskId === task.id && s.userId === currentUser.id
+            );
+            const isApproved = userSubmission?.status === 'approved';
+            const isPending  = userSubmission?.status === 'pending';
+            const isRejected = userSubmission?.status === 'rejected';
+            const isOpen     = proofOpen === task.id;
+            const thisResult = proofResult?.taskId === task.id ? proofResult : null;
+
+            return (
+              <div key={task.id} className={`glass-card p-4 space-y-3 border ${isApproved ? 'border-emerald-500/25' : 'border-purple-500/20'}`}>
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center flex-shrink-0 text-base">
+                    {task.icon ?? '🎯'}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                      <h3 className="text-sm font-semibold text-white">{task.title}</h3>
+                      <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-purple-500/20 text-purple-400">PROMO</span>
+                    </div>
+                    <p className="text-xs text-slate-400 leading-relaxed">{task.description}</p>
+                  </div>
+                  <span className="text-sm font-bold text-emerald-400 flex-shrink-0">+{task.reward.toFixed(2)} TON</span>
+                </div>
+
+                {task.maxCompletions && (
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 h-1 rounded-full bg-white/10 overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-purple-500 to-pink-500"
+                        style={{ width: `${Math.min((task.totalCompletions / task.maxCompletions) * 100, 100)}%` }}
+                      />
+                    </div>
+                    <span className="text-[10px] text-slate-500 flex-shrink-0">{task.totalCompletions}/{task.maxCompletions} places</span>
+                  </div>
+                )}
+
+                {isApproved && (
+                  <div className="flex items-center gap-2 p-2.5 rounded-lg bg-emerald-500/5 border border-emerald-500/20">
+                    <CheckCircle className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                    <p className="text-xs font-semibold text-emerald-400">Validée — récompense créditée</p>
+                  </div>
+                )}
+
+                {isPending && (
+                  <div className="flex items-center gap-2 p-2.5 rounded-lg bg-amber-500/5 border border-amber-500/20">
+                    <Clock className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                    <p className="text-xs font-semibold text-amber-400">En attente de validation par l'équipe</p>
+                  </div>
+                )}
+
+                {isRejected && (
+                  <div className="p-2.5 rounded-lg bg-red-500/5 border border-red-500/20 space-y-1">
+                    <p className="text-xs font-semibold text-red-400">Preuve refusée</p>
+                    {userSubmission?.adminNote && (
+                      <p className="text-[10px] text-red-400/70">Motif: {userSubmission.adminNote}</p>
+                    )}
+                  </div>
+                )}
+
+                {thisResult && (
+                  <p className={`text-xs font-medium ${thisResult.success ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {thisResult.success ? '✓' : '✗'} {thisResult.message}
+                  </p>
+                )}
+
+                {!isApproved && !isPending && !isOpen && (
+                  <button
+                    onClick={() => { setProofOpen(task.id); setProofText(''); setProofResult(null); }}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-purple-500/15 border border-purple-500/30 text-purple-400 text-xs font-semibold hover:bg-purple-500/25 transition-all"
+                  >
+                    <FileText className="w-3.5 h-3.5" />
+                    {isRejected ? 'Soumettre à nouveau' : 'Soumettre ma preuve'}
+                  </button>
+                )}
+
+                {isOpen && (
+                  <div className="space-y-2 border-t border-white/5 pt-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-semibold text-white">Votre preuve</p>
+                      <button onClick={() => { setProofOpen(null); setProofText(''); }} className="text-slate-500 hover:text-white">
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                    <textarea
+                      value={proofText}
+                      onChange={e => setProofText(e.target.value)}
+                      placeholder="Décrivez votre preuve ou collez un lien (capture d'écran URL, message Telegram, etc.)..."
+                      rows={3}
+                      className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white text-xs resize-none focus:outline-none focus:border-purple-500/50 transition-colors placeholder:text-slate-600"
+                    />
+                    <button
+                      onClick={() => handleSubmitProof(task.id)}
+                      disabled={!proofText.trim() || proofSubmitting}
+                      className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl btn-primary text-xs font-semibold text-white disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      {proofSubmitting
+                        ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Envoi en cours...</>
+                        : <><Send className="w-3.5 h-3.5" /> Envoyer ma preuve</>
+                      }
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
     </div>
   );
 };
