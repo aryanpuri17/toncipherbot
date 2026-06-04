@@ -291,6 +291,7 @@ export interface PlatformConfig {
   // Bot Settings
   botToken: string;
   botUsername: string;
+  appShortName: string;
   apiId: string;
   apiHash: string;
   databaseUrl: string;
@@ -621,7 +622,7 @@ const mockPaymentProviders: PaymentProvider[] = [
 ];
 
 const mockAdminUsers: AdminUser[] = [
-  { id: '1', telegramId: 0, username: 'super_admin', role: 'super_admin', permissions: ['*'], isActive: true, createdAt: new Date().toISOString() },
+  { id: '1', telegramId: 0, username: 'puriaryan', role: 'super_admin', permissions: ['*'], isActive: true, createdAt: new Date().toISOString() },
 ];
 
 const mockReferralMilestones: ReferralMilestone[] = [
@@ -634,6 +635,7 @@ const mockReferralMilestones: ReferralMilestone[] = [
 const mockPlatformConfig: PlatformConfig = {
   botToken: '',
   botUsername: 'TonCipher_bot',
+  appShortName: 'app',
   apiId: '',
   apiHash: '',
   databaseUrl: '',
@@ -650,7 +652,7 @@ const mockPlatformConfig: PlatformConfig = {
   referralBonusDepositPercent: 5,
   referralLevels: 3,
   referralCodeLength: 8,
-  referralLinkPrefix: 'https://t.me/toncipherbot?start=',
+  referralLinkPrefix: 'https://t.me/TonCipher_bot/app?startapp=r_',
   xpPerTask: 10,
   xpPerReferral: 50,
   xpPerDeposit: 5,
@@ -774,6 +776,7 @@ interface AppState {
   updateReferralMilestone: (id: string, data: Partial<ReferralMilestone>) => void;
   deleteReferralMilestone: (id: string) => void;
   initFromTelegram: (user: { id: number; first_name: string; last_name?: string; username?: string; photo_url?: string }) => void;
+  processIncomingReferral: (referrerId: string) => void;
 
   // Actions - View
   setCurrentView: (view: 'miniapp' | 'admin') => void;
@@ -1006,6 +1009,10 @@ export const useAppStore = create<AppState>((set, get) => ({
       users: s.users.map(u => u.id === s.currentUser.id ? { ...u, ...tgData } : u),
     };
   }),
+
+  processIncomingReferral: (_referrerId) => {
+    // placeholder — crediting the referrer requires a backend database
+  },
 
   claimReferralMilestone: (id) => {
     const state = get();

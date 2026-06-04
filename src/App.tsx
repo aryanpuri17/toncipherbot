@@ -268,7 +268,7 @@ export default function App() {
     }
 
     type TgUser = { id: number; first_name: string; last_name?: string; username?: string; photo_url?: string };
-    type TgWebApp = { ready: () => void; expand: () => void; setHeaderColor: (c: string) => void; initDataUnsafe?: { user?: TgUser } };
+    type TgWebApp = { ready: () => void; expand: () => void; setHeaderColor: (c: string) => void; initDataUnsafe?: { user?: TgUser; start_param?: string } };
     const tg = (window as unknown as { Telegram?: { WebApp?: TgWebApp } }).Telegram?.WebApp;
     if (tg) {
       tg.ready();
@@ -278,6 +278,13 @@ export default function App() {
       const tgUser = tg.initDataUnsafe?.user;
       if (tgUser) {
         initFromTelegram(tgUser);
+      }
+      const startParam = tg.initDataUnsafe?.start_param;
+      if (startParam?.startsWith('r_')) {
+        const referrerId = startParam.slice(2);
+        if (referrerId && referrerId !== String(tgUser?.id)) {
+          useAppStore.getState().processIncomingReferral(referrerId);
+        }
       }
     }
   }, []);
