@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAppStore } from '../../store/appStore';
-import { ArrowUpRight, ArrowDownLeft, ListTodo, ChevronRight, TrendingUp, Flame, Gift, Loader2 } from 'lucide-react';
+import { ArrowUpRight, ArrowDownLeft, ListTodo, ChevronRight, TrendingUp, Flame, Gift, Loader2, Users } from 'lucide-react';
 
 export const MiniAppDashboard: React.FC = () => {
   const { currentUser: u, setMiniAppPage, tasks, completedTaskIds, redeemPromoCode } = useAppStore();
@@ -59,6 +59,28 @@ export const MiniAppDashboard: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Referral invite banner */}
+      <button
+        onClick={() => setMiniAppPage('referral')}
+        className="w-full flex items-center gap-3 p-3.5 rounded-2xl bg-gradient-to-r from-purple-600/20 via-blue-600/15 to-purple-600/20 border border-purple-500/25 hover:border-purple-500/40 transition-all"
+      >
+        <div className="w-10 h-10 rounded-xl bg-purple-500/25 flex items-center justify-center shrink-0">
+          <Users className="w-5 h-5 text-purple-300" />
+        </div>
+        <div className="flex-1 text-left">
+          <p className="text-sm font-semibold text-white">Invitez vos amis</p>
+          <p className="text-xs text-purple-300">
+            {u.referralCount > 0
+              ? `${u.referralCount} ami${u.referralCount !== 1 ? 's' : ''} invité${u.referralCount !== 1 ? 's' : ''} · ${(u.referralCount * 1).toFixed(2)} TON gagnés`
+              : 'Gagnez 1 TON par ami qui s\'inscrit'}
+          </p>
+        </div>
+        <div className="shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-lg bg-purple-500/20 border border-purple-500/30">
+          <span className="text-xs font-bold text-purple-300">+1 TON</span>
+          <ChevronRight className="w-3.5 h-3.5 text-purple-400" />
+        </div>
+      </button>
 
       {/* Quick Stats */}
       <div className="grid grid-cols-2 gap-3">

@@ -119,7 +119,7 @@ const MiniAppPageContent: React.FC = () => {
     case 'withdraw':      return <MiniAppWithdraw />;
     case 'history':       return <MiniAppHistory />;
     case 'tasks':         return <MiniAppTasks />;
-    case 'leaderboard':   return <MiniAppLeaderboard />;
+    case 'leaderboard':   return <MiniAppReferral />;
     case 'profile':       return <MiniAppProfile />;
     case 'createTask':    return <MiniAppCreateTask />;
     case 'myTasks':       return <MiniAppMyTasks />;

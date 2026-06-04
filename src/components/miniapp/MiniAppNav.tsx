@@ -1,25 +1,25 @@
 import React from 'react';
 import { useAppStore } from '../../store/appStore';
-import { LayoutDashboard, Wallet, ListTodo, Trophy, User } from 'lucide-react';
+import { LayoutDashboard, Wallet, ListTodo, Users, User } from 'lucide-react';
 
 const navItems = [
-  { id: 'dashboard', label: 'Home', icon: LayoutDashboard },
-  { id: 'wallet', label: 'Wallet', icon: Wallet },
-  { id: 'tasks', label: 'Tâches', icon: ListTodo },
-  { id: 'leaderboard', label: 'Rang', icon: Trophy },
-  { id: 'profile', label: 'Profil', icon: User },
+  { id: 'dashboard',  label: 'Home',   icon: LayoutDashboard },
+  { id: 'tasks',      label: 'Tâches', icon: ListTodo },
+  { id: 'referral',   label: 'Amis',   icon: Users },
+  { id: 'wallet',     label: 'Wallet', icon: Wallet },
+  { id: 'profile',    label: 'Profil', icon: User },
 ];
 
 const subPageToNav: Record<string, string> = {
-  deposit: 'wallet',
-  withdraw: 'wallet',
-  history: 'wallet',
-  createTask: 'tasks',
-  myTasks: 'tasks',
-  referral: 'profile',
-  shop: 'profile',
+  deposit:       'wallet',
+  withdraw:      'wallet',
+  history:       'wallet',
+  createTask:    'tasks',
+  myTasks:       'tasks',
+  leaderboard:   'referral',
+  shop:          'profile',
   notifications: 'profile',
-  settings: 'profile',
+  settings:      'profile',
 };
 
 export const MiniAppNav: React.FC = () => {
