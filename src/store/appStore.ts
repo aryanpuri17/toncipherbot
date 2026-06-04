@@ -457,7 +457,7 @@ const mockFraudAlerts: FraudAlert[] = [];
 
 const mockCryptoNetworks: CryptoNetwork[] = [
   { id: '1', name: 'Toncoin', symbol: 'TON', network: 'TON', isActive: true, isDepositEnabled: true, isWithdrawalEnabled: true, minDeposit: 1, maxDeposit: 10000, minWithdrawal: 5, maxWithdrawal: 5000, withdrawalFee: 0.5, withdrawalFeeType: 'fixed', requiredConfirmations: 12, dailyWithdrawalLimit: 10000, autoWithdrawal: true, autoWithdrawalThreshold: 100, hotWalletBalance: 0, coldWalletBalance: 0, hotWalletAddress: '', coldWalletAddress: '', explorerUrl: 'https://tonscan.org/tx/', decimals: 9, priority: 1 },
-  { id: '2', name: 'Tether Polygon', symbol: 'USDT', network: 'POLYGON', isActive: true, isDepositEnabled: true, isWithdrawalEnabled: true, minDeposit: 5, maxDeposit: 50000, minWithdrawal: 10, maxWithdrawal: 25000, withdrawalFee: 1.0, withdrawalFeeType: 'fixed', requiredConfirmations: 20, dailyWithdrawalLimit: 50000, autoWithdrawal: true, autoWithdrawalThreshold: 500, hotWalletBalance: 0, coldWalletBalance: 0, hotWalletAddress: '', coldWalletAddress: '', explorerUrl: 'https://polygonscan.com/tx/', decimals: 6, contractAddress: '0xc2132D05D31c914a87C6611C10748AEb04B58e8F', priority: 2 },
+  { id: '2', name: 'Tether USD (TON)', symbol: 'USDT', network: 'TON', isActive: true, isDepositEnabled: true, isWithdrawalEnabled: true, minDeposit: 5, maxDeposit: 50000, minWithdrawal: 10, maxWithdrawal: 25000, withdrawalFee: 1.0, withdrawalFeeType: 'fixed', requiredConfirmations: 12, dailyWithdrawalLimit: 50000, autoWithdrawal: false, autoWithdrawalThreshold: 500, hotWalletBalance: 0, coldWalletBalance: 0, hotWalletAddress: '', coldWalletAddress: '', explorerUrl: 'https://tonscan.org/tx/', decimals: 6, contractAddress: '0:b113a994b5024a16719f69139328eb759596c38a25f5972a7e5b7892d4b7a09e', priority: 2 },
 ];
 
 const mockLevelConfigs: LevelConfig[] = [
@@ -683,6 +683,7 @@ interface AppState {
   claimedReferralMilestoneIds: string[];
 
   // Actions - Mini App
+  confirmDeposit: (txId: string, txHash: string) => void;
   completeTask: (taskId: string) => void;
   submitWithdrawal: (networkId: string, amount: number, address: string) => { success: boolean; error?: string };
   claimReferralMilestone: (id: string) => void;
@@ -815,6 +816,30 @@ export const useAppStore = create<AppState>((set, get) => ({
   claimedReferralMilestoneIds: [],
 
   // Mini App Actions
+  confirmDeposit: (txId, txHash) => {
+    const state = get();
+    const tx = state.transactions.find(t => t.id === txId);
+    if (!tx || tx.status === 'completed') return;
+    const balanceUpdate = {
+      balanceMain: state.currentUser.balanceMain + tx.amount,
+      totalEarnings: state.currentUser.totalEarnings + tx.amount,
+    };
+    set(s => ({
+      transactions: s.transactions.map(t =>
+        t.id === txId ? { ...t, status: 'completed', txHash, completedAt: new Date().toISOString() } : t
+      ),
+      currentUser: s.currentUser.id === tx.userId ? { ...s.currentUser, ...balanceUpdate } : s.currentUser,
+      users: s.users.map(u => u.id === tx.userId ? { ...u, ...balanceUpdate } : u),
+    }));
+    get().addNotification({
+      userId: tx.userId,
+      type: 'deposit',
+      title: 'Dépôt confirmé! 🎉',
+      message: `+${tx.amount.toFixed(2)} ${tx.currency} crédité sur votre compte.`,
+      isRead: false,
+    });
+  },
+
   completeTask: (taskId) => {
     const state = get();
     const task = state.tasks.find(t => t.id === taskId);

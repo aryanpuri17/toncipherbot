@@ -26,6 +26,7 @@ import { MiniAppReferral } from './components/miniapp/MiniAppReferral';
 
 import { Bell, Menu, Settings, ChevronRight, Globe, Info, Wallet } from 'lucide-react';
 import { useTonConnectUI, useTonWallet } from '@tonconnect/ui-react';
+import { useDepositMonitor } from './hooks/useDepositMonitor';
 
 const MiniAppSettings: React.FC = () => {
   const { setMiniAppPage } = useAppStore();
@@ -205,15 +206,18 @@ const MiniAppHeader: React.FC = () => {
   );
 };
 
-const MiniApp: React.FC = () => (
-  <div className="mini-app-bg min-h-screen max-w-lg mx-auto relative">
-    <MiniAppHeader />
-    <div className="px-4 pt-4 pb-24">
-      <MiniAppPageContent />
+const MiniApp: React.FC = () => {
+  useDepositMonitor(); // polls TonAPI every 30s to auto-confirm pending deposits
+  return (
+    <div className="mini-app-bg min-h-screen max-w-lg mx-auto relative">
+      <MiniAppHeader />
+      <div className="px-4 pt-4 pb-24">
+        <MiniAppPageContent />
+      </div>
+      <MiniAppNav />
     </div>
-    <MiniAppNav />
-  </div>
-);
+  );
+};
 
 export default function App() {
   const { currentView, setCurrentView, initFromTelegram } = useAppStore();

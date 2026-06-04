@@ -76,19 +76,30 @@ export const MiniAppDeposit: React.FC = () => {
   const tonWallet = useTonWallet();
   const [selectedId, setSelectedId] = useState('1');
   const [copied, setCopied] = useState(false);
-  const [tonAmount, setTonAmount] = useState('');
+  const [depositAmount, setDepositAmount] = useState('');
   const [txStatus, setTxStatus] = useState<'idle' | 'pending' | 'success' | 'error'>('idle');
   const [txError, setTxError] = useState('');
+  const [successMsg, setSuccessMsg] = useState('');
 
   const depositNetworks = cryptoNetworks.filter(n => n.isActive && n.isDepositEnabled);
   const selected = depositNetworks.find(n => n.id === selectedId) ?? depositNetworks[0];
-  const isTON = selected?.symbol === 'TON';
+  const isNativeTON = selected?.symbol === 'TON';
+  const isUSDT_TON = selected?.symbol === 'USDT' && selected?.network === 'TON';
+  const isOtherNetwork = !isNativeTON && !isUSDT_TON;
 
-  const address = selected?.hotWalletAddress || '';
+  // For TON-based networks, the TON network's hotWalletAddress is used for USDT/TON too
+  const tonNet = cryptoNetworks.find(n => n.symbol === 'TON' && n.isActive);
+  const address = isNativeTON
+    ? (selected?.hotWalletAddress ?? '')
+    : isUSDT_TON
+    ? (selected?.hotWalletAddress || tonNet?.hotWalletAddress || '')
+    : (selected?.hotWalletAddress ?? '');
   const hasAddress = address.length > 0;
   const isWalletConnected = !!tonWallet;
+  const connectedAddr = tonWallet?.account.address ?? '';
 
-  const shortAddress = (addr: string) => addr.length > 12 ? `${addr.slice(0, 6)}...${addr.slice(-4)}` : addr;
+  const shortAddress = (addr: string) =>
+    addr.length > 12 ? `${addr.slice(0, 6)}...${addr.slice(-4)}` : addr;
 
   const handleCopy = () => {
     if (!hasAddress) return;
@@ -97,8 +108,17 @@ export const MiniAppDeposit: React.FC = () => {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleTonConnectDeposit = async () => {
-    const amount = parseFloat(tonAmount);
+  const networkIcon = (symbol: string, network: string) => {
+    if (symbol === 'TON') return '💎';
+    if (symbol === 'USDT' && network === 'TON') return '💵';
+    if (network === 'POLYGON') return '🟣';
+    if (network === 'BEP20') return '🟡';
+    return '💵';
+  };
+
+  // TON native — send via TonKeeper
+  const handleTonDeposit = async () => {
+    const amount = parseFloat(depositAmount);
     if (!amount || amount < (selected?.minDeposit ?? 1)) {
       setTxError(`Minimum: ${selected?.minDeposit} TON`);
       return;
@@ -112,10 +132,7 @@ export const MiniAppDeposit: React.FC = () => {
     try {
       await tonConnectUI.sendTransaction({
         validUntil: Math.floor(Date.now() / 1000) + 600,
-        messages: [{
-          address,
-          amount: Math.floor(amount * 1e9).toString(),
-        }],
+        messages: [{ address, amount: Math.floor(amount * 1e9).toString() }],
       });
       addTransaction({
         userId: currentUser.id,
@@ -124,8 +141,9 @@ export const MiniAppDeposit: React.FC = () => {
         currency: 'TON',
         network: 'TON',
         status: 'confirming',
-        address: tonWallet?.account.address ?? '',
+        address: connectedAddr, // sender — used for matching in monitor
       });
+      setSuccessMsg(`${amount} TON envoyés. Confirmation blockchain en cours…`);
       setTxStatus('success');
     } catch {
       setTxStatus('error');
@@ -133,23 +151,52 @@ export const MiniAppDeposit: React.FC = () => {
     }
   };
 
-  const networkIcon = (symbol: string, network: string) => {
-    if (symbol === 'TON') return '💎';
-    if (network === 'POLYGON') return '🟣';
-    if (network === 'BEP20') return '🟡';
-    return '💵';
+  // USDT/TON — user sends manually from TonKeeper, we register pending tx for auto-detection
+  const handleRegisterUSDT = () => {
+    const amount = parseFloat(depositAmount);
+    if (!amount || amount < (selected?.minDeposit ?? 5)) {
+      setTxError(`Minimum: ${selected?.minDeposit} USDT`);
+      return;
+    }
+    if (!hasAddress) {
+      setTxError("Adresse de la plateforme non configurée — contactez l'admin.");
+      return;
+    }
+    setTxError('');
+    addTransaction({
+      userId: currentUser.id,
+      type: 'deposit',
+      amount,
+      currency: 'USDT',
+      network: 'TON',
+      status: 'pending',
+      address: connectedAddr, // sender — used for auto-detection
+    });
+    setSuccessMsg(`Dépôt de ${amount} USDT enregistré. Il sera confirmé automatiquement après réception.`);
+    setTxStatus('success');
+  };
+
+  const goBack = () => {
+    setTxStatus('idle');
+    setDepositAmount('');
+    setTxError('');
+    useAppStore.getState().setMiniAppPage('wallet');
   };
 
   if (txStatus === 'success') {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4 animate-slide-up">
         <div className="text-5xl">✅</div>
-        <h2 className="text-xl font-bold text-white">Transaction envoyée!</h2>
-        <p className="text-sm text-slate-400 text-center px-4">
-          Votre dépôt de {tonAmount} TON est en cours de confirmation sur la blockchain.
-        </p>
-        <button onClick={() => { setTxStatus('idle'); setTonAmount(''); useAppStore.getState().setMiniAppPage('wallet'); }}
-          className="btn-primary px-6 py-3 rounded-xl text-sm font-semibold text-white">
+        <h2 className="text-xl font-bold text-white">
+          {isNativeTON ? 'Transaction envoyée!' : 'Dépôt enregistré!'}
+        </h2>
+        <p className="text-sm text-slate-400 text-center px-4">{successMsg}</p>
+        <div className="p-3 rounded-lg bg-blue-500/5 border border-blue-500/20 w-full max-w-xs">
+          <p className="text-xs text-blue-400 text-center">
+            🔄 Votre solde sera mis à jour automatiquement après confirmation.
+          </p>
+        </div>
+        <button onClick={goBack} className="btn-primary px-6 py-3 rounded-xl text-sm font-semibold text-white">
           Retour au wallet
         </button>
       </div>
@@ -159,7 +206,8 @@ export const MiniAppDeposit: React.FC = () => {
   return (
     <div className="space-y-5 animate-slide-up">
       <div className="flex items-center gap-3">
-        <button onClick={() => useAppStore.getState().setMiniAppPage('wallet')} className="p-2 rounded-lg hover:bg-white/5 text-slate-400">←</button>
+        <button onClick={() => useAppStore.getState().setMiniAppPage('wallet')}
+          className="p-2 rounded-lg hover:bg-white/5 text-slate-400">←</button>
         <h1 className="text-xl font-bold text-white">Déposer</h1>
       </div>
 
@@ -168,7 +216,8 @@ export const MiniAppDeposit: React.FC = () => {
         <p className="text-xs text-slate-400 mb-2">Sélectionnez le réseau</p>
         <div className="grid grid-cols-3 gap-2">
           {depositNetworks.map(net => (
-            <button key={net.id} onClick={() => { setSelectedId(net.id); setTxStatus('idle'); setTxError(''); }}
+            <button key={net.id}
+              onClick={() => { setSelectedId(net.id); setTxStatus('idle'); setTxError(''); setDepositAmount(''); }}
               className={`p-3 rounded-xl text-center transition-all ${selectedId === net.id ? 'bg-blue-500/15 border border-blue-500/40 text-white' : 'glass-card-light text-slate-400 hover:text-white'}`}>
               <span className="text-xl block mb-1">{networkIcon(net.symbol, net.network)}</span>
               <span className="text-xs font-medium">{net.symbol}</span>
@@ -178,23 +227,22 @@ export const MiniAppDeposit: React.FC = () => {
         </div>
       </div>
 
-      {/* TON Connect method (TON network only) */}
-      {isTON && (
+      {/* ── Native TON via TonKeeper ──────────────────────────────── */}
+      {isNativeTON && (
         <div className="glass-card p-5 space-y-4">
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-base">💎</span>
-            <h3 className="text-sm font-semibold text-white">Dépôt via TonKeeper</h3>
-            <span className="ml-auto px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/20 text-blue-400 border border-blue-500/30">Recommandé</span>
+          <div className="flex items-center gap-2">
+            <span>💎</span>
+            <h3 className="text-sm font-semibold text-white">Dépôt TON via TonKeeper</h3>
+            <span className="ml-auto px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/20 text-blue-400 border border-blue-500/30">
+              Auto-détecté
+            </span>
           </div>
 
-          {/* Wallet connect status */}
           {isWalletConnected ? (
             <div className="flex items-center justify-between p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-emerald-400" />
-                <span className="text-xs text-emerald-400 font-medium">
-                  {shortAddress(tonWallet.account.address)}
-                </span>
+                <span className="text-xs text-emerald-400 font-medium">{shortAddress(connectedAddr)}</span>
               </div>
               <button onClick={() => tonConnectUI.disconnect()}
                 className="flex items-center gap-1 text-[10px] text-slate-400 hover:text-red-400 transition-colors">
@@ -204,8 +252,7 @@ export const MiniAppDeposit: React.FC = () => {
           ) : (
             <button onClick={() => tonConnectUI.openModal()}
               className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-blue-500/15 border border-blue-500/30 text-blue-400 text-sm font-semibold hover:bg-blue-500/25 transition-all">
-              <Wallet className="w-4 h-4" />
-              Connecter TonKeeper
+              <Wallet className="w-4 h-4" /> Connecter TonKeeper
             </button>
           )}
 
@@ -214,8 +261,92 @@ export const MiniAppDeposit: React.FC = () => {
               <div>
                 <p className="text-xs text-slate-400 mb-2">Montant (TON)</p>
                 <input type="number" step="0.1" min={selected?.minDeposit ?? 1}
-                  value={tonAmount} onChange={e => { setTonAmount(e.target.value); setTxError(''); }}
+                  value={depositAmount}
+                  onChange={e => { setDepositAmount(e.target.value); setTxError(''); }}
                   placeholder={`Min: ${selected?.minDeposit ?? 1} TON`}
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white text-lg font-semibold placeholder:text-slate-600 focus:outline-none focus:border-blue-500/50" />
+              </div>
+              {txError && (
+                <div className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/20">
+                  <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
+                  <p className="text-xs text-red-400">{txError}</p>
+                </div>
+              )}
+              {!hasAddress && (
+                <p className="text-[10px] text-amber-400 text-center">
+                  ⚠️ L'adresse de la plateforme n'est pas encore configurée par l'admin.
+                </p>
+              )}
+              <button onClick={handleTonDeposit}
+                disabled={txStatus === 'pending' || !depositAmount || !hasAddress}
+                className="w-full btn-primary py-3.5 rounded-xl text-sm font-semibold text-white disabled:opacity-40 disabled:cursor-not-allowed">
+                {txStatus === 'pending' ? '⏳ En attente de signature…' : `Envoyer ${depositAmount || '0'} TON`}
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* ── USDT/TON Jetton ──────────────────────────────────────── */}
+      {isUSDT_TON && (
+        <div className="glass-card p-5 space-y-4">
+          <div className="flex items-center gap-2">
+            <span>💵</span>
+            <h3 className="text-sm font-semibold text-white">Dépôt USDT (TON Jetton)</h3>
+            <span className="ml-auto px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+              Auto-détecté
+            </span>
+          </div>
+
+          <div className="p-3 rounded-lg bg-blue-500/5 border border-blue-500/20 text-xs text-blue-400">
+            Connectez TonKeeper pour que votre dépôt soit détecté automatiquement.
+          </div>
+
+          {/* TonKeeper connection */}
+          {isWalletConnected ? (
+            <div className="flex items-center justify-between p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-emerald-400" />
+                <span className="text-xs text-emerald-400 font-medium">{shortAddress(connectedAddr)}</span>
+              </div>
+              <button onClick={() => tonConnectUI.disconnect()}
+                className="flex items-center gap-1 text-[10px] text-slate-400 hover:text-red-400 transition-colors">
+                <Unlink className="w-3 h-3" /> Déconnecter
+              </button>
+            </div>
+          ) : (
+            <button onClick={() => tonConnectUI.openModal()}
+              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-blue-500/15 border border-blue-500/30 text-blue-400 text-sm font-semibold hover:bg-blue-500/25 transition-all">
+              <Wallet className="w-4 h-4" /> Connecter TonKeeper
+            </button>
+          )}
+
+          {hasAddress && (
+            <>
+              <div>
+                <p className="text-xs text-slate-400 mb-1.5">Adresse de dépôt USDT</p>
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 px-3 py-2.5 bg-white/5 rounded-lg text-xs text-white font-mono truncate">{address}</div>
+                  <button onClick={handleCopy} className="p-2.5 rounded-lg bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 transition-colors">
+                    {copied ? <CheckCircle className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-3 rounded-lg bg-amber-500/5 border border-amber-500/20">
+                <p className="text-xs text-amber-400">⚠️ Envoyez uniquement du USDT sur le réseau TON (Jetton). Tout autre token sera perdu.</p>
+              </div>
+            </>
+          )}
+
+          {isWalletConnected && (
+            <>
+              <div>
+                <p className="text-xs text-slate-400 mb-2">Montant envoyé (USDT)</p>
+                <input type="number" step="1" min={selected?.minDeposit ?? 5}
+                  value={depositAmount}
+                  onChange={e => { setDepositAmount(e.target.value); setTxError(''); }}
+                  placeholder={`Min: ${selected?.minDeposit ?? 5} USDT`}
                   className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white text-lg font-semibold placeholder:text-slate-600 focus:outline-none focus:border-blue-500/50" />
               </div>
 
@@ -226,24 +357,33 @@ export const MiniAppDeposit: React.FC = () => {
                 </div>
               )}
 
-              <button onClick={handleTonConnectDeposit} disabled={txStatus === 'pending' || !tonAmount}
-                className="w-full btn-primary py-3.5 rounded-xl text-sm font-semibold text-white disabled:opacity-40 disabled:cursor-not-allowed">
-                {txStatus === 'pending' ? '⏳ En attente de signature...' : `Envoyer ${tonAmount || '0'} TON`}
-              </button>
-
               {!hasAddress && (
-                <p className="text-[10px] text-amber-400 text-center">⚠️ L'adresse de la plateforme n'est pas encore configurée par l'admin.</p>
+                <p className="text-[10px] text-amber-400 text-center">
+                  ⚠️ Adresse de la plateforme non configurée par l'admin.
+                </p>
               )}
+
+              <button onClick={handleRegisterUSDT}
+                disabled={!depositAmount || !hasAddress}
+                className="w-full btn-primary py-3.5 rounded-xl text-sm font-semibold text-white disabled:opacity-40 disabled:cursor-not-allowed">
+                J'ai envoyé {depositAmount || '0'} USDT — Enregistrer
+              </button>
             </>
+          )}
+
+          {!isWalletConnected && !hasAddress && (
+            <div className="flex flex-col items-center gap-3 py-2">
+              <AlertCircle className="w-8 h-8 text-amber-400" />
+              <p className="text-xs text-slate-400 text-center">Adresse non configurée. Contactez l'admin.</p>
+            </div>
           )}
         </div>
       )}
 
-      {/* Manual deposit for non-TON networks */}
-      {!isTON && (
+      {/* ── Other networks (manual, no auto-detection) ───────────── */}
+      {isOtherNetwork && (
         <div className="glass-card p-5 space-y-4">
           <h3 className="text-sm font-semibold text-white">Dépôt {selected?.symbol ?? ''}</h3>
-
           {hasAddress ? (
             <>
               <p className="text-xs text-slate-400">
@@ -268,7 +408,7 @@ export const MiniAppDeposit: React.FC = () => {
             <div className="flex flex-col items-center gap-3 py-4">
               <AlertCircle className="w-10 h-10 text-amber-400" />
               <p className="text-sm text-amber-400 font-medium text-center">Adresse non configurée</p>
-              <p className="text-xs text-slate-400 text-center">L'administrateur doit configurer l'adresse du wallet dans Admin → Crypto & Réseaux.</p>
+              <p className="text-xs text-slate-400 text-center">L'administrateur doit configurer l'adresse dans Admin → Crypto & Réseaux.</p>
             </div>
           )}
         </div>
