@@ -566,7 +566,7 @@ const mockPlatformConfig: PlatformConfig = {
   mainGroup: '@teletask_discuss',
   supportBot: '@teletask_support',
   announcementChannel: '@teletask_news',
-  mainWallet: 'EQC...main_wallet',
+  mainWallet: '',
   hotWalletThreshold: 10000,
   coldWalletThreshold: 100000,
   referralBonusSignup: 1.00,

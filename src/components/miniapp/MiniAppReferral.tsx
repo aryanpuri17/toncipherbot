@@ -3,10 +3,10 @@ import { useAppStore } from '../../store/appStore';
 import { Copy, Check, Users, Gift, Lock, ChevronRight } from 'lucide-react';
 
 export const MiniAppReferral: React.FC = () => {
-  const { setMiniAppPage, currentUser, referralMilestones, claimedReferralMilestoneIds, claimReferralMilestone } = useAppStore();
+  const { setMiniAppPage, currentUser, referralMilestones, claimedReferralMilestoneIds, claimReferralMilestone, platformConfig } = useAppStore();
   const [copied, setCopied] = useState(false);
 
-  const referralLink = `https://t.me/toncipherbot?start=${currentUser.referralCode}`;
+  const referralLink = `${platformConfig.referralLinkPrefix}${currentUser.referralCode}`;
 
   const handleCopy = () => {
     navigator.clipboard.writeText(referralLink).catch(() => {});

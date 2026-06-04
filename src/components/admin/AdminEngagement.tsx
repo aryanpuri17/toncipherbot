@@ -173,6 +173,11 @@ export const AdminShop: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {shopItems.length === 0 && (
+          <div className="col-span-full glass-card p-10 text-center">
+            <p className="text-sm text-slate-500">Aucun article dans la boutique pour l'instant</p>
+          </div>
+        )}
         {shopItems.map(item => (
           <div key={item.id} className="glass-card p-5">
             <div className="flex items-center justify-between mb-3">
@@ -265,6 +270,11 @@ export const AdminChannels: React.FC = () => {
       </div>
 
       <div className="space-y-3">
+        {channels.length === 0 && (
+          <div className="glass-card p-10 text-center">
+            <p className="text-sm text-slate-500">Aucun canal ou groupe configuré pour l'instant</p>
+          </div>
+        )}
         {channels.map(ch => (
           <div key={ch.id} className="glass-card p-5">
             <div className="flex items-center gap-4">

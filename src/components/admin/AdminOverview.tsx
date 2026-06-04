@@ -68,14 +68,14 @@ export const AdminOverview: React.FC = () => {
         />
         <StatCard
           title="Dépôts totaux"
-          value={`${(totalDeposits / 1000).toFixed(2)}K TON`}
+          value={totalDeposits >= 1000 ? `${(totalDeposits / 1000).toFixed(2)}K TON` : `${totalDeposits.toFixed(2)} TON`}
           subtitle="Tous réseaux confondus"
           icon={<ArrowDownToLine className="w-5 h-5" />}
           color="green"
         />
         <StatCard
           title="Retraits totaux"
-          value={`${(totalWithdrawals / 1000).toFixed(2)}K TON`}
+          value={totalWithdrawals >= 1000 ? `${(totalWithdrawals / 1000).toFixed(2)}K TON` : `${totalWithdrawals.toFixed(2)} TON`}
           subtitle="Traitement automatique"
           icon={<ArrowUpFromLine className="w-5 h-5" />}
           color="orange"

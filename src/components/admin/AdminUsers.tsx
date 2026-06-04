@@ -72,6 +72,13 @@ export const AdminUsers: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
+                {filtered.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-10 text-center text-sm text-slate-500">
+                      {search || statusFilter !== 'all' ? 'Aucun utilisateur correspondant à la recherche' : 'Aucun utilisateur pour l\'instant'}
+                    </td>
+                  </tr>
+                )}
                 {filtered.map(user => (
                   <tr key={user.id} className={`table-row border-b border-white/[0.03] cursor-pointer ${selectedUser === user.id ? 'bg-blue-500/5' : ''}`} onClick={() => setSelectedUser(user.id)}>
                     <td className="px-4 py-3">
