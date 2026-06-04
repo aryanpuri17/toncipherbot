@@ -269,7 +269,7 @@ export default function App() {
       if (!isAdminRoute) setCurrentView('miniapp');
 
       type TgUser = { id: number; first_name: string; last_name?: string; username?: string; photo_url?: string };
-      type TgWebApp = { ready: () => void; expand: () => void; setHeaderColor: (c: string) => void; initDataUnsafe?: { user?: TgUser; start_param?: string } };
+      type TgWebApp = { ready: () => void; expand: () => void; setHeaderColor: (c: string) => void; initData: string; initDataUnsafe?: { user?: TgUser; start_param?: string } };
       const tg = (window as unknown as { Telegram?: { WebApp?: TgWebApp } }).Telegram?.WebApp;
       if (!tg) return;
 
@@ -283,6 +283,8 @@ export default function App() {
 
       initFromTelegram(tgUser);
 
+      const initData = tg.initData ?? '';
+
       // Sync user with backend — creates/updates user record and returns referral count
       try {
         const res = await fetch(`${API}/api/user/init`, {
@@ -293,6 +295,7 @@ export default function App() {
             username:   tgUser.username ?? '',
             firstName:  tgUser.first_name,
             lastName:   tgUser.last_name ?? '',
+            initData,
           }),
         });
         if (res.ok) {
@@ -313,9 +316,10 @@ export default function App() {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                referrerId:       referrerId,
-                refereeId:        tgUser.id,
-                refereeUsername:  tgUser.username ?? `user${tgUser.id}`,
+                referrerId,
+                refereeId:       tgUser.id,
+                refereeUsername: tgUser.username ?? `user${tgUser.id}`,
+                initData,
               }),
             });
           } catch {

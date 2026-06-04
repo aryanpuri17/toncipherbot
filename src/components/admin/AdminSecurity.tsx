@@ -1,24 +1,70 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAppStore } from '../../store/appStore';
 import { StatusBadge } from '../ui/StatusBadge';
 import { ToggleSwitch } from '../ui/ToggleSwitch';
-import { Shield, AlertTriangle, UserX, Eye, Ban, FileText, Search, Plus, Edit2, Trash2 } from 'lucide-react';
+import { Shield, AlertTriangle, UserX, Eye, Ban, FileText, Search, Plus, Edit2, Trash2, RefreshCw, CheckCircle } from 'lucide-react';
+
+type ApiAlert = {
+  id: number;
+  telegram_id: number;
+  username: string;
+  alert_type: string;
+  details: string;
+  severity: 'critical' | 'high' | 'medium' | 'low';
+  risk_score: number;
+  resolved: boolean;
+  banned: boolean;
+  created_at: string;
+};
 
 export const AdminAntiFraud: React.FC = () => {
-  const { fraudAlerts, updateFraudAlert, antiFraudRules, updateAntiFraudRule, deleteAntiFraudRule, openModal } = useAppStore();
+  const { antiFraudRules, updateAntiFraudRule, deleteAntiFraudRule, openModal } = useAppStore();
+
+  const [alerts, setAlerts] = useState<ApiAlert[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState<'all' | 'unresolved'>('unresolved');
+
+  const fetchAlerts = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/admin/fraud-alerts');
+      if (res.ok) setAlerts(await res.json() as ApiAlert[]);
+    } catch { /* backend unavailable */ }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { void fetchAlerts(); }, [fetchAlerts]);
+
+  const handleAction = async (alertId: number, action: 'resolve' | 'ban') => {
+    try {
+      await fetch(`/api/admin/fraud-alerts/${alertId}/resolve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      });
+      await fetchAlerts();
+    } catch { /* ignore */ }
+  };
+
+  const displayed = filter === 'unresolved' ? alerts.filter(a => !a.resolved) : alerts;
 
   const severityCounts = {
-    critical: fraudAlerts.filter(a => a.severity === 'critical').length,
-    high: fraudAlerts.filter(a => a.severity === 'high').length,
-    medium: fraudAlerts.filter(a => a.severity === 'medium').length,
-    low: fraudAlerts.filter(a => a.severity === 'low').length,
+    critical: alerts.filter(a => a.severity === 'critical' && !a.resolved).length,
+    high:     alerts.filter(a => a.severity === 'high'     && !a.resolved).length,
+    medium:   alerts.filter(a => a.severity === 'medium'   && !a.resolved).length,
+    low:      alerts.filter(a => a.severity === 'low'      && !a.resolved).length,
   };
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div>
-        <h2 className="text-2xl font-bold text-white">Anti-Fraude</h2>
-        <p className="text-slate-400 text-sm mt-1">Surveillance et détection des fraudes</p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h2 className="text-2xl font-bold text-white">Anti-Fraude</h2>
+          <p className="text-slate-400 text-sm mt-1">Surveillance et détection des fraudes</p>
+        </div>
+        <button onClick={() => void fetchAlerts()} className="p-2 rounded-lg hover:bg-white/5 text-slate-400 transition-colors" title="Actualiser">
+          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+        </button>
       </div>
 
       {/* Severity Overview */}
@@ -44,7 +90,7 @@ export const AdminAntiFraud: React.FC = () => {
       {/* Anti-Fraud Rules */}
       <div className="glass-card p-5">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-semibold text-white">Règles de détection</h3>
+          <h3 className="text-sm font-semibold text-white">Règles de détection actives</h3>
           <button onClick={() => openModal('antiFraudRule')} className="text-xs text-blue-400 flex items-center gap-1 hover:underline">
             <Plus className="w-3 h-3" /> Ajouter
           </button>
@@ -72,50 +118,69 @@ export const AdminAntiFraud: React.FC = () => {
         </div>
       </div>
 
+      {/* Alerts filter */}
+      <div className="flex gap-2">
+        {(['unresolved', 'all'] as const).map(f => (
+          <button
+            key={f}
+            onClick={() => setFilter(f)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${filter === f ? 'bg-blue-500/20 text-blue-400' : 'text-slate-400 hover:bg-white/5'}`}
+          >
+            {f === 'unresolved' ? 'Non résolues' : 'Toutes'}
+          </button>
+        ))}
+      </div>
+
       {/* Alerts List */}
       <div className="space-y-3">
-        {fraudAlerts.length === 0 && (
+        {loading && (
           <div className="glass-card p-8 text-center">
-            <Shield className="w-8 h-8 text-slate-600 mx-auto mb-2" />
-            <p className="text-sm text-slate-500">Aucune alerte de fraude détectée</p>
+            <div className="w-6 h-6 border-2 border-blue-500/30 border-t-blue-400 rounded-full animate-spin mx-auto mb-2" />
+            <p className="text-sm text-slate-500">Chargement des alertes…</p>
           </div>
         )}
-        {fraudAlerts.map(alert => (
-          <div key={alert.id} className={`glass-card p-5 ${alert.severity === 'critical' ? 'border-red-500/20' : alert.severity === 'high' ? 'border-orange-500/20' : ''}`}>
+        {!loading && displayed.length === 0 && (
+          <div className="glass-card p-8 text-center">
+            <Shield className="w-8 h-8 text-slate-600 mx-auto mb-2" />
+            <p className="text-sm text-slate-500">
+              {filter === 'unresolved' ? 'Aucune alerte non résolue' : 'Aucune alerte de fraude détectée'}
+            </p>
+          </div>
+        )}
+        {!loading && displayed.map(alert => (
+          <div key={alert.id} className={`glass-card p-5 ${alert.severity === 'critical' ? 'border-red-500/20' : alert.severity === 'high' ? 'border-orange-500/20' : ''} ${alert.resolved ? 'opacity-50' : ''}`}>
             <div className="flex flex-col sm:flex-row items-start gap-4">
               <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${alert.severity === 'critical' ? 'bg-red-500/20 text-red-400' : alert.severity === 'high' ? 'bg-orange-500/20 text-orange-400' : alert.severity === 'medium' ? 'bg-amber-500/20 text-amber-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
-                <AlertTriangle className="w-5 h-5" />
+                {alert.resolved ? <CheckCircle className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5" />}
               </div>
 
               <div className="flex-1">
-                <div className="flex items-center gap-2 mb-1">
-                  <h3 className="text-sm font-semibold text-white">@{alert.username}</h3>
-                  <StatusBadge status={alert.severity} />
-                  <StatusBadge status={alert.action} />
+                <div className="flex items-center gap-2 mb-1 flex-wrap">
+                  <h3 className="text-sm font-semibold text-white">@{alert.username || `id:${alert.telegram_id}`}</h3>
+                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${alert.severity === 'critical' ? 'bg-red-500/20 text-red-400' : alert.severity === 'high' ? 'bg-orange-500/20 text-orange-400' : alert.severity === 'medium' ? 'bg-amber-500/20 text-amber-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
+                    {alert.severity}
+                  </span>
+                  {alert.banned && <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-red-500/20 text-red-400">banni</span>}
+                  {alert.resolved && !alert.banned && <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-emerald-500/20 text-emerald-400">résolu</span>}
                 </div>
-                <p className="text-xs text-slate-400 mb-2">{alert.description}</p>
-                <div className="flex items-center gap-4 text-xs text-slate-500">
-                  <span>Type: {alert.type.replace(/_/g, ' ')}</span>
-                  <span>Score: {alert.riskScore}/100</span>
-                  <span>{new Date(alert.createdAt).toLocaleString('fr-FR')}</span>
+                <p className="text-xs text-slate-400 mb-2">{alert.details}</p>
+                <div className="flex items-center gap-4 text-xs text-slate-500 flex-wrap">
+                  <span>Type: {alert.alert_type.replace(/_/g, ' ')}</span>
+                  <span>Score: {alert.risk_score}/100</span>
+                  <span>{new Date(alert.created_at).toLocaleString('fr-FR')}</span>
                 </div>
               </div>
 
-              <div className="flex gap-2">
-                {alert.action !== 'banned' && (
-                  <>
-                    <button onClick={() => updateFraudAlert(alert.id, { action: 'review' })} className="p-2 rounded-lg bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 transition-colors" title="Revue manuelle">
-                      <Eye className="w-4 h-4" />
-                    </button>
-                    <button onClick={() => updateFraudAlert(alert.id, { action: 'suspended' })} className="p-2 rounded-lg bg-orange-500/10 text-orange-400 hover:bg-orange-500/20 transition-colors" title="Suspendre">
-                      <UserX className="w-4 h-4" />
-                    </button>
-                    <button onClick={() => updateFraudAlert(alert.id, { action: 'banned' })} className="p-2 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors" title="Bannir">
-                      <Ban className="w-4 h-4" />
-                    </button>
-                  </>
-                )}
-              </div>
+              {!alert.resolved && (
+                <div className="flex gap-2">
+                  <button onClick={() => void handleAction(alert.id, 'resolve')} className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors" title="Résoudre">
+                    <CheckCircle className="w-4 h-4" />
+                  </button>
+                  <button onClick={() => void handleAction(alert.id, 'ban')} className="p-2 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors" title="Bannir l'utilisateur">
+                    <Ban className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         ))}
