@@ -348,6 +348,9 @@ export interface PlatformConfig {
   maxDailyTasks: number;
   bonusTaskMultiplier: number;
   taskCreationFeeRate: number; // e.g. 0.15 = 15%
+  taskPricePerExecution: number; // fixed cost charged to task creator per execution
+  taskMinExecutions: number;
+  taskMaxExecutions: number;
   
   // Deposits
   depositBonusPercent: number;
@@ -603,6 +606,9 @@ const mockPlatformConfig: PlatformConfig = {
   maxDailyTasks: 50,
   bonusTaskMultiplier: 1.5,
   taskCreationFeeRate: 0.15,
+  taskPricePerExecution: 0.05,
+  taskMinExecutions: 100,
+  taskMaxExecutions: 100000,
   depositBonusPercent: 5,
   firstDepositBonus: 10,
   minDepositForBonus: 50,
