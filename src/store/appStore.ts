@@ -633,7 +633,7 @@ const mockReferralMilestones: ReferralMilestone[] = [
 
 const mockPlatformConfig: PlatformConfig = {
   botToken: '',
-  botUsername: 'toncipherbot',
+  botUsername: 'TonCipher_bot',
   apiId: '',
   apiHash: '',
   databaseUrl: '',
