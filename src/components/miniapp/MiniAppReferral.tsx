@@ -9,7 +9,7 @@ export const MiniAppReferral: React.FC = () => {
   } = useAppStore();
   const [copied, setCopied] = useState(false);
 
-  const referralLink = `${platformConfig.referralLinkPrefix}${currentUser.referralCode}`;
+  const referralLink = `https://t.me/${platformConfig.botUsername}?start=${currentUser.referralCode}`;
 
   const handleCopy = () => {
     navigator.clipboard.writeText(referralLink).catch(() => {});
@@ -106,6 +106,14 @@ export const MiniAppReferral: React.FC = () => {
       {/* Referral link */}
       <div className="glass-card p-4 space-y-3">
         <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Votre lien de parrainage</p>
+        {platformConfig.botUsername === 'toncipherbot' && (
+          <div className="flex items-start gap-2 p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20">
+            <span className="text-amber-400 mt-0.5">⚠️</span>
+            <p className="text-[11px] text-amber-300 leading-relaxed">
+              Configurez votre nom de bot dans <strong>Admin → Configuration → Bot → Bot Username</strong> pour que ce lien fonctionne.
+            </p>
+          </div>
+        )}
         <div className="flex items-center gap-2 p-3 rounded-lg bg-white/[0.04] border border-white/10">
           <p className="flex-1 text-xs text-slate-300 truncate font-mono">{referralLink}</p>
           <button

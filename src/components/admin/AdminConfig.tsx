@@ -166,9 +166,15 @@ export const AdminConfig: React.FC = () => {
                 <input type="number" min="4" max="16" value={platformConfig.referralCodeLength} onChange={e => updatePlatformConfig({ referralCodeLength: parseInt(e.target.value) || 8 })} className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white" />
               </div>
             </div>
-            <div className="mt-4">
-              <label className="block text-xs text-slate-400 mb-1.5">Préfixe du lien de parrainage</label>
-              <input type="text" value={platformConfig.referralLinkPrefix} onChange={e => updatePlatformConfig({ referralLinkPrefix: e.target.value })} className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white" />
+            <div className="mt-4 space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="block text-xs text-slate-400">Lien de parrainage actuel</label>
+                <span className="text-[10px] text-blue-400">Dérivé du nom du bot automatiquement</span>
+              </div>
+              <div className="px-3 py-2 bg-white/[0.03] border border-white/5 rounded-lg text-xs text-slate-300 font-mono break-all">
+                https://t.me/<span className="text-blue-400">{platformConfig.botUsername}</span>?start=CODE_PARRAIN
+              </div>
+              <p className="text-[10px] text-slate-500">Changez le "Bot Username" dans l'onglet Bot pour mettre à jour ce lien.</p>
             </div>
           </div>
         </div>
