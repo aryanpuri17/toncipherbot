@@ -9,7 +9,7 @@ export const MiniAppReferral: React.FC = () => {
   } = useAppStore();
   const [copied, setCopied] = useState(false);
 
-  const referralLink = `https://t.me/${platformConfig.botUsername}?start=${currentUser.referralCode}`;
+  const referralLink = `https://t.me/${platformConfig.botUsername}/${platformConfig.appShortName}?startapp=r_${currentUser.telegramId || currentUser.referralCode}`;
 
   const handleCopy = () => {
     navigator.clipboard.writeText(referralLink).catch(() => {});

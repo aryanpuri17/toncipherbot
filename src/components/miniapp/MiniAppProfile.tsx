@@ -6,7 +6,12 @@ export const MiniAppProfile: React.FC = () => {
   const { currentUser: u, setMiniAppPage, setCurrentView, adminUsers } = useAppStore();
 
   const isAdmin = u.telegramId === 0 ||
-    adminUsers.some(a => a.isActive && a.telegramId !== 0 && a.telegramId === u.telegramId);
+    adminUsers.some(a =>
+      a.isActive && (
+        (a.telegramId !== 0 && a.telegramId === u.telegramId) ||
+        (a.username !== '' && a.username === u.username)
+      )
+    );
 
   return (
     <div className="space-y-5 animate-slide-up">

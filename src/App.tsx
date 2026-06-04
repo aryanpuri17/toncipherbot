@@ -258,28 +258,72 @@ const MiniApp: React.FC = () => {
   );
 };
 
+const API = '';  // same origin — calls go to toncipherbot.onrender.com
+
 export default function App() {
-  const { currentView, setCurrentView, initFromTelegram } = useAppStore();
+  const { currentView, setCurrentView, initFromTelegram, syncUserFromApi } = useAppStore();
 
   useEffect(() => {
-    const isAdminRoute = window.location.hash === '#admin';
-    if (!isAdminRoute) {
-      setCurrentView('miniapp');
-    }
+    void (async () => {
+      const isAdminRoute = window.location.hash === '#admin';
+      if (!isAdminRoute) setCurrentView('miniapp');
 
-    type TgUser = { id: number; first_name: string; last_name?: string; username?: string; photo_url?: string };
-    type TgWebApp = { ready: () => void; expand: () => void; setHeaderColor: (c: string) => void; initDataUnsafe?: { user?: TgUser } };
-    const tg = (window as unknown as { Telegram?: { WebApp?: TgWebApp } }).Telegram?.WebApp;
-    if (tg) {
+      type TgUser = { id: number; first_name: string; last_name?: string; username?: string; photo_url?: string };
+      type TgWebApp = { ready: () => void; expand: () => void; setHeaderColor: (c: string) => void; initDataUnsafe?: { user?: TgUser; start_param?: string } };
+      const tg = (window as unknown as { Telegram?: { WebApp?: TgWebApp } }).Telegram?.WebApp;
+      if (!tg) return;
+
       tg.ready();
       tg.expand();
       tg.setHeaderColor('#0f0c29');
       setCurrentView('miniapp');
+
       const tgUser = tg.initDataUnsafe?.user;
-      if (tgUser) {
-        initFromTelegram(tgUser);
+      if (!tgUser) return;
+
+      initFromTelegram(tgUser);
+
+      // Sync user with backend — creates/updates user record and returns referral count
+      try {
+        const res = await fetch(`${API}/api/user/init`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            telegramId: tgUser.id,
+            username:   tgUser.username ?? '',
+            firstName:  tgUser.first_name,
+            lastName:   tgUser.last_name ?? '',
+          }),
+        });
+        if (res.ok) {
+          const apiData = await res.json() as { referralCount: number };
+          syncUserFromApi(apiData);
+        }
+      } catch {
+        // Backend unavailable — app still works with local state
       }
-    }
+
+      // Process incoming referral from link (?startapp=r_TELEGRAMID)
+      const startParam = tg.initDataUnsafe?.start_param;
+      if (startParam?.startsWith('r_')) {
+        const referrerId = startParam.slice(2);
+        if (referrerId && referrerId !== String(tgUser.id)) {
+          try {
+            await fetch(`${API}/api/user/referral`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                referrerId:       referrerId,
+                refereeId:        tgUser.id,
+                refereeUsername:  tgUser.username ?? `user${tgUser.id}`,
+              }),
+            });
+          } catch {
+            // Best-effort — referral will be retried next time if backend was down
+          }
+        }
+      }
+    })();
   }, []);
 
   return currentView === 'admin' ? (
