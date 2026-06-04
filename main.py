@@ -19,14 +19,15 @@ from aiogram import Bot, Dispatcher, types
 from aiogram.filters import CommandStart
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 
-BOT_TOKEN  = os.getenv("BOT_TOKEN", "")
-WEBAPP_URL = os.getenv("WEBAPP_URL", "https://toncipherbot.onrender.com")
-PORT       = int(os.getenv("PORT", 8080))
-DB_PATH    = os.path.join(os.path.dirname(__file__), "toncipherbot.db")
+BOT_TOKEN    = os.getenv("BOT_TOKEN", "")
+WEBAPP_URL   = os.getenv("WEBAPP_URL", "https://toncipherbot.onrender.com")
+PORT         = int(os.getenv("PORT", 8080))
+DB_PATH      = os.path.join(os.path.dirname(__file__), "toncipherbot.db")
+ADMIN_SECRET = os.getenv("ADMIN_SECRET", "")  # If set, required as X-Admin-Key header
 
 REFERRAL_BONUS_TON  = float(os.getenv("REFERRAL_BONUS_TON", "1.0"))
 MAX_ACCOUNTS_PER_IP = int(os.getenv("MAX_ACCOUNTS_PER_IP", "3"))
-RATE_LIMIT_MAX      = int(os.getenv("RATE_LIMIT_MAX", "30"))   # requests / minute / IP
+RATE_LIMIT_MAX      = int(os.getenv("RATE_LIMIT_MAX", "30"))  # requests / minute / IP
 RATE_LIMIT_WINDOW   = 60  # seconds
 
 logging.basicConfig(level=logging.INFO)
@@ -38,7 +39,7 @@ dp  = Dispatcher()
 _CORS = {
     "Access-Control-Allow-Origin":  "*",
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Headers": "Content-Type, X-Admin-Key",
 }
 
 # In-memory rate-limit buckets  {ip: [timestamps]}
@@ -56,9 +57,7 @@ def _is_rate_limited(ip: str) -> bool:
     """Return True if IP has exceeded RATE_LIMIT_MAX calls in RATE_LIMIT_WINDOW seconds."""
     now = time.time()
     cutoff = now - RATE_LIMIT_WINDOW
-    bucket = _rate_buckets[ip]
-    # Evict old entries
-    _rate_buckets[ip] = bucket = [t for t in bucket if t > cutoff]
+    _rate_buckets[ip] = bucket = [t for t in _rate_buckets[ip] if t > cutoff]
     if len(bucket) >= RATE_LIMIT_MAX:
         return True
     bucket.append(now)
@@ -69,7 +68,6 @@ def _validate_init_data(init_data: str, bot_token: str) -> bool:
     """
     Validate Telegram Mini App initData using HMAC-SHA256.
     Spec: https://core.telegram.org/bots/webapps#validating-data-received-via-the-mini-app
-    Returns True if the signature is valid.
     """
     if not init_data or not bot_token:
         return False
@@ -78,40 +76,36 @@ def _validate_init_data(init_data: str, bot_token: str) -> bool:
         check_hash = parsed.pop("hash", "")
         if not check_hash:
             return False
-        data_check_string = "\n".join(
-            f"{k}={v}" for k, v in sorted(parsed.items())
-        )
-        secret_key = hmac_lib.new(
-            b"WebAppData",
-            msg=bot_token.encode(),
-            digestmod=hashlib.sha256,
-        ).digest()
-        expected = hmac_lib.new(
-            secret_key,
-            msg=data_check_string.encode(),
-            digestmod=hashlib.sha256,
-        ).hexdigest()
+        data_check_string = "\n".join(f"{k}={v}" for k, v in sorted(parsed.items()))
+        secret_key = hmac_lib.new(b"WebAppData", msg=bot_token.encode(), digestmod=hashlib.sha256).digest()
+        expected = hmac_lib.new(secret_key, msg=data_check_string.encode(), digestmod=hashlib.sha256).hexdigest()
         return hmac_lib.compare_digest(expected, check_hash)
     except Exception:
         return False
 
 
+def _check_admin_auth(request: web.Request) -> bool:
+    """Return True if the request is authorized as admin. Always true if ADMIN_SECRET is not set."""
+    if not ADMIN_SECRET:
+        return True
+    return request.headers.get("X-Admin-Key", "") == ADMIN_SECRET
+
+
 def _risk_score(reasons: list[str]) -> int:
-    """Compute a 0-100 risk score from a list of detected violations."""
+    """Compute a 0–100 risk score from a list of detected violations."""
     weights = {
-        "invalid_init_data":  60,
-        "multi_account_ip":   40,
-        "self_referral_ip":   70,
-        "rate_limit":         20,
+        "invalid_init_data": 60,
+        "self_referral_ip":  70,
+        "multi_account_ip":  40,
+        "rate_limit":        20,
     }
-    score = sum(weights.get(r, 10) for r in reasons)
-    return min(score, 100)
+    return min(sum(weights.get(r, 10) for r in reasons), 100)
 
 
 def _severity(score: int) -> str:
-    if score >= 70:  return "critical"
-    if score >= 50:  return "high"
-    if score >= 25:  return "medium"
+    if score >= 70: return "critical"
+    if score >= 50: return "high"
+    if score >= 25: return "medium"
     return "low"
 
 
@@ -121,17 +115,17 @@ async def init_db() -> None:
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("""
             CREATE TABLE IF NOT EXISTS users (
-                telegram_id       INTEGER PRIMARY KEY,
-                username          TEXT    NOT NULL DEFAULT '',
-                first_name        TEXT    NOT NULL DEFAULT '',
-                last_name         TEXT    NOT NULL DEFAULT '',
-                referral_count    INTEGER NOT NULL DEFAULT 0,
-                referral_balance  REAL    NOT NULL DEFAULT 0,
-                referred_by       INTEGER,
-                ip_address        TEXT,
-                flagged           INTEGER NOT NULL DEFAULT 0,
-                banned            INTEGER NOT NULL DEFAULT 0,
-                created_at        TEXT    NOT NULL DEFAULT (datetime('now'))
+                telegram_id      INTEGER PRIMARY KEY,
+                username         TEXT    NOT NULL DEFAULT '',
+                first_name       TEXT    NOT NULL DEFAULT '',
+                last_name        TEXT    NOT NULL DEFAULT '',
+                referral_count   INTEGER NOT NULL DEFAULT 0,
+                referral_balance REAL    NOT NULL DEFAULT 0,
+                referred_by      INTEGER,
+                ip_address       TEXT,
+                flagged          INTEGER NOT NULL DEFAULT 0,
+                banned           INTEGER NOT NULL DEFAULT 0,
+                created_at       TEXT    NOT NULL DEFAULT (datetime('now'))
             )
         """)
         await db.execute("""
@@ -154,7 +148,7 @@ async def init_db() -> None:
                 created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
             )
         """)
-        # Backward-compat: add columns to existing tables
+        # Backward-compat: add columns to existing tables without failing
         for tbl, col, defn in [
             ("users", "referral_balance", "REAL    NOT NULL DEFAULT 0"),
             ("users", "ip_address",       "TEXT"),
@@ -178,10 +172,11 @@ async def _log_fraud_alert(
     score: int,
 ) -> None:
     sev = _severity(score)
-    await db.execute("""
-        INSERT INTO fraud_alerts (telegram_id, username, alert_type, details, severity, risk_score)
-        VALUES (?, ?, ?, ?, ?, ?)
-    """, (telegram_id, username, alert_type, details, sev, score))
+    await db.execute(
+        "INSERT INTO fraud_alerts (telegram_id, username, alert_type, details, severity, risk_score)"
+        " VALUES (?, ?, ?, ?, ?, ?)",
+        (telegram_id, username, alert_type, details, sev, score),
+    )
     log.warning("FRAUD [%s] user=%d @%s score=%d — %s", sev.upper(), telegram_id, username, score, details)
 
 
@@ -190,10 +185,7 @@ async def _log_fraud_alert(
 @dp.message(CommandStart())
 async def cmd_start(msg: types.Message):
     if not WEBAPP_URL:
-        await msg.answer(
-            "⚙️ <b>TonCipher</b> — configuration en cours.\nRevenez bientôt !",
-            parse_mode="HTML",
-        )
+        await msg.answer("⚙️ <b>TonCipher</b> — configuration en cours.", parse_mode="HTML")
         return
     kb = InlineKeyboardMarkup(inline_keyboard=[[
         InlineKeyboardButton(text="🚀 Ouvrir TonCipher", web_app=WebAppInfo(url=WEBAPP_URL))
@@ -230,23 +222,21 @@ async def api_user_init(request: web.Request) -> web.Response:
         return web.json_response({"error": "Invalid telegramId"}, status=400, headers=_CORS)
 
     violations: list[str] = []
+    ip_count = 0  # initialize before conditional block to avoid NameError
 
     # 1. Telegram initData HMAC validation
     if BOT_TOKEN and init_data:
         if not _validate_init_data(init_data, BOT_TOKEN):
             violations.append("invalid_init_data")
-    # (If initData not provided, skip — allows browser testing without Telegram)
 
     async with aiosqlite.connect(DB_PATH) as db:
         # Check if banned
-        async with db.execute(
-            "SELECT banned FROM users WHERE telegram_id = ?", (telegram_id,)
-        ) as cur:
+        async with db.execute("SELECT banned FROM users WHERE telegram_id = ?", (telegram_id,)) as cur:
             existing = await cur.fetchone()
         if existing and existing[0]:
             return web.json_response({"error": "Account banned"}, status=403, headers=_CORS)
 
-        # Upsert user
+        # Upsert user record
         await db.execute("""
             INSERT INTO users (telegram_id, username, first_name, last_name, ip_address)
             VALUES (?, ?, ?, ?, ?)
@@ -267,18 +257,16 @@ async def api_user_init(request: web.Request) -> web.Response:
             if ip_count >= MAX_ACCOUNTS_PER_IP:
                 violations.append("multi_account_ip")
 
-        # Log and flag if any violations
+        # Log violations and flag user
         if violations:
             score = _risk_score(violations)
             await _log_fraud_alert(
                 db, telegram_id, username,
                 alert_type=", ".join(violations),
-                details=f"IP {ip} | violations: {violations} | other accounts on same IP: {ip_count if ip else 0}",
+                details=f"IP={ip} violations={violations} other_accounts_on_ip={ip_count}",
                 score=score,
             )
-            await db.execute(
-                "UPDATE users SET flagged = 1 WHERE telegram_id = ?", (telegram_id,)
-            )
+            await db.execute("UPDATE users SET flagged = 1 WHERE telegram_id = ?", (telegram_id,))
 
         await db.commit()
 
@@ -328,7 +316,7 @@ async def api_user_referral(request: web.Request) -> web.Response:
                 await _log_fraud_alert(
                     db, referee_id, referee_username,
                     "invalid_init_data",
-                    f"Referral attempt with invalid/missing initData from IP {ip}",
+                    f"Referral attempt with invalid/missing initData from IP={ip}",
                     score,
                 )
                 await db.commit()
@@ -336,25 +324,18 @@ async def api_user_referral(request: web.Request) -> web.Response:
 
     async with aiosqlite.connect(DB_PATH) as db:
         # Prevent double-counting
-        async with db.execute(
-            "SELECT referrer_id FROM referrals WHERE referee_id = ?", (referee_id,)
-        ) as cur:
+        async with db.execute("SELECT referrer_id FROM referrals WHERE referee_id = ?", (referee_id,)) as cur:
             if await cur.fetchone():
                 return web.json_response({"success": False, "error": "Already referred"}, headers=_CORS)
 
-        # Fetch referee's IP and status
-        async with db.execute(
-            "SELECT ip_address, flagged, banned FROM users WHERE telegram_id = ?", (referee_id,)
-        ) as cur:
+        # Fetch referee info
+        async with db.execute("SELECT ip_address, flagged, banned FROM users WHERE telegram_id = ?", (referee_id,)) as cur:
             ref_row = await cur.fetchone()
-
-        if ref_row and ref_row[2]:  # banned
+        if ref_row and ref_row[2]:
             return web.json_response({"success": False, "error": "Referee banned"}, headers=_CORS)
 
-        # Fetch referrer's IP
-        async with db.execute(
-            "SELECT ip_address FROM users WHERE telegram_id = ?", (referrer_id,)
-        ) as cur:
+        # Fetch referrer IP
+        async with db.execute("SELECT ip_address FROM users WHERE telegram_id = ?", (referrer_id,)) as cur:
             rr_row = await cur.fetchone()
 
         referrer_ip = rr_row[0] if rr_row else None
@@ -375,7 +356,7 @@ async def api_user_referral(request: web.Request) -> web.Response:
             await _log_fraud_alert(
                 db, referee_id, referee_username,
                 alert_type=", ".join(violations),
-                details=f"Referral from {referrer_id} to {referee_id} | referrer_ip={referrer_ip} referee_ip={referee_ip}",
+                details=f"Referral referrer={referrer_id}({referrer_ip}) referee={referee_id}({referee_ip})",
                 score=score,
             )
             await db.commit()
@@ -395,8 +376,7 @@ async def api_user_referral(request: web.Request) -> web.Response:
         await db.commit()
 
         async with db.execute(
-            "SELECT referral_count, referral_balance FROM users WHERE telegram_id = ?",
-            (referrer_id,),
+            "SELECT referral_count, referral_balance FROM users WHERE telegram_id = ?", (referrer_id,)
         ) as cur:
             row = await cur.fetchone()
 
@@ -428,49 +408,184 @@ async def api_user_referral(request: web.Request) -> web.Response:
 async def api_leaderboard(request: web.Request) -> web.Response:
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute("""
-            SELECT telegram_id, username, first_name, referral_count, referral_balance
+            SELECT telegram_id, username, first_name, referral_count
             FROM users
-            WHERE flagged = 0 AND banned = 0
+            WHERE flagged = 0 AND banned = 0 AND referral_count > 0
             ORDER BY referral_count DESC
             LIMIT 50
         """) as cur:
             rows = await cur.fetchall()
     return web.json_response([
-        {"telegramId": r[0], "username": r[1], "firstName": r[2],
-         "referralCount": r[3], "referralBalance": r[4]}
+        {"telegramId": r[0], "username": r[1], "firstName": r[2], "referralCount": r[3]}
         for r in rows
     ], headers=_CORS)
+
+
+# ── API — Admin: stats ─────────────────────────────────────────────────────────
+
+async def api_admin_stats(request: web.Request) -> web.Response:
+    if not _check_admin_auth(request):
+        return web.json_response({"error": "Unauthorized"}, status=401, headers=_CORS)
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute("SELECT COUNT(*) FROM users") as cur:
+            (total_users,) = await cur.fetchone()
+        async with db.execute("SELECT COUNT(*) FROM users WHERE flagged = 1") as cur:
+            (flagged_users,) = await cur.fetchone()
+        async with db.execute("SELECT COUNT(*) FROM users WHERE banned = 1") as cur:
+            (banned_users,) = await cur.fetchone()
+        async with db.execute("SELECT COUNT(*), COALESCE(SUM(referral_balance), 0) FROM users") as cur:
+            r = await cur.fetchone()
+            total_referral_bonus = float(r[1])
+        async with db.execute("SELECT COUNT(*) FROM referrals") as cur:
+            (total_referrals,) = await cur.fetchone()
+        async with db.execute("SELECT COUNT(*) FROM fraud_alerts WHERE resolved = 0") as cur:
+            (open_alerts,) = await cur.fetchone()
+        async with db.execute("SELECT COUNT(*) FROM fraud_alerts WHERE resolved = 0 AND severity = 'critical'") as cur:
+            (critical_alerts,) = await cur.fetchone()
+        async with db.execute("SELECT COUNT(*) FROM fraud_alerts WHERE resolved = 0 AND severity = 'high'") as cur:
+            (high_alerts,) = await cur.fetchone()
+        async with db.execute("SELECT COUNT(*) FROM fraud_alerts WHERE resolved = 0 AND severity = 'medium'") as cur:
+            (medium_alerts,) = await cur.fetchone()
+        async with db.execute("SELECT COUNT(*) FROM fraud_alerts WHERE resolved = 0 AND severity = 'low'") as cur:
+            (low_alerts,) = await cur.fetchone()
+
+    return web.json_response({
+        "total_users":         total_users,
+        "flagged_users":       flagged_users,
+        "banned_users":        banned_users,
+        "total_referrals":     total_referrals,
+        "total_referral_bonus": total_referral_bonus,
+        "open_alerts":         open_alerts,
+        "critical_alerts":     critical_alerts,
+        "high_alerts":         high_alerts,
+        "medium_alerts":       medium_alerts,
+        "low_alerts":          low_alerts,
+    }, headers=_CORS)
+
+
+# ── API — Admin: users list ────────────────────────────────────────────────────
+
+async def api_admin_users(request: web.Request) -> web.Response:
+    if not _check_admin_auth(request):
+        return web.json_response({"error": "Unauthorized"}, status=401, headers=_CORS)
+
+    search = request.rel_url.query.get("search", "").strip()
+    status = request.rel_url.query.get("status", "all")
+
+    query = """
+        SELECT telegram_id, username, first_name, last_name,
+               referral_count, referral_balance, flagged, banned, ip_address, created_at
+        FROM users
+    """
+    params: list = []
+    conditions: list[str] = []
+
+    if search:
+        conditions.append("(username LIKE ? OR first_name LIKE ? OR CAST(telegram_id AS TEXT) LIKE ?)")
+        like = f"%{search}%"
+        params.extend([like, like, like])
+
+    if status == "banned":
+        conditions.append("banned = 1")
+    elif status == "flagged":
+        conditions.append("flagged = 1 AND banned = 0")
+    elif status == "active":
+        conditions.append("flagged = 0 AND banned = 0")
+
+    if conditions:
+        query += " WHERE " + " AND ".join(conditions)
+    query += " ORDER BY created_at DESC LIMIT 200"
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(query, params) as cur:
+            rows = await cur.fetchall()
+
+    return web.json_response([{
+        "telegram_id":      r[0],
+        "username":         r[1],
+        "first_name":       r[2],
+        "last_name":        r[3],
+        "referral_count":   r[4],
+        "referral_balance": r[5],
+        "flagged":          bool(r[6]),
+        "banned":           bool(r[7]),
+        "ip_address":       r[8],
+        "created_at":       r[9],
+    } for r in rows], headers=_CORS)
+
+
+# ── API — Admin: ban/unban/unflag user ─────────────────────────────────────────
+
+async def api_admin_ban_user(request: web.Request) -> web.Response:
+    if not _check_admin_auth(request):
+        return web.json_response({"error": "Unauthorized"}, status=401, headers=_CORS)
+
+    telegram_id = request.match_info.get("telegram_id")
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("UPDATE users SET banned = 1, flagged = 1 WHERE telegram_id = ?", (telegram_id,))
+        await db.commit()
+    return web.json_response({"success": True}, headers=_CORS)
+
+
+async def api_admin_unban_user(request: web.Request) -> web.Response:
+    if not _check_admin_auth(request):
+        return web.json_response({"error": "Unauthorized"}, status=401, headers=_CORS)
+
+    telegram_id = request.match_info.get("telegram_id")
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("UPDATE users SET banned = 0, flagged = 0 WHERE telegram_id = ?", (telegram_id,))
+        await db.commit()
+    return web.json_response({"success": True}, headers=_CORS)
+
+
+async def api_admin_unflag_user(request: web.Request) -> web.Response:
+    if not _check_admin_auth(request):
+        return web.json_response({"error": "Unauthorized"}, status=401, headers=_CORS)
+
+    telegram_id = request.match_info.get("telegram_id")
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("UPDATE users SET flagged = 0 WHERE telegram_id = ? AND banned = 0", (telegram_id,))
+        await db.commit()
+    return web.json_response({"success": True}, headers=_CORS)
 
 
 # ── API — Admin: fraud alerts ──────────────────────────────────────────────────
 
 async def api_admin_fraud_alerts(request: web.Request) -> web.Response:
+    if not _check_admin_auth(request):
+        return web.json_response({"error": "Unauthorized"}, status=401, headers=_CORS)
+
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute("""
-            SELECT id, telegram_id, username, alert_type, details, severity, risk_score, resolved, created_at
-            FROM fraud_alerts
-            ORDER BY created_at DESC
+            SELECT f.id, f.telegram_id, f.username, f.alert_type, f.details,
+                   f.severity, f.risk_score, f.resolved, f.created_at,
+                   COALESCE(u.banned, 0) AS banned
+            FROM fraud_alerts f
+            LEFT JOIN users u ON f.telegram_id = u.telegram_id
+            ORDER BY f.created_at DESC
             LIMIT 200
         """) as cur:
             rows = await cur.fetchall()
-    alerts = [
-        {
-            "id":          r[0],
-            "telegramId":  r[1],
-            "username":    r[2],
-            "type":        r[3],
-            "description": r[4],
-            "severity":    r[5],
-            "riskScore":   r[6],
-            "resolved":    bool(r[7]),
-            "createdAt":   r[8],
-        }
-        for r in rows
-    ]
-    return web.json_response(alerts, headers=_CORS)
+
+    return web.json_response([{
+        "id":          r[0],
+        "telegram_id": r[1],
+        "username":    r[2],
+        "alert_type":  r[3],
+        "details":     r[4],
+        "severity":    r[5],
+        "risk_score":  r[6],
+        "resolved":    bool(r[7]),
+        "created_at":  r[8],
+        "banned":      bool(r[9]),
+    } for r in rows], headers=_CORS)
 
 
 async def api_admin_resolve_alert(request: web.Request) -> web.Response:
+    if not _check_admin_auth(request):
+        return web.json_response({"error": "Unauthorized"}, status=401, headers=_CORS)
+
     alert_id = request.match_info.get("alert_id")
     try:
         data = await request.json()
@@ -479,14 +594,9 @@ async def api_admin_resolve_alert(request: web.Request) -> web.Response:
     action = str(data.get("action", "resolve"))  # "resolve" | "ban"
 
     async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute(
-            "UPDATE fraud_alerts SET resolved = 1 WHERE id = ?", (alert_id,)
-        )
+        await db.execute("UPDATE fraud_alerts SET resolved = 1 WHERE id = ?", (alert_id,))
         if action == "ban":
-            # Get the telegram_id for this alert
-            async with db.execute(
-                "SELECT telegram_id FROM fraud_alerts WHERE id = ?", (alert_id,)
-            ) as cur:
+            async with db.execute("SELECT telegram_id FROM fraud_alerts WHERE id = ?", (alert_id,)) as cur:
                 row = await cur.fetchone()
             if row:
                 await db.execute(
@@ -520,7 +630,10 @@ async def health(request: web.Request) -> web.Response:
 
 
 async def serve_manifest(request: web.Request) -> web.Response:
-    with open(os.path.join(DIST, "tonconnect-manifest.json"), "rb") as f:
+    path = os.path.join(DIST, "tonconnect-manifest.json")
+    if not os.path.exists(path):
+        return web.Response(status=404)
+    with open(path, "rb") as f:
         raw = f.read()
     return web.Response(body=raw, content_type="application/json",
                         headers={"Access-Control-Allow-Origin": "*"})
@@ -546,18 +659,28 @@ async def serve_image(request: web.Request) -> web.Response:
 
 async def start_web() -> None:
     app = web.Application()
-    app.router.add_get( "/health",                        health)
-    app.router.add_get( "/tonconnect-manifest.json",      serve_manifest)
-    app.router.add_get( "/images/{filename}",             serve_image)
+
+    # Static / health
+    app.router.add_get("/health",                          health)
+    app.router.add_get("/tonconnect-manifest.json",        serve_manifest)
+    app.router.add_get("/images/{filename}",               serve_image)
+
     # User API
-    app.router.add_post("/api/user/init",                 api_user_init)
-    app.router.add_post("/api/user/referral",             api_user_referral)
-    app.router.add_get( "/api/leaderboard",               api_leaderboard)
+    app.router.add_post("/api/user/init",                  api_user_init)
+    app.router.add_post("/api/user/referral",              api_user_referral)
+    app.router.add_get( "/api/leaderboard",                api_leaderboard)
+
     # Admin API
-    app.router.add_get( "/api/admin/fraud-alerts",        api_admin_fraud_alerts)
+    app.router.add_get( "/api/admin/stats",                api_admin_stats)
+    app.router.add_get( "/api/admin/users",                api_admin_users)
+    app.router.add_post("/api/admin/users/{telegram_id}/ban",    api_admin_ban_user)
+    app.router.add_post("/api/admin/users/{telegram_id}/unban",  api_admin_unban_user)
+    app.router.add_post("/api/admin/users/{telegram_id}/unflag", api_admin_unflag_user)
+    app.router.add_get( "/api/admin/fraud-alerts",         api_admin_fraud_alerts)
     app.router.add_post("/api/admin/fraud-alerts/{alert_id}/resolve", api_admin_resolve_alert)
-    # SPA fallback
-    app.router.add_get( "/{path:.*}",                     serve_app)
+
+    # SPA fallback — must be last
+    app.router.add_get("/{path:.*}",                       serve_app)
 
     runner = web.AppRunner(app)
     await runner.setup()

@@ -1,27 +1,64 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAppStore } from '../../store/appStore';
 import { StatCard } from '../ui/StatCard';
 import { StatusBadge } from '../ui/StatusBadge';
 import {
   Users, DollarSign, ArrowDownToLine, ArrowUpFromLine,
-  Megaphone, Gift, ListTodo, Shield, TrendingUp, Activity
+  Megaphone, Gift, ListTodo, Shield, TrendingUp, Activity, AlertTriangle
 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 
+type ApiStats = {
+  total_users: number;
+  flagged_users: number;
+  banned_users: number;
+  total_referrals: number;
+  total_referral_bonus: number;
+  open_alerts: number;
+  critical_alerts: number;
+  high_alerts: number;
+  medium_alerts: number;
+  low_alerts: number;
+};
+
+type ApiAlert = {
+  id: number;
+  telegram_id: number;
+  username: string;
+  alert_type: string;
+  details: string;
+  severity: string;
+  risk_score: number;
+  resolved: boolean;
+  banned: boolean;
+  created_at: string;
+};
+
 export const AdminOverview: React.FC = () => {
-  const { transactions, fraudAlerts, users, tasks, campaigns } = useAppStore();
+  const { transactions, tasks, campaigns } = useAppStore();
+  const [apiStats, setApiStats] = useState<ApiStats | null>(null);
+  const [recentAlerts, setRecentAlerts] = useState<ApiAlert[]>([]);
+
+  useEffect(() => {
+    void fetch('/api/admin/stats')
+      .then(r => r.ok ? r.json() : null)
+      .then((d: ApiStats | null) => { if (d) setApiStats(d); })
+      .catch(() => {});
+    void fetch('/api/admin/fraud-alerts')
+      .then(r => r.ok ? r.json() : [])
+      .then((d: ApiAlert[]) => setRecentAlerts(d.filter(a => !a.resolved).slice(0, 3)))
+      .catch(() => {});
+  }, []);
 
   const today = new Date().toDateString();
-  const totalUsers = users.length;
-  const activeUsers = users.filter(u => u.status === 'active').length;
-  const newUsersToday = users.filter(u => new Date(u.createdAt).toDateString() === today).length;
-  const totalDeposits = transactions.filter(t => t.type === 'deposit' && t.status === 'completed').reduce((sum, t) => sum + t.amount, 0);
+  const totalUsers       = apiStats?.total_users ?? 0;
+  const openFraudAlerts  = apiStats?.open_alerts ?? 0;
+  const totalDeposits    = transactions.filter(t => t.type === 'deposit' && t.status === 'completed').reduce((sum, t) => sum + t.amount, 0);
   const totalWithdrawals = transactions.filter(t => t.type === 'withdrawal' && ['completed', 'processing'].includes(t.status)).reduce((sum, t) => sum + t.amount, 0);
-  const platformRevenue = transactions.filter(t => t.fee && t.fee > 0).reduce((sum, t) => sum + (t.fee || 0), 0);
-  const activeCampaigns = campaigns.filter(c => c.status === 'active').length;
+  const platformRevenue  = transactions.filter(t => t.fee && t.fee > 0).reduce((sum, t) => sum + (t.fee || 0), 0);
+  const activeCampaigns  = campaigns.filter(c => c.status === 'active').length;
   const completedTasksToday = transactions.filter(t => t.type === 'reward' && new Date(t.createdAt).toDateString() === today).length;
   const totalActiveTasks = tasks.filter(t => t.isActive).length;
-  const openFraudAlerts = fraudAlerts.filter(a => a.action === 'review').length;
 
   const chartData = React.useMemo(() => {
     const days = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
@@ -31,12 +68,12 @@ export const AdminOverview: React.FC = () => {
       const end = new Date(d); end.setHours(23, 59, 59, 999);
       return {
         name: days[d.getDay()],
-        users: users.filter(u => { const j = new Date(u.createdAt); return j >= start && j <= end; }).length,
+        users: 0,
         deposits: transactions.filter(tx => tx.type === 'deposit' && new Date(tx.createdAt) >= start && new Date(tx.createdAt) <= end).reduce((s, tx) => s + tx.amount, 0),
         tasks: transactions.filter(tx => tx.type === 'reward' && new Date(tx.createdAt) >= start && new Date(tx.createdAt) <= end).length,
       };
     });
-  }, [users, transactions]);
+  }, [transactions]);
 
   const revenueData = React.useMemo(() => {
     const months = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
@@ -48,7 +85,6 @@ export const AdminOverview: React.FC = () => {
   }, [transactions]);
 
   const recentTx = transactions.slice(0, 5);
-  const recentAlerts = fraudAlerts.slice(0, 3);
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -62,7 +98,7 @@ export const AdminOverview: React.FC = () => {
         <StatCard
           title="Utilisateurs totaux"
           value={totalUsers.toLocaleString()}
-          subtitle={`+${newUsersToday} aujourd'hui`}
+          subtitle={apiStats ? `${apiStats.flagged_users} signalés · ${apiStats.banned_users} bannis` : '—'}
           icon={<Users className="w-5 h-5" />}
           color="blue"
         />
@@ -92,9 +128,9 @@ export const AdminOverview: React.FC = () => {
       {/* Second Stats Row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
-          title="Utilisateurs actifs"
-          value={activeUsers.toLocaleString()}
-          subtitle={totalUsers > 0 ? `${((activeUsers / totalUsers) * 100).toFixed(0)}% du total` : '0 actifs'}
+          title="Filleuls totaux"
+          value={apiStats ? apiStats.total_referrals.toLocaleString() : '—'}
+          subtitle={apiStats ? `${apiStats.total_referral_bonus.toFixed(2)} TON crédités` : ''}
           icon={<Activity className="w-5 h-5" />}
           color="cyan"
         />
@@ -114,7 +150,7 @@ export const AdminOverview: React.FC = () => {
         <StatCard
           title="Alertes fraude"
           value={openFraudAlerts}
-          subtitle="Surveillance 24/7"
+          subtitle={apiStats ? `${apiStats.critical_alerts} critiques · ${apiStats.high_alerts} élevées` : 'Surveillance 24/7'}
           icon={<Shield className="w-5 h-5" />}
           color="red"
         />
@@ -219,23 +255,27 @@ export const AdminOverview: React.FC = () => {
 
         {/* Fraud Alerts */}
         <div className="glass-card p-5">
-          <h3 className="text-sm font-semibold text-white mb-4">Alertes anti-fraude</h3>
+          <h3 className="text-sm font-semibold text-white mb-4">Alertes anti-fraude récentes</h3>
           <div className="space-y-3">
-            {recentAlerts.length === 0 && <p className="text-sm text-slate-500 text-center py-4">Aucune alerte active</p>}
+            {recentAlerts.length === 0 && (
+              <div className="text-center py-4">
+                <Shield className="w-6 h-6 text-slate-600 mx-auto mb-1" />
+                <p className="text-sm text-slate-500">Aucune alerte active</p>
+              </div>
+            )}
             {recentAlerts.map(alert => (
               <div key={alert.id} className="p-3 rounded-lg bg-white/[0.02] hover:bg-white/[0.04] transition-colors">
-                <div className="flex items-start justify-between mb-2">
+                <div className="flex items-start justify-between mb-1">
                   <div className="flex items-center gap-2">
-                    <Shield className={`w-4 h-4 ${alert.severity === 'critical' ? 'text-red-400' : alert.severity === 'high' ? 'text-orange-400' : 'text-amber-400'}`} />
-                    <span className="text-sm font-medium text-white">@{alert.username}</span>
+                    <AlertTriangle className={`w-4 h-4 flex-shrink-0 ${alert.severity === 'critical' ? 'text-red-400' : alert.severity === 'high' ? 'text-orange-400' : 'text-amber-400'}`} />
+                    <span className="text-sm font-medium text-white">@{alert.username || `id:${alert.telegram_id}`}</span>
                   </div>
-                  <StatusBadge status={alert.severity} />
+                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${alert.severity === 'critical' ? 'bg-red-500/20 text-red-400' : alert.severity === 'high' ? 'bg-orange-500/20 text-orange-400' : 'bg-amber-500/20 text-amber-400'}`}>
+                    {alert.severity}
+                  </span>
                 </div>
-                <p className="text-xs text-slate-400 mb-2">{alert.description}</p>
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] text-slate-500">Score: {alert.riskScore}/100</span>
-                  <StatusBadge status={alert.action} />
-                </div>
+                <p className="text-xs text-slate-500 truncate">{alert.alert_type.replace(/_/g, ' ')}</p>
+                <p className="text-[10px] text-slate-600 mt-1">Score: {alert.risk_score}/100 · {new Date(alert.created_at).toLocaleString('fr-FR')}</p>
               </div>
             ))}
           </div>
