@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAppStore } from '../../store/appStore';
 import { useTonConnectUI, useTonWallet } from '@tonconnect/ui-react';
 import { ArrowDownLeft, ArrowUpRight, TrendingUp, Copy, CheckCircle, ChevronRight, AlertCircle, Wallet, Unlink } from 'lucide-react';
@@ -80,6 +80,17 @@ export const MiniAppDeposit: React.FC = () => {
   const [txStatus, setTxStatus] = useState<'idle' | 'pending' | 'success' | 'error'>('idle');
   const [txError, setTxError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+
+  const depositCode = useMemo(
+    () => currentUser.telegramId !== 0 ? String(currentUser.telegramId) : currentUser.id.slice(-6).toUpperCase(),
+    [currentUser.telegramId, currentUser.id]
+  );
+  const [codeCopied, setCodeCopied] = useState(false);
+  const handleCopyCode = () => {
+    navigator.clipboard.writeText(depositCode).catch(() => {});
+    setCodeCopied(true);
+    setTimeout(() => setCodeCopied(false), 2000);
+  };
 
   const depositNetworks = cryptoNetworks.filter(n => n.isActive && n.isDepositEnabled);
   const selected = depositNetworks.find(n => n.id === selectedId) ?? depositNetworks[0];
@@ -277,6 +288,14 @@ export const MiniAppDeposit: React.FC = () => {
                   ⚠️ L'adresse de la plateforme n'est pas encore configurée par l'admin.
                 </p>
               )}
+              {/* Deposit code info */}
+              <div className="p-3 rounded-xl bg-purple-500/5 border border-purple-500/20 flex items-start gap-2">
+                <span className="text-purple-400 text-xs">📋</span>
+                <p className="text-[10px] text-slate-400">
+                  Code de dépôt : <span className="font-mono font-bold text-purple-300">{depositCode}</span>
+                  {' '}— ajoutez-le en commentaire pour sécuriser votre dépôt.
+                </p>
+              </div>
               <button onClick={handleTonDeposit}
                 disabled={txStatus === 'pending' || !depositAmount || !hasAddress}
                 className="w-full btn-primary py-3.5 rounded-xl text-sm font-semibold text-white disabled:opacity-40 disabled:cursor-not-allowed">
@@ -298,49 +317,69 @@ export const MiniAppDeposit: React.FC = () => {
             </span>
           </div>
 
-          <div className="p-3 rounded-lg bg-blue-500/5 border border-blue-500/20 text-xs text-blue-400">
-            Connectez TonKeeper pour que votre dépôt soit détecté automatiquement.
-          </div>
-
-          {/* TonKeeper connection */}
-          {isWalletConnected ? (
-            <div className="flex items-center justify-between p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-emerald-400" />
-                <span className="text-xs text-emerald-400 font-medium">{shortAddress(connectedAddr)}</span>
-              </div>
-              <button onClick={() => tonConnectUI.disconnect()}
-                className="flex items-center gap-1 text-[10px] text-slate-400 hover:text-red-400 transition-colors">
-                <Unlink className="w-3 h-3" /> Déconnecter
+          {/* Deposit code — always shown */}
+          <div className="p-4 rounded-xl bg-gradient-to-r from-purple-500/10 to-blue-500/10 border border-purple-500/20 space-y-2">
+            <p className="text-xs font-semibold text-purple-300">📋 Votre code de dépôt</p>
+            <div className="flex items-center gap-2">
+              <span className="flex-1 text-lg font-mono font-bold text-white tracking-widest">{depositCode}</span>
+              <button onClick={handleCopyCode} className="p-2 rounded-lg bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 transition-colors">
+                {codeCopied ? <CheckCircle className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
               </button>
             </div>
-          ) : (
-            <button onClick={() => tonConnectUI.openModal()}
-              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-blue-500/15 border border-blue-500/30 text-blue-400 text-sm font-semibold hover:bg-blue-500/25 transition-all">
-              <Wallet className="w-4 h-4" /> Connecter TonKeeper
-            </button>
-          )}
+            <p className="text-[10px] text-slate-400">⚠️ Incluez ce code dans le commentaire/mémo de votre transaction pour être crédité automatiquement.</p>
+          </div>
 
-          {hasAddress && (
-            <>
-              <div>
-                <p className="text-xs text-slate-400 mb-1.5">Adresse de dépôt USDT</p>
-                <div className="flex items-center gap-2">
-                  <div className="flex-1 px-3 py-2.5 bg-white/5 rounded-lg text-xs text-white font-mono truncate">{address}</div>
-                  <button onClick={handleCopy} className="p-2.5 rounded-lg bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 transition-colors">
-                    {copied ? <CheckCircle className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                  </button>
-                </div>
+          {/* When wallet NOT connected: simplified flow */}
+          {!isWalletConnected && hasAddress && (
+            <div className="space-y-3">
+              <p className="text-xs text-slate-400">
+                Envoyez vos USDT (Jetton TON) à l'adresse ci-dessous. Incluez votre code de dépôt dans le commentaire pour être crédité automatiquement.
+              </p>
+              <div className="flex items-center gap-2">
+                <div className="flex-1 px-3 py-2.5 bg-white/5 rounded-lg text-xs text-white font-mono truncate">{address}</div>
+                <button onClick={handleCopy} className="p-2.5 rounded-lg bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 transition-colors">
+                  {copied ? <CheckCircle className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                </button>
               </div>
-
               <div className="p-3 rounded-lg bg-amber-500/5 border border-amber-500/20">
-                <p className="text-xs text-amber-400">⚠️ Envoyez uniquement du USDT sur le réseau TON (Jetton). Tout autre token sera perdu.</p>
+                <p className="text-xs text-amber-400">⚠️ Réseau TON uniquement. Incluez votre code de dépôt en commentaire sinon votre dépôt ne pourra pas être attribué.</p>
               </div>
-            </>
+            </div>
           )}
 
+          {!isWalletConnected && !hasAddress && (
+            <div className="flex flex-col items-center gap-3 py-2">
+              <AlertCircle className="w-8 h-8 text-amber-400" />
+              <p className="text-xs text-slate-400 text-center">Adresse non configurée. Contactez l'admin.</p>
+            </div>
+          )}
+
+          {/* When wallet IS connected: show connect indicator + address + register button */}
           {isWalletConnected && (
             <>
+              <div className="flex items-center justify-between p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-emerald-400" />
+                  <span className="text-xs text-emerald-400 font-medium">{shortAddress(connectedAddr)}</span>
+                </div>
+                <button onClick={() => tonConnectUI.disconnect()}
+                  className="flex items-center gap-1 text-[10px] text-slate-400 hover:text-red-400 transition-colors">
+                  <Unlink className="w-3 h-3" /> Déconnecter
+                </button>
+              </div>
+
+              {hasAddress && (
+                <div>
+                  <p className="text-xs text-slate-400 mb-1.5">Adresse de dépôt USDT</p>
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 px-3 py-2.5 bg-white/5 rounded-lg text-xs text-white font-mono truncate">{address}</div>
+                    <button onClick={handleCopy} className="p-2.5 rounded-lg bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 transition-colors">
+                      {copied ? <CheckCircle className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <div>
                 <p className="text-xs text-slate-400 mb-2">Montant envoyé (USDT)</p>
                 <input type="number" step="1" min={selected?.minDeposit ?? 5}
@@ -369,13 +408,6 @@ export const MiniAppDeposit: React.FC = () => {
                 J'ai envoyé {depositAmount || '0'} USDT — Enregistrer
               </button>
             </>
-          )}
-
-          {!isWalletConnected && !hasAddress && (
-            <div className="flex flex-col items-center gap-3 py-2">
-              <AlertCircle className="w-8 h-8 text-amber-400" />
-              <p className="text-xs text-slate-400 text-center">Adresse non configurée. Contactez l'admin.</p>
-            </div>
           )}
         </div>
       )}

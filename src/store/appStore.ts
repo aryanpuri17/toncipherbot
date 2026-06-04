@@ -684,6 +684,7 @@ interface AppState {
 
   // Actions - Mini App
   confirmDeposit: (txId: string, txHash: string) => void;
+  creditDeposit: (userId: string, amount: number, currency: string, txHash: string, network: string) => void;
   completeTask: (taskId: string) => void;
   submitWithdrawal: (networkId: string, amount: number, address: string) => { success: boolean; error?: string };
   claimReferralMilestone: (id: string) => void;
@@ -820,22 +821,55 @@ export const useAppStore = create<AppState>((set, get) => ({
     const state = get();
     const tx = state.transactions.find(t => t.id === txId);
     if (!tx || tx.status === 'completed') return;
+    const user = state.users.find(u => u.id === tx.userId);
+    if (!user) return;
     const balanceUpdate = {
-      balanceMain: state.currentUser.balanceMain + tx.amount,
-      totalEarnings: state.currentUser.totalEarnings + tx.amount,
+      balanceMain: user.balanceMain + tx.amount,
+      totalEarnings: user.totalEarnings + tx.amount,
     };
     set(s => ({
       transactions: s.transactions.map(t =>
         t.id === txId ? { ...t, status: 'completed', txHash, completedAt: new Date().toISOString() } : t
       ),
-      currentUser: s.currentUser.id === tx.userId ? { ...s.currentUser, ...balanceUpdate } : s.currentUser,
       users: s.users.map(u => u.id === tx.userId ? { ...u, ...balanceUpdate } : u),
+      currentUser: s.currentUser.id === tx.userId ? { ...s.currentUser, ...balanceUpdate } : s.currentUser,
     }));
     get().addNotification({
       userId: tx.userId,
       type: 'deposit',
       title: 'Dépôt confirmé! 🎉',
       message: `+${tx.amount.toFixed(2)} ${tx.currency} crédité sur votre compte.`,
+      isRead: false,
+    });
+  },
+
+  creditDeposit: (userId, amount, currency, txHash, network) => {
+    const state = get();
+    const user = state.users.find(u => u.id === userId);
+    if (!user) return;
+    const balanceUpdate = {
+      balanceMain: user.balanceMain + amount,
+      totalEarnings: user.totalEarnings + amount,
+    };
+    set(s => ({
+      users: s.users.map(u => u.id === userId ? { ...u, ...balanceUpdate } : u),
+      currentUser: s.currentUser.id === userId ? { ...s.currentUser, ...balanceUpdate } : s.currentUser,
+    }));
+    get().addTransaction({
+      userId,
+      type: 'deposit',
+      amount,
+      currency,
+      network,
+      status: 'completed',
+      txHash,
+      completedAt: new Date().toISOString(),
+    });
+    get().addNotification({
+      userId,
+      type: 'deposit',
+      title: 'Dépôt reçu! 🎉',
+      message: `+${amount.toFixed(2)} ${currency} crédité automatiquement.`,
       isRead: false,
     });
   },
