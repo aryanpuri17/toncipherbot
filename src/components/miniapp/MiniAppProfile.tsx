@@ -5,8 +5,6 @@ import { Users, Settings, ChevronRight, Store, Shield } from 'lucide-react';
 export const MiniAppProfile: React.FC = () => {
   const { currentUser: u, setMiniAppPage, setCurrentView, adminUsers } = useAppStore();
 
-  // Show admin access only if user is in the adminUsers list
-  // In demo mode (telegramId === 0), always show for development purposes
   const isAdmin = u.telegramId === 0 ||
     adminUsers.some(a => a.isActive && a.telegramId !== 0 && a.telegramId === u.telegramId);
 
@@ -59,7 +57,6 @@ export const MiniAppProfile: React.FC = () => {
           <ChevronRight className="w-4 h-4 text-slate-500" />
         </button>
 
-        {/* Admin Panel — only visible to admins */}
         {isAdmin && (
           <button
             onClick={() => { window.location.hash = '#admin'; setCurrentView('admin'); }}
