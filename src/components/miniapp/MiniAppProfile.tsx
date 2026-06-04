@@ -1,9 +1,14 @@
 import React from 'react';
 import { useAppStore } from '../../store/appStore';
-import { Users, Settings, ChevronRight, Store } from 'lucide-react';
+import { Users, Settings, ChevronRight, Store, Shield } from 'lucide-react';
 
 export const MiniAppProfile: React.FC = () => {
-  const { currentUser: u, setMiniAppPage, setCurrentView } = useAppStore();
+  const { currentUser: u, setMiniAppPage, setCurrentView, adminUsers } = useAppStore();
+
+  // Show admin access only if user is in the adminUsers list
+  // In demo mode (telegramId === 0), always show for development purposes
+  const isAdmin = u.telegramId === 0 ||
+    adminUsers.some(a => a.isActive && a.telegramId !== 0 && a.telegramId === u.telegramId);
 
   return (
     <div className="space-y-5 animate-slide-up">
@@ -53,6 +58,18 @@ export const MiniAppProfile: React.FC = () => {
           <span className="text-sm text-white flex-1 text-left">Paramètres</span>
           <ChevronRight className="w-4 h-4 text-slate-500" />
         </button>
+
+        {/* Admin Panel — only visible to admins */}
+        {isAdmin && (
+          <button
+            onClick={() => { window.location.hash = '#admin'; setCurrentView('admin'); }}
+            className="w-full glass-card-light p-3.5 flex items-center gap-3 hover:bg-white/[0.04] transition-colors border border-blue-500/20"
+          >
+            <Shield className="w-5 h-5 text-blue-400" />
+            <span className="text-sm text-white flex-1 text-left">Panel Admin</span>
+            <ChevronRight className="w-4 h-4 text-slate-500" />
+          </button>
+        )}
       </div>
     </div>
   );

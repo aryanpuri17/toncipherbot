@@ -19,23 +19,17 @@ export const MiniAppCreateTask: React.FC = () => {
   const maxExec    = platformConfig.taskMaxExecutions     ?? 100000;
   const botName    = platformConfig.botUsername           || 'toncipherbot';
 
-  // Minimum worker reward at the platform's base price
-  const minWorkerReward = parseFloat((priceFixed * (1 - feeRate)).toFixed(4));
+  const [type,        setType]        = useState<TaskType>('join_channel');
+  const [title,       setTitle]       = useState('');
+  const [description, setDescription] = useState('');
+  const [targetUrl,   setTargetUrl]   = useState('');
+  const [executions,  setExecutions]  = useState(String(minExec));
+  const [submitted,   setSubmitted]   = useState(false);
+  const [error,       setError]       = useState('');
 
-  const [type,         setType]         = useState<TaskType>('join_channel');
-  const [title,        setTitle]        = useState('');
-  const [description,  setDescription]  = useState('');
-  const [targetUrl,    setTargetUrl]    = useState('');
-  const [executions,   setExecutions]   = useState(String(minExec));
-  const [rewardInput,  setRewardInput]  = useState(String(minWorkerReward));
-  const [submitted,    setSubmitted]    = useState(false);
-  const [error,        setError]        = useState('');
-
-  const execCount    = Math.max(0, parseInt(executions) || 0);
-  const workerReward = Math.max(minWorkerReward, parseFloat(rewardInput) || minWorkerReward);
-  // Total cost = workerReward / (1 - feeRate) to ensure platform always gets its cut
-  const pricePerExec = workerReward / (1 - feeRate);
-  const totalCost    = execCount * pricePerExec;
+  const execCount   = Math.max(0, parseInt(executions) || 0);
+  const totalCost   = execCount * priceFixed;
+  const workerReward = parseFloat((priceFixed * (1 - feeRate)).toFixed(6));
   const platformFee  = totalCost * feeRate;
   const needsAdminBot = type === 'join_channel' || type === 'join_group';
 
@@ -61,7 +55,7 @@ export const MiniAppCreateTask: React.FC = () => {
       type,
       title: title.trim(),
       description: description.trim() || `Complétez cette tâche pour gagner ${workerReward.toFixed(4)} TON`,
-      reward: parseFloat(workerReward.toFixed(6)),
+      reward: workerReward,
       rewardType: 'main',
       targetUrl: targetUrl.trim() || undefined,
       isActive: true,
@@ -191,42 +185,17 @@ export const MiniAppCreateTask: React.FC = () => {
           />
         </div>
 
-        {/* Reward per execution */}
-        <div>
-          <p className="text-xs text-slate-400 mb-2">
-            Récompense par exécution{' '}
-            <span className="text-slate-600">(min. {minWorkerReward.toFixed(4)} TON)</span>
-          </p>
-          <div className="relative">
-            <input
-              type="number"
-              step="0.01"
-              min={minWorkerReward}
-              value={rewardInput}
-              onChange={e => setRewardInput(e.target.value)}
-              className="w-full px-4 py-3 pr-16 bg-white/5 border border-white/10 rounded-xl text-white text-sm font-mono focus:outline-none focus:border-emerald-500/50"
-            />
-            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-slate-400">TON</span>
-          </div>
-          <p className="text-[10px] text-slate-500 mt-1">
-            Montant reçu par chaque utilisateur qui complète votre tâche.
-          </p>
-        </div>
       </div>
 
       {/* Cost summary */}
       <div className="glass-card-light p-4 space-y-2">
         <div className="flex justify-between text-xs">
+          <span className="text-slate-400">Prix par exécution</span>
+          <span className="text-white font-semibold">{priceFixed.toFixed(4)} TON</span>
+        </div>
+        <div className="flex justify-between text-xs">
           <span className="text-slate-400">Récompense par utilisateur</span>
           <span className="text-emerald-400 font-semibold">+{workerReward.toFixed(4)} TON</span>
-        </div>
-        <div className="flex justify-between text-xs">
-          <span className="text-slate-400">Commission plateforme ({Math.round(feeRate * 100)}%)</span>
-          <span className="text-slate-300 font-semibold">{(pricePerExec - workerReward).toFixed(4)} TON/exec</span>
-        </div>
-        <div className="flex justify-between text-xs">
-          <span className="text-slate-400">Coût par exécution</span>
-          <span className="text-white font-semibold">{pricePerExec.toFixed(4)} TON</span>
         </div>
         <div className="flex justify-between text-xs">
           <span className="text-slate-400">Nombre d'exécutions</span>
