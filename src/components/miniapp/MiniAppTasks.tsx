@@ -99,29 +99,30 @@ export const MiniAppTasks: React.FC = () => {
     }
   };
 
-  // ── Bot (30s countdown) ────────────────────────────────────────
+  // ── Bot — ouvre le bot puis vérifie via API ────────────────────
   const handleBot = (task: typeof tasks[0]) => {
     if (task.targetUrl) openUrl(task.targetUrl);
-    setPhase(task.id, { phase: 'counting', countdown: 30 });
-
-    timerRefs.current[task.id] = setInterval(() => {
-      setTaskStates(prev => {
-        const cur = prev[task.id];
-        if (!cur || cur.phase !== 'counting') return prev;
-        const next = (cur.countdown ?? 0) - 1;
-        if (next <= 0) {
-          clearInterval(timerRefs.current[task.id]);
-          return { ...prev, [task.id]: { phase: 'claimable' } };
-        }
-        return { ...prev, [task.id]: { phase: 'counting', countdown: next } };
-      });
-    }, 1000);
+    setPhase(task.id, { phase: 'step_verify' });
   };
 
-  const handleClaim = (task: typeof tasks[0]) => {
-    setPhase(task.id, { phase: 'completing' });
-    completeTask(task.id);
-    setTimeout(() => setPhase(task.id, { phase: 'done' }), 1200);
+  const handleVerifyBot = async (task: typeof tasks[0]) => {
+    setPhase(task.id, { phase: 'verifying' });
+    try {
+      const telegramId = useAppStore.getState().currentUser.telegramId;
+      const res = await fetch(`/api/check-bot-start?telegram_id=${telegramId}`);
+      const { started } = await res.json() as { started: boolean };
+      if (started) {
+        setPhase(task.id, { phase: 'completing' });
+        completeTask(task.id);
+        setTimeout(() => setPhase(task.id, { phase: 'done' }), 1500);
+      } else {
+        setPhase(task.id, { phase: 'step_verify' });
+      }
+    } catch {
+      setPhase(task.id, { phase: 'completing' });
+      completeTask(task.id);
+      setTimeout(() => setPhase(task.id, { phase: 'done' }), 1500);
+    }
   };
 
   // ── Daily / Special (instant) ──────────────────────────────────
@@ -137,6 +138,12 @@ export const MiniAppTasks: React.FC = () => {
     if (task.type === 'join_channel' || task.type === 'join_group') handleChannelGroup(task);
     else if (task.type === 'start_bot') handleBot(task);
     else handleInstant(task);
+  };
+
+  // Unified "Vérifier" button handler — routes to correct verifier
+  const handleVerifyAction = (task: typeof tasks[0]) => {
+    if (task.type === 'start_bot') void handleVerifyBot(task);
+    else void handleVerify(task);
   };
 
   // ── Promo proof submission ─────────────────────────────────────
@@ -277,7 +284,7 @@ export const MiniAppTasks: React.FC = () => {
                     <p className="text-xs text-red-400 text-center">Abonnement non détecté — abonnez-vous d'abord.</p>
                   )}
                   <button
-                    onClick={() => handleVerify(task)}
+                    onClick={() => handleVerifyAction(task)}
                     disabled={s.phase === 'verifying'}
                     className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-blue-500/15 border border-blue-500/30 text-blue-400 text-xs font-semibold hover:bg-blue-500/25 transition-all disabled:opacity-50"
                   >
@@ -290,30 +297,22 @@ export const MiniAppTasks: React.FC = () => {
                 </div>
               )}
 
-              {/* Bot countdown / claim */}
-              {isBot && (s.phase === 'counting' || s.phase === 'claimable') && (
+              {/* Bot verify step — same pattern as channel */}
+              {isBot && (s.phase === 'step_verify' || s.phase === 'verifying') && (
                 <div className="border-t border-white/5 pt-3 space-y-2">
-                  {s.phase === 'counting' ? (
-                    <>
-                      <div className="flex items-center gap-2 p-2.5 rounded-lg bg-amber-500/5 border border-amber-500/15">
-                        <Clock className="w-4 h-4 text-amber-400 flex-shrink-0" />
-                        <p className="text-xs text-amber-300">Restez dans le bot pendant <span className="font-bold">{s.countdown}s</span> avant de revenir réclamer.</p>
-                      </div>
-                      <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
-                        <div
-                          className="h-full rounded-full bg-gradient-to-r from-amber-500 to-orange-500 transition-all duration-1000"
-                          style={{ width: `${((30 - (s.countdown ?? 0)) / 30) * 100}%` }}
-                        />
-                      </div>
-                    </>
-                  ) : (
-                    <button
-                      onClick={() => handleClaim(task)}
-                      className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-sm font-semibold hover:bg-emerald-500/25 transition-all"
-                    >
-                      <CheckCircle className="w-4 h-4" /> Réclamer la récompense
-                    </button>
-                  )}
+                  <div className="flex items-center gap-2 p-2.5 rounded-lg bg-blue-500/5 border border-blue-500/15">
+                    <ShieldCheck className="w-4 h-4 text-blue-400 flex-shrink-0" />
+                    <p className="text-xs text-blue-300">Envoyez /start au bot ci-dessus, puis vérifiez.</p>
+                  </div>
+                  <button
+                    onClick={() => handleVerifyAction(task)}
+                    disabled={s.phase === 'verifying'}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-blue-500/15 border border-blue-500/30 text-blue-400 text-xs font-semibold hover:bg-blue-500/25 transition-all disabled:opacity-50"
+                  >
+                    {s.phase === 'verifying'
+                      ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Vérification en cours...</>
+                      : <><ShieldCheck className="w-3.5 h-3.5" /> Vérifier</>}
+                  </button>
                 </div>
               )}
             </div>

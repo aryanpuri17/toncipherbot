@@ -177,6 +177,7 @@ async def init_db() -> None:
             ("users", "flagged",            "INTEGER NOT NULL DEFAULT 0"),
             ("users", "banned",             "INTEGER NOT NULL DEFAULT 0"),
             ("users", "withdrawal_blocked", "INTEGER NOT NULL DEFAULT 0"),
+            ("users", "bot_started",        "INTEGER NOT NULL DEFAULT 0"),
         ]:
             try:
                 await db.execute(f"ALTER TABLE {tbl} ADD COLUMN {col} {defn}")
@@ -225,6 +226,14 @@ async def _log_fraud_alert(
 
 @dp.message(CommandStart())
 async def cmd_start(msg: types.Message):
+    # Mark that this user has started the bot (used for task verification)
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "UPDATE users SET bot_started = 1 WHERE telegram_id = ?",
+            (msg.from_user.id,)
+        )
+        await db.commit()
+
     if not WEBAPP_URL:
         await msg.answer("⚙️ <b>TonCipher</b> — configuration en cours.", parse_mode="HTML")
         return
@@ -584,6 +593,25 @@ async def api_check_membership(request: web.Request) -> web.Response:
         is_member = True  # On error, allow through (don't block users)
 
     return web.json_response({"member": is_member}, headers=_CORS)
+
+
+# ── API — Check bot start ──────────────────────────────────────────────────────
+
+async def api_check_bot_start(request: web.Request) -> web.Response:
+    """Return {started: bool} — whether the user has sent /start to the bot."""
+    try:
+        telegram_id = int(request.rel_url.query.get("telegram_id", 0))
+    except (ValueError, TypeError):
+        return web.json_response({"started": False}, headers=_CORS)
+    if not telegram_id:
+        return web.json_response({"started": False}, headers=_CORS)
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT bot_started FROM users WHERE telegram_id = ?", (telegram_id,)
+        ) as cur:
+            row = await cur.fetchone()
+    started = bool(row and row[0]) if row else False
+    return web.json_response({"started": started}, headers=_CORS)
 
 
 # ── API — Admin: stats ─────────────────────────────────────────────────────────
@@ -1048,6 +1076,7 @@ async def start_web() -> None:
     app.router.add_post("/api/user/init",                  api_user_init)
     app.router.add_post("/api/user/referral",              api_user_referral)
     app.router.add_get( "/api/check-membership",           api_check_membership)
+    app.router.add_get( "/api/check-bot-start",            api_check_bot_start)
     app.router.add_get( "/api/leaderboard",                api_leaderboard)
 
     # Transaction API (called by frontend)
