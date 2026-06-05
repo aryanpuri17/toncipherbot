@@ -1,6 +1,17 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAppStore } from '../../store/appStore';
-import { Hash, Users, Bot, Calendar, Star, CheckCircle, ExternalLink, Plus, AlertCircle, Flame, Loader2, ShieldCheck, Clock, FileText, Send, X } from 'lucide-react';
+import { Hash, Users, Bot, Calendar, Star, CheckCircle, ExternalLink, Plus, AlertCircle, Flame, Loader2, ShieldCheck, Clock, FileText, Send, X, Sparkles } from 'lucide-react';
+
+interface ApiTask {
+  id: string;
+  type: string;
+  title: string;
+  description: string;
+  targetUrl: string;
+  reward: number;
+  totalCompletions: number;
+  maxCompletions: number;
+}
 
 const typeConfig: Record<string, { icon: React.ReactNode; color: string; label: string }> = {
   join_channel: { icon: <Hash className="w-4 h-4" />,     color: 'bg-blue-500/20 text-blue-400',     label: 'Canal' },
@@ -49,9 +60,23 @@ export const MiniAppTasks: React.FC = () => {
   const [proofSubmitting, setProofSubmitting] = useState(false);
   const [proofResult,    setProofResult]    = useState<{ taskId: string; success: boolean; message: string } | null>(null);
 
+  // User-created tasks from backend
+  const [apiTasks,          setApiTasks]          = useState<ApiTask[]>([]);
+  const [completedApiTaskIds, setCompletedApiTaskIds] = useState<string[]>([]);
+
   useEffect(() => {
     const refs = timerRefs.current;
     return () => { Object.values(refs).forEach(clearInterval); };
+  }, []);
+
+  // Fetch user-created tasks available for this user
+  useEffect(() => {
+    const telegramId = useAppStore.getState().currentUser.telegramId;
+    if (!telegramId) return;
+    fetch(`/api/user-tasks/available?telegram_id=${telegramId}`)
+      .then(r => r.json())
+      .then((data: ApiTask[]) => setApiTasks(data))
+      .catch(() => {});
   }, []);
 
   const setPhase = (id: string, s: TaskState) =>
@@ -68,16 +93,49 @@ export const MiniAppTasks: React.FC = () => {
   const filtered    = filter === 'all' ? activeTasks : activeTasks.filter(t => t.type === filter);
 
   // ── Channel / Group ────────────────────────────────────────────
-  const handleChannelGroup = (task: typeof tasks[0]) => {
+  const handleChannelGroup = (task: { id: string; targetUrl?: string }) => {
     if (task.targetUrl) openUrl(task.targetUrl);
     setPhase(task.id, { phase: 'step_verify' });
   };
 
-  const handleVerify = async (task: typeof tasks[0]) => {
+  const creditApiTask = async (taskId: string, reward: number) => {
+    // Record completion on backend + credit locally
+    try {
+      const telegramId = useAppStore.getState().currentUser.telegramId;
+      const res = await fetch(`/api/user-tasks/${taskId}/complete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ telegramId }),
+      });
+      const data = await res.json() as { success: boolean; reward?: number };
+      if (data.success) {
+        const earned = data.reward ?? reward;
+        const state = useAppStore.getState();
+        state.updateUser(state.currentUser.id, {
+          balanceMain:    state.currentUser.balanceMain    + earned,
+          totalEarnings:  state.currentUser.totalEarnings  + earned,
+          todayEarnings:  state.currentUser.todayEarnings  + earned,
+          tasksCompleted: state.currentUser.tasksCompleted + 1,
+        });
+        state.addNotification({ type: 'reward', title: 'Tâche complétée !', message: `+${earned.toFixed(4)} TON crédité.`, isRead: false });
+        setCompletedApiTaskIds(prev => [...prev, taskId]);
+        setApiTasks(prev => prev.filter(t => t.id !== taskId));
+      } else {
+        setPhase(taskId, { phase: 'step_verify' });
+      }
+    } catch {
+      // Offline: credit optimistically
+      const state = useAppStore.getState();
+      state.updateUser(state.currentUser.id, { balanceMain: state.currentUser.balanceMain + reward });
+      setCompletedApiTaskIds(prev => [...prev, taskId]);
+      setApiTasks(prev => prev.filter(t => t.id !== taskId));
+    }
+  };
+
+  const handleVerify = async (task: { id: string; targetUrl?: string; type: string; reward?: number }) => {
     setPhase(task.id, { phase: 'verifying' });
     try {
       const telegramId = useAppStore.getState().currentUser.telegramId;
-      // Extract @username from URL e.g. https://t.me/TonCipher_Official → @TonCipher_Official
       const chatId = task.targetUrl
         ? '@' + task.targetUrl.replace('https://t.me/', '').split('/')[0]
         : '';
@@ -85,27 +143,34 @@ export const MiniAppTasks: React.FC = () => {
       const data = await res.json() as { member: boolean };
       if (data.member) {
         setPhase(task.id, { phase: 'completing' });
-        completeTask(task.id);
+        if (task.reward !== undefined) {
+          // API task
+          await creditApiTask(task.id, task.reward);
+        } else {
+          completeTask(task.id);
+        }
         setTimeout(() => setPhase(task.id, { phase: 'done' }), 1500);
       } else {
-        // Not yet a member — go back to verify step with error hint
         setPhase(task.id, { phase: 'step_verify' });
       }
     } catch {
-      // Backend unavailable — complete anyway (offline mode)
       setPhase(task.id, { phase: 'completing' });
-      completeTask(task.id);
+      if (task.reward !== undefined) {
+        await creditApiTask(task.id, task.reward);
+      } else {
+        completeTask(task.id);
+      }
       setTimeout(() => setPhase(task.id, { phase: 'done' }), 1500);
     }
   };
 
   // ── Bot — ouvre le bot puis vérifie via API ────────────────────
-  const handleBot = (task: typeof tasks[0]) => {
+  const handleBot = (task: { id: string; targetUrl?: string }) => {
     if (task.targetUrl) openUrl(task.targetUrl);
     setPhase(task.id, { phase: 'step_verify' });
   };
 
-  const handleVerifyBot = async (task: typeof tasks[0]) => {
+  const handleVerifyBot = async (task: { id: string; type: string; reward?: number }) => {
     setPhase(task.id, { phase: 'verifying' });
     try {
       const telegramId = useAppStore.getState().currentUser.telegramId;
@@ -113,14 +178,22 @@ export const MiniAppTasks: React.FC = () => {
       const { started } = await res.json() as { started: boolean };
       if (started) {
         setPhase(task.id, { phase: 'completing' });
-        completeTask(task.id);
+        if (task.reward !== undefined) {
+          await creditApiTask(task.id, task.reward);
+        } else {
+          completeTask(task.id);
+        }
         setTimeout(() => setPhase(task.id, { phase: 'done' }), 1500);
       } else {
         setPhase(task.id, { phase: 'step_verify' });
       }
     } catch {
       setPhase(task.id, { phase: 'completing' });
-      completeTask(task.id);
+      if (task.reward !== undefined) {
+        await creditApiTask(task.id, task.reward);
+      } else {
+        completeTask(task.id);
+      }
       setTimeout(() => setPhase(task.id, { phase: 'done' }), 1500);
     }
   };
@@ -140,10 +213,22 @@ export const MiniAppTasks: React.FC = () => {
     else handleInstant(task);
   };
 
+  const handleCompleteApi = (task: ApiTask) => {
+    const s = getState(task.id);
+    if (completedApiTaskIds.includes(task.id) || s.phase === 'completing' || s.phase === 'done') return;
+    if (task.type === 'join_channel' || task.type === 'join_group') handleChannelGroup(task);
+    else if (task.type === 'start_bot') handleBot(task);
+  };
+
   // Unified "Vérifier" button handler — routes to correct verifier
   const handleVerifyAction = (task: typeof tasks[0]) => {
     if (task.type === 'start_bot') void handleVerifyBot(task);
     else void handleVerify(task);
+  };
+
+  const handleVerifyActionApi = (task: ApiTask) => {
+    if (task.type === 'start_bot') void handleVerifyBot({ id: task.id, type: task.type, reward: task.reward });
+    else void handleVerify({ id: task.id, targetUrl: task.targetUrl, type: task.type, reward: task.reward });
   };
 
   // ── Promo proof submission ─────────────────────────────────────
@@ -326,6 +411,107 @@ export const MiniAppTasks: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* ── User-created tasks (from API) ── */}
+      {apiTasks.length > 0 && (
+        <div className="space-y-3 pt-1">
+          <div className="flex items-center gap-3">
+            <div className="flex-1 h-px bg-white/8" />
+            <span className="text-[10px] text-slate-600 font-medium tracking-wider uppercase flex items-center gap-1">
+              <Sparkles className="w-3 h-3" /> Campagnes utilisateurs
+            </span>
+            <div className="flex-1 h-px bg-white/8" />
+          </div>
+
+          {apiTasks.filter(t => !completedApiTaskIds.includes(t.id)).map(task => {
+            const config   = typeConfig[task.type] ?? typeConfig.special;
+            const s        = getState(task.id);
+            const isDone   = completedApiTaskIds.includes(task.id) || s.phase === 'done';
+            const needsVerify = task.type === 'join_channel' || task.type === 'join_group';
+            const isBot    = task.type === 'start_bot';
+
+            return (
+              <div key={task.id} className={`glass-card p-4 transition-all space-y-3 border border-blue-500/10 ${isDone ? 'opacity-50' : ''}`}>
+                <div className="flex items-start gap-3">
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${config.color}`}>
+                    {config.icon}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                      <h3 className="text-sm font-semibold text-white">{task.title}</h3>
+                      <span className="px-1.5 py-0.5 rounded text-[9px] font-medium bg-blue-500/10 text-blue-400">Campagne</span>
+                    </div>
+                    <p className="text-xs text-slate-400 mb-2">{task.description}</p>
+                    {task.maxCompletions > 0 && (
+                      <div className="mb-2">
+                        <div className="progress-bar">
+                          <div
+                            className="progress-bar-fill bg-gradient-to-r from-blue-500 to-purple-500"
+                            style={{ width: `${Math.min((task.totalCompletions / task.maxCompletions) * 100, 100)}%` }}
+                          />
+                        </div>
+                        <p className="text-[10px] text-slate-500 mt-0.5">{task.totalCompletions}/{task.maxCompletions} places</p>
+                      </div>
+                    )}
+                    <span className="text-lg font-bold text-emerald-400">+{task.reward.toFixed(4)} TON</span>
+                  </div>
+
+                  <div className="flex-shrink-0">
+                    {isDone ? (
+                      <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400">
+                        <CheckCircle className="w-5 h-5" />
+                      </div>
+                    ) : s.phase === 'completing' ? (
+                      <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-500/10 text-emerald-400 text-xs font-medium">
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" /> Crédit...
+                      </div>
+                    ) : s.phase === 'idle' ? (
+                      <button onClick={() => handleCompleteApi(task)}
+                        className="px-4 py-2 rounded-xl btn-primary text-xs font-semibold text-white flex items-center gap-1.5">
+                        Faire <ExternalLink className="w-3 h-3" />
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+
+                {/* Channel/Group verify step */}
+                {needsVerify && (s.phase === 'step_verify' || s.phase === 'verifying') && (
+                  <div className="border-t border-white/5 pt-3 space-y-2">
+                    <div className="flex items-center gap-2 p-2.5 rounded-lg bg-blue-500/5 border border-blue-500/15">
+                      <ShieldCheck className="w-4 h-4 text-blue-400 flex-shrink-0" />
+                      <p className="text-xs text-blue-300">
+                        {task.type === 'join_channel' ? 'Abonnez-vous au canal ci-dessus, puis vérifiez.' : 'Rejoignez le groupe ci-dessus, puis vérifiez.'}
+                      </p>
+                    </div>
+                    <button onClick={() => handleVerifyActionApi(task)} disabled={s.phase === 'verifying'}
+                      className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-blue-500/15 border border-blue-500/30 text-blue-400 text-xs font-semibold hover:bg-blue-500/25 transition-all disabled:opacity-50">
+                      {s.phase === 'verifying'
+                        ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Vérification...</>
+                        : <><ShieldCheck className="w-3.5 h-3.5" /> Vérifier mon abonnement</>}
+                    </button>
+                  </div>
+                )}
+
+                {/* Bot verify step */}
+                {isBot && (s.phase === 'step_verify' || s.phase === 'verifying') && (
+                  <div className="border-t border-white/5 pt-3 space-y-2">
+                    <div className="flex items-center gap-2 p-2.5 rounded-lg bg-blue-500/5 border border-blue-500/15">
+                      <ShieldCheck className="w-4 h-4 text-blue-400 flex-shrink-0" />
+                      <p className="text-xs text-blue-300">Envoyez /start au bot ci-dessus, puis vérifiez.</p>
+                    </div>
+                    <button onClick={() => handleVerifyActionApi(task)} disabled={s.phase === 'verifying'}
+                      className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-blue-500/15 border border-blue-500/30 text-blue-400 text-xs font-semibold hover:bg-blue-500/25 transition-all disabled:opacity-50">
+                      {s.phase === 'verifying'
+                        ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Vérification...</>
+                        : <><ShieldCheck className="w-3.5 h-3.5" /> Vérifier</>}
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* ── Promo Tasks (bottom) ── */}
       {promoTasks.length > 0 && (

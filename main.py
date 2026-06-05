@@ -170,6 +170,33 @@ async def init_db() -> None:
                 admin_note  TEXT    NOT NULL DEFAULT ''
             )
         """)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS user_tasks (
+                id              TEXT    PRIMARY KEY,
+                creator_id      INTEGER NOT NULL,
+                type            TEXT    NOT NULL,
+                title           TEXT    NOT NULL,
+                description     TEXT    NOT NULL DEFAULT '',
+                target_url      TEXT    NOT NULL,
+                reward          REAL    NOT NULL,
+                total_budget    REAL    NOT NULL,
+                spent           REAL    NOT NULL DEFAULT 0,
+                status          TEXT    NOT NULL DEFAULT 'pending_approval',
+                completions     INTEGER NOT NULL DEFAULT 0,
+                max_completions INTEGER NOT NULL,
+                admin_note      TEXT    NOT NULL DEFAULT '',
+                created_at      TEXT    NOT NULL DEFAULT (datetime('now')),
+                approved_at     TEXT
+            )
+        """)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS user_task_completions (
+                task_id         TEXT    NOT NULL,
+                telegram_id     INTEGER NOT NULL,
+                completed_at    TEXT    NOT NULL DEFAULT (datetime('now')),
+                PRIMARY KEY (task_id, telegram_id)
+            )
+        """)
         # Backward-compat migrations — safe to run on existing DB
         for tbl, col, defn in [
             ("users", "referral_balance",   "REAL    NOT NULL DEFAULT 0"),
@@ -1014,6 +1041,401 @@ async def api_admin_resolve_alert(request: web.Request) -> web.Response:
     return web.json_response({"success": True}, headers=_CORS)
 
 
+# ── API — User-created tasks ───────────────────────────────────────────────────
+
+async def api_user_task_create(request: web.Request) -> web.Response:
+    try:
+        data = await request.json()
+    except Exception:
+        return web.json_response({"error": "Invalid JSON"}, status=400, headers=_CORS)
+
+    creator_id      = data.get("telegramId")
+    task_type       = str(data.get("type", "")).strip()
+    title           = str(data.get("title", "")).strip()
+    description     = str(data.get("description", "")).strip()
+    target_url      = str(data.get("targetUrl", "")).strip()   # stored EXACTLY as-is
+    reward          = float(data.get("reward", 0))
+    total_budget    = float(data.get("totalBudget", 0))
+    max_completions = int(data.get("maxCompletions", 0))
+
+    if not creator_id or not task_type or not title or not target_url:
+        return web.json_response({"error": "Missing required fields"}, status=400, headers=_CORS)
+    if task_type not in ("join_channel", "join_group", "start_bot"):
+        return web.json_response({"error": "Invalid task type"}, status=400, headers=_CORS)
+    if max_completions < 1:
+        return web.json_response({"error": "Invalid max_completions"}, status=400, headers=_CORS)
+
+    task_id = _short_id()
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("""
+            INSERT INTO user_tasks
+                (id, creator_id, type, title, description, target_url, reward, total_budget, max_completions)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (task_id, creator_id, task_type, title, description, target_url, reward, total_budget, max_completions))
+        await db.commit()
+
+        async with db.execute(
+            "SELECT username, first_name FROM users WHERE telegram_id = ?", (creator_id,)
+        ) as cur:
+            urow = await cur.fetchone()
+
+    uname = urow[0] if urow else ""
+    fname = urow[1] if urow else ""
+    await _notify_admin(
+        f"📋 <b>Nouvelle tâche à approuver</b>\n"
+        f"👤 {fname} @{uname or 'inconnu'} (ID: <code>{creator_id}</code>)\n"
+        f"📝 {title}\n"
+        f"🔗 {target_url}\n"
+        f"💰 Budget: {total_budget:.3f} TON ({max_completions} × {reward:.4f} TON)\n"
+        f"🆔 <code>{task_id}</code>\n"
+        f"👉 Admin panel → Approuver / Refuser"
+    )
+    return web.json_response({"success": True, "id": task_id}, headers=_CORS)
+
+
+async def api_user_task_mine(request: web.Request) -> web.Response:
+    try:
+        telegram_id = int(request.rel_url.query.get("telegram_id", 0))
+    except (ValueError, TypeError):
+        return web.json_response([], headers=_CORS)
+    if not telegram_id:
+        return web.json_response([], headers=_CORS)
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute("""
+            SELECT id, type, title, description, target_url, reward, total_budget, spent,
+                   status, completions, max_completions, admin_note, created_at, approved_at
+            FROM user_tasks WHERE creator_id = ?
+            ORDER BY created_at DESC
+        """, (telegram_id,)) as cur:
+            rows = await cur.fetchall()
+
+    return web.json_response([{
+        "id":             r[0],
+        "type":           r[1],
+        "title":          r[2],
+        "description":    r[3],
+        "targetUrl":      r[4],
+        "reward":         float(r[5]),
+        "totalBudget":    float(r[6]),
+        "spent":          float(r[7]),
+        "status":         r[8],
+        "completions":    r[9],
+        "maxCompletions": r[10],
+        "adminNote":      r[11],
+        "createdAt":      r[12],
+        "approvedAt":     r[13],
+    } for r in rows], headers=_CORS)
+
+
+async def api_user_task_available(request: web.Request) -> web.Response:
+    try:
+        telegram_id = int(request.rel_url.query.get("telegram_id", 0))
+    except (ValueError, TypeError):
+        telegram_id = 0
+
+    fid = telegram_id or -1
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute("""
+            SELECT t.id, t.type, t.title, t.description, t.target_url,
+                   t.reward, t.completions, t.max_completions
+            FROM user_tasks t
+            WHERE t.status = 'active'
+              AND t.completions < t.max_completions
+              AND t.creator_id != ?
+              AND NOT EXISTS (
+                  SELECT 1 FROM user_task_completions c
+                  WHERE c.task_id = t.id AND c.telegram_id = ?
+              )
+            ORDER BY t.approved_at DESC
+            LIMIT 100
+        """, (fid, fid)) as cur:
+            rows = await cur.fetchall()
+
+    return web.json_response([{
+        "id":               r[0],
+        "type":             r[1],
+        "title":            r[2],
+        "description":      r[3],
+        "targetUrl":        r[4],
+        "reward":           float(r[5]),
+        "totalCompletions": r[6],
+        "maxCompletions":   r[7],
+    } for r in rows], headers=_CORS)
+
+
+async def api_user_task_complete(request: web.Request) -> web.Response:
+    task_id = request.match_info.get("id")
+    try:
+        data = await request.json()
+    except Exception:
+        return web.json_response({"error": "Invalid JSON"}, status=400, headers=_CORS)
+
+    telegram_id = data.get("telegramId")
+    if not telegram_id:
+        return web.json_response({"error": "Missing telegramId"}, status=400, headers=_CORS)
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT status, completions, max_completions, reward, creator_id FROM user_tasks WHERE id = ?",
+            (task_id,)
+        ) as cur:
+            task = await cur.fetchone()
+
+        if not task:
+            return web.json_response({"error": "Task not found"}, status=404, headers=_CORS)
+        if task[0] != 'active':
+            return web.json_response({"error": "Task not active"}, status=400, headers=_CORS)
+        if task[1] >= task[2]:
+            return web.json_response({"error": "Task depleted"}, status=400, headers=_CORS)
+        if task[4] == telegram_id:
+            return web.json_response({"error": "Cannot complete your own task"}, status=400, headers=_CORS)
+
+        async with db.execute(
+            "SELECT 1 FROM user_task_completions WHERE task_id = ? AND telegram_id = ?",
+            (task_id, telegram_id)
+        ) as cur:
+            if await cur.fetchone():
+                return web.json_response({"error": "Already completed"}, status=400, headers=_CORS)
+
+        reward          = float(task[3])
+        new_completions = task[1] + 1
+        new_status      = 'depleted' if new_completions >= task[2] else 'active'
+
+        await db.execute(
+            "INSERT INTO user_task_completions (task_id, telegram_id) VALUES (?, ?)",
+            (task_id, telegram_id)
+        )
+        await db.execute(
+            "UPDATE user_tasks SET completions = ?, spent = spent + ?, status = ? WHERE id = ?",
+            (new_completions, reward, new_status, task_id)
+        )
+        await db.commit()
+
+    return web.json_response({"success": True, "reward": reward}, headers=_CORS)
+
+
+async def api_user_task_pause(request: web.Request) -> web.Response:
+    task_id = request.match_info.get("id")
+    try:
+        data = await request.json()
+    except Exception:
+        return web.json_response({"error": "Invalid JSON"}, status=400, headers=_CORS)
+
+    telegram_id = data.get("telegramId")
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT status, creator_id FROM user_tasks WHERE id = ?", (task_id,)
+        ) as cur:
+            task = await cur.fetchone()
+
+        if not task:
+            return web.json_response({"error": "Task not found"}, status=404, headers=_CORS)
+        if task[1] != telegram_id:
+            return web.json_response({"error": "Unauthorized"}, status=403, headers=_CORS)
+        if task[0] not in ('active', 'paused'):
+            return web.json_response({"error": "Cannot toggle pause"}, status=400, headers=_CORS)
+
+        new_status = 'paused' if task[0] == 'active' else 'active'
+        await db.execute("UPDATE user_tasks SET status = ? WHERE id = ?", (new_status, task_id))
+        await db.commit()
+
+    return web.json_response({"success": True, "status": new_status}, headers=_CORS)
+
+
+async def api_user_task_delete(request: web.Request) -> web.Response:
+    task_id = request.match_info.get("id")
+    try:
+        data = await request.json()
+    except Exception:
+        return web.json_response({"error": "Invalid JSON"}, status=400, headers=_CORS)
+
+    telegram_id = data.get("telegramId")
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT creator_id, completions, max_completions, reward, status FROM user_tasks WHERE id = ?",
+            (task_id,)
+        ) as cur:
+            task = await cur.fetchone()
+
+        if not task:
+            return web.json_response({"error": "Task not found"}, status=404, headers=_CORS)
+        if task[0] != telegram_id:
+            return web.json_response({"error": "Unauthorized"}, status=403, headers=_CORS)
+
+        remaining = max(0, task[2] - task[1])
+        refund    = remaining * float(task[3])
+
+        await db.execute("DELETE FROM user_tasks WHERE id = ?", (task_id,))
+        await db.execute("DELETE FROM user_task_completions WHERE task_id = ?", (task_id,))
+        await db.commit()
+
+    return web.json_response({"success": True, "refund": refund}, headers=_CORS)
+
+
+async def api_user_task_fund(request: web.Request) -> web.Response:
+    task_id = request.match_info.get("id")
+    try:
+        data = await request.json()
+    except Exception:
+        return web.json_response({"error": "Invalid JSON"}, status=400, headers=_CORS)
+
+    telegram_id      = data.get("telegramId")
+    extra_executions = int(data.get("extraExecutions", 0))
+    extra_budget     = float(data.get("extraBudget", 0))
+
+    if extra_executions < 1:
+        return web.json_response({"error": "Invalid extra executions"}, status=400, headers=_CORS)
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT creator_id, status FROM user_tasks WHERE id = ?", (task_id,)
+        ) as cur:
+            task = await cur.fetchone()
+
+        if not task:
+            return web.json_response({"error": "Task not found"}, status=404, headers=_CORS)
+        if task[0] != telegram_id:
+            return web.json_response({"error": "Unauthorized"}, status=403, headers=_CORS)
+
+        await db.execute("""
+            UPDATE user_tasks
+            SET max_completions = max_completions + ?,
+                total_budget    = total_budget + ?,
+                status = CASE WHEN status = 'depleted' THEN 'active' ELSE status END
+            WHERE id = ?
+        """, (extra_executions, extra_budget, task_id))
+        await db.commit()
+
+    return web.json_response({"success": True}, headers=_CORS)
+
+
+async def api_admin_user_tasks(request: web.Request) -> web.Response:
+    if not _check_admin_auth(request):
+        return web.json_response({"error": "Unauthorized"}, status=401, headers=_CORS)
+
+    status_filter = request.rel_url.query.get("status", "all")
+
+    query = """
+        SELECT t.id, t.creator_id, t.type, t.title, t.description, t.target_url,
+               t.reward, t.total_budget, t.spent, t.status, t.completions, t.max_completions,
+               t.admin_note, t.created_at, t.approved_at,
+               u.username, u.first_name
+        FROM user_tasks t
+        LEFT JOIN users u ON t.creator_id = u.telegram_id
+    """
+    params: list = []
+    if status_filter != "all":
+        query += " WHERE t.status = ?"
+        params.append(status_filter)
+    query += " ORDER BY t.created_at DESC LIMIT 200"
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(query, params) as cur:
+            rows = await cur.fetchall()
+
+    return web.json_response([{
+        "id":             r[0],
+        "creatorId":      r[1],
+        "type":           r[2],
+        "title":          r[3],
+        "description":    r[4],
+        "targetUrl":      r[5],
+        "reward":         float(r[6]),
+        "totalBudget":    float(r[7]),
+        "spent":          float(r[8]),
+        "status":         r[9],
+        "completions":    r[10],
+        "maxCompletions": r[11],
+        "adminNote":      r[12],
+        "createdAt":      r[13],
+        "approvedAt":     r[14],
+        "username":       r[15] or "",
+        "firstName":      r[16] or "",
+    } for r in rows], headers=_CORS)
+
+
+async def api_admin_approve_user_task(request: web.Request) -> web.Response:
+    if not _check_admin_auth(request):
+        return web.json_response({"error": "Unauthorized"}, status=401, headers=_CORS)
+
+    task_id = request.match_info.get("id")
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT creator_id, title, status FROM user_tasks WHERE id = ?", (task_id,)
+        ) as cur:
+            task = await cur.fetchone()
+
+        if not task or task[2] != 'pending_approval':
+            return web.json_response({"error": "Task not found or not pending"}, status=400, headers=_CORS)
+
+        await db.execute(
+            "UPDATE user_tasks SET status = 'active', approved_at = datetime('now') WHERE id = ?",
+            (task_id,)
+        )
+        await db.commit()
+
+    if bot and task:
+        try:
+            await bot.send_message(
+                task[0],
+                f"✅ <b>Tâche approuvée !</b>\n\n"
+                f"📋 <b>{task[1]}</b> est maintenant active.\n"
+                f"Les utilisateurs peuvent la compléter dès maintenant.",
+                parse_mode="HTML",
+            )
+        except Exception:
+            pass
+
+    return web.json_response({"success": True}, headers=_CORS)
+
+
+async def api_admin_reject_user_task(request: web.Request) -> web.Response:
+    if not _check_admin_auth(request):
+        return web.json_response({"error": "Unauthorized"}, status=401, headers=_CORS)
+
+    task_id = request.match_info.get("id")
+    try:
+        data = await request.json()
+    except Exception:
+        data = {}
+    note = str(data.get("note", "")).strip()
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT creator_id, title, total_budget, status FROM user_tasks WHERE id = ?", (task_id,)
+        ) as cur:
+            task = await cur.fetchone()
+
+        if not task or task[3] != 'pending_approval':
+            return web.json_response({"error": "Task not found or not pending"}, status=400, headers=_CORS)
+
+        await db.execute(
+            "UPDATE user_tasks SET status = 'rejected', admin_note = ? WHERE id = ?",
+            (note, task_id)
+        )
+        await db.commit()
+
+    if bot and task:
+        try:
+            await bot.send_message(
+                task[0],
+                f"❌ <b>Tâche refusée</b>\n\n"
+                f"📋 <b>{task[1]}</b>\n"
+                f"💰 Remboursement de <b>{float(task[2]):.3f} TON</b> en cours.\n"
+                + (f"📝 Motif : {note}" if note else ""),
+                parse_mode="HTML",
+            )
+        except Exception:
+            pass
+
+    return web.json_response({"success": True, "refund": float(task[2]) if task else 0}, headers=_CORS)
+
+
 # ── Static Files ───────────────────────────────────────────────────────────────
 
 DIST = os.path.join(os.path.dirname(__file__), "dist")
@@ -1100,6 +1522,20 @@ async def start_web() -> None:
     # Admin — fraud alerts
     app.router.add_get( "/api/admin/fraud-alerts",         api_admin_fraud_alerts)
     app.router.add_post("/api/admin/fraud-alerts/{alert_id}/resolve", api_admin_resolve_alert)
+
+    # User tasks marketplace
+    app.router.add_post("/api/user-tasks/create",               api_user_task_create)
+    app.router.add_get( "/api/user-tasks/mine",                 api_user_task_mine)
+    app.router.add_get( "/api/user-tasks/available",            api_user_task_available)
+    app.router.add_post("/api/user-tasks/{id}/complete",        api_user_task_complete)
+    app.router.add_post("/api/user-tasks/{id}/pause",           api_user_task_pause)
+    app.router.add_post("/api/user-tasks/{id}/delete",          api_user_task_delete)
+    app.router.add_post("/api/user-tasks/{id}/fund",            api_user_task_fund)
+
+    # Admin — user tasks
+    app.router.add_get( "/api/admin/user-tasks",                      api_admin_user_tasks)
+    app.router.add_post("/api/admin/user-tasks/{id}/approve",         api_admin_approve_user_task)
+    app.router.add_post("/api/admin/user-tasks/{id}/reject",          api_admin_reject_user_task)
 
     # SPA fallback — must be last
     app.router.add_get("/{path:.*}",                       serve_app)
