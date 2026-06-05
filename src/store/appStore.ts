@@ -467,9 +467,9 @@ const mockUsers: User[] = [
 
 const mockTasks: Task[] = [
   { id: '1', type: 'daily', title: 'Mission Quotidienne', description: 'Connectez-vous chaque jour pour gagner', reward: 0.10, rewardType: 'main', cooldownHours: 24, isActive: true, totalCompletions: 0, createdAt: new Date().toISOString(), verificationMethod: 'auto', priority: 0, maxPerUser: 1, icon: '📅', createdByUserId: 'platform' },
-  { id: '2', type: 'join_channel', title: 'Rejoindre TonCipher Official', description: 'Abonnez-vous à notre canal principal pour rester informé', reward: 0.0425, rewardType: 'main', targetUrl: 'https://t.me/toncipherofficial', isActive: true, totalCompletions: 234, maxCompletions: 1000, createdAt: new Date(Date.now() - 5 * 86400000).toISOString(), verificationMethod: 'auto', priority: 8, icon: '📢', createdByUserId: 'platform' },
-  { id: '3', type: 'join_group', title: 'Rejoindre la communauté', description: 'Participez à notre groupe de discussion officiel', reward: 0.0425, rewardType: 'main', targetUrl: 'https://t.me/toncipherchat', isActive: true, totalCompletions: 98, maxCompletions: 500, createdAt: new Date(Date.now() - 3 * 86400000).toISOString(), verificationMethod: 'auto', priority: 7, icon: '👥', createdByUserId: 'platform' },
-  { id: '4', type: 'start_bot', title: 'Démarrer @toncipherbot', description: 'Lancez le bot TonCipher et cliquez sur Start', reward: 0.0212, rewardType: 'main', targetUrl: 'https://t.me/toncipherbot', isActive: true, totalCompletions: 45, maxCompletions: 200, createdAt: new Date(Date.now() - 1 * 86400000).toISOString(), verificationMethod: 'auto', priority: 5, icon: '🤖', createdByUserId: 'platform' },
+  { id: '2', type: 'join_channel', title: 'Rejoindre TonCipher Officiel', description: 'Abonnez-vous à notre canal officiel pour rester informé', reward: 0.0425, rewardType: 'main', targetUrl: 'https://t.me/TonCipher_Official', isActive: true, totalCompletions: 0, maxCompletions: 1000, createdAt: new Date(Date.now() - 5 * 86400000).toISOString(), verificationMethod: 'auto', priority: 8, icon: '📢', createdByUserId: 'platform' },
+  { id: '3', type: 'join_channel', title: 'Rejoindre TonCipher Paiements', description: 'Rejoignez notre canal de suivi des paiements', reward: 0.0425, rewardType: 'main', targetUrl: 'https://t.me/TonCipher_Pays', isActive: true, totalCompletions: 0, maxCompletions: 500, createdAt: new Date(Date.now() - 3 * 86400000).toISOString(), verificationMethod: 'auto', priority: 7, icon: '💸', createdByUserId: 'platform' },
+  { id: '4', type: 'start_bot', title: 'Démarrer @TonCipher_bot', description: 'Lancez le bot TonCipher et cliquez sur Start', reward: 0.0212, rewardType: 'main', targetUrl: 'https://t.me/TonCipher_bot', isActive: true, totalCompletions: 0, maxCompletions: 200, createdAt: new Date(Date.now() - 1 * 86400000).toISOString(), verificationMethod: 'auto', priority: 5, icon: '🤖', createdByUserId: 'platform' },
   { id: '5', type: 'special', title: '🏆 Challenge Parrainage', description: 'Invitez 3 amis à rejoindre TonCipher. Envoyez une capture d\'écran de votre section Parrainage avec 3+ filleuls visibles.', reward: 1.50, rewardType: 'main', isActive: true, totalCompletions: 12, maxCompletions: 50, createdAt: new Date(Date.now() - 2 * 86400000).toISOString(), verificationMethod: 'manual', priority: 10, isPromoTask: true, icon: '🏆', createdByUserId: 'platform' },
   { id: '6', type: 'special', title: '📢 Partage Communauté', description: 'Partagez TonCipher dans un groupe Telegram de 100+ membres. Envoyez la capture d\'écran de votre message publié avec le lien visible.', reward: 0.80, rewardType: 'main', isActive: true, totalCompletions: 5, maxCompletions: 100, createdAt: new Date(Date.now() - 1 * 86400000).toISOString(), verificationMethod: 'manual', priority: 9, isPromoTask: true, icon: '📢', createdByUserId: 'platform' },
 ];
@@ -608,9 +608,9 @@ const mockPlatformConfig: PlatformConfig = {
   apiHash: '',
   databaseUrl: '',
   mainChannel: '@toncipherofficial',
-  mainGroup: '@teletask_discuss',
-  supportBot: '@teletask_support',
-  announcementChannel: '@teletask_news',
+  mainGroup: '@TonCipher_Pays',
+  supportBot: '@TonCipher_bot',
+  announcementChannel: '@TonCipher_Official',
   mainWallet: '',
   hotWalletThreshold: 10000,
   coldWalletThreshold: 100000,
@@ -738,6 +738,7 @@ interface AppState {
   // Actions - Mini App
   confirmDeposit: (txId: string, txHash: string) => void;
   creditDeposit: (userId: string, amount: number, currency: string, txHash: string, network: string) => void;
+  resetDailyTasks: () => void;
   completeTask: (taskId: string) => void;
   submitWithdrawal: (networkId: string, amount: number, address: string) => { success: boolean; error?: string };
   claimReferralMilestone: (id: string) => void;
@@ -941,6 +942,14 @@ export const useAppStore = create<AppState>((set, get) => ({
       isRead: false,
     });
   },
+
+  resetDailyTasks: () => set(s => ({
+    completedTaskIds: s.completedTaskIds.filter(id => {
+      const task = s.tasks.find(t => t.id === id);
+      return task?.type !== 'daily';
+    }),
+    currentUser: { ...s.currentUser, dailyTasksCompleted: 0, dailyWithdrawn: 0 },
+  })),
 
   completeTask: (taskId) => {
     const state = get();

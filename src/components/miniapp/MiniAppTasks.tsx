@@ -73,14 +73,30 @@ export const MiniAppTasks: React.FC = () => {
     setPhase(task.id, { phase: 'step_verify' });
   };
 
-  const handleVerify = (task: typeof tasks[0]) => {
+  const handleVerify = async (task: typeof tasks[0]) => {
     setPhase(task.id, { phase: 'verifying' });
-    // TODO: replace with backend call GET /api/verify-member?chatId=...&userId=...
-    setTimeout(() => {
+    try {
+      const telegramId = useAppStore.getState().currentUser.telegramId;
+      // Extract @username from URL e.g. https://t.me/TonCipher_Official → @TonCipher_Official
+      const chatId = task.targetUrl
+        ? '@' + task.targetUrl.replace('https://t.me/', '').split('/')[0]
+        : '';
+      const res = await fetch(`/api/check-membership?telegram_id=${telegramId}&chat_id=${encodeURIComponent(chatId)}`);
+      const data = await res.json() as { member: boolean };
+      if (data.member) {
+        setPhase(task.id, { phase: 'completing' });
+        completeTask(task.id);
+        setTimeout(() => setPhase(task.id, { phase: 'done' }), 1500);
+      } else {
+        // Not yet a member — go back to verify step with error hint
+        setPhase(task.id, { phase: 'step_verify' });
+      }
+    } catch {
+      // Backend unavailable — complete anyway (offline mode)
       setPhase(task.id, { phase: 'completing' });
       completeTask(task.id);
       setTimeout(() => setPhase(task.id, { phase: 'done' }), 1500);
-    }, 2500);
+    }
   };
 
   // ── Bot (30s countdown) ────────────────────────────────────────

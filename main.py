@@ -556,35 +556,34 @@ async def api_withdrawal_create(request: web.Request) -> web.Response:
 # ── API — Check channel membership ────────────────────────────────────────────
 
 async def api_check_membership(request: web.Request) -> web.Response:
-    """Return {member: bool, channel_url: str} — whether user is subscribed to official channel."""
-    # Build a t.me link from OFFICIAL_CHANNEL (handle @username or -100... ID)
-    if OFFICIAL_CHANNEL.startswith("@"):
-        channel_url = f"https://t.me/{OFFICIAL_CHANNEL[1:]}"
-    elif OFFICIAL_CHANNEL:
-        channel_url = f"https://t.me/c/{str(OFFICIAL_CHANNEL).lstrip('-100')}"
-    else:
-        channel_url = ""
-
-    if not bot or not OFFICIAL_CHANNEL:
-        return web.json_response({"member": True, "channel_url": channel_url}, headers=_CORS)
+    """Return {member: bool} — whether user is in a given Telegram channel/group.
+    Query params:
+      telegram_id : user's Telegram ID
+      chat_id     : channel/group @username or numeric ID (defaults to OFFICIAL_CHANNEL)
+    """
     try:
         telegram_id = int(request.rel_url.query.get("telegram_id", 0))
     except (ValueError, TypeError):
-        return web.json_response({"member": True, "channel_url": channel_url}, headers=_CORS)
-    if not telegram_id:
-        return web.json_response({"member": True, "channel_url": channel_url}, headers=_CORS)
+        return web.json_response({"member": True}, headers=_CORS)
+
+    chat_id = request.rel_url.query.get("chat_id", "").strip() or OFFICIAL_CHANNEL
+
+    if not bot or not chat_id or not telegram_id:
+        return web.json_response({"member": True}, headers=_CORS)
+
     try:
         from aiogram.enums import ChatMemberStatus
-        member = await bot.get_chat_member(OFFICIAL_CHANNEL, telegram_id)
+        member = await bot.get_chat_member(chat_id, telegram_id)
         is_member = member.status in (
             ChatMemberStatus.MEMBER,
             ChatMemberStatus.ADMINISTRATOR,
             ChatMemberStatus.CREATOR,
         )
     except Exception as e:
-        log.warning("Membership check failed for %d: %s", telegram_id, e)
+        log.warning("Membership check failed for %d in %s: %s", telegram_id, chat_id, e)
         is_member = True  # On error, allow through (don't block users)
-    return web.json_response({"member": is_member, "channel_url": channel_url}, headers=_CORS)
+
+    return web.json_response({"member": is_member}, headers=_CORS)
 
 
 # ── API — Admin: stats ─────────────────────────────────────────────────────────
