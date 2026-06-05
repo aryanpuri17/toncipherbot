@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0f0c29"/>
+      <stop offset="50%" style="stop-color:#302b63"/>
+      <stop offset="100%" style="stop-color:#24243e"/>
+    </linearGradient>
+    <linearGradient id="gem" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#60a5fa"/>
+      <stop offset="100%" style="stop-color:#a855f7"/>
+    </linearGradient>
+    <linearGradient id="shine" x1="0%" y1="0%" x2="60%" y2="100%">
+      <stop offset="0%" style="stop-color:#ffffff;stop-opacity:0.35"/>
+      <stop offset="100%" style="stop-color:#ffffff;stop-opacity:0"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="8" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="512" height="512" fill="url(#bg)" rx="80"/>
+
+  <!-- Outer glow ring -->
+  <circle cx="256" cy="256" r="190" fill="none" stroke="#6366f1" stroke-width="1.5" opacity="0.3"/>
+  <circle cx="256" cy="256" r="175" fill="none" stroke="#818cf8" stroke-width="0.8" opacity="0.2"/>
+
+  <!-- Diamond gem shape -->
+  <g filter="url(#glow)" transform="translate(256,248)">
+    <!-- Main gem body -->
+    <polygon points="0,-118 88,-40 88,40 0,118 -88,40 -88,-40" fill="url(#gem)" opacity="0.95"/>
+    <!-- Top face -->
+    <polygon points="0,-118 48,-60 0,-30 -48,-60" fill="#93c5fd" opacity="0.7"/>
+    <!-- Middle left -->
+    <polygon points="-88,-40 -48,-60 0,-30 0,30 -88,40" fill="#7c3aed" opacity="0.6"/>
+    <!-- Middle right -->
+    <polygon points="88,-40 48,-60 0,-30 0,30 88,40" fill="#3b82f6" opacity="0.5"/>
+    <!-- Bottom -->
+    <polygon points="0,118 -88,40 0,30 88,40" fill="#1e40af" opacity="0.7"/>
+    <!-- Shine overlay -->
+    <polygon points="0,-118 88,-40 88,40 0,118 -88,40 -88,-40" fill="url(#shine)"/>
+    <!-- Inner highlight -->
+    <polygon points="0,-80 32,-42 0,-20 -32,-42" fill="white" opacity="0.25"/>
+  </g>
+
+  <!-- Text TC -->
+  <text x="256" y="420" font-family="'Arial Black', 'Helvetica Neue', sans-serif" font-weight="900"
+        font-size="58" fill="white" text-anchor="middle" letter-spacing="8" opacity="0.9">
+    TonCipher
+  </text>
+
+  <!-- Subtitle dots -->
+  <circle cx="200" cy="445" r="3" fill="#6366f1" opacity="0.6"/>
+  <circle cx="256" cy="445" r="3" fill="#a855f7" opacity="0.6"/>
+  <circle cx="312" cy="445" r="3" fill="#6366f1" opacity="0.6"/>
+</svg>
