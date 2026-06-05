@@ -1,66 +1,86 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
-    <linearGradient id="bg2" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#0f0c29"/>
-      <stop offset="50%" style="stop-color:#1e1b4b"/>
-      <stop offset="100%" style="stop-color:#312e81"/>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0a0a1a"/>
+      <stop offset="100%" stop-color="#0f0a2a"/>
     </linearGradient>
-    <linearGradient id="badge" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#3b82f6"/>
-      <stop offset="100%" style="stop-color:#6366f1"/>
+    <linearGradient id="ring" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#a78bfa"/>
+      <stop offset="50%" stop-color="#60a5fa"/>
+      <stop offset="100%" stop-color="#a78bfa"/>
     </linearGradient>
-    <linearGradient id="star" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#fbbf24"/>
-      <stop offset="100%" style="stop-color:#f59e0b"/>
+    <linearGradient id="inner" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e1b4b"/>
+      <stop offset="100%" stop-color="#0f0c29"/>
     </linearGradient>
-    <filter id="shadow2">
-      <feDropShadow dx="0" dy="4" stdDeviation="12" flood-color="#6366f1" flood-opacity="0.5"/>
+    <linearGradient id="star1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fde68a"/>
+      <stop offset="100%" stop-color="#f59e0b"/>
+    </linearGradient>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="12" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="starglow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="8" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
     </filter>
   </defs>
 
   <!-- Background -->
-  <rect width="512" height="512" fill="url(#bg2)" rx="80"/>
+  <rect width="512" height="512" fill="url(#bg)"/>
 
-  <!-- Decorative rings -->
-  <circle cx="256" cy="220" r="160" fill="none" stroke="#4f46e5" stroke-width="1" opacity="0.25"/>
-  <circle cx="256" cy="220" r="140" fill="none" stroke="#6366f1" stroke-width="0.5" opacity="0.2"/>
+  <!-- Outer decorative ring -->
+  <circle cx="256" cy="256" r="200" fill="none" stroke="url(#ring)" stroke-width="1.5" opacity="0.35"/>
 
-  <!-- Shield / badge shape -->
-  <g filter="url(#shadow2)" transform="translate(256,215)">
-    <path d="M0,-140 L105,-95 L105,30 Q105,100 0,140 Q-105,100 -105,30 L-105,-95 Z"
-          fill="url(#badge)" opacity="0.9"/>
-    <!-- Inner shield highlight -->
-    <path d="M0,-120 L88,-80 L88,28 Q88,88 0,122 Q-88,88 -88,28 L-88,-80 Z"
-          fill="none" stroke="white" stroke-width="1.5" opacity="0.2"/>
-    <!-- Diamond inside shield -->
-    <polygon points="0,-75 42,-20 42,20 0,65 -42,20 -42,-20" fill="white" opacity="0.95"/>
-    <polygon points="0,-75 22,-35 0,-18 -22,-35" fill="#bfdbfe" opacity="0.8"/>
-    <polygon points="-42,-20 -22,-35 0,-18 0,15 -42,20" fill="#4338ca" opacity="0.5"/>
-    <polygon points="42,-20 22,-35 0,-18 0,15 42,20" fill="#1d4ed8" opacity="0.4"/>
-    <polygon points="0,65 -42,20 0,15 42,20" fill="#1e3a8a" opacity="0.6"/>
-  </g>
+  <!-- Inner filled circle -->
+  <circle cx="256" cy="256" r="170" fill="url(#inner)"/>
 
-  <!-- Stars decoration -->
-  <g transform="translate(120,100)">
-    <polygon points="0,-12 3,-4 12,-4 5,2 8,12 0,6 -8,12 -5,2 -12,-4 -3,-4" fill="url(#star)" opacity="0.7"/>
-  </g>
-  <g transform="translate(392,90)">
-    <polygon points="0,-10 2.5,-3 10,-3 4,2 6,10 0,5 -6,10 -4,2 -10,-3 -2.5,-3" fill="url(#star)" opacity="0.5"/>
-  </g>
-  <g transform="translate(100,340)">
-    <polygon points="0,-8 2,-2 8,-2 3,2 5,8 0,4 -5,8 -3,2 -8,-2 -2,-2" fill="url(#star)" opacity="0.4"/>
-  </g>
-  <g transform="translate(410,330)">
-    <polygon points="0,-12 3,-4 12,-4 5,2 8,12 0,6 -8,12 -5,2 -12,-4 -3,-4" fill="url(#star)" opacity="0.6"/>
+  <!-- Ring border -->
+  <circle cx="256" cy="256" r="170" fill="none" stroke="url(#ring)" stroke-width="3" opacity="0.7"/>
+
+  <!-- 8-point star / seal -->
+  <g transform="translate(256,256)" filter="url(#starglow)">
+    <!-- 8 rotated squares making a star seal -->
+    <g opacity="0.9">
+      <rect x="-68" y="-68" width="136" height="136" rx="12" fill="#4338ca" transform="rotate(0)"/>
+      <rect x="-68" y="-68" width="136" height="136" rx="12" fill="#5b21b6" transform="rotate(22.5)" opacity="0.7"/>
+      <rect x="-68" y="-68" width="136" height="136" rx="12" fill="#4c1d95" transform="rotate(45)" opacity="0.8"/>
+    </g>
+
+    <!-- Center diamond (TON-style) -->
+    <g filter="url(#glow)">
+      <polygon points="0,-55  42,-18  42,18  0,55  -42,18  -42,-18" fill="#60a5fa"/>
+      <polygon points="0,-55  18,-25  0,-12 -18,-25" fill="#bfdbfe"/>
+      <polygon points="-42,-18 -18,-25  0,-12  0,12  -42,18" fill="#3730a3"/>
+      <polygon points=" 42,-18  18,-25  0,-12  0,12   42,18" fill="#1d4ed8"/>
+      <polygon points="0,55  -42,18  0,12  42,18" fill="#1e3a8a"/>
+      <!-- Highlight -->
+      <polygon points="0,-55  12,-38  0,-25  -12,-38" fill="white" opacity="0.4"/>
+    </g>
   </g>
 
-  <!-- Text -->
-  <text x="256" y="415" font-family="'Arial Black', 'Helvetica Neue', sans-serif" font-weight="900"
-        font-size="52" fill="white" text-anchor="middle" letter-spacing="4" opacity="0.95">
-    TonCipher
-  </text>
-  <text x="256" y="455" font-family="'Arial', sans-serif" font-weight="600"
-        font-size="28" fill="#818cf8" text-anchor="middle" letter-spacing="10" opacity="0.85">
-    OFFICIEL
-  </text>
+  <!-- Gold star top -->
+  <g transform="translate(256,66)" filter="url(#starglow)">
+    <polygon points="0,-22 6,-8 22,-8 10,2 14,18 0,8 -14,18 -10,2 -22,-8 -6,-8"
+             fill="url(#star1)"/>
+  </g>
+
+  <!-- Subtle outer stars -->
+  <g transform="translate(140,140)">
+    <polygon points="0,-10 2.5,-3 10,-3 4,2 6,10 0,5 -6,10 -4,2 -10,-3 -2.5,-3"
+             fill="#a78bfa" opacity="0.45"/>
+  </g>
+  <g transform="translate(372,140)">
+    <polygon points="0,-10 2.5,-3 10,-3 4,2 6,10 0,5 -6,10 -4,2 -10,-3 -2.5,-3"
+             fill="#a78bfa" opacity="0.45"/>
+  </g>
+  <g transform="translate(140,372)">
+    <polygon points="0,-8 2,-2.5 8,-2.5 3.5,1.5 5,8 0,4 -5,8 -3.5,1.5 -8,-2.5 -2,-2.5"
+             fill="#a78bfa" opacity="0.3"/>
+  </g>
+  <g transform="translate(372,372)">
+    <polygon points="0,-8 2,-2.5 8,-2.5 3.5,1.5 5,8 0,4 -5,8 -3.5,1.5 -8,-2.5 -2,-2.5"
+             fill="#a78bfa" opacity="0.3"/>
+  </g>
 </svg>

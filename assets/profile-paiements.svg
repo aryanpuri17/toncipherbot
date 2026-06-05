@@ -1,80 +1,67 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
-    <linearGradient id="bg3" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#052e16"/>
-      <stop offset="50%" style="stop-color:#064e3b"/>
-      <stop offset="100%" style="stop-color:#0f172a"/>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#020d07"/>
+      <stop offset="100%" stop-color="#071a10"/>
     </linearGradient>
-    <linearGradient id="circle" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#10b981"/>
-      <stop offset="100%" style="stop-color:#059669"/>
+    <linearGradient id="ring" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#34d399"/>
+      <stop offset="50%" stop-color="#10b981"/>
+      <stop offset="100%" stop-color="#34d399"/>
     </linearGradient>
-    <linearGradient id="coin" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#fbbf24"/>
-      <stop offset="100%" style="stop-color:#d97706"/>
+    <linearGradient id="inner" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#052e16"/>
+      <stop offset="100%" stop-color="#022c16"/>
     </linearGradient>
-    <filter id="glow3">
-      <feGaussianBlur stdDeviation="10" result="blur"/>
+    <linearGradient id="check" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#6ee7b7"/>
+      <stop offset="100%" stop-color="#10b981"/>
+    </linearGradient>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="14" result="blur"/>
       <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
     </filter>
-    <filter id="shadow3">
-      <feDropShadow dx="0" dy="6" stdDeviation="16" flood-color="#10b981" flood-opacity="0.45"/>
+    <filter id="ambient" x="-100%" y="-100%" width="300%" height="300%">
+      <feGaussianBlur stdDeviation="50" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
     </filter>
   </defs>
 
   <!-- Background -->
-  <rect width="512" height="512" fill="url(#bg3)" rx="80"/>
+  <rect width="512" height="512" fill="url(#bg)"/>
 
-  <!-- Decorative rings -->
-  <circle cx="256" cy="230" r="185" fill="none" stroke="#10b981" stroke-width="1" opacity="0.15"/>
-  <circle cx="256" cy="230" r="165" fill="none" stroke="#34d399" stroke-width="0.6" opacity="0.12"/>
+  <!-- Ambient green glow -->
+  <circle cx="256" cy="256" r="130" fill="#10b981" opacity="0.06" filter="url(#ambient)"/>
 
-  <!-- Main circle with checkmark -->
-  <g filter="url(#shadow3)" transform="translate(256,220)">
-    <!-- Circle background -->
-    <circle cx="0" cy="0" r="138" fill="url(#circle)" opacity="0.15"/>
-    <circle cx="0" cy="0" r="125" fill="none" stroke="url(#circle)" stroke-width="6" opacity="0.8"/>
+  <!-- Outer ring -->
+  <circle cx="256" cy="256" r="200" fill="none" stroke="url(#ring)" stroke-width="1" opacity="0.25"/>
 
-    <!-- Big checkmark -->
-    <g filter="url(#glow3)">
-      <polyline points="-68,8 -22,58 72,-52"
-                fill="none" stroke="#10b981" stroke-width="22"
-                stroke-linecap="round" stroke-linejoin="round"/>
-      <polyline points="-68,8 -22,58 72,-52"
-                fill="none" stroke="#34d399" stroke-width="10"
-                stroke-linecap="round" stroke-linejoin="round"/>
-    </g>
+  <!-- Inner circle -->
+  <circle cx="256" cy="256" r="170" fill="url(#inner)"/>
+  <circle cx="256" cy="256" r="170" fill="none" stroke="url(#ring)" stroke-width="3" opacity="0.65"/>
+
+  <!-- Secondary ring inside -->
+  <circle cx="256" cy="256" r="140" fill="none" stroke="#10b981" stroke-width="1" opacity="0.2"/>
+
+  <!-- Checkmark — bold, centered -->
+  <g filter="url(#glow)">
+    <!-- Shadow layer -->
+    <polyline points="152,256  220,322  360,178"
+              fill="none" stroke="#059669" stroke-width="36"
+              stroke-linecap="round" stroke-linejoin="round" opacity="0.4"/>
+    <!-- Main check -->
+    <polyline points="152,256  220,322  360,178"
+              fill="none" stroke="url(#check)" stroke-width="28"
+              stroke-linecap="round" stroke-linejoin="round"/>
+    <!-- Bright inner check -->
+    <polyline points="152,256  220,322  360,178"
+              fill="none" stroke="#d1fae5" stroke-width="8"
+              stroke-linecap="round" stroke-linejoin="round" opacity="0.55"/>
   </g>
 
-  <!-- Small coin icons -->
-  <g transform="translate(115,120)">
-    <circle cx="0" cy="0" r="28" fill="url(#coin)" opacity="0.85"/>
-    <text x="0" y="10" font-family="'Arial Black', sans-serif" font-weight="900"
-          font-size="22" fill="#7c2d12" text-anchor="middle">T</text>
-  </g>
-  <g transform="translate(397,118)">
-    <circle cx="0" cy="0" r="22" fill="url(#coin)" opacity="0.65"/>
-    <text x="0" y="8" font-family="'Arial Black', sans-serif" font-weight="900"
-          font-size="18" fill="#7c2d12" text-anchor="middle">T</text>
-  </g>
-  <g transform="translate(106,340)">
-    <circle cx="0" cy="0" r="18" fill="url(#coin)" opacity="0.5"/>
-    <text x="0" y="7" font-family="'Arial Black', sans-serif" font-weight="900"
-          font-size="14" fill="#7c2d12" text-anchor="middle">T</text>
-  </g>
-  <g transform="translate(405,342)">
-    <circle cx="0" cy="0" r="24" fill="url(#coin)" opacity="0.7"/>
-    <text x="0" y="9" font-family="'Arial Black', sans-serif" font-weight="900"
-          font-size="18" fill="#7c2d12" text-anchor="middle">T</text>
-  </g>
-
-  <!-- Text -->
-  <text x="256" y="415" font-family="'Arial Black', 'Helvetica Neue', sans-serif" font-weight="900"
-        font-size="52" fill="white" text-anchor="middle" letter-spacing="4" opacity="0.95">
-    TonCipher
-  </text>
-  <text x="256" y="457" font-family="'Arial', sans-serif" font-weight="700"
-        font-size="27" fill="#34d399" text-anchor="middle" letter-spacing="8" opacity="0.9">
-    PAIEMENTS
-  </text>
+  <!-- Corner sparkles -->
+  <circle cx="256" cy="72"  r="3" fill="#34d399" opacity="0.6"/>
+  <circle cx="440" cy="256" r="3" fill="#34d399" opacity="0.4"/>
+  <circle cx="256" cy="440" r="3" fill="#34d399" opacity="0.6"/>
+  <circle cx="72"  cy="256" r="3" fill="#34d399" opacity="0.4"/>
 </svg>
