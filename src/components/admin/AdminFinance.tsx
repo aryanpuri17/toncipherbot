@@ -282,7 +282,7 @@ export const AdminWithdrawals: React.FC = () => {
                       <div className="flex gap-2">
                         <input type="text" value={txHashInput[w.id] ?? ''}
                           onChange={e => setTxHashInput(p => ({ ...p, [w.id]: e.target.value }))}
-                          placeholder="Hash TX blockchain (après envoi, optionnel)"
+                          placeholder="Hash TX (depuis tonscan.org après envoi — optionnel)"
                           className="flex-1 px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-xs text-white font-mono placeholder:text-slate-600 focus:outline-none focus:border-emerald-500/40" />
                         <button onClick={() => void doApprove(w.id)} disabled={isActioning}
                           className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-semibold hover:bg-emerald-500/25 disabled:opacity-40">
@@ -307,8 +307,16 @@ export const AdminWithdrawals: React.FC = () => {
                     <div className="flex items-center gap-2 p-3 rounded-lg bg-white/[0.03]">
                       {w.status === 'completed'
                         ? <><CheckCircle className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-                            <div><p className="text-xs text-emerald-400 font-medium">Approuvé {w.processed_at ? new Date(w.processed_at).toLocaleString('fr-FR') : ''}</p>
-                              {w.tx_hash && <p className="text-[10px] text-slate-500 font-mono mt-0.5">TX: {w.tx_hash}</p>}</div></>
+                            <div>
+                              <p className="text-xs text-emerald-400 font-medium">Approuvé {w.processed_at ? new Date(w.processed_at).toLocaleString('fr-FR') : ''}</p>
+                              {w.tx_hash && (
+                                <a href={`https://tonscan.org/tx/${w.tx_hash}`} target="_blank" rel="noopener noreferrer"
+                                   className="flex items-center gap-1 text-[10px] text-blue-400 hover:text-blue-300 mt-0.5 font-mono">
+                                  <ExternalLink className="w-2.5 h-2.5 flex-shrink-0" />
+                                  {w.tx_hash.length > 20 ? w.tx_hash.slice(0, 20) + '…' : w.tx_hash}
+                                </a>
+                              )}
+                            </div></>
                         : <><XCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
                             <div><p className="text-xs text-red-400 font-medium">Refusé {w.processed_at ? new Date(w.processed_at).toLocaleString('fr-FR') : ''}</p>
                               {w.admin_note && <p className="text-[10px] text-slate-500 mt-0.5">Motif: {w.admin_note}</p>}</div></>}

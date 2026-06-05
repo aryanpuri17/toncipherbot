@@ -21,12 +21,16 @@ from aiogram import Bot, Dispatcher, types
 from aiogram.filters import CommandStart
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 
-BOT_TOKEN        = os.getenv("BOT_TOKEN", "")
-WEBAPP_URL       = os.getenv("WEBAPP_URL", "https://toncipherbot.onrender.com")
-PORT             = int(os.getenv("PORT", 8080))
-DB_PATH          = os.path.join(os.path.dirname(__file__), "toncipherbot.db")
-ADMIN_SECRET     = os.getenv("ADMIN_SECRET", "")  # If set, required as X-Admin-Key header
-ADMIN_TELEGRAM_ID = int(os.getenv("ADMIN_TELEGRAM_ID", "0"))  # Your personal Telegram ID for notifications
+BOT_TOKEN         = os.getenv("BOT_TOKEN", "")
+WEBAPP_URL        = os.getenv("WEBAPP_URL", "https://toncipherbot.onrender.com")
+PORT              = int(os.getenv("PORT", 8080))
+DB_PATH           = os.path.join(os.path.dirname(__file__), "toncipherbot.db")
+ADMIN_SECRET      = os.getenv("ADMIN_SECRET", "")
+ADMIN_TELEGRAM_ID = int(os.getenv("ADMIN_TELEGRAM_ID", "0"))
+# Canal Telegram obligatoire (ex: @TonCipher_official ou -100xxxxxxxxxx)
+OFFICIAL_CHANNEL  = os.getenv("OFFICIAL_CHANNEL", "")
+# Canal Telegram où poster les retraits (ex: @TonCipher_withdrawals ou -100xxxxxxxxxx)
+WITHDRAWAL_CHANNEL = os.getenv("WITHDRAWAL_CHANNEL", "")
 
 REFERRAL_BONUS_TON  = float(os.getenv("REFERRAL_BONUS_TON", "1.0"))
 MAX_ACCOUNTS_PER_IP = int(os.getenv("MAX_ACCOUNTS_PER_IP", "3"))
@@ -189,6 +193,15 @@ async def _notify_admin(text: str) -> None:
             await bot.send_message(ADMIN_TELEGRAM_ID, text, parse_mode="HTML")
         except Exception as e:
             log.warning("Admin notify failed: %s", e)
+
+
+async def _notify_channel(channel: str, text: str) -> None:
+    """Post a message to a Telegram channel (WITHDRAWAL_CHANNEL or OFFICIAL_CHANNEL)."""
+    if bot and channel:
+        try:
+            await bot.send_message(channel, text, parse_mode="HTML")
+        except Exception as e:
+            log.warning("Channel notify failed (%s): %s", channel, e)
 
 
 async def _log_fraud_alert(
@@ -525,18 +538,53 @@ async def api_withdrawal_create(request: web.Request) -> web.Response:
     is_flagged = bool(urow[2]) if urow else False
 
     flag_warn = "\n⚠️ <b>Compte signalé (anti-fraude)</b> — vérification recommandée." if is_flagged else ""
-    await _notify_admin(
+    withdrawal_msg = (
         f"💸 <b>Nouvelle demande de retrait</b>{flag_warn}\n"
         f"👤 {fname} @{uname or 'inconnu'} (ID: <code>{telegram_id}</code>)\n"
         f"💰 <b>{amount:.2f} {currency}</b> ({network}) — frais: {fee}\n"
         f"📬 Adresse: <code>{address}</code>\n"
-        f"🆔 TX ID: <code>{tx_id}</code>\n"
-        f"👉 Ouvre l'admin pour approuver ou refuser."
+        f"🆔 TX ID: <code>{tx_id}</code>"
     )
+    await _notify_admin(withdrawal_msg + "\n👉 Ouvre l'admin pour approuver ou refuser.")
+    await _notify_channel(WITHDRAWAL_CHANNEL, withdrawal_msg + "\n⏳ En attente d'approbation.")
 
     log.info("Withdrawal request: id=%s telegram_id=%d amount=%.2f %s → %s",
              tx_id, telegram_id, amount, currency, address[:12])
     return web.json_response({"success": True, "id": tx_id}, headers=_CORS)
+
+
+# ── API — Check channel membership ────────────────────────────────────────────
+
+async def api_check_membership(request: web.Request) -> web.Response:
+    """Return {member: bool, channel_url: str} — whether user is subscribed to official channel."""
+    # Build a t.me link from OFFICIAL_CHANNEL (handle @username or -100... ID)
+    if OFFICIAL_CHANNEL.startswith("@"):
+        channel_url = f"https://t.me/{OFFICIAL_CHANNEL[1:]}"
+    elif OFFICIAL_CHANNEL:
+        channel_url = f"https://t.me/c/{str(OFFICIAL_CHANNEL).lstrip('-100')}"
+    else:
+        channel_url = ""
+
+    if not bot or not OFFICIAL_CHANNEL:
+        return web.json_response({"member": True, "channel_url": channel_url}, headers=_CORS)
+    try:
+        telegram_id = int(request.rel_url.query.get("telegram_id", 0))
+    except (ValueError, TypeError):
+        return web.json_response({"member": True, "channel_url": channel_url}, headers=_CORS)
+    if not telegram_id:
+        return web.json_response({"member": True, "channel_url": channel_url}, headers=_CORS)
+    try:
+        from aiogram.enums import ChatMemberStatus
+        member = await bot.get_chat_member(OFFICIAL_CHANNEL, telegram_id)
+        is_member = member.status in (
+            ChatMemberStatus.MEMBER,
+            ChatMemberStatus.ADMINISTRATOR,
+            ChatMemberStatus.CREATOR,
+        )
+    except Exception as e:
+        log.warning("Membership check failed for %d: %s", telegram_id, e)
+        is_member = True  # On error, allow through (don't block users)
+    return web.json_response({"member": is_member, "channel_url": channel_url}, headers=_CORS)
 
 
 # ── API — Admin: stats ─────────────────────────────────────────────────────────
@@ -812,17 +860,27 @@ async def api_admin_approve_withdrawal(request: web.Request) -> web.Response:
             tx_row = await cur.fetchone()
         await db.commit()
 
+    tx_link = f"https://tonscan.org/tx/{tx_hash}" if tx_hash else ""
     if bot and tx_row:
         try:
             await bot.send_message(
                 tx_row[0],
                 f"✅ <b>Retrait approuvé !</b>\n\n"
                 f"💰 Montant : <b>{tx_row[1]:.2f} {tx_row[2]}</b>\n"
-                f"{'🔗 TX : ' + tx_hash if tx_hash else ''}",
+                + (f'🔗 <a href="{tx_link}">Voir la transaction</a>' if tx_link else ""),
                 parse_mode="HTML",
+                disable_web_page_preview=True,
             )
         except Exception:
             pass
+
+    await _notify_channel(
+        WITHDRAWAL_CHANNEL,
+        f"✅ <b>Retrait approuvé</b>\n"
+        f"🆔 TX ID: <code>{tx_id}</code>\n"
+        f"💰 {tx_row[1]:.2f} {tx_row[2] if tx_row else ''}\n"
+        + (f'🔗 <a href="{tx_link}">Voir sur TonScan</a>' if tx_link else ""),
+    )
 
     return web.json_response({"success": True}, headers=_CORS)
 
@@ -860,6 +918,14 @@ async def api_admin_reject_withdrawal(request: web.Request) -> web.Response:
             )
         except Exception:
             pass
+
+    await _notify_channel(
+        WITHDRAWAL_CHANNEL,
+        f"❌ <b>Retrait refusé</b>\n"
+        f"🆔 TX ID: <code>{tx_id}</code>\n"
+        f"💰 {tx_row[1]:.2f} {tx_row[2] if tx_row else ''}\n"
+        + (f"📝 Motif : {note}" if note else ""),
+    )
 
     return web.json_response({"success": True}, headers=_CORS)
 
@@ -982,6 +1048,7 @@ async def start_web() -> None:
     # User API
     app.router.add_post("/api/user/init",                  api_user_init)
     app.router.add_post("/api/user/referral",              api_user_referral)
+    app.router.add_get( "/api/check-membership",           api_check_membership)
     app.router.add_get( "/api/leaderboard",                api_leaderboard)
 
     # Transaction API (called by frontend)
