@@ -259,66 +259,8 @@ const MiniApp: React.FC = () => {
 
 const API = '';  // same origin — calls go to toncipherbot.onrender.com
 
-// ── Channel gate — shown if user hasn't joined the official channel ──────────
-function ChannelGate({ channelUrl, onJoined }: { channelUrl: string; onJoined: () => void }) {
-  const [checking, setChecking] = React.useState(false);
-
-  const handleCheck = async () => {
-    setChecking(true);
-    try {
-      // Open channel first, then check membership
-      window.open(channelUrl, '_blank');
-      await new Promise(r => setTimeout(r, 4000));
-      onJoined(); // re-check happens in parent
-    } finally {
-      setChecking(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gradient-to-br from-[#0f0c29] via-[#302b63] to-[#24243e] p-6">
-      <div className="w-full max-w-sm text-center space-y-6">
-        <div className="w-20 h-20 rounded-full bg-blue-500/20 flex items-center justify-center mx-auto">
-          <span className="text-4xl">📢</span>
-        </div>
-        <div className="space-y-2">
-          <h2 className="text-xl font-bold text-white">Canal officiel requis</h2>
-          <p className="text-slate-400 text-sm leading-relaxed">
-            Pour utiliser TonCipher, tu dois d'abord rejoindre notre canal officiel.
-            Tu y trouveras les annonces, mises à jour et informations importantes.
-          </p>
-        </div>
-        <button
-          onClick={() => void handleCheck()}
-          disabled={checking}
-          className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-blue-500 to-purple-600 text-white font-semibold text-sm flex items-center justify-center gap-2 disabled:opacity-60">
-          {checking
-            ? <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Vérification…</>
-            : '📢 Rejoindre le canal'}
-        </button>
-        <p className="text-[11px] text-slate-500">
-          Après avoir rejoint, attends quelques secondes — la vérification est automatique.
-        </p>
-      </div>
-    </div>
-  );
-}
-
 export default function App() {
   const { currentView, setCurrentView, initFromTelegram, syncUserFromApi } = useAppStore();
-  const [channelGate, setChannelGate] = React.useState<{ show: boolean; url: string; telegramId: number }>({ show: false, url: '', telegramId: 0 });
-
-  const checkMembership = async (telegramId: number) => {
-    try {
-      const res = await fetch(`${API}/api/check-membership?telegram_id=${telegramId}`);
-      if (res.ok) {
-        const { member, channel_url } = await res.json() as { member: boolean; channel_url?: string };
-        if (!member && channel_url) {
-          setChannelGate({ show: true, url: channel_url, telegramId });
-        }
-      }
-    } catch { /* backend unavailable — allow through */ }
-  };
 
   useEffect(() => {
     void (async () => {
@@ -363,11 +305,6 @@ export default function App() {
         // Backend unavailable — app still works with local state
       }
 
-      // Check mandatory channel membership (non-blocking: admin route skips it)
-      if (!window.location.hash.includes('admin')) {
-        await checkMembership(tgUser.id);
-      }
-
       // Process incoming referral from link (?startapp=r_TELEGRAMID)
       const startParam = tg.initDataUnsafe?.start_param;
       if (startParam?.startsWith('r_')) {
@@ -398,17 +335,6 @@ export default function App() {
       <ModalManager />
     </>
   ) : (
-    <>
-      {channelGate.show && (
-        <ChannelGate
-          channelUrl={channelGate.url}
-          onJoined={() => void checkMembership(channelGate.telegramId).then(() => {
-            // Hide gate once membership is confirmed (checkMembership will not re-show if member)
-            setChannelGate(g => ({ ...g, show: false }));
-          })}
-        />
-      )}
-      <MiniApp />
-    </>
+    <MiniApp />
   );
 }
