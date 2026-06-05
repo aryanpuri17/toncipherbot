@@ -1031,9 +1031,30 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (amount > network.maxWithdrawal) return { success: false, error: `Maximum: ${network.maxWithdrawal} ${network.symbol}` };
     if (state.currentUser.balanceMain < amount) return { success: false, error: 'Solde insuffisant' };
     if (!address || address.trim().length < 20) return { success: false, error: 'Adresse invalide (trop courte)' };
+    // Per-user daily withdrawal limit
+    const perUserDailyLimit = state.dailyLimits.find(l => l.type === 'withdrawal' && l.perUser && l.isActive);
+    if (perUserDailyLimit && state.currentUser.dailyWithdrawn + amount > perUserDailyLimit.limit) {
+      const remaining = Math.max(0, perUserDailyLimit.limit - state.currentUser.dailyWithdrawn);
+      return { success: false, error: `Limite journalière atteinte. Restant: ${remaining.toFixed(2)} ${network.symbol}` };
+    }
+    // Per-network daily limit
+    if (network.dailyWithdrawalLimit > 0 && amount > network.dailyWithdrawalLimit) {
+      return { success: false, error: `Limite réseau dépassée: max ${network.dailyWithdrawalLimit} ${network.symbol}/jour` };
+    }
+    // Platform-wide pending withdrawals cap
+    const pendingCount = state.transactions.filter(t => t.type === 'withdrawal' && t.status === 'pending').length;
+    if (pendingCount >= state.platformConfig.maxPendingWithdrawals) {
+      return { success: false, error: 'Trop de retraits en attente. Réessayez plus tard.' };
+    }
     set(s => ({
-      currentUser: { ...s.currentUser, balanceMain: s.currentUser.balanceMain - amount },
-      users: s.users.map(u => u.id === state.currentUser.id ? { ...u, balanceMain: u.balanceMain - amount } : u),
+      currentUser: {
+        ...s.currentUser,
+        balanceMain: s.currentUser.balanceMain - amount,
+        dailyWithdrawn: s.currentUser.dailyWithdrawn + amount,
+      },
+      users: s.users.map(u => u.id === state.currentUser.id
+        ? { ...u, balanceMain: u.balanceMain - amount, dailyWithdrawn: u.dailyWithdrawn + amount }
+        : u),
     }));
     get().addTransaction({ userId: state.currentUser.id, type: 'withdrawal', amount, currency: network.symbol, network: network.network, address: address.trim(), status: 'pending', fee: network.withdrawalFee });
     return { success: true };

@@ -450,7 +450,7 @@ export const MiniAppDeposit: React.FC = () => {
 };
 
 export const MiniAppWithdraw: React.FC = () => {
-  const { cryptoNetworks, currentUser, submitWithdrawal } = useAppStore();
+  const { cryptoNetworks, currentUser, dailyLimits, submitWithdrawal } = useAppStore();
   const [tonConnectUI] = useTonConnectUI();
   const tonWallet = useTonWallet();
   const [selectedId, setSelectedId] = useState(() => {
@@ -465,6 +465,9 @@ export const MiniAppWithdraw: React.FC = () => {
   const connectedAddress = tonWallet?.account.address ?? '';
   // Both TON and USDT/TON use a TON address for withdrawal
   const isOnTONNetwork = cryptoNetworks.find(n => n.id === selectedId)?.network === 'TON';
+
+  const perUserDailyLimit = dailyLimits.find(l => l.type === 'withdrawal' && l.perUser && l.isActive);
+  const dailyRemaining = perUserDailyLimit ? Math.max(0, perUserDailyLimit.limit - currentUser.dailyWithdrawn) : null;
 
   useEffect(() => {
     if (isOnTONNetwork && connectedAddress) {
@@ -568,7 +571,12 @@ export const MiniAppWithdraw: React.FC = () => {
         <div className="flex items-center justify-between mb-2">
           <p className="text-xs text-slate-400">Montant</p>
           <button
-            onClick={() => setAmount(currentUser.balanceMain.toFixed(2))}
+            onClick={() => {
+              const maxAllowed = dailyRemaining !== null
+                ? Math.min(currentUser.balanceMain, dailyRemaining)
+                : currentUser.balanceMain;
+              setAmount(maxAllowed.toFixed(2));
+            }}
             className="text-xs text-blue-400"
           >
             Max
@@ -606,10 +614,14 @@ export const MiniAppWithdraw: React.FC = () => {
             <span className="text-slate-400">Vous recevrez</span>
             <span className="text-emerald-400 font-medium">{netReceived > 0 ? netReceived.toFixed(2) : '0.00'} {selected.symbol}</span>
           </div>
-          <div className="flex justify-between text-xs">
-            <span className="text-slate-400">Limite journalière</span>
-            <span className="text-white font-medium">{selected.dailyWithdrawalLimit.toLocaleString()} {selected.symbol}</span>
-          </div>
+          {dailyRemaining !== null && (
+            <div className="flex justify-between text-xs">
+              <span className="text-slate-400">Restant aujourd'hui</span>
+              <span className={`font-medium ${dailyRemaining < 50 ? 'text-amber-400' : 'text-white'}`}>
+                {dailyRemaining.toFixed(2)} / {perUserDailyLimit!.limit} {selected.symbol}
+              </span>
+            </div>
+          )}
           <div className="flex justify-between text-xs">
             <span className="text-slate-400">Traitement</span>
             <span className="text-amber-400 font-medium">Validation admin requise 🔐</span>
