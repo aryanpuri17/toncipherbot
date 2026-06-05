@@ -21,11 +21,12 @@ from aiogram import Bot, Dispatcher, types
 from aiogram.filters import CommandStart
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 
-BOT_TOKEN    = os.getenv("BOT_TOKEN", "")
-WEBAPP_URL   = os.getenv("WEBAPP_URL", "https://toncipherbot.onrender.com")
-PORT         = int(os.getenv("PORT", 8080))
-DB_PATH      = os.path.join(os.path.dirname(__file__), "toncipherbot.db")
-ADMIN_SECRET = os.getenv("ADMIN_SECRET", "")  # If set, required as X-Admin-Key header
+BOT_TOKEN        = os.getenv("BOT_TOKEN", "")
+WEBAPP_URL       = os.getenv("WEBAPP_URL", "https://toncipherbot.onrender.com")
+PORT             = int(os.getenv("PORT", 8080))
+DB_PATH          = os.path.join(os.path.dirname(__file__), "toncipherbot.db")
+ADMIN_SECRET     = os.getenv("ADMIN_SECRET", "")  # If set, required as X-Admin-Key header
+ADMIN_TELEGRAM_ID = int(os.getenv("ADMIN_TELEGRAM_ID", "0"))  # Your personal Telegram ID for notifications
 
 REFERRAL_BONUS_TON  = float(os.getenv("REFERRAL_BONUS_TON", "1.0"))
 MAX_ACCOUNTS_PER_IP = int(os.getenv("MAX_ACCOUNTS_PER_IP", "3"))
@@ -181,6 +182,15 @@ async def init_db() -> None:
     log.info("Database ready at %s", DB_PATH)
 
 
+async def _notify_admin(text: str) -> None:
+    """Send a Telegram message to the admin if ADMIN_TELEGRAM_ID is configured."""
+    if bot and ADMIN_TELEGRAM_ID:
+        try:
+            await bot.send_message(ADMIN_TELEGRAM_ID, text, parse_mode="HTML")
+        except Exception as e:
+            log.warning("Admin notify failed: %s", e)
+
+
 async def _log_fraud_alert(
     db: aiosqlite.Connection,
     telegram_id: int,
@@ -280,6 +290,15 @@ async def api_user_init(request: web.Request) -> web.Response:
                 score=score,
             )
             await db.execute("UPDATE users SET flagged = 1 WHERE telegram_id = ?", (telegram_id,))
+            sev_label = _severity(score).upper()
+            await _notify_admin(
+                f"⚠️ <b>Activité suspecte [{sev_label}]</b>\n"
+                f"👤 @{username or 'inconnu'} (ID: <code>{telegram_id}</code>)\n"
+                f"🚨 Raisons: {', '.join(violations)}\n"
+                f"📊 Score risque: {score}/100\n"
+                f"ℹ️ Ce compte est <b>signalé</b> — aucun ban automatique.\n"
+                f"👉 Vérifie l'admin panel pour décider."
+            )
 
         await db.commit()
 
@@ -494,6 +513,26 @@ async def api_withdrawal_create(request: web.Request) -> web.Response:
             VALUES (?, ?, 'withdrawal', ?, ?, ?, ?, 'pending', ?)
         """, (tx_id, telegram_id, amount, currency, network, address, fee))
         await db.commit()
+
+        # Fetch user info for the notification
+        async with db.execute(
+            "SELECT username, first_name, flagged FROM users WHERE telegram_id = ?", (telegram_id,)
+        ) as cur:
+            urow = await cur.fetchone()
+
+    uname    = urow[0] if urow else ""
+    fname    = urow[1] if urow else ""
+    is_flagged = bool(urow[2]) if urow else False
+
+    flag_warn = "\n⚠️ <b>Compte signalé (anti-fraude)</b> — vérification recommandée." if is_flagged else ""
+    await _notify_admin(
+        f"💸 <b>Nouvelle demande de retrait</b>{flag_warn}\n"
+        f"👤 {fname} @{uname or 'inconnu'} (ID: <code>{telegram_id}</code>)\n"
+        f"💰 <b>{amount:.2f} {currency}</b> ({network}) — frais: {fee}\n"
+        f"📬 Adresse: <code>{address}</code>\n"
+        f"🆔 TX ID: <code>{tx_id}</code>\n"
+        f"👉 Ouvre l'admin pour approuver ou refuser."
+    )
 
     log.info("Withdrawal request: id=%s telegram_id=%d amount=%.2f %s → %s",
              tx_id, telegram_id, amount, currency, address[:12])
