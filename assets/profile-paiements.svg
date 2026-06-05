@@ -1,67 +1,85 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
     <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#020d07"/>
-      <stop offset="100%" stop-color="#071a10"/>
+      <stop offset="0%" stop-color="#021a0e"/>
+      <stop offset="100%" stop-color="#052e16"/>
     </linearGradient>
-    <linearGradient id="ring" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#34d399"/>
-      <stop offset="50%" stop-color="#10b981"/>
-      <stop offset="100%" stop-color="#34d399"/>
+    <linearGradient id="coingrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fde68a"/>
+      <stop offset="100%" stop-color="#d97706"/>
     </linearGradient>
-    <linearGradient id="inner" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#052e16"/>
-      <stop offset="100%" stop-color="#022c16"/>
+    <linearGradient id="coinside" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#92400e"/>
+      <stop offset="100%" stop-color="#78350f"/>
     </linearGradient>
-    <linearGradient id="check" x1="0%" y1="0%" x2="100%" y2="100%">
+    <linearGradient id="arrowgrad" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#6ee7b7"/>
       <stop offset="100%" stop-color="#10b981"/>
     </linearGradient>
-    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
-      <feGaussianBlur stdDeviation="14" result="blur"/>
-      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    <linearGradient id="textgrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#d1fae5"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="10" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
     </filter>
-    <filter id="ambient" x="-100%" y="-100%" width="300%" height="300%">
-      <feGaussianBlur stdDeviation="50" result="blur"/>
-      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    <filter id="coinglow">
+      <feGaussianBlur stdDeviation="6" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
     </filter>
   </defs>
 
-  <!-- Background -->
   <rect width="512" height="512" fill="url(#bg)"/>
 
-  <!-- Ambient green glow -->
-  <circle cx="256" cy="256" r="130" fill="#10b981" opacity="0.06" filter="url(#ambient)"/>
+  <!-- Subtle lines -->
+  <line x1="0" y1="256" x2="512" y2="256" stroke="#ffffff" stroke-width="0.4" opacity="0.04"/>
+  <line x1="256" y1="0" x2="256" y2="512" stroke="#ffffff" stroke-width="0.4" opacity="0.04"/>
 
-  <!-- Outer ring -->
-  <circle cx="256" cy="256" r="200" fill="none" stroke="url(#ring)" stroke-width="1" opacity="0.25"/>
+  <!-- 3 stacked coins with arrow -->
+  <g transform="translate(256,178)" filter="url(#coinglow)">
+    <!-- Coin 3 (back) -->
+    <ellipse cx="0" cy="-32" rx="88" ry="24" fill="url(#coinside)"/>
+    <ellipse cx="0" cy="-44" rx="88" ry="24" fill="#f59e0b" opacity="0.7"/>
+    <ellipse cx="0" cy="-44" rx="75" ry="18" fill="#fbbf24" opacity="0.6"/>
 
-  <!-- Inner circle -->
-  <circle cx="256" cy="256" r="170" fill="url(#inner)"/>
-  <circle cx="256" cy="256" r="170" fill="none" stroke="url(#ring)" stroke-width="3" opacity="0.65"/>
+    <!-- Coin 2 (middle) -->
+    <ellipse cx="0" cy="-8" rx="88" ry="24" fill="url(#coinside)"/>
+    <ellipse cx="0" cy="-20" rx="88" ry="24" fill="#d97706" opacity="0.85"/>
+    <ellipse cx="0" cy="-20" rx="75" ry="18" fill="#fbbf24" opacity="0.75"/>
 
-  <!-- Secondary ring inside -->
-  <circle cx="256" cy="256" r="140" fill="none" stroke="#10b981" stroke-width="1" opacity="0.2"/>
+    <!-- Coin 1 (front face) -->
+    <ellipse cx="0" cy="16" rx="88" ry="24" fill="url(#coinside)"/>
+    <ellipse cx="0" cy="4" rx="88" ry="24" fill="url(#coingrad)"/>
+    <ellipse cx="0" cy="4" rx="75" ry="18" fill="#fde68a"/>
+    <!-- TON letter on front coin -->
+    <text x="0" y="10"
+          font-family="'Arial Black',sans-serif"
+          font-weight="900" font-size="22" fill="#92400e"
+          text-anchor="middle">TON</text>
 
-  <!-- Checkmark — bold, centered -->
-  <g filter="url(#glow)">
-    <!-- Shadow layer -->
-    <polyline points="152,256  220,322  360,178"
-              fill="none" stroke="#059669" stroke-width="36"
-              stroke-linecap="round" stroke-linejoin="round" opacity="0.4"/>
-    <!-- Main check -->
-    <polyline points="152,256  220,322  360,178"
-              fill="none" stroke="url(#check)" stroke-width="28"
-              stroke-linecap="round" stroke-linejoin="round"/>
-    <!-- Bright inner check -->
-    <polyline points="152,256  220,322  360,178"
-              fill="none" stroke="#d1fae5" stroke-width="8"
-              stroke-linecap="round" stroke-linejoin="round" opacity="0.55"/>
+    <!-- Green arrow down-right (withdraw) -->
+    <g transform="translate(62, 30)" filter="url(#glow)">
+      <circle cx="0" cy="0" r="30" fill="#052e16" opacity="0.9"/>
+      <circle cx="0" cy="0" r="30" fill="none" stroke="#10b981" stroke-width="2.5" opacity="0.7"/>
+      <!-- Arrow down -->
+      <line x1="0" y1="-12" x2="0" y2="10" stroke="url(#arrowgrad)" stroke-width="5" stroke-linecap="round"/>
+      <polygon points="0,16 -8,4 8,4" fill="url(#arrowgrad)"/>
+    </g>
   </g>
 
-  <!-- Corner sparkles -->
-  <circle cx="256" cy="72"  r="3" fill="#34d399" opacity="0.6"/>
-  <circle cx="440" cy="256" r="3" fill="#34d399" opacity="0.4"/>
-  <circle cx="256" cy="440" r="3" fill="#34d399" opacity="0.6"/>
-  <circle cx="72"  cy="256" r="3" fill="#34d399" opacity="0.4"/>
+  <!-- TonCipher -->
+  <text x="256" y="348"
+        font-family="'Arial Black','Impact','Helvetica Neue',sans-serif"
+        font-weight="900" font-size="62" fill="url(#textgrad)"
+        text-anchor="middle" letter-spacing="-1">TonCipher</text>
+
+  <!-- Divider -->
+  <rect x="158" y="363" width="196" height="2" rx="1" fill="#10b981" opacity="0.55"/>
+
+  <!-- Subtitle -->
+  <text x="256" y="402"
+        font-family="'Arial','Helvetica Neue',sans-serif"
+        font-weight="700" font-size="24" fill="#34d399"
+        text-anchor="middle" letter-spacing="5">RETRAITS</text>
 </svg>
