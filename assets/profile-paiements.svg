@@ -1,30 +1,31 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
     <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#021a0e"/>
-      <stop offset="100%" stop-color="#052e16"/>
+      <stop offset="0%" stop-color="#0d0b2a"/>
+      <stop offset="100%" stop-color="#1a1545"/>
     </linearGradient>
-    <linearGradient id="coingrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#fde68a"/>
-      <stop offset="100%" stop-color="#d97706"/>
+    <linearGradient id="gemtop" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#bfdbfe"/>
+      <stop offset="100%" stop-color="#93c5fd"/>
     </linearGradient>
-    <linearGradient id="coinside" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#92400e"/>
-      <stop offset="100%" stop-color="#78350f"/>
+    <linearGradient id="gemleft" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4338ca"/>
+      <stop offset="100%" stop-color="#3730a3"/>
     </linearGradient>
-    <linearGradient id="arrowgrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#6ee7b7"/>
+    <linearGradient id="gemright" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1d4ed8"/>
+      <stop offset="100%" stop-color="#1e3a8a"/>
+    </linearGradient>
+    <!-- Green accent for retraits -->
+    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#34d399"/>
       <stop offset="100%" stop-color="#10b981"/>
     </linearGradient>
-    <linearGradient id="textgrad" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#ffffff"/>
-      <stop offset="100%" stop-color="#d1fae5"/>
-    </linearGradient>
     <filter id="glow">
-      <feGaussianBlur stdDeviation="10" result="b"/>
+      <feGaussianBlur stdDeviation="12" result="b"/>
       <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
     </filter>
-    <filter id="coinglow">
+    <filter id="greenglow">
       <feGaussianBlur stdDeviation="6" result="b"/>
       <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
     </filter>
@@ -32,54 +33,38 @@
 
   <rect width="512" height="512" fill="url(#bg)"/>
 
-  <!-- Subtle lines -->
-  <line x1="0" y1="256" x2="512" y2="256" stroke="#ffffff" stroke-width="0.4" opacity="0.04"/>
-  <line x1="256" y1="0" x2="256" y2="512" stroke="#ffffff" stroke-width="0.4" opacity="0.04"/>
+  <!-- Green ring around gem -->
+  <ellipse cx="256" cy="188" rx="122" ry="122" fill="none" stroke="url(#accent)" stroke-width="2" opacity="0.3" filter="url(#greenglow)"/>
 
-  <!-- 3 stacked coins with arrow -->
-  <g transform="translate(256,178)" filter="url(#coinglow)">
-    <!-- Coin 3 (back) -->
-    <ellipse cx="0" cy="-32" rx="88" ry="24" fill="url(#coinside)"/>
-    <ellipse cx="0" cy="-44" rx="88" ry="24" fill="#f59e0b" opacity="0.7"/>
-    <ellipse cx="0" cy="-44" rx="75" ry="18" fill="#fbbf24" opacity="0.6"/>
+  <!-- Ambient glow -->
+  <ellipse cx="256" cy="195" rx="130" ry="110" fill="#6366f1" opacity="0.10" filter="url(#glow)"/>
 
-    <!-- Coin 2 (middle) -->
-    <ellipse cx="0" cy="-8" rx="88" ry="24" fill="url(#coinside)"/>
-    <ellipse cx="0" cy="-20" rx="88" ry="24" fill="#d97706" opacity="0.85"/>
-    <ellipse cx="0" cy="-20" rx="75" ry="18" fill="#fbbf24" opacity="0.75"/>
-
-    <!-- Coin 1 (front face) -->
-    <ellipse cx="0" cy="16" rx="88" ry="24" fill="url(#coinside)"/>
-    <ellipse cx="0" cy="4" rx="88" ry="24" fill="url(#coingrad)"/>
-    <ellipse cx="0" cy="4" rx="75" ry="18" fill="#fde68a"/>
-    <!-- TON letter on front coin -->
-    <text x="0" y="10"
-          font-family="'Arial Black',sans-serif"
-          font-weight="900" font-size="22" fill="#92400e"
-          text-anchor="middle">TON</text>
-
-    <!-- Green arrow down-right (withdraw) -->
-    <g transform="translate(62, 30)" filter="url(#glow)">
-      <circle cx="0" cy="0" r="30" fill="#052e16" opacity="0.9"/>
-      <circle cx="0" cy="0" r="30" fill="none" stroke="#10b981" stroke-width="2.5" opacity="0.7"/>
-      <!-- Arrow down -->
-      <line x1="0" y1="-12" x2="0" y2="10" stroke="url(#arrowgrad)" stroke-width="5" stroke-linecap="round"/>
-      <polygon points="0,16 -8,4 8,4" fill="url(#arrowgrad)"/>
-    </g>
+  <!-- Same diamond gem -->
+  <g transform="translate(256,188)" filter="url(#glow)">
+    <polygon points="0,-108 -78,-30  0, -8  78,-30" fill="url(#gemtop)"/>
+    <polygon points="-78,-30 -102, 54  0,108  0,-8"  fill="url(#gemleft)"/>
+    <polygon points=" 78,-30  102, 54  0,108  0,-8"  fill="url(#gemright)"/>
+    <polygon points="0,-108 32,-64 0,-8 -32,-64"     fill="#93c5fd" opacity="0.6"/>
+    <polygon points="0,-108 15,-85 0,-68 -15,-85"    fill="white"   opacity="0.4"/>
+    <line x1="0" y1="-8" x2="0" y2="108" stroke="#93c5fd" stroke-width="0.8" opacity="0.18"/>
   </g>
 
-  <!-- TonCipher -->
-  <text x="256" y="348"
-        font-family="'Arial Black','Impact','Helvetica Neue',sans-serif"
-        font-weight="900" font-size="62" fill="url(#textgrad)"
-        text-anchor="middle" letter-spacing="-1">TonCipher</text>
+  <!-- Green check badge top-right -->
+  <g transform="translate(352,104)" filter="url(#greenglow)">
+    <circle cx="0" cy="0" r="22" fill="#0d0b2a"/>
+    <circle cx="0" cy="0" r="22" fill="none" stroke="#10b981" stroke-width="2" opacity="0.8"/>
+    <polyline points="-9,1 -2,9 10,-7" fill="none" stroke="#34d399" stroke-width="3.5"
+              stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
 
-  <!-- Divider -->
-  <rect x="158" y="363" width="196" height="2" rx="1" fill="#10b981" opacity="0.55"/>
+  <!-- Name -->
+  <text x="256" y="348" font-family="'Arial Black','Helvetica Neue',sans-serif"
+        font-weight="900" font-size="64" fill="white" text-anchor="middle" letter-spacing="-1">TonCipher</text>
 
-  <!-- Subtitle -->
-  <text x="256" y="402"
-        font-family="'Arial','Helvetica Neue',sans-serif"
-        font-weight="700" font-size="24" fill="#34d399"
-        text-anchor="middle" letter-spacing="5">RETRAITS</text>
+  <!-- Green accent line -->
+  <rect x="168" y="362" width="176" height="2.5" rx="1.5" fill="url(#accent)" opacity="0.75"/>
+
+  <!-- Subtitle green -->
+  <text x="256" y="402" font-family="'Arial','Helvetica Neue',sans-serif"
+        font-weight="700" font-size="24" fill="#34d399" text-anchor="middle" letter-spacing="7">RETRAITS</text>
 </svg>

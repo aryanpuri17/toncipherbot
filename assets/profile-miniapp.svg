@@ -4,10 +4,6 @@
       <stop offset="0%" stop-color="#0d0b2a"/>
       <stop offset="100%" stop-color="#1a1545"/>
     </linearGradient>
-    <linearGradient id="gem" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#60a5fa"/>
-      <stop offset="100%" stop-color="#a78bfa"/>
-    </linearGradient>
     <linearGradient id="gemtop" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#bfdbfe"/>
       <stop offset="100%" stop-color="#93c5fd"/>
@@ -20,53 +16,39 @@
       <stop offset="0%" stop-color="#1d4ed8"/>
       <stop offset="100%" stop-color="#1e3a8a"/>
     </linearGradient>
-    <linearGradient id="textgrad" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#ffffff"/>
-      <stop offset="100%" stop-color="#c7d2fe"/>
+    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#818cf8"/>
+      <stop offset="100%" stop-color="#60a5fa"/>
     </linearGradient>
     <filter id="glow">
-      <feGaussianBlur stdDeviation="10" result="b"/>
+      <feGaussianBlur stdDeviation="12" result="b"/>
       <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
     </filter>
   </defs>
 
-  <rect width="512" height="512" fill="url(#bg)" rx="0"/>
+  <rect width="512" height="512" fill="url(#bg)"/>
 
-  <!-- Subtle grid lines -->
-  <line x1="0" y1="256" x2="512" y2="256" stroke="#ffffff" stroke-width="0.4" opacity="0.04"/>
-  <line x1="256" y1="0" x2="256" y2="512" stroke="#ffffff" stroke-width="0.4" opacity="0.04"/>
+  <!-- Ambient glow -->
+  <ellipse cx="256" cy="195" rx="130" ry="110" fill="#6366f1" opacity="0.10" filter="url(#glow)"/>
 
-  <!-- Glow behind gem -->
-  <ellipse cx="256" cy="195" rx="120" ry="100" fill="#6366f1" opacity="0.12" filter="url(#glow)"/>
-
-  <!-- Diamond gem — TON style -->
+  <!-- Diamond gem -->
   <g transform="translate(256,188)" filter="url(#glow)">
-    <!-- Top facets -->
-    <polygon points="0,-105 -76,-30  0, -8  76,-30" fill="url(#gemtop)"/>
-    <!-- Left body -->
-    <polygon points="-76,-30 -100, 52  0,105  0,-8" fill="url(#gemleft)"/>
-    <!-- Right body -->
-    <polygon points=" 76,-30  100, 52  0,105  0,-8" fill="url(#gemright)"/>
-    <!-- Center top -->
-    <polygon points="0,-105 30,-62 0,-8 -30,-62" fill="url(#gem)" opacity="0.7"/>
-    <!-- Shimmer -->
-    <polygon points="0,-105 14,-82 0,-65 -14,-82" fill="white" opacity="0.45"/>
-    <!-- Center line -->
-    <line x1="0" y1="-8" x2="0" y2="105" stroke="#93c5fd" stroke-width="0.8" opacity="0.2"/>
+    <polygon points="0,-108 -78,-30  0, -8  78,-30" fill="url(#gemtop)"/>
+    <polygon points="-78,-30 -102, 54  0,108  0,-8"  fill="url(#gemleft)"/>
+    <polygon points=" 78,-30  102, 54  0,108  0,-8"  fill="url(#gemright)"/>
+    <polygon points="0,-108 32,-64 0,-8 -32,-64"     fill="#93c5fd" opacity="0.6"/>
+    <polygon points="0,-108 15,-85 0,-68 -15,-85"    fill="white"   opacity="0.4"/>
+    <line x1="0" y1="-8" x2="0" y2="108" stroke="#93c5fd" stroke-width="0.8" opacity="0.18"/>
   </g>
 
-  <!-- TonCipher -->
-  <text x="256" y="345"
-        font-family="'Arial Black','Impact','Helvetica Neue',sans-serif"
-        font-weight="900" font-size="62" fill="url(#textgrad)"
-        text-anchor="middle" letter-spacing="-1">TonCipher</text>
+  <!-- Name -->
+  <text x="256" y="348" font-family="'Arial Black','Helvetica Neue',sans-serif"
+        font-weight="900" font-size="64" fill="white" text-anchor="middle" letter-spacing="-1">TonCipher</text>
 
-  <!-- Divider -->
-  <rect x="176" y="360" width="160" height="2" rx="1" fill="#6366f1" opacity="0.55"/>
+  <!-- Accent line -->
+  <rect x="178" y="362" width="156" height="2.5" rx="1.5" fill="url(#accent)" opacity="0.7"/>
 
-  <!-- Tagline -->
-  <text x="256" y="400"
-        font-family="'Arial','Helvetica Neue',sans-serif"
-        font-weight="600" font-size="26" fill="#818cf8"
-        text-anchor="middle" letter-spacing="6">EARN TON</text>
+  <!-- Subtitle -->
+  <text x="256" y="402" font-family="'Arial','Helvetica Neue',sans-serif"
+        font-weight="700" font-size="24" fill="#818cf8" text-anchor="middle" letter-spacing="7">EARN  TON</text>
 </svg>
