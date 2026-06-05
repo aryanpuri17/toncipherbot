@@ -76,6 +76,15 @@ export function useDepositMonitor(): void {
           if (match) {
             markSeen(txHash);
             useAppStore.getState().confirmDeposit(match.id, txHash);
+            // Record confirmed deposit in backend
+            const matchUser = state.users.find(u => u.id === (state.transactions.find(t => t.id === match.id)?.userId ?? ''));
+            if (matchUser?.telegramId) {
+              void fetch('/api/deposit/record', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: match.id, telegramId: matchUser.telegramId, amount: tonAmt, currency: 'TON', network: 'TON', txHash }),
+              }).catch(() => {});
+            }
             break;
           }
 
@@ -86,6 +95,13 @@ export function useDepositMonitor(): void {
             if (user) {
               markSeen(txHash);
               useAppStore.getState().creditDeposit(user.id, tonAmt, 'TON', txHash, 'TON');
+              if (user.telegramId) {
+                void fetch('/api/deposit/record', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ telegramId: user.telegramId, amount: tonAmt, currency: 'TON', network: 'TON', txHash }),
+                }).catch(() => {});
+              }
               break;
             }
           }
@@ -110,6 +126,14 @@ export function useDepositMonitor(): void {
           if (match) {
             markSeen(txHash);
             useAppStore.getState().confirmDeposit(match.id, txHash);
+            const matchUser = state.users.find(u => u.id === (state.transactions.find(t => t.id === match.id)?.userId ?? ''));
+            if (matchUser?.telegramId) {
+              void fetch('/api/deposit/record', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: match.id, telegramId: matchUser.telegramId, amount: usdtAmt, currency: 'USDT', network: 'TON', txHash }),
+              }).catch(() => {});
+            }
             break;
           }
 
@@ -120,6 +144,13 @@ export function useDepositMonitor(): void {
             if (user) {
               markSeen(txHash);
               useAppStore.getState().creditDeposit(user.id, usdtAmt, 'USDT', txHash, 'TON');
+              if (user.telegramId) {
+                void fetch('/api/deposit/record', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ telegramId: user.telegramId, amount: usdtAmt, currency: 'USDT', network: 'TON', txHash }),
+                }).catch(() => {});
+              }
               break;
             }
           }
