@@ -284,15 +284,17 @@ async def api_user_init(request: web.Request) -> web.Response:
         await db.commit()
 
         async with db.execute(
-            "SELECT referral_count, referral_balance, flagged FROM users WHERE telegram_id = ?",
+            "SELECT referral_count, referral_balance, flagged, banned, withdrawal_blocked FROM users WHERE telegram_id = ?",
             (telegram_id,),
         ) as cur:
             row = await cur.fetchone()
 
     return web.json_response({
-        "referralCount":   row[0] if row else 0,
-        "referralBalance": row[1] if row else 0.0,
-        "flagged":         bool(row[2]) if row else False,
+        "referralCount":      row[0] if row else 0,
+        "referralBalance":    row[1] if row else 0.0,
+        "flagged":            bool(row[2]) if row else False,
+        "banned":             bool(row[3]) if row else False,
+        "withdrawalBlocked":  bool(row[4]) if row else False,
     }, headers=_CORS)
 
 

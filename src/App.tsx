@@ -298,7 +298,7 @@ export default function App() {
           }),
         });
         if (res.ok) {
-          const apiData = await res.json() as { referralCount: number; referralBalance: number; flagged: boolean };
+          const apiData = await res.json() as { referralCount: number; referralBalance: number; flagged: boolean; banned?: boolean; withdrawalBlocked?: boolean };
           syncUserFromApi(apiData);
         }
       } catch {

@@ -745,7 +745,7 @@ interface AppState {
   updateReferralMilestone: (id: string, data: Partial<ReferralMilestone>) => void;
   deleteReferralMilestone: (id: string) => void;
   initFromTelegram: (user: { id: number; first_name: string; last_name?: string; username?: string; photo_url?: string }) => void;
-  syncUserFromApi: (data: { referralCount: number; referralBalance: number; flagged: boolean }) => void;
+  syncUserFromApi: (data: { referralCount: number; referralBalance: number; flagged: boolean; banned?: boolean; withdrawalBlocked?: boolean }) => void;
   processIncomingReferral: (referrerId: string) => void;
 
   // Actions - View
@@ -986,10 +986,12 @@ export const useAppStore = create<AppState>((set, get) => ({
     const delta = Math.max(0, data.referralBalance - s.lastSyncedReferralBalance);
     const updatedUser = {
       ...s.currentUser,
-      referralCount:  data.referralCount,
-      balanceMain:    s.currentUser.balanceMain + delta,
-      totalEarnings:  s.currentUser.totalEarnings + delta,
-      todayEarnings:  s.currentUser.todayEarnings + delta,
+      referralCount:     data.referralCount,
+      balanceMain:       s.currentUser.balanceMain + delta,
+      totalEarnings:     s.currentUser.totalEarnings + delta,
+      todayEarnings:     s.currentUser.todayEarnings + delta,
+      ...(data.banned             !== undefined && { status: data.banned ? 'banned' as const : s.currentUser.status }),
+      ...(data.withdrawalBlocked  !== undefined && { withdrawalBlocked: data.withdrawalBlocked }),
     };
     return {
       currentUser: updatedUser,
