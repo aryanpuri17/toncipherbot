@@ -783,6 +783,7 @@ interface AppState {
   initFromTelegram: (user: { id: number; first_name: string; last_name?: string; username?: string; photo_url?: string }) => void;
   syncUserFromApi: (data: { referralCount: number; referralBalance: number; flagged: boolean; banned?: boolean; withdrawalBlocked?: boolean }) => void;
   processIncomingReferral: (referrerId: string) => void;
+  spinWheelBet: (bet: number, win: number) => void;
 
   // Actions - View
   setCurrentView: (view: 'miniapp' | 'admin') => void;
@@ -1154,6 +1155,21 @@ export const useAppStore = create<AppState>((set, get) => ({
       }),
     }).catch(() => {});
     return { success: true };
+  },
+
+  spinWheelBet: (bet, win) => {
+    set(s => {
+      const newBalance = Math.max(0, s.currentUser.balanceMain - bet + win);
+      const updatedUser = {
+        ...s.currentUser,
+        balanceMain: newBalance,
+        totalEarnings: win > 0 ? s.currentUser.totalEarnings + win : s.currentUser.totalEarnings,
+      };
+      return {
+        currentUser: updatedUser,
+        users: s.users.map(u => u.id === s.currentUser.id ? { ...u, ...updatedUser } : u),
+      };
+    });
   },
 
   // View Actions
