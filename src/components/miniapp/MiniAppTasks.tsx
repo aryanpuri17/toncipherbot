@@ -1,6 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAppStore } from '../../store/appStore';
-import { Hash, Users, Bot, Calendar, Star, CheckCircle, ExternalLink, Plus, AlertCircle, Flame, Loader2, ShieldCheck, Clock, FileText, Send, X, Sparkles } from 'lucide-react';
+import {
+  Hash, Users, Bot, Calendar, Star, CheckCircle, ExternalLink, Plus,
+  AlertCircle, Flame, Loader2, ShieldCheck, Clock, FileText, Send, X,
+} from 'lucide-react';
+
+// ── Types ──────────────────────────────────────────────────────────────────────
 
 interface ApiTask {
   id: string;
@@ -12,6 +17,24 @@ interface ApiTask {
   totalCompletions: number;
   maxCompletions: number;
 }
+
+/** Normalized shape used for all card rendering */
+interface CardTask {
+  id: string;
+  source: 'platform' | 'api';
+  type: string;
+  title: string;
+  description: string;
+  targetUrl?: string;
+  reward: number;
+  promoMultiplier?: number;
+  totalCompletions: number;
+  maxCompletions?: number;
+  icon?: string;
+  isInstant: boolean;
+}
+
+// ── Static config ──────────────────────────────────────────────────────────────
 
 const typeConfig: Record<string, { icon: React.ReactNode; color: string; label: string }> = {
   join_channel: { icon: <Hash className="w-4 h-4" />,     color: 'bg-blue-500/20 text-blue-400',     label: 'Canal' },
@@ -30,17 +53,8 @@ const filters = [
   { id: 'special',      label: '⭐ Spécial' },
 ];
 
-type TaskPhase =
-  | 'idle'
-  | 'step_verify'
-  | 'verifying'
-  | 'not_subscribed'
-  | 'counting'
-  | 'claimable'
-  | 'completing'
-  | 'done';
-
-interface TaskState { phase: TaskPhase; countdown?: number; }
+type TaskPhase = 'idle' | 'step_verify' | 'verifying' | 'not_subscribed' | 'completing' | 'done';
+interface TaskState { phase: TaskPhase }
 
 function openUrl(url: string) {
   const tg = (window as unknown as { Telegram?: { WebApp?: { openTelegramLink?: (u: string) => void; openLink?: (u: string) => void } } }).Telegram?.WebApp;
@@ -49,82 +63,123 @@ function openUrl(url: string) {
   else window.open(url, '_blank');
 }
 
+// ── Component ──────────────────────────────────────────────────────────────────
+
 export const MiniAppTasks: React.FC = () => {
-  const { tasks, completedTaskIds, completeTask, setMiniAppPage, currentUser, taskSubmissions, submitTaskProof } = useAppStore();
-  const [filter, setFilter] = useState<string>('all');
-  const [taskStates, setTaskStates] = useState<Record<string, TaskState>>({});
-  const timerRefs = useRef<Record<string, ReturnType<typeof setInterval>>>({});
+  const {
+    tasks, completedTaskIds, completeTask,
+    setMiniAppPage, currentUser, taskSubmissions, submitTaskProof,
+  } = useAppStore();
 
-  const [proofOpen,      setProofOpen]      = useState<string | null>(null);
-  const [proofText,      setProofText]      = useState('');
+  const [filter,         setFilter]         = useState('all');
+  const [taskStates,     setTaskStates]      = useState<Record<string, TaskState>>({});
+  const timerRefs                            = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+
+  const [apiTasks,             setApiTasks]             = useState<ApiTask[]>([]);
+  const [completedApiTaskIds,  setCompletedApiTaskIds]  = useState<string[]>([]);
+
+  const [proofOpen,       setProofOpen]      = useState<string | null>(null);
+  const [proofText,       setProofText]      = useState('');
   const [proofSubmitting, setProofSubmitting] = useState(false);
-  const [proofResult,    setProofResult]    = useState<{ taskId: string; success: boolean; message: string } | null>(null);
+  const [proofResult,     setProofResult]    = useState<{ taskId: string; success: boolean; message: string } | null>(null);
 
-  // User-created tasks from backend
-  const [apiTasks,          setApiTasks]          = useState<ApiTask[]>([]);
-  const [completedApiTaskIds, setCompletedApiTaskIds] = useState<string[]>([]);
-
+  // cleanup timers on unmount
   useEffect(() => {
     const refs = timerRefs.current;
-    return () => { Object.values(refs).forEach(clearInterval); };
+    return () => { Object.values(refs).forEach(clearTimeout); };
   }, []);
 
-  // Fetch user-created tasks available for this user
+  // fetch user-created tasks available for this user
   useEffect(() => {
-    const telegramId = useAppStore.getState().currentUser.telegramId;
-    if (!telegramId) return;
-    fetch(`/api/user-tasks/available?telegram_id=${telegramId}`)
+    const tid = useAppStore.getState().currentUser.telegramId;
+    if (!tid) return;
+    fetch(`/api/user-tasks/available?telegram_id=${tid}`)
       .then(r => r.json())
       .then((data: ApiTask[]) => setApiTasks(data))
       .catch(() => {});
   }, []);
 
+  // ── State helpers ────────────────────────────────────────────────
   const setPhase = (id: string, s: TaskState) =>
     setTaskStates(prev => ({ ...prev, [id]: s }));
+  const getPhase = (id: string): TaskPhase =>
+    taskStates[id]?.phase ?? 'idle';
 
-  const getState = (id: string): TaskState =>
-    taskStates[id] ?? { phase: 'idle' };
-
-  const allActive = tasks.filter(
-    t => t.isActive && (t.maxCompletions == null || t.totalCompletions < t.maxCompletions)
+  // ── Build unified task list ──────────────────────────────────────
+  const promoTasks  = tasks.filter(t => t.isActive && t.isPromoTask);
+  const allActive   = tasks.filter(
+    t => t.isActive && !t.isPromoTask &&
+         (t.maxCompletions == null || t.totalCompletions < t.maxCompletions)
   );
-  const promoTasks  = allActive.filter(t => t.isPromoTask);
-  const activeTasks = allActive.filter(t => !t.isPromoTask);
-  const filtered    = filter === 'all' ? activeTasks : activeTasks.filter(t => t.type === filter);
 
-  // ── Channel / Group ────────────────────────────────────────────
-  const handleChannelGroup = (task: { id: string; targetUrl?: string }) => {
-    if (task.targetUrl) openUrl(task.targetUrl);
-    setPhase(task.id, { phase: 'step_verify' });
-  };
+  const platformCards: CardTask[] = allActive
+    .filter(t => filter === 'all' || t.type === filter)
+    .map(t => {
+      const promoActive = t.promotion && new Date(t.promotion.endsAt) > new Date();
+      return {
+        id:               t.id,
+        source:           'platform',
+        type:             t.type,
+        title:            t.title,
+        description:      t.description,
+        targetUrl:        t.targetUrl,
+        reward:           t.reward,
+        promoMultiplier:  promoActive ? t.promotion!.multiplier : undefined,
+        totalCompletions: t.totalCompletions,
+        maxCompletions:   t.maxCompletions,
+        icon:             t.icon,
+        isInstant:        t.type === 'daily' || t.type === 'special',
+      };
+    });
 
+  const apiCards: CardTask[] = apiTasks
+    .filter(t => !completedApiTaskIds.includes(t.id))
+    .filter(t => filter === 'all' || t.type === filter)
+    .map(t => ({
+      id:               t.id,
+      source:           'api',
+      type:             t.type,
+      title:            t.title,
+      description:      t.description,
+      targetUrl:        t.targetUrl,
+      reward:           t.reward,
+      totalCompletions: t.totalCompletions,
+      maxCompletions:   t.maxCompletions,
+      isInstant:        false,
+    }));
+
+  const allCards = [...platformCards, ...apiCards];
+  const totalAvailable = allActive.length + apiTasks.filter(t => !completedApiTaskIds.includes(t.id)).length;
+
+  // ── Completion helpers ───────────────────────────────────────────
   const creditApiTask = async (taskId: string, reward: number) => {
-    // Record completion on backend + credit locally
     try {
       const telegramId = useAppStore.getState().currentUser.telegramId;
-      const res = await fetch(`/api/user-tasks/${taskId}/complete`, {
-        method: 'POST',
+      const res  = await fetch(`/api/user-tasks/${taskId}/complete`, {
+        method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ telegramId }),
+        body:    JSON.stringify({ telegramId }),
       });
       const data = await res.json() as { success: boolean; reward?: number };
       if (data.success) {
         const earned = data.reward ?? reward;
-        const state = useAppStore.getState();
+        const state  = useAppStore.getState();
         state.updateUser(state.currentUser.id, {
           balanceMain:    state.currentUser.balanceMain    + earned,
           totalEarnings:  state.currentUser.totalEarnings  + earned,
           todayEarnings:  state.currentUser.todayEarnings  + earned,
           tasksCompleted: state.currentUser.tasksCompleted + 1,
         });
-        state.addNotification({ type: 'reward', title: 'Tâche complétée !', message: `+${earned.toFixed(4)} TON crédité.`, isRead: false });
+        state.addNotification({
+          type: 'reward', title: 'Tâche complétée !',
+          message: `+${earned.toFixed(4)} TON crédité.`, isRead: false,
+        });
         setCompletedApiTaskIds(prev => [...prev, taskId]);
         setApiTasks(prev => prev.filter(t => t.id !== taskId));
       } else {
         setPhase(taskId, { phase: 'step_verify' });
       }
     } catch {
-      // Offline: credit optimistically
       const state = useAppStore.getState();
       state.updateUser(state.currentUser.id, { balanceMain: state.currentUser.balanceMain + reward });
       setCompletedApiTaskIds(prev => [...prev, taskId]);
@@ -132,106 +187,59 @@ export const MiniAppTasks: React.FC = () => {
     }
   };
 
-  const handleVerify = async (task: { id: string; targetUrl?: string; type: string; reward?: number }) => {
-    setPhase(task.id, { phase: 'verifying' });
-    try {
-      const telegramId = useAppStore.getState().currentUser.telegramId;
-      const chatId = task.targetUrl
-        ? '@' + task.targetUrl.replace('https://t.me/', '').split('/')[0]
-        : '';
-      const res = await fetch(`/api/check-membership?telegram_id=${telegramId}&chat_id=${encodeURIComponent(chatId)}`);
-      const data = await res.json() as { member: boolean };
-      if (data.member) {
-        setPhase(task.id, { phase: 'completing' });
-        if (task.reward !== undefined) {
-          // API task
-          await creditApiTask(task.id, task.reward);
-        } else {
-          completeTask(task.id);
-        }
-        setTimeout(() => setPhase(task.id, { phase: 'done' }), 1500);
+  // ── Unified action handlers ──────────────────────────────────────
+  const handleStart = (card: CardTask) => {
+    const phase = getPhase(card.id);
+    if (phase === 'completing' || phase === 'done') return;
+    if (card.source === 'platform' && completedTaskIds.includes(card.id)) return;
+    if (card.source === 'api'      && completedApiTaskIds.includes(card.id)) return;
+
+    if (card.isInstant) {
+      // daily / special — platform only
+      setPhase(card.id, { phase: 'completing' });
+      completeTask(card.id);
+      timerRefs.current[card.id] = setTimeout(() => setPhase(card.id, { phase: 'done' }), 1200);
+      return;
+    }
+    if (card.targetUrl) openUrl(card.targetUrl);
+    setPhase(card.id, { phase: 'step_verify' });
+  };
+
+  const handleVerify = async (card: CardTask) => {
+    setPhase(card.id, { phase: 'verifying' });
+    const telegramId = useAppStore.getState().currentUser.telegramId;
+
+    const succeed = async () => {
+      setPhase(card.id, { phase: 'completing' });
+      if (card.source === 'api') {
+        await creditApiTask(card.id, card.reward);
       } else {
-        setPhase(task.id, { phase: 'step_verify' });
+        completeTask(card.id);
+      }
+      timerRefs.current[card.id] = setTimeout(() => setPhase(card.id, { phase: 'done' }), 1500);
+    };
+
+    try {
+      if (card.type === 'start_bot') {
+        const res  = await fetch(`/api/check-bot-start?telegram_id=${telegramId}`);
+        const data = await res.json() as { started: boolean };
+        if (data.started) await succeed();
+        else setPhase(card.id, { phase: 'step_verify' });
+      } else {
+        const chatId = card.targetUrl
+          ? '@' + card.targetUrl.replace('https://t.me/', '').split('/')[0]
+          : '';
+        const res  = await fetch(`/api/check-membership?telegram_id=${telegramId}&chat_id=${encodeURIComponent(chatId)}`);
+        const data = await res.json() as { member: boolean };
+        if (data.member) await succeed();
+        else setPhase(card.id, { phase: 'not_subscribed' });
       }
     } catch {
-      setPhase(task.id, { phase: 'completing' });
-      if (task.reward !== undefined) {
-        await creditApiTask(task.id, task.reward);
-      } else {
-        completeTask(task.id);
-      }
-      setTimeout(() => setPhase(task.id, { phase: 'done' }), 1500);
+      await succeed(); // offline: allow through
     }
   };
 
-  // ── Bot — ouvre le bot puis vérifie via API ────────────────────
-  const handleBot = (task: { id: string; targetUrl?: string }) => {
-    if (task.targetUrl) openUrl(task.targetUrl);
-    setPhase(task.id, { phase: 'step_verify' });
-  };
-
-  const handleVerifyBot = async (task: { id: string; type: string; reward?: number }) => {
-    setPhase(task.id, { phase: 'verifying' });
-    try {
-      const telegramId = useAppStore.getState().currentUser.telegramId;
-      const res = await fetch(`/api/check-bot-start?telegram_id=${telegramId}`);
-      const { started } = await res.json() as { started: boolean };
-      if (started) {
-        setPhase(task.id, { phase: 'completing' });
-        if (task.reward !== undefined) {
-          await creditApiTask(task.id, task.reward);
-        } else {
-          completeTask(task.id);
-        }
-        setTimeout(() => setPhase(task.id, { phase: 'done' }), 1500);
-      } else {
-        setPhase(task.id, { phase: 'step_verify' });
-      }
-    } catch {
-      setPhase(task.id, { phase: 'completing' });
-      if (task.reward !== undefined) {
-        await creditApiTask(task.id, task.reward);
-      } else {
-        completeTask(task.id);
-      }
-      setTimeout(() => setPhase(task.id, { phase: 'done' }), 1500);
-    }
-  };
-
-  // ── Daily / Special (instant) ──────────────────────────────────
-  const handleInstant = (task: typeof tasks[0]) => {
-    setPhase(task.id, { phase: 'completing' });
-    completeTask(task.id);
-    setTimeout(() => setPhase(task.id, { phase: 'done' }), 1200);
-  };
-
-  const handleComplete = (task: typeof tasks[0]) => {
-    const s = getState(task.id);
-    if (completedTaskIds.includes(task.id) || s.phase === 'completing' || s.phase === 'done') return;
-    if (task.type === 'join_channel' || task.type === 'join_group') handleChannelGroup(task);
-    else if (task.type === 'start_bot') handleBot(task);
-    else handleInstant(task);
-  };
-
-  const handleCompleteApi = (task: ApiTask) => {
-    const s = getState(task.id);
-    if (completedApiTaskIds.includes(task.id) || s.phase === 'completing' || s.phase === 'done') return;
-    if (task.type === 'join_channel' || task.type === 'join_group') handleChannelGroup(task);
-    else if (task.type === 'start_bot') handleBot(task);
-  };
-
-  // Unified "Vérifier" button handler — routes to correct verifier
-  const handleVerifyAction = (task: typeof tasks[0]) => {
-    if (task.type === 'start_bot') void handleVerifyBot(task);
-    else void handleVerify(task);
-  };
-
-  const handleVerifyActionApi = (task: ApiTask) => {
-    if (task.type === 'start_bot') void handleVerifyBot({ id: task.id, type: task.type, reward: task.reward });
-    else void handleVerify({ id: task.id, targetUrl: task.targetUrl, type: task.type, reward: task.reward });
-  };
-
-  // ── Promo proof submission ─────────────────────────────────────
+  // ── Promo proof submission ───────────────────────────────────────
   const handleSubmitProof = (taskId: string) => {
     if (proofSubmitting || !proofText.trim()) return;
     setProofSubmitting(true);
@@ -241,22 +249,24 @@ export const MiniAppTasks: React.FC = () => {
       setProofResult({
         taskId,
         success: result.success,
-        message: result.success
-          ? 'Soumission envoyée! En attente de validation.'
-          : (result.error ?? 'Erreur inconnue.'),
+        message: result.success ? 'Soumission envoyée ! En attente de validation.' : (result.error ?? 'Erreur.'),
       });
       if (result.success) { setProofOpen(null); setProofText(''); }
       setTimeout(() => setProofResult(null), 5000);
     }, 700);
   };
 
+  // ── Render ───────────────────────────────────────────────────────
   return (
     <div className="space-y-5 animate-slide-up">
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-white">Tâches</h1>
-          <p className="text-sm text-slate-400">{activeTasks.length} tâche{activeTasks.length !== 1 ? 's' : ''} disponible{activeTasks.length !== 1 ? 's' : ''}</p>
+          <p className="text-sm text-slate-400">
+            {totalAvailable} tâche{totalAvailable !== 1 ? 's' : ''} disponible{totalAvailable !== 1 ? 's' : ''}
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -274,60 +284,81 @@ export const MiniAppTasks: React.FC = () => {
         </div>
       </div>
 
-      {/* ── Filters ── */}
+      {/* Filters */}
       <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 no-scrollbar">
         {filters.map(f => (
-          <button key={f.id} onClick={() => setFilter(f.id)}
-            className={`px-3 py-2 rounded-xl text-xs font-medium whitespace-nowrap transition-all ${filter === f.id ? 'bg-blue-500/15 text-blue-400 border border-blue-500/30' : 'bg-white/5 text-slate-400 border border-transparent'}`}>
+          <button
+            key={f.id}
+            onClick={() => setFilter(f.id)}
+            className={`px-3 py-2 rounded-xl text-xs font-medium whitespace-nowrap transition-all ${
+              filter === f.id
+                ? 'bg-blue-500/15 text-blue-400 border border-blue-500/30'
+                : 'bg-white/5 text-slate-400 border border-transparent'
+            }`}
+          >
             {f.label}
           </button>
         ))}
       </div>
 
-      {/* ── Regular task cards ── */}
+      {/* ── Unified task list (platform + user-created together) ── */}
       <div className="space-y-3">
-        {filtered.map(task => {
-          const config = typeConfig[task.type] ?? typeConfig.special;
-          const isCompleted = completedTaskIds.includes(task.id);
-          const s = getState(task.id);
-          const isPromoActive = task.promotion && new Date(task.promotion.endsAt) > new Date();
-          const displayReward = task.reward * (isPromoActive ? task.promotion!.multiplier : 1);
-          const needsVerify = task.type === 'join_channel' || task.type === 'join_group';
-          const isBot = task.type === 'start_bot';
+        {allCards.map(card => {
+          const config       = typeConfig[card.type] ?? typeConfig.special;
+          const phase        = getPhase(card.id);
+          const isCompleted  = (card.source === 'platform' && completedTaskIds.includes(card.id)) ||
+                               (card.source === 'api'      && completedApiTaskIds.includes(card.id));
+          const isDone       = isCompleted || phase === 'done';
+          const displayReward = card.reward * (card.promoMultiplier ?? 1);
+          const needsVerify  = card.type === 'join_channel' || card.type === 'join_group';
+          const isBot        = card.type === 'start_bot';
+          const notSubbed    = phase === 'not_subscribed';
 
           return (
-            <div key={task.id} className={`glass-card p-4 transition-all space-y-3 ${isCompleted || s.phase === 'done' ? 'opacity-50' : ''} ${isPromoActive ? 'border border-amber-500/30' : ''}`}>
+            <div
+              key={card.id}
+              className={`glass-card p-4 transition-all space-y-3 ${isDone ? 'opacity-50' : ''} ${card.promoMultiplier ? 'border border-amber-500/30' : ''}`}
+            >
               <div className="flex items-start gap-3">
+                {/* Icon */}
                 <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${config.color}`}>
-                  {task.icon ? <span className="text-base">{task.icon}</span> : config.icon}
+                  {card.icon ? <span className="text-base">{card.icon}</span> : config.icon}
                 </div>
+
+                {/* Content */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-                    <h3 className="text-sm font-semibold text-white">{task.title}</h3>
-                    <span className="px-1.5 py-0.5 rounded text-[9px] font-medium bg-white/5 text-slate-400">{config.label}</span>
-                    {isPromoActive && (
+                    <h3 className="text-sm font-semibold text-white">{card.title}</h3>
+                    <span className="px-1.5 py-0.5 rounded text-[9px] font-medium bg-white/5 text-slate-400">
+                      {config.label}
+                    </span>
+                    {card.promoMultiplier && (
                       <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 text-[9px] font-bold">
-                        <Flame className="w-2.5 h-2.5" /> PROMO ×{task.promotion!.multiplier}
+                        <Flame className="w-2.5 h-2.5" /> PROMO ×{card.promoMultiplier}
                       </span>
                     )}
                   </div>
-                  <p className="text-xs text-slate-400 mb-2">{task.description}</p>
+                  <p className="text-xs text-slate-400 mb-2">{card.description}</p>
 
-                  {task.maxCompletions && (
+                  {card.maxCompletions && (
                     <div className="mb-2">
                       <div className="progress-bar">
-                        <div className="progress-bar-fill bg-gradient-to-r from-blue-500 to-purple-500"
-                          style={{ width: `${Math.min((task.totalCompletions / task.maxCompletions) * 100, 100)}%` }} />
+                        <div
+                          className="progress-bar-fill bg-gradient-to-r from-blue-500 to-purple-500"
+                          style={{ width: `${Math.min((card.totalCompletions / card.maxCompletions) * 100, 100)}%` }}
+                        />
                       </div>
-                      <p className="text-[10px] text-slate-500 mt-0.5">{task.totalCompletions.toLocaleString()}/{task.maxCompletions.toLocaleString()} places</p>
+                      <p className="text-[10px] text-slate-500 mt-0.5">
+                        {card.totalCompletions.toLocaleString()}/{card.maxCompletions.toLocaleString()} places
+                      </p>
                     </div>
                   )}
 
                   <div className="flex items-center gap-2">
-                    {isPromoActive ? (
+                    {card.promoMultiplier ? (
                       <>
                         <span className="text-lg font-bold text-amber-400">+{displayReward.toFixed(4)} TON</span>
-                        <span className="text-xs text-slate-500 line-through">+{task.reward.toFixed(4)}</span>
+                        <span className="text-xs text-slate-500 line-through">+{card.reward.toFixed(4)}</span>
                       </>
                     ) : (
                       <span className="text-lg font-bold text-emerald-400">+{displayReward.toFixed(4)} TON</span>
@@ -335,66 +366,68 @@ export const MiniAppTasks: React.FC = () => {
                   </div>
                 </div>
 
+                {/* Action button */}
                 <div className="flex-shrink-0">
-                  {isCompleted || s.phase === 'done' ? (
+                  {isDone ? (
                     <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400">
                       <CheckCircle className="w-5 h-5" />
                     </div>
-                  ) : s.phase === 'completing' ? (
+                  ) : phase === 'completing' ? (
                     <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-500/10 text-emerald-400 text-xs font-medium">
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      Crédit...
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" /> Crédit...
                     </div>
-                  ) : s.phase === 'idle' ? (
-                    <button onClick={() => handleComplete(task)}
-                      className="px-4 py-2 rounded-xl btn-primary text-xs font-semibold text-white flex items-center gap-1.5">
+                  ) : phase === 'idle' ? (
+                    <button
+                      onClick={() => handleStart(card)}
+                      className="px-4 py-2 rounded-xl btn-primary text-xs font-semibold text-white flex items-center gap-1.5"
+                    >
                       Faire <ExternalLink className="w-3 h-3" />
                     </button>
                   ) : null}
                 </div>
               </div>
 
-              {/* Channel/Group verify step */}
-              {needsVerify && (s.phase === 'step_verify' || s.phase === 'verifying' || s.phase === 'not_subscribed') && (
+              {/* Verify step — channel / group */}
+              {needsVerify && (phase === 'step_verify' || phase === 'verifying' || notSubbed) && (
                 <div className="border-t border-white/5 pt-3 space-y-2">
                   <div className="flex items-center gap-2 p-2.5 rounded-lg bg-blue-500/5 border border-blue-500/15">
                     <ShieldCheck className="w-4 h-4 text-blue-400 flex-shrink-0" />
                     <p className="text-xs text-blue-300">
-                      {task.type === 'join_channel'
+                      {card.type === 'join_channel'
                         ? 'Abonnez-vous au canal ci-dessus, puis vérifiez.'
                         : 'Rejoignez le groupe ci-dessus, puis vérifiez.'}
                     </p>
                   </div>
-                  {s.phase === 'not_subscribed' && (
-                    <p className="text-xs text-red-400 text-center">Abonnement non détecté — abonnez-vous d'abord.</p>
+                  {notSubbed && (
+                    <p className="text-xs text-red-400 text-center">
+                      Abonnement non détecté — abonnez-vous d'abord.
+                    </p>
                   )}
                   <button
-                    onClick={() => handleVerifyAction(task)}
-                    disabled={s.phase === 'verifying'}
+                    onClick={() => void handleVerify(card)}
+                    disabled={phase === 'verifying'}
                     className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-blue-500/15 border border-blue-500/30 text-blue-400 text-xs font-semibold hover:bg-blue-500/25 transition-all disabled:opacity-50"
                   >
-                    {s.phase === 'verifying' ? (
-                      <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Vérification en cours...</>
-                    ) : (
-                      <><ShieldCheck className="w-3.5 h-3.5" /> Vérifier mon abonnement</>
-                    )}
+                    {phase === 'verifying'
+                      ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Vérification en cours...</>
+                      : <><ShieldCheck className="w-3.5 h-3.5" /> Vérifier mon abonnement</>}
                   </button>
                 </div>
               )}
 
-              {/* Bot verify step — same pattern as channel */}
-              {isBot && (s.phase === 'step_verify' || s.phase === 'verifying') && (
+              {/* Verify step — bot */}
+              {isBot && (phase === 'step_verify' || phase === 'verifying') && (
                 <div className="border-t border-white/5 pt-3 space-y-2">
                   <div className="flex items-center gap-2 p-2.5 rounded-lg bg-blue-500/5 border border-blue-500/15">
                     <ShieldCheck className="w-4 h-4 text-blue-400 flex-shrink-0" />
                     <p className="text-xs text-blue-300">Envoyez /start au bot ci-dessus, puis vérifiez.</p>
                   </div>
                   <button
-                    onClick={() => handleVerifyAction(task)}
-                    disabled={s.phase === 'verifying'}
+                    onClick={() => void handleVerify(card)}
+                    disabled={phase === 'verifying'}
                     className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-blue-500/15 border border-blue-500/30 text-blue-400 text-xs font-semibold hover:bg-blue-500/25 transition-all disabled:opacity-50"
                   >
-                    {s.phase === 'verifying'
+                    {phase === 'verifying'
                       ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Vérification en cours...</>
                       : <><ShieldCheck className="w-3.5 h-3.5" /> Vérifier</>}
                   </button>
@@ -404,7 +437,7 @@ export const MiniAppTasks: React.FC = () => {
           );
         })}
 
-        {filtered.length === 0 && (
+        {allCards.length === 0 && (
           <div className="flex flex-col items-center gap-2 py-10">
             <AlertCircle className="w-8 h-8 text-slate-600" />
             <p className="text-sm text-slate-500">Aucune tâche dans cette catégorie</p>
@@ -412,111 +445,9 @@ export const MiniAppTasks: React.FC = () => {
         )}
       </div>
 
-      {/* ── User-created tasks (from API) ── */}
-      {apiTasks.length > 0 && (
-        <div className="space-y-3 pt-1">
-          <div className="flex items-center gap-3">
-            <div className="flex-1 h-px bg-white/8" />
-            <span className="text-[10px] text-slate-600 font-medium tracking-wider uppercase flex items-center gap-1">
-              <Sparkles className="w-3 h-3" /> Campagnes utilisateurs
-            </span>
-            <div className="flex-1 h-px bg-white/8" />
-          </div>
-
-          {apiTasks.filter(t => !completedApiTaskIds.includes(t.id)).map(task => {
-            const config   = typeConfig[task.type] ?? typeConfig.special;
-            const s        = getState(task.id);
-            const isDone   = completedApiTaskIds.includes(task.id) || s.phase === 'done';
-            const needsVerify = task.type === 'join_channel' || task.type === 'join_group';
-            const isBot    = task.type === 'start_bot';
-
-            return (
-              <div key={task.id} className={`glass-card p-4 transition-all space-y-3 border border-blue-500/10 ${isDone ? 'opacity-50' : ''}`}>
-                <div className="flex items-start gap-3">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${config.color}`}>
-                    {config.icon}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-                      <h3 className="text-sm font-semibold text-white">{task.title}</h3>
-                      <span className="px-1.5 py-0.5 rounded text-[9px] font-medium bg-blue-500/10 text-blue-400">Campagne</span>
-                    </div>
-                    <p className="text-xs text-slate-400 mb-2">{task.description}</p>
-                    {task.maxCompletions > 0 && (
-                      <div className="mb-2">
-                        <div className="progress-bar">
-                          <div
-                            className="progress-bar-fill bg-gradient-to-r from-blue-500 to-purple-500"
-                            style={{ width: `${Math.min((task.totalCompletions / task.maxCompletions) * 100, 100)}%` }}
-                          />
-                        </div>
-                        <p className="text-[10px] text-slate-500 mt-0.5">{task.totalCompletions}/{task.maxCompletions} places</p>
-                      </div>
-                    )}
-                    <span className="text-lg font-bold text-emerald-400">+{task.reward.toFixed(4)} TON</span>
-                  </div>
-
-                  <div className="flex-shrink-0">
-                    {isDone ? (
-                      <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400">
-                        <CheckCircle className="w-5 h-5" />
-                      </div>
-                    ) : s.phase === 'completing' ? (
-                      <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-500/10 text-emerald-400 text-xs font-medium">
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" /> Crédit...
-                      </div>
-                    ) : s.phase === 'idle' ? (
-                      <button onClick={() => handleCompleteApi(task)}
-                        className="px-4 py-2 rounded-xl btn-primary text-xs font-semibold text-white flex items-center gap-1.5">
-                        Faire <ExternalLink className="w-3 h-3" />
-                      </button>
-                    ) : null}
-                  </div>
-                </div>
-
-                {/* Channel/Group verify step */}
-                {needsVerify && (s.phase === 'step_verify' || s.phase === 'verifying') && (
-                  <div className="border-t border-white/5 pt-3 space-y-2">
-                    <div className="flex items-center gap-2 p-2.5 rounded-lg bg-blue-500/5 border border-blue-500/15">
-                      <ShieldCheck className="w-4 h-4 text-blue-400 flex-shrink-0" />
-                      <p className="text-xs text-blue-300">
-                        {task.type === 'join_channel' ? 'Abonnez-vous au canal ci-dessus, puis vérifiez.' : 'Rejoignez le groupe ci-dessus, puis vérifiez.'}
-                      </p>
-                    </div>
-                    <button onClick={() => handleVerifyActionApi(task)} disabled={s.phase === 'verifying'}
-                      className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-blue-500/15 border border-blue-500/30 text-blue-400 text-xs font-semibold hover:bg-blue-500/25 transition-all disabled:opacity-50">
-                      {s.phase === 'verifying'
-                        ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Vérification...</>
-                        : <><ShieldCheck className="w-3.5 h-3.5" /> Vérifier mon abonnement</>}
-                    </button>
-                  </div>
-                )}
-
-                {/* Bot verify step */}
-                {isBot && (s.phase === 'step_verify' || s.phase === 'verifying') && (
-                  <div className="border-t border-white/5 pt-3 space-y-2">
-                    <div className="flex items-center gap-2 p-2.5 rounded-lg bg-blue-500/5 border border-blue-500/15">
-                      <ShieldCheck className="w-4 h-4 text-blue-400 flex-shrink-0" />
-                      <p className="text-xs text-blue-300">Envoyez /start au bot ci-dessus, puis vérifiez.</p>
-                    </div>
-                    <button onClick={() => handleVerifyActionApi(task)} disabled={s.phase === 'verifying'}
-                      className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-blue-500/15 border border-blue-500/30 text-blue-400 text-xs font-semibold hover:bg-blue-500/25 transition-all disabled:opacity-50">
-                      {s.phase === 'verifying'
-                        ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Vérification...</>
-                        : <><ShieldCheck className="w-3.5 h-3.5" /> Vérifier</>}
-                    </button>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* ── Promo Tasks (bottom) ── */}
+      {/* ── Promo / Special tasks (manual verification) ── */}
       {promoTasks.length > 0 && (
         <div className="space-y-3 pt-2">
-          {/* Visual separator */}
           <div className="flex items-center gap-3">
             <div className="flex-1 h-px bg-white/8" />
             <span className="text-[10px] text-slate-600 font-medium tracking-wider uppercase">Tâches spéciales</span>
@@ -527,7 +458,9 @@ export const MiniAppTasks: React.FC = () => {
             <span className="text-sm font-bold text-white">🎯 Tâches Promo</span>
             <span className="px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-400 text-[10px] font-semibold">Vérif. manuelle</span>
           </div>
-          <p className="text-[10px] text-slate-500 px-1">Créées par l'équipe. Complétez la condition et soumettez votre preuve pour être récompensé.</p>
+          <p className="text-[10px] text-slate-500 px-1">
+            Complétez la condition et soumettez votre preuve pour être récompensé.
+          </p>
 
           {promoTasks.map(task => {
             const userSubmission = taskSubmissions.find(
@@ -540,7 +473,10 @@ export const MiniAppTasks: React.FC = () => {
             const thisResult = proofResult?.taskId === task.id ? proofResult : null;
 
             return (
-              <div key={task.id} className={`glass-card p-4 space-y-3 border ${isApproved ? 'border-emerald-500/25' : 'border-purple-500/20'}`}>
+              <div
+                key={task.id}
+                className={`glass-card p-4 space-y-3 border ${isApproved ? 'border-emerald-500/25' : 'border-purple-500/20'}`}
+              >
                 <div className="flex items-start gap-3">
                   <div className="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center flex-shrink-0 text-base">
                     {task.icon ?? '🎯'}
@@ -563,7 +499,9 @@ export const MiniAppTasks: React.FC = () => {
                         style={{ width: `${Math.min((task.totalCompletions / task.maxCompletions) * 100, 100)}%` }}
                       />
                     </div>
-                    <span className="text-[10px] text-slate-500 flex-shrink-0">{task.totalCompletions}/{task.maxCompletions} places</span>
+                    <span className="text-[10px] text-slate-500 flex-shrink-0">
+                      {task.totalCompletions}/{task.maxCompletions} places
+                    </span>
                   </div>
                 )}
 
@@ -573,19 +511,17 @@ export const MiniAppTasks: React.FC = () => {
                     <p className="text-xs font-semibold text-emerald-400">Validée — récompense créditée</p>
                   </div>
                 )}
-
                 {isPending && (
                   <div className="flex items-center gap-2 p-2.5 rounded-lg bg-amber-500/5 border border-amber-500/20">
                     <Clock className="w-4 h-4 text-amber-400 flex-shrink-0" />
                     <p className="text-xs font-semibold text-amber-400">En attente de validation par l'équipe</p>
                   </div>
                 )}
-
                 {isRejected && (
                   <div className="p-2.5 rounded-lg bg-red-500/5 border border-red-500/20 space-y-1">
                     <p className="text-xs font-semibold text-red-400">Preuve refusée</p>
                     {userSubmission?.adminNote && (
-                      <p className="text-[10px] text-red-400/70">Motif: {userSubmission.adminNote}</p>
+                      <p className="text-[10px] text-red-400/70">Motif : {userSubmission.adminNote}</p>
                     )}
                   </div>
                 )}
@@ -617,9 +553,9 @@ export const MiniAppTasks: React.FC = () => {
                     <textarea
                       value={proofText}
                       onChange={e => setProofText(e.target.value)}
-                      placeholder="Décrivez votre preuve ou collez un lien (capture d'écran URL, message Telegram, etc.)..."
+                      placeholder="Décrivez votre preuve ou collez un lien…"
                       rows={3}
-                      className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white text-xs resize-none focus:outline-none focus:border-purple-500/50 transition-colors placeholder:text-slate-600"
+                      className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white text-xs resize-none focus:outline-none focus:border-purple-500/50 placeholder:text-slate-600"
                     />
                     <button
                       onClick={() => handleSubmitProof(task.id)}
@@ -627,9 +563,8 @@ export const MiniAppTasks: React.FC = () => {
                       className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl btn-primary text-xs font-semibold text-white disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       {proofSubmitting
-                        ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Envoi en cours...</>
-                        : <><Send className="w-3.5 h-3.5" /> Envoyer ma preuve</>
-                      }
+                        ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Envoi...</>
+                        : <><Send className="w-3.5 h-3.5" /> Envoyer ma preuve</>}
                     </button>
                   </div>
                 )}
