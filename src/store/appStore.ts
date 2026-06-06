@@ -532,7 +532,7 @@ const mockNotifications: Notification[] = [];
 const mockFraudAlerts: FraudAlert[] = [];
 
 const mockCryptoNetworks: CryptoNetwork[] = [
-  { id: '1', name: 'Toncoin', symbol: 'TON', network: 'TON', isActive: true, isDepositEnabled: true, isWithdrawalEnabled: true, minDeposit: 1, maxDeposit: 10000, minWithdrawal: 5, maxWithdrawal: 5000, withdrawalFee: 0.5, withdrawalFeeType: 'fixed', requiredConfirmations: 12, dailyWithdrawalLimit: 10000, autoWithdrawal: true, autoWithdrawalThreshold: 100, hotWalletBalance: 0, coldWalletBalance: 0, hotWalletAddress: '', coldWalletAddress: '', explorerUrl: 'https://tonscan.org/tx/', decimals: 9, priority: 1 },
+  { id: '1', name: 'Toncoin', symbol: 'TON', network: 'TON', isActive: true, isDepositEnabled: true, isWithdrawalEnabled: true, minDeposit: 1, maxDeposit: 10000, minWithdrawal: 0.1, maxWithdrawal: 5000, withdrawalFee: 0.02, withdrawalFeeType: 'fixed', requiredConfirmations: 12, dailyWithdrawalLimit: 10000, autoWithdrawal: true, autoWithdrawalThreshold: 100, hotWalletBalance: 0, coldWalletBalance: 0, hotWalletAddress: '', coldWalletAddress: '', explorerUrl: 'https://tonscan.org/tx/', decimals: 9, priority: 1 },
   { id: '2', name: 'Tether USD (TON)', symbol: 'USDT', network: 'TON', isActive: true, isDepositEnabled: true, isWithdrawalEnabled: true, minDeposit: 5, maxDeposit: 50000, minWithdrawal: 10, maxWithdrawal: 25000, withdrawalFee: 1.0, withdrawalFeeType: 'fixed', requiredConfirmations: 12, dailyWithdrawalLimit: 50000, autoWithdrawal: false, autoWithdrawalThreshold: 500, hotWalletBalance: 0, coldWalletBalance: 0, hotWalletAddress: '', coldWalletAddress: '', explorerUrl: 'https://tonscan.org/tx/', decimals: 6, contractAddress: '0:b113a994b5024a16719f69139328eb759596c38a25f5972a7e5b7892d4b7a09e', priority: 2 },
 ];
 
@@ -679,7 +679,7 @@ const mockPlatformConfig: PlatformConfig = {
   maxDailyTasks: 50,
   bonusTaskMultiplier: 1.5,
   taskCreationFeeRate: 0.30,
-  taskPricePerExecution: 0.05,
+  taskPricePerExecution: 0.003,
   taskMinExecutions: 100,
   taskMaxExecutions: 100000,
   depositBonusPercent: 5,
@@ -774,6 +774,7 @@ interface AppState {
   creditDeposit: (userId: string, amount: number, currency: string, txHash: string, network: string) => void;
   resetDailyTasks: () => void;
   completeTask: (taskId: string) => void;
+  creditReferralBonus: (earned: number) => void;
   submitWithdrawal: (networkId: string, amount: number, address: string) => { success: boolean; error?: string };
   claimReferralMilestone: (id: string) => void;
   addReferralMilestone: (milestone: Omit<ReferralMilestone, 'id'>) => void;
@@ -1004,15 +1005,37 @@ export const useAppStore = create<AppState>((set, get) => ({
       todayEarnings: state.currentUser.todayEarnings + earned,
       totalEarnings: state.currentUser.totalEarnings + earned,
     };
+    // Referral bonus: 10% of earned amount credited to referrer
+    const referralBonus = parseFloat((earned * 0.10).toFixed(6));
+    const referrer = state.currentUser.referredBy
+      ? state.users.find(u => u.referralCode === state.currentUser.referredBy && u.id !== state.currentUser.id)
+      : null;
     set(s => ({
       completedTaskIds: [...s.completedTaskIds, taskId],
       tasks: s.tasks.map(t => t.id === taskId ? { ...t, totalCompletions: t.totalCompletions + 1 } : t),
       currentUser: { ...s.currentUser, ...updatedUser },
-      users: s.users.map(u => u.id === state.currentUser.id ? { ...u, ...updatedUser } : u),
+      users: s.users.map(u => {
+        if (u.id === state.currentUser.id) return { ...u, ...updatedUser };
+        if (referrer && u.id === referrer.id) return { ...u, balanceMain: u.balanceMain + referralBonus, totalEarnings: u.totalEarnings + referralBonus };
+        return u;
+      }),
     }));
     const rewardCurrency = task.rewardType === 'main' ? 'TON' : task.rewardType.toUpperCase();
     get().addTransaction({ userId: state.currentUser.id, type: 'reward', amount: earned, currency: rewardCurrency, status: 'completed', completedAt: new Date().toISOString() });
     get().addNotification({ userId: state.currentUser.id, type: 'reward', title: 'Tâche complétée!', message: `+${earned.toFixed(2)} TON${isPromoActive ? ` (×${multiplier} promo!)` : ''} pour "${task.title}"`, isRead: false });
+  },
+
+  creditReferralBonus: (earned) => {
+    const state = get();
+    if (!state.currentUser.referredBy) return;
+    const referrer = state.users.find(u => u.referralCode === state.currentUser.referredBy && u.id !== state.currentUser.id);
+    if (!referrer) return;
+    const bonus = parseFloat((earned * 0.10).toFixed(6));
+    set(s => ({
+      users: s.users.map(u => u.id === referrer.id
+        ? { ...u, balanceMain: u.balanceMain + bonus, totalEarnings: u.totalEarnings + bonus }
+        : u),
+    }));
   },
 
   initFromTelegram: (tgUser) => set(s => {
