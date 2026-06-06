@@ -1,7 +1,27 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAppStore } from '../../store/appStore';
 import { ToggleSwitch } from '../ui/ToggleSwitch';
-import { Hash, Users, Bot, UserPlus, Calendar, Star, ExternalLink, Edit2, Trash2, Plus, Tv, AlertCircle, Flame, CheckCircle, XCircle, Clock, FileText } from 'lucide-react';
+import { Hash, Users, Bot, UserPlus, Calendar, Star, ExternalLink, Edit2, Trash2, Plus, Tv, AlertCircle, Flame, CheckCircle, XCircle, Clock, FileText, Sparkles, RefreshCw, Loader2 } from 'lucide-react';
+
+interface AdminUserTask {
+  id: string;
+  creatorId: number;
+  type: string;
+  title: string;
+  description: string;
+  targetUrl: string;
+  reward: number;
+  totalBudget: number;
+  spent: number;
+  status: string;
+  completions: number;
+  maxCompletions: number;
+  adminNote: string;
+  createdAt: string;
+  approvedAt: string | null;
+  username: string;
+  firstName: string;
+}
 
 const taskTypeIcons: Record<string, React.ReactNode> = {
   join_channel: <Hash className="w-4 h-4" />,
@@ -38,8 +58,52 @@ const taskTypeColors: Record<string, string> = {
 
 export const AdminTasks: React.FC = () => {
   const { tasks, updateTask, deleteTask, openModal, taskSubmissions, reviewTaskSubmission } = useAppStore();
-  const [rejectNotes, setRejectNotes] = useState<Record<string, string>>({});
-  const [rejectOpen,  setRejectOpen]  = useState<string | null>(null);
+  const [rejectNotes,      setRejectNotes]      = useState<Record<string, string>>({});
+  const [rejectOpen,       setRejectOpen]       = useState<string | null>(null);
+
+  // User-created tasks from backend
+  const [userTasks,        setUserTasks]        = useState<AdminUserTask[]>([]);
+  const [userTasksLoading, setUserTasksLoading] = useState(true);
+  const [utRejectOpen,     setUtRejectOpen]     = useState<string | null>(null);
+  const [utRejectNotes,    setUtRejectNotes]    = useState<Record<string, string>>({});
+  const [utActionLoading,  setUtActionLoading]  = useState<string | null>(null);
+  const [utFilter,         setUtFilter]         = useState<string>('pending_approval');
+
+  const fetchUserTasks = async () => {
+    setUserTasksLoading(true);
+    try {
+      const res  = await fetch(`/api/admin/user-tasks?status=${utFilter}`);
+      const data = await res.json() as AdminUserTask[];
+      setUserTasks(data);
+    } catch { /* offline */ }
+    finally { setUserTasksLoading(false); }
+  };
+
+  useEffect(() => { void fetchUserTasks(); }, [utFilter]);
+
+  const handleUtApprove = async (id: string) => {
+    setUtActionLoading(id);
+    try {
+      await fetch(`/api/admin/user-tasks/${id}/approve`, { method: 'POST' });
+      await fetchUserTasks();
+    } finally { setUtActionLoading(null); }
+  };
+
+  const handleUtReject = async (id: string) => {
+    setUtActionLoading(id);
+    try {
+      await fetch(`/api/admin/user-tasks/${id}/reject`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ note: utRejectNotes[id]?.trim() || '' }),
+      });
+      setUtRejectOpen(null);
+      setUtRejectNotes(prev => { const n = { ...prev }; delete n[id]; return n; });
+      await fetchUserTasks();
+    } finally { setUtActionLoading(null); }
+  };
+
+  const pendingUserTasksCount = userTasks.filter(t => t.status === 'pending_approval').length;
 
   const pendingSubmissions = taskSubmissions.filter(s => s.status === 'pending');
   const allSubmissions     = taskSubmissions;
@@ -170,6 +234,129 @@ export const AdminTasks: React.FC = () => {
           })}
         </div>
       )}
+
+      {/* ── User-created tasks (marketplace) ── */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-bold text-white flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-blue-400" /> Campagnes utilisateurs
+            </h3>
+            <p className="text-slate-400 text-sm mt-0.5">
+              Tâches créées par les utilisateurs — approbation requise
+              {pendingUserTasksCount > 0 && <span className="ml-2 text-amber-400 font-semibold">({pendingUserTasksCount} en attente)</span>}
+            </p>
+          </div>
+          <button onClick={() => void fetchUserTasks()} className="p-2 rounded-lg hover:bg-white/5 text-slate-500">
+            <RefreshCw className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Filter tabs */}
+        <div className="flex gap-2">
+          {[
+            { value: 'pending_approval', label: 'En attente' },
+            { value: 'active',           label: 'Actives' },
+            { value: 'all',              label: 'Toutes' },
+          ].map(f => (
+            <button key={f.value} onClick={() => setUtFilter(f.value)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${utFilter === f.value ? 'bg-blue-500/15 text-blue-400 border border-blue-500/30' : 'glass-card-light text-slate-400'}`}>
+              {f.label}
+            </button>
+          ))}
+        </div>
+
+        {userTasksLoading ? (
+          <div className="flex items-center justify-center py-10">
+            <Loader2 className="w-6 h-6 text-slate-500 animate-spin" />
+          </div>
+        ) : userTasks.length === 0 ? (
+          <div className="glass-card p-8 text-center">
+            <Sparkles className="w-8 h-8 text-slate-600 mx-auto mb-3" />
+            <p className="text-sm text-slate-400">Aucune campagne {utFilter === 'pending_approval' ? 'en attente' : ''}</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {userTasks.map(task => {
+              const isActionLoading = utActionLoading === task.id;
+              const isRejectOpen    = utRejectOpen === task.id;
+              const statusMap: Record<string, string> = {
+                pending_approval: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+                active:           'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+                paused:           'bg-amber-500/10 text-amber-400 border-amber-500/20',
+                rejected:         'bg-red-500/10 text-red-400 border-red-500/20',
+                depleted:         'bg-white/5 text-slate-400 border-white/10',
+              };
+              const statusCls = statusMap[task.status] ?? statusMap.pending_approval;
+
+              return (
+                <div key={task.id} className={`glass-card p-4 space-y-3 border ${task.status === 'pending_approval' ? 'border-amber-500/20' : 'border-white/5'}`}>
+                  <div className="flex items-start gap-3">
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap mb-1">
+                        <span className="text-sm font-semibold text-white">{task.title}</span>
+                        <span className={`text-[10px] font-medium px-2 py-0.5 rounded-lg border ${statusCls}`}>{task.status}</span>
+                      </div>
+                      <p className="text-xs text-slate-400 mb-1">{task.description}</p>
+                      <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-[11px] text-slate-500">
+                        <span>👤 {task.firstName} @{task.username || 'inconnu'} (<code>{task.creatorId}</code>)</span>
+                        <span>🔗 <a href={task.targetUrl} target="_blank" rel="noreferrer" className="text-blue-400 hover:underline">{task.targetUrl}</a></span>
+                        <span>💰 {task.reward.toFixed(4)} TON/exec — Budget: {task.totalBudget.toFixed(3)} TON</span>
+                        <span>📊 {task.completions}/{task.maxCompletions} complétions</span>
+                        <span>🕐 {timeAgo(task.createdAt)}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {task.adminNote && (
+                    <p className="text-xs text-slate-500">Note: <span className="text-slate-400">{task.adminNote}</span></p>
+                  )}
+
+                  {task.status === 'pending_approval' && !isRejectOpen && (
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => void handleUtApprove(task.id)}
+                        disabled={isActionLoading}
+                        className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-semibold hover:bg-emerald-500/25 transition-all disabled:opacity-40"
+                      >
+                        {isActionLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <><CheckCircle className="w-3.5 h-3.5" /> Approuver</>}
+                      </button>
+                      <button
+                        onClick={() => setUtRejectOpen(task.id)}
+                        className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-semibold hover:bg-red-500/20 transition-all"
+                      >
+                        <XCircle className="w-3.5 h-3.5" /> Refuser
+                      </button>
+                    </div>
+                  )}
+
+                  {isRejectOpen && (
+                    <div className="space-y-2">
+                      <input
+                        type="text"
+                        value={utRejectNotes[task.id] ?? ''}
+                        onChange={e => setUtRejectNotes(prev => ({ ...prev, [task.id]: e.target.value }))}
+                        placeholder="Motif du refus (optionnel)..."
+                        className="w-full px-3 py-2 bg-white/5 border border-red-500/20 rounded-xl text-white text-xs focus:outline-none"
+                      />
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => void handleUtReject(task.id)}
+                          disabled={isActionLoading}
+                          className="flex-1 py-2 rounded-xl bg-red-500/15 border border-red-500/30 text-red-400 text-xs font-semibold disabled:opacity-40"
+                        >
+                          {isActionLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin mx-auto" /> : 'Confirmer le refus'}
+                        </button>
+                        <button onClick={() => setUtRejectOpen(null)} className="flex-1 py-2 rounded-xl bg-white/5 text-slate-400 text-xs">Annuler</button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
 
       {/* ── Promo Task Submissions ── */}
       <div className="space-y-4">

@@ -1,56 +1,112 @@
-import React, { useState } from 'react';
-import { useAppStore } from '../../store/appStore';
-import { StatusBadge } from '../ui/StatusBadge';
-import { Search, Filter, UserCheck, UserX, Eye, Shield, ChevronDown } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Search, Filter, UserCheck, UserX, Eye, Shield, ChevronDown, RefreshCw, AlertTriangle, ArrowDownLeft, ArrowUpRight, Lock, Unlock, Clock } from 'lucide-react';
+
+type ApiUser = {
+  telegram_id:         number;
+  username:            string;
+  first_name:          string;
+  last_name:           string;
+  referral_count:      number;
+  referral_balance:    number;
+  flagged:             boolean;
+  banned:              boolean;
+  withdrawal_blocked:  boolean;
+  ip_address:          string | null;
+  created_at:          string;
+  deposit_count:       number;
+  deposit_total:       number;
+  withdrawal_count:    number;
+  withdrawal_total:    number;
+  pending_withdrawals: number;
+};
+
+function userStatus(u: ApiUser): 'banned' | 'blocked' | 'flagged' | 'active' {
+  if (u.banned)              return 'banned';
+  if (u.withdrawal_blocked)  return 'blocked';
+  if (u.flagged)             return 'flagged';
+  return 'active';
+}
 
 export const AdminUsers: React.FC = () => {
-  const { users, updateUser } = useAppStore();
-  const [search, setSearch] = useState('');
+  const [users, setUsers]           = useState<ApiUser[]>([]);
+  const [loading, setLoading]       = useState(true);
+  const [search, setSearch]         = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [selectedUser, setSelectedUser] = useState<string | null>(null);
+  const [selected, setSelected]     = useState<ApiUser | null>(null);
+  const [actioning, setActioning]   = useState<number | null>(null);
 
-  const filtered = users.filter(u => {
-    const matchSearch = u.username.toLowerCase().includes(search.toLowerCase()) ||
-      u.firstName.toLowerCase().includes(search.toLowerCase()) ||
-      u.telegramId.toString().includes(search);
-    const matchStatus = statusFilter === 'all' || u.status === statusFilter;
-    return matchSearch && matchStatus;
-  });
+  const fetchUsers = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (search) params.set('search', search);
+      if (statusFilter !== 'all') params.set('status', statusFilter);
+      const res = await fetch(`/api/admin/users?${params.toString()}`);
+      if (res.ok) setUsers(await res.json() as ApiUser[]);
+    } catch { /* backend unavailable */ }
+    setLoading(false);
+  }, [search, statusFilter]);
 
-  const selected = selectedUser ? users.find(u => u.id === selectedUser) : null;
+  useEffect(() => { void fetchUsers(); }, [fetchUsers]);
+
+  const doAction = async (telegramId: number, action: 'ban' | 'unban' | 'unflag' | 'block-withdrawals' | 'unblock-withdrawals') => {
+    setActioning(telegramId);
+    try {
+      await fetch(`/api/admin/users/${telegramId}/${action}`, { method: 'POST' });
+      await fetchUsers();
+      setSelected(prev => {
+        if (!prev || prev.telegram_id !== telegramId) return prev;
+        return users.find(u => u.telegram_id === telegramId) ?? null;
+      });
+    } catch { /* ignore */ }
+    setActioning(null);
+  };
+
+  const statusLabel = { banned: 'Banni', blocked: 'Retraits bloqués', flagged: 'Signalé', active: 'Actif' } as const;
+  const statusColor = {
+    banned:  'bg-red-500/20 text-red-400',
+    blocked: 'bg-orange-500/20 text-orange-400',
+    flagged: 'bg-amber-500/20 text-amber-400',
+    active:  'bg-emerald-500/20 text-emerald-400',
+  } as const;
+
+  // Account age helper
+  const accountAge = (createdAt: string) => {
+    const days = Math.floor((Date.now() - new Date(createdAt).getTime()) / 86400000);
+    if (days === 0) return "aujourd'hui";
+    if (days === 1) return 'hier';
+    return `il y a ${days}j`;
+  };
 
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold text-white">Utilisateurs</h2>
-          <p className="text-slate-400 text-sm mt-1">{users.length} utilisateurs inscrits</p>
+          <p className="text-slate-400 text-sm mt-1">{users.length} utilisateurs</p>
         </div>
+        <button onClick={() => void fetchUsers()} className="p-2 rounded-lg hover:bg-white/5 text-slate-400" title="Actualiser">
+          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+        </button>
       </div>
 
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Rechercher par nom, username, ID..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 bg-white/5 border border-white/10 rounded-xl text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-500/50"
-          />
+          <input type="text" placeholder="Rechercher nom, username, ID Telegram…"
+            value={search} onChange={e => setSearch(e.target.value)}
+            className="w-full pl-10 pr-4 py-2.5 bg-white/5 border border-white/10 rounded-xl text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-500/50" />
         </div>
         <div className="relative">
           <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-          <select
-            value={statusFilter}
-            onChange={e => setStatusFilter(e.target.value)}
-            className="pl-10 pr-8 py-2.5 bg-white/5 border border-white/10 rounded-xl text-sm text-white appearance-none focus:outline-none focus:border-blue-500/50"
-          >
+          <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
+            className="pl-10 pr-8 py-2.5 bg-white/5 border border-white/10 rounded-xl text-sm text-white appearance-none focus:outline-none focus:border-blue-500/50">
             <option value="all">Tous</option>
             <option value="active">Actifs</option>
-            <option value="suspended">Suspendus</option>
+            <option value="flagged">Signalés</option>
             <option value="banned">Bannis</option>
+            <option value="blocked">Retraits bloqués</option>
           </select>
           <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
         </div>
@@ -64,140 +120,206 @@ export const AdminUsers: React.FC = () => {
               <thead>
                 <tr className="border-b border-white/5">
                   <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Utilisateur</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Solde</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Tâches</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Risque</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Dépôts</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Retraits</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Statut</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {filtered.length === 0 && (
-                  <tr>
-                    <td colSpan={6} className="px-4 py-10 text-center text-sm text-slate-500">
-                      {search || statusFilter !== 'all' ? 'Aucun utilisateur correspondant à la recherche' : 'Aucun utilisateur pour l\'instant'}
-                    </td>
-                  </tr>
+                {loading && (
+                  <tr><td colSpan={5} className="px-4 py-12 text-center">
+                    <div className="w-6 h-6 border-2 border-blue-500/30 border-t-blue-400 rounded-full animate-spin mx-auto mb-2" />
+                    <p className="text-sm text-slate-500">Chargement…</p>
+                  </td></tr>
                 )}
-                {filtered.map(user => (
-                  <tr key={user.id} className={`table-row border-b border-white/[0.03] cursor-pointer ${selectedUser === user.id ? 'bg-blue-500/5' : ''}`} onClick={() => setSelectedUser(user.id)}>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-xs font-bold text-white">
-                          {user.firstName[0]}
+                {!loading && users.length === 0 && (
+                  <tr><td colSpan={5} className="px-4 py-10 text-center text-sm text-slate-500">
+                    {search || statusFilter !== 'all' ? 'Aucun résultat' : 'Aucun utilisateur inscrit'}
+                  </td></tr>
+                )}
+                {!loading && users.map(user => {
+                  const s = userStatus(user);
+                  const isActioning = actioning === user.telegram_id;
+                  return (
+                    <tr key={user.telegram_id}
+                      className={`border-b border-white/[0.03] cursor-pointer hover:bg-white/[0.02] transition-colors ${selected?.telegram_id === user.telegram_id ? 'bg-blue-500/5' : ''}`}
+                      onClick={() => setSelected(user)}>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-xs font-bold text-white flex-shrink-0 ${user.banned ? 'ring-2 ring-red-400' : user.flagged ? 'ring-2 ring-amber-400' : ''}`}>
+                            {(user.first_name || user.username || '?')[0].toUpperCase()}
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-white">
+                              @{user.username || `id:${user.telegram_id}`}
+                              {user.flagged && !user.banned && <AlertTriangle className="inline w-3 h-3 text-amber-400 ml-1" />}
+                              {user.withdrawal_blocked && !user.banned && <Lock className="inline w-3 h-3 text-orange-400 ml-1" />}
+                            </p>
+                            <p className="text-xs text-slate-500">{user.first_name} · {accountAge(user.created_at)}</p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="text-sm font-medium text-white">@{user.username}</p>
-                          <p className="text-xs text-slate-500">{user.firstName} {user.lastName}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <p className="text-sm font-semibold text-emerald-400">{user.balanceMain.toFixed(2)} TON</p>
-                      <p className="text-xs text-slate-500">Total: {user.totalEarnings.toFixed(2)} TON</p>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="text-sm font-semibold text-purple-400">{user.tasksCompleted}</span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <div className="w-16 h-1.5 rounded-full bg-white/10 overflow-hidden">
-                          <div
-                            className={`h-full rounded-full ${user.riskScore > 60 ? 'bg-red-500' : user.riskScore > 30 ? 'bg-amber-500' : 'bg-emerald-500'}`}
-                            style={{ width: `${user.riskScore}%` }}
-                          />
-                        </div>
-                        <span className="text-xs text-slate-400">{user.riskScore}</span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <StatusBadge status={user.status} />
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-1">
-                        <button className="p-1.5 rounded-lg hover:bg-white/5 text-slate-400 hover:text-white transition-colors" onClick={(e) => { e.stopPropagation(); setSelectedUser(user.id); }}>
-                          <Eye className="w-3.5 h-3.5" />
-                        </button>
-                        {user.status === 'active' ? (
-                          <button className="p-1.5 rounded-lg hover:bg-red-500/10 text-slate-400 hover:text-red-400 transition-colors" onClick={(e) => { e.stopPropagation(); updateUser(user.id, { status: 'suspended' }); }}>
-                            <UserX className="w-3.5 h-3.5" />
+                      </td>
+                      <td className="px-4 py-3">
+                        <p className="text-sm font-semibold text-emerald-400">+{user.deposit_total.toFixed(2)} TON</p>
+                        <p className="text-[10px] text-slate-500">{user.deposit_count} dépôt{user.deposit_count !== 1 ? 's' : ''}</p>
+                      </td>
+                      <td className="px-4 py-3">
+                        <p className="text-sm font-semibold text-orange-400">−{user.withdrawal_total.toFixed(2)} TON</p>
+                        <p className="text-[10px] text-slate-500">
+                          {user.withdrawal_count} retrait{user.withdrawal_count !== 1 ? 's' : ''}
+                          {user.pending_withdrawals > 0 && <span className="text-amber-400 ml-1">({user.pending_withdrawals} en attente)</span>}
+                        </p>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${statusColor[s]}`}>
+                          {statusLabel[s]}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-1">
+                          <button className="p-1.5 rounded-lg hover:bg-white/5 text-slate-400 hover:text-white"
+                            onClick={e => { e.stopPropagation(); setSelected(user); }} title="Détails">
+                            <Eye className="w-3.5 h-3.5" />
                           </button>
-                        ) : (
-                          <button className="p-1.5 rounded-lg hover:bg-emerald-500/10 text-slate-400 hover:text-emerald-400 transition-colors" onClick={(e) => { e.stopPropagation(); updateUser(user.id, { status: 'active' }); }}>
-                            <UserCheck className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                          {!user.banned
+                            ? <button className="p-1.5 rounded-lg hover:bg-red-500/10 text-slate-400 hover:text-red-400 disabled:opacity-40"
+                                onClick={e => { e.stopPropagation(); void doAction(user.telegram_id, 'ban'); }}
+                                disabled={isActioning} title="Bannir">
+                                <UserX className="w-3.5 h-3.5" />
+                              </button>
+                            : <button className="p-1.5 rounded-lg hover:bg-emerald-500/10 text-slate-400 hover:text-emerald-400 disabled:opacity-40"
+                                onClick={e => { e.stopPropagation(); void doAction(user.telegram_id, 'unban'); }}
+                                disabled={isActioning} title="Débannir">
+                                <UserCheck className="w-3.5 h-3.5" />
+                              </button>}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         </div>
 
-        {/* User Detail */}
-        {selected && (
-          <div className="w-full lg:w-80 glass-card p-5 space-y-5 animate-slide-up">
-            <div className="text-center">
-              <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-xl font-bold text-white mx-auto mb-3">
-                {selected.firstName[0]}
+        {/* User Detail Panel */}
+        {selected && (() => {
+          const s = userStatus(selected);
+          const balanceDiff = selected.deposit_total - selected.withdrawal_total;
+          return (
+            <div className="w-full lg:w-80 glass-card p-5 space-y-4 animate-slide-up">
+              {/* Avatar + name */}
+              <div className="text-center">
+                <div className={`w-16 h-16 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-xl font-bold text-white mx-auto mb-3 ${selected.banned ? 'ring-2 ring-red-400' : selected.flagged ? 'ring-2 ring-amber-400' : ''}`}>
+                  {(selected.first_name || selected.username || '?')[0].toUpperCase()}
+                </div>
+                <h3 className="text-lg font-bold text-white">{selected.first_name} {selected.last_name}</h3>
+                <p className="text-sm text-slate-400">@{selected.username || `id:${selected.telegram_id}`}</p>
+                <p className="text-xs text-slate-500 mt-0.5">ID Telegram: {selected.telegram_id}</p>
+                {selected.ip_address && <p className="text-xs text-slate-500">IP: {selected.ip_address}</p>}
+                <div className="mt-2">
+                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${statusColor[s]}`}>
+                    {statusLabel[s]}
+                  </span>
+                </div>
               </div>
-              <h3 className="text-lg font-bold text-white">{selected.firstName} {selected.lastName}</h3>
-              <p className="text-sm text-slate-400">@{selected.username}</p>
-              <p className="text-xs text-slate-500 mt-1">ID: {selected.telegramId}</p>
-            </div>
 
-            <div className="space-y-3">
-              <div className="flex justify-between items-center p-2.5 rounded-lg bg-white/[0.03]">
-                <span className="text-xs text-slate-400">Solde</span>
-                <span className="text-sm font-semibold text-emerald-400">{selected.balanceMain.toFixed(2)} TON</span>
+              {/* Financial summary */}
+              <div className="space-y-1.5">
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Finances</p>
+                <div className="flex justify-between items-center p-2.5 rounded-lg bg-emerald-500/5 border border-emerald-500/10">
+                  <div className="flex items-center gap-2">
+                    <ArrowDownLeft className="w-3.5 h-3.5 text-emerald-400" />
+                    <span className="text-xs text-slate-400">Dépôts ({selected.deposit_count})</span>
+                  </div>
+                  <span className="text-sm font-bold text-emerald-400">+{selected.deposit_total.toFixed(2)} TON</span>
+                </div>
+                <div className="flex justify-between items-center p-2.5 rounded-lg bg-orange-500/5 border border-orange-500/10">
+                  <div className="flex items-center gap-2">
+                    <ArrowUpRight className="w-3.5 h-3.5 text-orange-400" />
+                    <span className="text-xs text-slate-400">Retraits ({selected.withdrawal_count})</span>
+                  </div>
+                  <span className="text-sm font-bold text-orange-400">−{selected.withdrawal_total.toFixed(2)} TON</span>
+                </div>
+                {selected.pending_withdrawals > 0 && (
+                  <div className="flex justify-between items-center p-2.5 rounded-lg bg-amber-500/5 border border-amber-500/20">
+                    <div className="flex items-center gap-2">
+                      <Clock className="w-3.5 h-3.5 text-amber-400" />
+                      <span className="text-xs text-slate-400">En attente</span>
+                    </div>
+                    <span className="text-sm font-bold text-amber-400">{selected.pending_withdrawals}</span>
+                  </div>
+                )}
+                <div className={`flex justify-between items-center p-2.5 rounded-lg ${balanceDiff >= 0 ? 'bg-white/[0.03]' : 'bg-red-500/5 border border-red-500/10'}`}>
+                  <span className="text-xs text-slate-400">Bilan net</span>
+                  <span className={`text-sm font-bold ${balanceDiff >= 0 ? 'text-white' : 'text-red-400'}`}>
+                    {balanceDiff >= 0 ? '+' : ''}{balanceDiff.toFixed(2)} TON
+                  </span>
+                </div>
               </div>
-              <div className="flex justify-between items-center p-2.5 rounded-lg bg-white/[0.03]">
-                <span className="text-xs text-slate-400">Gains totaux</span>
-                <span className="text-sm font-semibold text-white">{selected.totalEarnings.toFixed(2)} TON</span>
-              </div>
-            </div>
 
-            <div className="grid grid-cols-2 gap-2">
-              <div className="text-center p-2 rounded-lg bg-white/[0.03]">
-                <p className="text-lg font-bold text-white">{selected.tasksCompleted}</p>
-                <p className="text-[10px] text-slate-500">Tâches</p>
+              {/* Other stats */}
+              <div className="space-y-1.5">
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Activité</p>
+                <div className="flex justify-between items-center p-2.5 rounded-lg bg-white/[0.03]">
+                  <span className="text-xs text-slate-400">Filleuls</span>
+                  <span className="text-sm font-semibold text-purple-400">{selected.referral_count}</span>
+                </div>
+                <div className="flex justify-between items-center p-2.5 rounded-lg bg-white/[0.03]">
+                  <span className="text-xs text-slate-400">Bonus parrainage</span>
+                  <span className="text-sm font-semibold text-emerald-400">{selected.referral_balance.toFixed(2)} TON</span>
+                </div>
+                <div className="flex justify-between items-center p-2.5 rounded-lg bg-white/[0.03]">
+                  <span className="text-xs text-slate-400">Inscrit</span>
+                  <span className="text-xs text-slate-300">{new Date(selected.created_at).toLocaleDateString('fr-FR')} ({accountAge(selected.created_at)})</span>
+                </div>
+                <div className="flex justify-between items-center p-2.5 rounded-lg bg-white/[0.03]">
+                  <Shield className={`w-4 h-4 ${selected.banned ? 'text-red-400' : selected.flagged ? 'text-amber-400' : 'text-emerald-400'}`} />
+                  <span className="text-xs text-slate-400">
+                    {selected.banned ? 'Compte banni' : selected.flagged ? 'Compte signalé' : 'Compte sain'}
+                  </span>
+                </div>
               </div>
-              <div className="text-center p-2 rounded-lg bg-white/[0.03]">
-                <p className="text-lg font-bold text-white">{selected.referralCount}</p>
-                <p className="text-[10px] text-slate-500">Filleuls</p>
-              </div>
-            </div>
 
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <Shield className={`w-4 h-4 ${selected.riskScore > 60 ? 'text-red-400' : selected.riskScore > 30 ? 'text-amber-400' : 'text-emerald-400'}`} />
-                <span className="text-xs text-slate-400">Score de risque: {selected.riskScore}/100</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-slate-400">Code parrainage: {selected.referralCode}</span>
+              {/* Action buttons */}
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Actions</p>
+                <div className="flex gap-2 flex-wrap">
+                  {selected.flagged && !selected.banned && (
+                    <button onClick={() => void doAction(selected.telegram_id, 'unflag')}
+                      disabled={actioning === selected.telegram_id}
+                      className="flex-1 py-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs font-medium hover:bg-amber-500/20 disabled:opacity-40">
+                      Désignaler
+                    </button>
+                  )}
+                  {!selected.banned
+                    ? <button onClick={() => void doAction(selected.telegram_id, 'ban')}
+                        disabled={actioning === selected.telegram_id}
+                        className="flex-1 py-2 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-medium hover:bg-red-500/20 disabled:opacity-40">
+                        <UserX className="inline w-3 h-3 mr-1" />Bannir
+                      </button>
+                    : <button onClick={() => void doAction(selected.telegram_id, 'unban')}
+                        disabled={actioning === selected.telegram_id}
+                        className="flex-1 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-medium hover:bg-emerald-500/20 disabled:opacity-40">
+                        <UserCheck className="inline w-3 h-3 mr-1" />Débannir
+                      </button>}
+                </div>
+                {!selected.withdrawal_blocked
+                  ? <button onClick={() => void doAction(selected.telegram_id, 'block-withdrawals')}
+                      disabled={actioning === selected.telegram_id}
+                      className="w-full py-2 rounded-lg bg-orange-500/10 border border-orange-500/20 text-orange-400 text-xs font-medium hover:bg-orange-500/20 disabled:opacity-40">
+                      <Lock className="inline w-3 h-3 mr-1" />Bloquer les retraits
+                    </button>
+                  : <button onClick={() => void doAction(selected.telegram_id, 'unblock-withdrawals')}
+                      disabled={actioning === selected.telegram_id}
+                      className="w-full py-2 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-medium hover:bg-blue-500/20 disabled:opacity-40">
+                      <Unlock className="inline w-3 h-3 mr-1" />Débloquer les retraits
+                    </button>}
               </div>
             </div>
-
-            <div className="flex gap-2">
-              {selected.status === 'active' ? (
-                <>
-                  <button onClick={() => updateUser(selected.id, { status: 'suspended' })} className="flex-1 py-2 rounded-lg bg-orange-500/10 border border-orange-500/20 text-orange-400 text-xs font-medium hover:bg-orange-500/20 transition-colors">
-                    Suspendre
-                  </button>
-                  <button onClick={() => updateUser(selected.id, { status: 'banned' })} className="flex-1 py-2 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-medium hover:bg-red-500/20 transition-colors">
-                    Bannir
-                  </button>
-                </>
-              ) : (
-                <button onClick={() => updateUser(selected.id, { status: 'active' })} className="flex-1 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-medium hover:bg-emerald-500/20 transition-colors">
-                  Réactiver
-                </button>
-              )}
-            </div>
-          </div>
-        )}
+          );
+        })()}
       </div>
     </div>
   );

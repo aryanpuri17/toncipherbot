@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360" width="640" height="360">
+  <defs>
+    <radialGradient id="orb1" cx="22%" cy="40%" r="55%">
+      <stop offset="0%" stop-color="#4f6ff5" stop-opacity="0.75"/>
+      <stop offset="100%" stop-color="#4f6ff5" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="orb2" cx="82%" cy="65%" r="50%">
+      <stop offset="0%" stop-color="#9b59d0" stop-opacity="0.6"/>
+      <stop offset="100%" stop-color="#9b59d0" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="hexstroke" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#6380f8"/>
+      <stop offset="100%" stop-color="#4b5ed4"/>
+    </linearGradient>
+    <linearGradient id="diamondtop" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#a5c8ff"/>
+      <stop offset="100%" stop-color="#5b9ef8"/>
+    </linearGradient>
+    <linearGradient id="diamondleft" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2a55cc"/>
+      <stop offset="100%" stop-color="#1a3a99"/>
+    </linearGradient>
+    <linearGradient id="diamondright" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e46b8"/>
+      <stop offset="100%" stop-color="#0f2870"/>
+    </linearGradient>
+    <filter id="softshadow">
+      <feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="#3b5bdb" flood-opacity="0.5"/>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="640" height="360" fill="#0a0b1e"/>
+
+  <!-- Orbs -->
+  <ellipse cx="140" cy="155" rx="260" ry="230" fill="url(#orb1)"/>
+  <ellipse cx="510" cy="240" rx="220" ry="200" fill="url(#orb2)"/>
+
+  <!-- Hexagon + diamond — left of center -->
+  <g transform="translate(220,172)" filter="url(#softshadow)">
+    <polygon points="0,-72 62,-36 62,36 0,72 -62,36 -62,-36"
+             fill="#111535" stroke="url(#hexstroke)" stroke-width="2.5"/>
+    <g transform="translate(0,2)">
+      <polygon points="0,-42 -27,-7 0,42 27,-7"  fill="url(#diamondtop)" opacity="0.9"/>
+      <polygon points="0,-42 -27,-7 0,-7"         fill="#c8deff" opacity="0.85"/>
+      <polygon points="0,-42  27,-7 0,-7"         fill="url(#diamondtop)" opacity="0.7"/>
+      <polygon points="-27,-7  0,42 0,-7"         fill="url(#diamondleft)"/>
+      <polygon points=" 27,-7  0,42 0,-7"         fill="url(#diamondright)"/>
+      <polygon points="0,-42 9,-25 0,-16 -9,-25"  fill="white" opacity="0.35"/>
+    </g>
+  </g>
+
+  <!-- TonCipher — right of hex -->
+  <text x="306" y="158"
+        font-family="'Trebuchet MS','Segoe UI','Arial',sans-serif"
+        font-weight="700" font-size="72" fill="white"
+        dominant-baseline="middle">TonCipher</text>
+
+  <!-- Tagline -->
+  <text x="306" y="210"
+        font-family="'Segoe UI','Arial',sans-serif"
+        font-weight="400" font-size="20" fill="#8899cc"
+        letter-spacing="0.5">Earn TON  •  Complete Tasks  •  Invite Friends</text>
+
+  <!-- Bot link -->
+  <text x="306" y="252"
+        font-family="'Segoe UI','Arial',sans-serif"
+        font-weight="400" font-size="17" fill="#5566aa">💎  t.me/TonCipher_bot</text>
+</svg>

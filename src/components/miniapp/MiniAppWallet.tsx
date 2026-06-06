@@ -18,6 +18,9 @@ export const MiniAppWallet: React.FC = () => {
           <p className="text-xs text-slate-400 mb-0.5">Solde disponible</p>
           <p className="text-2xl font-bold text-white">{u.balanceMain.toFixed(2)} TON</p>
           <p className="text-xs text-emerald-400 mt-0.5">Total gagné: {u.totalEarnings.toFixed(2)} TON</p>
+          {u.taskCredits > 0 && (
+            <p className="text-xs text-blue-400 mt-0.5">dont {u.taskCredits.toFixed(2)} TON crédits campagnes</p>
+          )}
         </div>
       </div>
 
@@ -450,7 +453,7 @@ export const MiniAppDeposit: React.FC = () => {
 };
 
 export const MiniAppWithdraw: React.FC = () => {
-  const { cryptoNetworks, currentUser, submitWithdrawal } = useAppStore();
+  const { cryptoNetworks, currentUser, dailyLimits, submitWithdrawal } = useAppStore();
   const [tonConnectUI] = useTonConnectUI();
   const tonWallet = useTonWallet();
   const [selectedId, setSelectedId] = useState(() => {
@@ -465,6 +468,9 @@ export const MiniAppWithdraw: React.FC = () => {
   const connectedAddress = tonWallet?.account.address ?? '';
   // Both TON and USDT/TON use a TON address for withdrawal
   const isOnTONNetwork = cryptoNetworks.find(n => n.id === selectedId)?.network === 'TON';
+
+  const perUserDailyLimit = dailyLimits.find(l => l.type === 'withdrawal' && l.perUser && l.isActive);
+  const dailyRemaining = perUserDailyLimit ? Math.max(0, perUserDailyLimit.limit - currentUser.dailyWithdrawn) : null;
 
   useEffect(() => {
     if (isOnTONNetwork && connectedAddress) {
@@ -517,9 +523,19 @@ export const MiniAppWithdraw: React.FC = () => {
       </div>
 
       {/* Balance available */}
-      <div className="glass-card-light p-3 flex items-center justify-between">
-        <span className="text-xs text-slate-400">Solde disponible</span>
-        <span className="text-sm font-bold text-blue-400">{currentUser.balanceMain.toFixed(2)} {selected?.symbol ?? 'TON'}</span>
+      <div className="glass-card-light p-3 space-y-1">
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-slate-400">Retirable</span>
+          <span className="text-sm font-bold text-blue-400">
+            {Math.max(0, currentUser.balanceMain - currentUser.taskCredits).toFixed(2)} {selected?.symbol ?? 'TON'}
+          </span>
+        </div>
+        {currentUser.taskCredits > 0 && (
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] text-slate-500">Crédits campagnes (non retirables)</span>
+            <span className="text-[10px] text-blue-400 font-medium">{currentUser.taskCredits.toFixed(2)} TON</span>
+          </div>
+        )}
       </div>
 
       {/* Network */}
@@ -529,7 +545,7 @@ export const MiniAppWithdraw: React.FC = () => {
           {withdrawNetworks.map(net => (
             <button
               key={net.id}
-              onClick={() => { setSelectedId(net.id); setError(''); setAddress(''); }}
+              onClick={() => { setSelectedId(net.id); setError(''); setAddress(''); setAmount(''); }}
               className={`p-3 rounded-xl text-center transition-all ${selectedId === net.id ? 'bg-blue-500/15 border border-blue-500/40 text-white' : 'glass-card-light text-slate-400'}`}
             >
               <span className="text-xl block mb-1">{networkIcon(net.symbol)}</span>
@@ -568,7 +584,13 @@ export const MiniAppWithdraw: React.FC = () => {
         <div className="flex items-center justify-between mb-2">
           <p className="text-xs text-slate-400">Montant</p>
           <button
-            onClick={() => setAmount(currentUser.balanceMain.toFixed(2))}
+            onClick={() => {
+              const withdrawable = Math.max(0, currentUser.balanceMain - currentUser.taskCredits);
+              const maxAllowed = dailyRemaining !== null
+                ? Math.min(withdrawable, dailyRemaining)
+                : withdrawable;
+              setAmount(maxAllowed.toFixed(2));
+            }}
             className="text-xs text-blue-400"
           >
             Max
@@ -606,10 +628,14 @@ export const MiniAppWithdraw: React.FC = () => {
             <span className="text-slate-400">Vous recevrez</span>
             <span className="text-emerald-400 font-medium">{netReceived > 0 ? netReceived.toFixed(2) : '0.00'} {selected.symbol}</span>
           </div>
-          <div className="flex justify-between text-xs">
-            <span className="text-slate-400">Limite journalière</span>
-            <span className="text-white font-medium">{selected.dailyWithdrawalLimit.toLocaleString()} {selected.symbol}</span>
-          </div>
+          {dailyRemaining !== null && (
+            <div className="flex justify-between text-xs">
+              <span className="text-slate-400">Restant aujourd'hui</span>
+              <span className={`font-medium ${dailyRemaining < 50 ? 'text-amber-400' : 'text-white'}`}>
+                {dailyRemaining.toFixed(2)} / {perUserDailyLimit!.limit} {selected.symbol}
+              </span>
+            </div>
+          )}
           <div className="flex justify-between text-xs">
             <span className="text-slate-400">Traitement</span>
             <span className="text-amber-400 font-medium">Validation admin requise 🔐</span>
@@ -623,6 +649,13 @@ export const MiniAppWithdraw: React.FC = () => {
           <p className="text-xs text-red-400">{error}</p>
         </div>
       )}
+
+      <div className="flex items-start gap-2 p-3 rounded-xl bg-amber-500/5 border border-amber-500/20">
+        <AlertCircle className="w-3.5 h-3.5 text-amber-400 flex-shrink-0 mt-0.5" />
+        <p className="text-[11px] text-amber-400/90 leading-relaxed">
+          Votre solde sera réservé immédiatement. Le retrait sera traité sous 12-24h après validation par l'équipe.
+        </p>
+      </div>
 
       <button
         onClick={handleSubmit}

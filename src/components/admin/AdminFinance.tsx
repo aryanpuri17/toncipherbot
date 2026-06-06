@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAppStore } from '../../store/appStore';
 import { StatusBadge } from '../ui/StatusBadge';
 import { ToggleSwitch } from '../ui/ToggleSwitch';
 import {
-  Wallet, CheckCircle, XCircle, Shield, AlertTriangle, Plus, Edit2, Trash2
+  Wallet, CheckCircle, XCircle, Shield, AlertTriangle, Plus, Edit2, Trash2,
+  RefreshCw, Copy, ExternalLink, Clock, Ban,
 } from 'lucide-react';
 
 export const AdminDeposits: React.FC = () => {
@@ -91,88 +92,241 @@ export const AdminDeposits: React.FC = () => {
   );
 };
 
-export const AdminWithdrawals: React.FC = () => {
-  const { transactions, users, updateTransaction } = useAppStore();
-  const withdrawals = transactions.filter(t => t.type === 'withdrawal');
-  const [filter, setFilter] = useState('all');
+type ApiWithdrawal = {
+  id: string; telegram_id: number; amount: number; currency: string; network: string;
+  address: string; status: string; tx_hash: string; fee: number; created_at: string;
+  processed_at: string | null; admin_note: string; username: string; first_name: string;
+  last_name: string; flagged: boolean; banned: boolean; withdrawal_blocked: boolean;
+  total_deposited: number;
+};
 
-  const filtered = withdrawals.filter(w => filter === 'all' || w.status === filter);
+export const AdminWithdrawals: React.FC = () => {
+  const [withdrawals, setWithdrawals] = useState<ApiWithdrawal[]>([]);
+  const [loading, setLoading]         = useState(true);
+  const [filter, setFilter]           = useState<'pending' | 'completed' | 'rejected' | 'all'>('pending');
+  const [actioning, setActioning]     = useState<string | null>(null);
+  const [txHashInput, setTxHashInput] = useState<Record<string, string>>({});
+  const [noteInput, setNoteInput]     = useState<Record<string, string>>({});
+  const [expanded, setExpanded]       = useState<string | null>(null);
+  const [copied, setCopied]           = useState<string | null>(null);
+
+  const fetchWithdrawals = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/admin/withdrawals?status=${filter}`);
+      if (res.ok) setWithdrawals(await res.json() as ApiWithdrawal[]);
+    } catch { /* backend unavailable */ }
+    setLoading(false);
+  }, [filter]);
+
+  useEffect(() => { void fetchWithdrawals(); }, [fetchWithdrawals]);
+
+  const doApprove = async (id: string) => {
+    setActioning(id);
+    try {
+      await fetch(`/api/admin/withdrawals/${id}/approve`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ txHash: txHashInput[id] ?? '' }),
+      });
+      await fetchWithdrawals();
+    } catch { /* ignore */ }
+    setActioning(null);
+  };
+
+  const doReject = async (id: string) => {
+    setActioning(id);
+    try {
+      await fetch(`/api/admin/withdrawals/${id}/reject`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ note: noteInput[id] ?? '' }),
+      });
+      await fetchWithdrawals();
+    } catch { /* ignore */ }
+    setActioning(null);
+  };
+
+  const copyAddr = (addr: string, key: string) => {
+    navigator.clipboard.writeText(addr).catch(() => {});
+    setCopied(key);
+    setTimeout(() => setCopied(null), 2000);
+  };
+
+  const pending   = withdrawals.filter(w => w.status === 'pending').length;
+  const completed = withdrawals.filter(w => w.status === 'completed').length;
+  const rejected  = withdrawals.filter(w => w.status === 'rejected').length;
+
+  const statusColor: Record<string, string> = {
+    pending:   'bg-amber-500/20 text-amber-400',
+    completed: 'bg-emerald-500/20 text-emerald-400',
+    rejected:  'bg-red-500/20 text-red-400',
+  };
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div>
-        <h2 className="text-2xl font-bold text-white">Retraits</h2>
-        <p className="text-slate-400 text-sm mt-1">Gestion des retraits crypto</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold text-white">Retraits</h2>
+          <p className="text-slate-400 text-sm mt-1">Approbation manuelle — vérifiez les dépôts avant d'envoyer</p>
+        </div>
+        <button onClick={() => void fetchWithdrawals()} className="p-2 rounded-lg hover:bg-white/5 text-slate-400" title="Actualiser">
+          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+        </button>
       </div>
 
-      {/* Quick Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-        {['all', 'completed', 'pending', 'failed'].map(s => {
-          const count = s === 'all' ? withdrawals.length : withdrawals.filter(w => w.status === s).length;
-          const label = s === 'all' ? 'Total' : s === 'completed' ? 'Complétés' : s === 'pending' ? 'En attente' : 'Échoués';
+      <div className="flex gap-2 flex-wrap">
+        {([
+          { v: 'pending',   label: `⏳ En attente (${pending})`   },
+          { v: 'completed', label: `✓ Approuvés (${completed})`   },
+          { v: 'rejected',  label: `✗ Refusés (${rejected})`      },
+          { v: 'all',       label: `Tous (${withdrawals.length})` },
+        ] as const).map(({ v, label }) => (
+          <button key={v} onClick={() => setFilter(v)}
+            className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all ${filter === v ? 'bg-blue-500/15 text-blue-400 border border-blue-500/30' : 'bg-white/5 text-slate-400'}`}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <div className="space-y-3">
+        {loading && (
+          <div className="glass-card p-8 text-center">
+            <div className="w-6 h-6 border-2 border-blue-500/30 border-t-blue-400 rounded-full animate-spin mx-auto mb-2" />
+            <p className="text-sm text-slate-500">Chargement…</p>
+          </div>
+        )}
+        {!loading && withdrawals.length === 0 && (
+          <div className="glass-card p-10 text-center">
+            <p className="text-sm text-slate-500">Aucune demande de retrait{filter !== 'all' ? ` "${filter}"` : ''}</p>
+          </div>
+        )}
+        {!loading && withdrawals.map(w => {
+          const isExpanded  = expanded === w.id;
+          const isActioning = actioning === w.id;
+          const netReceived = w.amount - w.fee;
+          const depositRatio = w.total_deposited > 0 ? w.amount / w.total_deposited : null;
+          const suspicious = w.flagged || w.banned || (depositRatio !== null && depositRatio > 1.5);
+
           return (
-            <button key={s} onClick={() => setFilter(s)} className={`glass-card-light p-3 text-center transition-all ${filter === s ? 'border-blue-500/50 bg-blue-500/5' : ''}`}>
-              <p className="text-xs text-slate-400">{label}</p>
-              <p className="text-xl font-bold text-white">{count}</p>
-            </button>
-          );
-        })}
-      </div>
+            <div key={w.id} className={`glass-card overflow-hidden ${suspicious ? 'border border-amber-500/30' : ''}`}>
+              <div className="p-4 flex items-center gap-4 cursor-pointer hover:bg-white/[0.02]"
+                   onClick={() => setExpanded(isExpanded ? null : w.id)}>
+                <div className={`w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-sm font-bold text-white flex-shrink-0 ${w.banned ? 'ring-2 ring-red-400' : w.flagged ? 'ring-2 ring-amber-400' : ''}`}>
+                  {(w.first_name || w.username || '?')[0].toUpperCase()}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="text-sm font-semibold text-white">{w.first_name} {w.last_name}
+                      {w.username ? <span className="text-slate-400 font-normal"> @{w.username}</span> : null}
+                    </p>
+                    {w.flagged && <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-500/20 text-amber-400">SIGNALÉ</span>}
+                    {w.banned  && <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-500/20 text-red-400">BANNI</span>}
+                  </div>
+                  <p className="text-xs text-slate-500">ID: {w.telegram_id} · {new Date(w.created_at).toLocaleString('fr-FR')}</p>
+                </div>
+                <div className="text-right flex-shrink-0">
+                  <p className="text-lg font-bold text-orange-400">−{w.amount.toFixed(2)} {w.currency}</p>
+                  <p className="text-xs text-slate-500">Reçoit: {netReceived.toFixed(2)} (frais {w.fee})</p>
+                </div>
+                <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase flex-shrink-0 ${statusColor[w.status] ?? 'bg-white/10 text-slate-400'}`}>
+                  {w.status}
+                </span>
+              </div>
 
-      {/* Withdrawals List */}
-      <div className="glass-card overflow-hidden">
-        <table className="w-full">
-          <thead>
-            <tr className="border-b border-white/5">
-              <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase">Utilisateur</th>
-              <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase">Montant</th>
-              <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase">Réseau</th>
-              <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase">Adresse</th>
-              <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase">Statut</th>
-              <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.length === 0 && (
-              <tr>
-                <td colSpan={6} className="px-4 py-10 text-center text-sm text-slate-500">Aucun retrait pour l'instant</td>
-              </tr>
-            )}
-            {filtered.map(tx => {
-              const user = users.find(u => u.id === tx.userId);
-              return (
-                <tr key={tx.id} className="table-row border-b border-white/[0.03]">
-                  <td className="px-4 py-3">
-                    <p className="text-sm font-medium text-white">@{user?.username || 'unknown'}</p>
-                  </td>
-                  <td className="px-4 py-3">
-                    <p className="text-sm font-semibold text-orange-400">-{tx.amount.toFixed(2)} {tx.currency}</p>
-                    {tx.fee && <p className="text-[10px] text-slate-500">Frais: {tx.fee} {tx.currency}</p>}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className="px-2 py-1 rounded-md bg-white/5 text-xs text-slate-300">{tx.network}</span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <p className="text-xs text-slate-400 font-mono">{tx.address?.slice(0, 8)}...{tx.address?.slice(-4)}</p>
-                  </td>
-                  <td className="px-4 py-3"><StatusBadge status={tx.status} /></td>
-                  <td className="px-4 py-3">
-                    {tx.status === 'pending' && (
-                      <div className="flex gap-1">
-                        <button onClick={() => updateTransaction(tx.id, { status: 'completed', completedAt: new Date().toISOString(), txHash: '0x' + Math.random().toString(16).slice(2, 18) })} className="p-1.5 rounded-lg hover:bg-emerald-500/10 text-emerald-400 transition-colors" title="Approuver">
-                          <CheckCircle className="w-4 h-4" />
-                        </button>
-                        <button onClick={() => updateTransaction(tx.id, { status: 'failed' })} className="p-1.5 rounded-lg hover:bg-red-500/10 text-red-400 transition-colors" title="Rejeter">
-                          <XCircle className="w-4 h-4" />
+              {isExpanded && (
+                <div className="border-t border-white/5 p-4 space-y-4 bg-white/[0.01]">
+                  {/* Audit grid */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="p-3 rounded-lg bg-white/[0.03]">
+                      <p className="text-[10px] text-slate-500 mb-0.5">Dépôts reçus</p>
+                      <p className="text-sm font-bold text-emerald-400">{w.total_deposited.toFixed(2)} TON</p>
+                    </div>
+                    <div className="p-3 rounded-lg bg-white/[0.03]">
+                      <p className="text-[10px] text-slate-500 mb-0.5">Retrait demandé</p>
+                      <p className="text-sm font-bold text-orange-400">{w.amount.toFixed(2)} {w.currency}</p>
+                    </div>
+                    <div className={`p-3 rounded-lg ${suspicious ? 'bg-amber-500/10 border border-amber-500/20' : 'bg-white/[0.03]'}`}>
+                      <p className="text-[10px] text-slate-500 mb-0.5">Ratio retrait/dépôt</p>
+                      <p className={`text-sm font-bold ${depositRatio === null ? 'text-slate-400' : depositRatio > 1 ? 'text-amber-400' : 'text-emerald-400'}`}>
+                        {depositRatio !== null ? `${(depositRatio * 100).toFixed(0)}%` : '∞ (0 dépôt)'}
+                      </p>
+                    </div>
+                    <div className="p-3 rounded-lg bg-white/[0.03]">
+                      <p className="text-[10px] text-slate-500 mb-0.5">Réseau</p>
+                      <p className="text-sm font-bold text-white">{w.currency}/{w.network}</p>
+                    </div>
+                  </div>
+
+                  {suspicious && (
+                    <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                      <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
+                      <p className="text-xs text-amber-300">
+                        {w.banned ? '⛔ Compte banni. ' : w.flagged ? '⚠️ Compte signalé par l\'anti-fraude. ' : ''}
+                        {depositRatio !== null && depositRatio > 1.5 ? `Le retrait (${w.amount.toFixed(2)}) dépasse les dépôts enregistrés (${w.total_deposited.toFixed(2)}).` : ''}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Full address */}
+                  <div>
+                    <p className="text-xs text-slate-400 mb-1.5">Adresse de destination</p>
+                    <div className="flex items-center gap-2 p-3 rounded-lg bg-white/[0.03]">
+                      <p className="text-xs text-white font-mono flex-1 break-all">{w.address}</p>
+                      <button onClick={() => copyAddr(w.address, w.id)} className="p-1.5 rounded-lg hover:bg-white/5 text-slate-400 flex-shrink-0">
+                        {copied === w.id ? <CheckCircle className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {w.status === 'pending' && (
+                    <div className="space-y-2">
+                      <div className="flex gap-2">
+                        <input type="text" value={txHashInput[w.id] ?? ''}
+                          onChange={e => setTxHashInput(p => ({ ...p, [w.id]: e.target.value }))}
+                          placeholder="Hash TX (depuis tonscan.org après envoi — optionnel)"
+                          className="flex-1 px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-xs text-white font-mono placeholder:text-slate-600 focus:outline-none focus:border-emerald-500/40" />
+                        <button onClick={() => void doApprove(w.id)} disabled={isActioning}
+                          className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-semibold hover:bg-emerald-500/25 disabled:opacity-40">
+                          <CheckCircle className="w-3.5 h-3.5" />
+                          {isActioning ? 'En cours…' : 'Approuver'}
                         </button>
                       </div>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                      <div className="flex gap-2">
+                        <input type="text" value={noteInput[w.id] ?? ''}
+                          onChange={e => setNoteInput(p => ({ ...p, [w.id]: e.target.value }))}
+                          placeholder="Motif du refus (optionnel)"
+                          className="flex-1 px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-xs text-white placeholder:text-slate-600 focus:outline-none focus:border-red-500/40" />
+                        <button onClick={() => void doReject(w.id)} disabled={isActioning}
+                          className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-semibold hover:bg-red-500/20 disabled:opacity-40">
+                          <XCircle className="w-3.5 h-3.5" /> Refuser
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {w.status !== 'pending' && (
+                    <div className="flex items-center gap-2 p-3 rounded-lg bg-white/[0.03]">
+                      {w.status === 'completed'
+                        ? <><CheckCircle className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                            <div>
+                              <p className="text-xs text-emerald-400 font-medium">Approuvé {w.processed_at ? new Date(w.processed_at).toLocaleString('fr-FR') : ''}</p>
+                              {w.tx_hash && (
+                                <a href={`https://tonscan.org/tx/${w.tx_hash}`} target="_blank" rel="noopener noreferrer"
+                                   className="flex items-center gap-1 text-[10px] text-blue-400 hover:text-blue-300 mt-0.5 font-mono">
+                                  <ExternalLink className="w-2.5 h-2.5 flex-shrink-0" />
+                                  {w.tx_hash.length > 20 ? w.tx_hash.slice(0, 20) + '…' : w.tx_hash}
+                                </a>
+                              )}
+                            </div></>
+                        : <><XCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
+                            <div><p className="text-xs text-red-400 font-medium">Refusé {w.processed_at ? new Date(w.processed_at).toLocaleString('fr-FR') : ''}</p>
+                              {w.admin_note && <p className="text-[10px] text-slate-500 mt-0.5">Motif: {w.admin_note}</p>}</div></>}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

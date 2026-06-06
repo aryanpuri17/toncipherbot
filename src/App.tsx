@@ -19,7 +19,6 @@ import { MiniAppNav } from './components/miniapp/MiniAppNav';
 import { MiniAppDashboard } from './components/miniapp/MiniAppDashboard';
 import { MiniAppWallet, MiniAppDeposit, MiniAppWithdraw, MiniAppHistory } from './components/miniapp/MiniAppWallet';
 import { MiniAppTasks } from './components/miniapp/MiniAppTasks';
-import { MiniAppLeaderboard } from './components/miniapp/MiniAppLeaderboard';
 import { MiniAppProfile } from './components/miniapp/MiniAppProfile';
 import { MiniAppCreateTask } from './components/miniapp/MiniAppCreateTask';
 import { MiniAppMyTasks } from './components/miniapp/MiniAppMyTasks';
@@ -27,7 +26,7 @@ import { MiniAppReferral } from './components/miniapp/MiniAppReferral';
 import { MiniAppNotifications } from './components/miniapp/MiniAppNotifications';
 import { MiniAppShop } from './components/miniapp/MiniAppShop';
 
-import { Bell, Menu, Settings, ChevronRight, Globe, Info, Wallet, Shield } from 'lucide-react';
+import { Bell, Menu, ChevronRight, Globe, Info, Wallet, Shield } from 'lucide-react';
 import { useTonConnectUI, useTonWallet } from '@tonconnect/ui-react';
 import { useDepositMonitor } from './hooks/useDepositMonitor';
 
@@ -119,7 +118,7 @@ const MiniAppPageContent: React.FC = () => {
     case 'withdraw':      return <MiniAppWithdraw />;
     case 'history':       return <MiniAppHistory />;
     case 'tasks':         return <MiniAppTasks />;
-    case 'leaderboard':   return <MiniAppLeaderboard />;
+    case 'leaderboard':   return <MiniAppReferral />;
     case 'profile':       return <MiniAppProfile />;
     case 'createTask':    return <MiniAppCreateTask />;
     case 'myTasks':       return <MiniAppMyTasks />;
@@ -261,15 +260,22 @@ const MiniApp: React.FC = () => {
 const API = '';  // same origin — calls go to toncipherbot.onrender.com
 
 export default function App() {
-  const { currentView, setCurrentView, initFromTelegram, syncUserFromApi } = useAppStore();
+  const { currentView, setCurrentView, initFromTelegram, syncUserFromApi, resetDailyTasks } = useAppStore();
 
   useEffect(() => {
+    // Daily reset — resets daily tasks and withdrawal counter at midnight
+    const today = new Date().toISOString().slice(0, 10);
+    if (localStorage.getItem('tc_daily_reset') !== today) {
+      localStorage.setItem('tc_daily_reset', today);
+      resetDailyTasks();
+    }
+
     void (async () => {
       const isAdminRoute = window.location.hash === '#admin';
       if (!isAdminRoute) setCurrentView('miniapp');
 
       type TgUser = { id: number; first_name: string; last_name?: string; username?: string; photo_url?: string };
-      type TgWebApp = { ready: () => void; expand: () => void; setHeaderColor: (c: string) => void; initDataUnsafe?: { user?: TgUser; start_param?: string } };
+      type TgWebApp = { ready: () => void; expand: () => void; setHeaderColor: (c: string) => void; initData: string; initDataUnsafe?: { user?: TgUser; start_param?: string } };
       const tg = (window as unknown as { Telegram?: { WebApp?: TgWebApp } }).Telegram?.WebApp;
       if (!tg) return;
 
@@ -283,6 +289,8 @@ export default function App() {
 
       initFromTelegram(tgUser);
 
+      const initData = tg.initData ?? '';
+
       // Sync user with backend — creates/updates user record and returns referral count
       try {
         const res = await fetch(`${API}/api/user/init`, {
@@ -293,10 +301,11 @@ export default function App() {
             username:   tgUser.username ?? '',
             firstName:  tgUser.first_name,
             lastName:   tgUser.last_name ?? '',
+            initData,
           }),
         });
         if (res.ok) {
-          const apiData = await res.json() as { referralCount: number; referralBalance: number; flagged: boolean };
+          const apiData = await res.json() as { referralCount: number; referralBalance: number; flagged: boolean; banned?: boolean; withdrawalBlocked?: boolean };
           syncUserFromApi(apiData);
         }
       } catch {
@@ -313,9 +322,10 @@ export default function App() {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                referrerId:       referrerId,
-                refereeId:        tgUser.id,
-                refereeUsername:  tgUser.username ?? `user${tgUser.id}`,
+                referrerId,
+                refereeId:       tgUser.id,
+                refereeUsername: tgUser.username ?? `user${tgUser.id}`,
+                initData,
               }),
             });
           } catch {
