@@ -678,7 +678,7 @@ const mockPlatformConfig: PlatformConfig = {
   taskCooldownGlobal: 5,
   maxDailyTasks: 50,
   bonusTaskMultiplier: 1.5,
-  taskCreationFeeRate: 0.15,
+  taskCreationFeeRate: 0.30,
   taskPricePerExecution: 0.05,
   taskMinExecutions: 100,
   taskMaxExecutions: 100000,
