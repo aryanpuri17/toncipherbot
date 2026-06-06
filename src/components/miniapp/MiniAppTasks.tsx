@@ -76,10 +76,8 @@ export const MiniAppTasks: React.FC = () => {
     setMiniAppPage, currentUser, taskSubmissions, submitTaskProof,
   } = useAppStore();
 
-  const [taskStates,    setTaskStates]    = useState<Record<string, { phase: TaskPhase }>>({});
-  const [countdowns,    setCountdowns]    = useState<Record<string, number>>({});
-  const timerRefs                          = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
-  const countdownRefs                      = useRef<Record<string, ReturnType<typeof setInterval>>>({});
+  const [taskStates, setTaskStates] = useState<Record<string, { phase: TaskPhase }>>({});
+  const timerRefs                   = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   const [apiTasks,            setApiTasks]            = useState<ApiTask[]>([]);
   const [completedApiTaskIds, setCompletedApiTaskIds] = useState<string[]>([]);
@@ -96,45 +94,28 @@ export const MiniAppTasks: React.FC = () => {
   const getPhase = (id: string): TaskPhase =>
     taskStates[id]?.phase ?? 'idle';
 
-  const clearCountdown = (id: string) => {
-    if (countdownRefs.current[id]) {
-      clearInterval(countdownRefs.current[id]);
-      delete countdownRefs.current[id];
-    }
-  };
-
-  // Check departure times and update phases
+  // Check departure times (only for start_bot) and update phases
   const checkDepartures = () => {
     const now  = Date.now();
     const keys = Object.keys(localStorage).filter(k => k.startsWith('tc_task_depart_'));
     keys.forEach(key => {
-      const id     = key.replace('tc_task_depart_', '');
-      const depart = parseInt(localStorage.getItem(key) ?? '0', 10);
+      const id      = key.replace('tc_task_depart_', '');
+      const depart  = parseInt(localStorage.getItem(key) ?? '0', 10);
       if (!depart) return;
-      const elapsed   = now - depart;
-      const remaining = Math.ceil((REQUIRED_MS - elapsed) / 1000);
+      const elapsed    = now - depart;
+      const remainingMs = REQUIRED_MS - elapsed;
 
-      if (remaining <= 0) {
+      if (remainingMs <= 0) {
         setTaskStates(prev => ({ ...prev, [id]: { phase: 'ready' } }));
-        clearCountdown(id);
-        setCountdowns(prev => { const n = { ...prev }; delete n[id]; return n; });
       } else {
         setTaskStates(prev => ({ ...prev, [id]: { phase: 'too_early' } }));
-        // Only start a new countdown if one isn't already running
-        if (!countdownRefs.current[id]) {
-          let secs = remaining;
-          setCountdowns(prev => ({ ...prev, [id]: secs }));
-          countdownRefs.current[id] = setInterval(() => {
-            secs--;
-            if (secs <= 0) {
-              clearInterval(countdownRefs.current[id]);
-              delete countdownRefs.current[id];
-              setTaskStates(prev => ({ ...prev, [id]: { phase: 'ready' } }));
-              setCountdowns(prev => { const n = { ...prev }; delete n[id]; return n; });
-            } else {
-              setCountdowns(prev => ({ ...prev, [id]: secs }));
-            }
-          }, 1000);
+        // Auto-flip to ready if user stays on the screen
+        const key2 = `depart_auto_${id}`;
+        if (!timerRefs.current[key2]) {
+          timerRefs.current[key2] = setTimeout(() => {
+            delete timerRefs.current[key2];
+            setTaskStates(prev => ({ ...prev, [id]: { phase: 'ready' } }));
+          }, remainingMs);
         }
       }
     });
@@ -143,12 +124,8 @@ export const MiniAppTasks: React.FC = () => {
   // ── Effects ──────────────────────────────────────────────────────────────────
 
   useEffect(() => {
-    const timerRefsSnap    = timerRefs.current;
-    const countdownRefsSnap = countdownRefs.current;
-    return () => {
-      Object.values(timerRefsSnap).forEach(clearTimeout);
-      Object.values(countdownRefsSnap).forEach(clearInterval);
-    };
+    const snap = timerRefs.current;
+    return () => { Object.values(snap).forEach(clearTimeout); };
   }, []);
 
   // Restore departure timers on mount + listen for app return
@@ -255,14 +232,14 @@ export const MiniAppTasks: React.FC = () => {
 
   // ── Action handlers ──────────────────────────────────────────────────────────
 
-  // Open the task URL and start the 30-second departure timer
+  // Reopen bot URL and reset departure timer
   const handleJoin = (card: CardTask) => {
     if (!card.targetUrl) return;
-    clearCountdown(card.id);
+    // Cancel any pending auto-flip
+    const autoKey = `depart_auto_${card.id}`;
+    if (timerRefs.current[autoKey]) { clearTimeout(timerRefs.current[autoKey]); delete timerRefs.current[autoKey]; }
     localStorage.setItem(departKey(card.id), Date.now().toString());
-    // Reset to idle so phase is clean while user is away
     setTaskStates(prev => ({ ...prev, [card.id]: { phase: 'idle' } }));
-    setCountdowns(prev => { const n = { ...prev }; delete n[card.id]; return n; });
     openUrl(card.targetUrl);
   };
 
@@ -279,7 +256,16 @@ export const MiniAppTasks: React.FC = () => {
       return;
     }
 
-    handleJoin(card);
+    if (card.targetUrl) openUrl(card.targetUrl);
+
+    if (card.type === 'start_bot') {
+      // Bot/mini app: require 30-second stay
+      localStorage.setItem(departKey(card.id), Date.now().toString());
+      // Phase stays idle while user is away; checkDepartures sets it on return
+    } else {
+      // Channel/group: just check membership, no timer needed
+      setPhase(card.id, 'ready');
+    }
   };
 
   const handleVerify = async (card: CardTask) => {
@@ -288,7 +274,8 @@ export const MiniAppTasks: React.FC = () => {
 
     const succeed = async () => {
       localStorage.removeItem(departKey(card.id));
-      clearCountdown(card.id);
+      const autoKey = `depart_auto_${card.id}`;
+      if (timerRefs.current[autoKey]) { clearTimeout(timerRefs.current[autoKey]); delete timerRefs.current[autoKey]; }
       setPhase(card.id, 'completing');
       if (card.source === 'api') {
         await creditApiTask(card.id, card.reward);
@@ -353,9 +340,8 @@ export const MiniAppTasks: React.FC = () => {
       ? 'Lancer'
       : 'Faire';
 
-    const isBot      = card.type === 'start_bot';
-    const notSubbed  = phase === 'not_subscribed';
-    const countdown  = countdowns[card.id] ?? 0;
+    const isBot     = card.type === 'start_bot';
+    const notSubbed = phase === 'not_subscribed';
 
     return (
       <div
@@ -416,9 +402,8 @@ export const MiniAppTasks: React.FC = () => {
                 <Loader2 className="w-4 h-4 animate-spin" />
               </div>
             ) : phase === 'too_early' ? (
-              <div className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-orange-500/10 text-orange-400 text-xs font-mono font-bold">
-                <Clock className="w-3 h-3" />
-                {countdown}s
+              <div className="p-2 rounded-xl bg-orange-500/10 text-orange-400">
+                <Clock className="w-4 h-4" />
               </div>
             ) : phase === 'ready' || phase === 'not_subscribed' ? null : (
               <button
@@ -431,24 +416,21 @@ export const MiniAppTasks: React.FC = () => {
           </div>
         </div>
 
-        {/* Too early — must go back */}
+        {/* Too early — bot only, no countdown shown */}
         {phase === 'too_early' && (
           <div className="border-t border-white/5 pt-3 space-y-2">
             <div className="flex items-start gap-2.5 p-3 rounded-xl bg-orange-500/10 border border-orange-500/20">
               <Clock className="w-4 h-4 text-orange-400 flex-shrink-0 mt-0.5" />
-              <div className="flex-1">
-                <p className="text-xs font-semibold text-orange-300">Vous êtes revenu trop tôt !</p>
-                <p className="text-xs text-orange-400/70 mt-0.5">
-                  Restez encore <span className="font-bold text-orange-300">{countdown} seconde{countdown > 1 ? 's' : ''}</span> puis revenez ici.
-                </p>
-              </div>
+              <p className="text-xs text-orange-300">
+                Restez dans le bot ou mini app pendant <span className="font-bold">30 secondes</span> puis revenez ici pour valider.
+              </p>
             </div>
             {card.targetUrl && (
               <button
                 onClick={() => handleJoin(card)}
                 className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-white/5 border border-white/10 text-slate-300 text-xs font-medium hover:bg-white/10 transition-all"
               >
-                <RotateCcw className="w-3.5 h-3.5" /> Retourner au {isBot ? 'bot' : card.type === 'join_channel' ? 'canal' : 'groupe'}
+                <RotateCcw className="w-3.5 h-3.5" /> Retourner au bot
               </button>
             )}
           </div>
@@ -458,10 +440,10 @@ export const MiniAppTasks: React.FC = () => {
         {(phase === 'ready' || notSubbed) && (
           <div className="border-t border-white/5 pt-3 space-y-2">
             {!notSubbed && (
-              <div className="flex items-center gap-2 p-2.5 rounded-lg bg-emerald-500/5 border border-emerald-500/20">
-                <CheckCircle className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-                <p className="text-xs text-emerald-300">
-                  ✓ 30 secondes écoulées — {isBot ? 'envoyez /start puis vérifiez' : 'vérifiez votre abonnement'}
+              <div className="flex items-center gap-2 p-2.5 rounded-lg bg-blue-500/5 border border-blue-500/15">
+                <ShieldCheck className="w-4 h-4 text-blue-400 flex-shrink-0" />
+                <p className="text-xs text-blue-300">
+                  {isBot ? 'Envoyez /start au bot, puis vérifiez.' : 'Abonnez-vous puis vérifiez votre abonnement.'}
                 </p>
               </div>
             )}
