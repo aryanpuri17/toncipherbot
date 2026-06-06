@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAppStore } from '../../store/appStore';
 import { ToggleSwitch } from '../ui/ToggleSwitch';
-import { Zap, Hash, Users, Award, TrendingUp, Plus, Edit2, Trash2, Save, X, Tag, AlertCircle } from 'lucide-react';
+import { Hash, Users, TrendingUp, Plus, Edit2, Trash2, Save, X, Tag, AlertCircle } from 'lucide-react';
 import type { ReferralMilestone, PromoCode } from '../../store/appStore';
 
 const emptyMilestone = { referralCount: 0, reward: 0, description: '', isActive: true };

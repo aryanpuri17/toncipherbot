@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useAppStore } from '../../store/appStore';
 import { StatusBadge } from '../ui/StatusBadge';
 import { ToggleSwitch } from '../ui/ToggleSwitch';
-import { Shield, AlertTriangle, UserX, Eye, Ban, FileText, Search, Plus, Edit2, Trash2, RefreshCw, CheckCircle } from 'lucide-react';
+import { Shield, AlertTriangle, Ban, FileText, Search, Plus, Edit2, Trash2, RefreshCw, CheckCircle } from 'lucide-react';
 
 type ApiAlert = {
   id: number;

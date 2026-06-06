@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAppStore } from '../../store/appStore';
 import { ToggleSwitch } from '../ui/ToggleSwitch';
-import { Key, Hash, Wallet, Bell, Server, Terminal, Shield, Users, Gift, CreditCard } from 'lucide-react';
+import { Key, Hash, Wallet, Bell, Server, Terminal, Shield, Users, Gift, CreditCard, Plus, MessageSquare, Edit2, Trash2 } from 'lucide-react';
 
 export const AdminConfig: React.FC = () => {
   const { platformConfig, updatePlatformConfig } = useAppStore();
