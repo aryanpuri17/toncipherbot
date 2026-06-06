@@ -511,11 +511,20 @@ const mockCampaigns: Campaign[] = [];
 const mockChannels: Channel[] = [];
 
 const mockShopItems: ShopItem[] = [
-  { id: '1', name: 'Booster ×1.5 (6h)', description: 'Multipliez vos récompenses de tâches par 1.5 pendant 6 heures', price: 0.20, currency: 'main', type: 'multiplier', value: 1.5, duration: 6, isActive: true, purchases: 0, icon: '⚡', category: 'boosters' },
-  { id: '2', name: 'Booster ×2 (12h)', description: 'Doublez vos récompenses de tâches pendant 12 heures', price: 0.50, currency: 'main', type: 'multiplier', value: 2, duration: 12, isActive: true, purchases: 0, icon: '🚀', category: 'boosters' },
-  { id: '3', name: 'Pack Créateur 0.75 TON', description: 'Recevez 0.75 TON de crédits pour financer vos campagnes', price: 0.50, currency: 'main', type: 'task_credit', value: 0.75, isActive: true, purchases: 0, icon: '📦', category: 'packs' },
-  { id: '4', name: 'Pack Créateur 2 TON', description: 'Recevez 2 TON de crédits pour financer vos campagnes', price: 1.50, currency: 'main', type: 'task_credit', value: 2.0, isActive: true, purchases: 0, icon: '📦', category: 'packs' },
-  { id: '5', name: 'Boost Parrainage (7j)', description: 'Doublez vos gains de parrainage pendant 7 jours', price: 1.00, currency: 'main', type: 'special', value: 2, duration: 168, isActive: true, purchases: 0, icon: '🎯', category: 'premium' },
+  // ── Boosters ───────────────────────────────────────────────────────────────
+  { id: '1', name: 'Booster ×1.5 (6h)',  description: 'Multipliez vos récompenses de tâches par 1.5 pendant 6 heures', price: 0.20, currency: 'main', type: 'multiplier',  value: 1.5, duration: 6,   isActive: true, purchases: 0, icon: '⚡', category: 'boosters' },
+  { id: '2', name: 'Booster ×2 (12h)',   description: 'Doublez vos récompenses de tâches pendant 12 heures',            price: 0.50, currency: 'main', type: 'multiplier',  value: 2,   duration: 12,  isActive: true, purchases: 0, icon: '🚀', category: 'boosters' },
+  // ── Packs Créateur ──────────────────────────────────────────────────────────
+  { id: '3',  name: 'Pack Starter',  description: 'Recevez 0.75 TON de crédits pour financer vos campagnes',  price: 0.50,  currency: 'main', type: 'task_credit', value: 0.75,  isActive: true, purchases: 0, icon: '📦', category: 'packs' },
+  { id: '4',  name: 'Pack Basic',    description: 'Recevez 2 TON de crédits pour financer vos campagnes',     price: 1.50,  currency: 'main', type: 'task_credit', value: 2.00,  isActive: true, purchases: 0, icon: '📦', category: 'packs' },
+  { id: '5',  name: 'Pack Standard', description: 'Recevez 4 TON de crédits pour financer vos campagnes',     price: 3.00,  currency: 'main', type: 'task_credit', value: 4.00,  isActive: true, purchases: 0, icon: '📦', category: 'packs' },
+  { id: '6',  name: 'Pack Pro',      description: 'Recevez 6.5 TON de crédits pour financer vos campagnes',   price: 5.00,  currency: 'main', type: 'task_credit', value: 6.50,  isActive: true, purchases: 0, icon: '📦', category: 'packs' },
+  { id: '7',  name: 'Pack Business', description: 'Recevez 13 TON de crédits pour financer vos campagnes',    price: 10.00, currency: 'main', type: 'task_credit', value: 13.00, isActive: true, purchases: 0, icon: '💼', category: 'packs' },
+  { id: '8',  name: 'Pack Premium',  description: 'Recevez 32 TON de crédits pour financer vos campagnes',    price: 25.00, currency: 'main', type: 'task_credit', value: 32.00, isActive: true, purchases: 0, icon: '💼', category: 'packs' },
+  { id: '9',  name: 'Pack Elite',    description: 'Recevez 65 TON de crédits pour financer vos campagnes',    price: 50.00, currency: 'main', type: 'task_credit', value: 65.00, isActive: true, purchases: 0, icon: '👑', category: 'packs' },
+  { id: '10', name: 'Pack Ultimate', description: 'Recevez 130 TON de crédits pour financer vos campagnes',   price: 100.00,currency: 'main', type: 'task_credit', value: 130.00,isActive: true, purchases: 0, icon: '👑', category: 'packs' },
+  // ── Premium ─────────────────────────────────────────────────────────────────
+  { id: '11', name: 'Boost Parrainage (7j)', description: 'Doublez vos gains de parrainage pendant 7 jours', price: 1.00, currency: 'main', type: 'special', value: 2, duration: 168, isActive: true, purchases: 0, icon: '🎯', category: 'premium' },
 ];
 
 const mockNotifications: Notification[] = [];
