@@ -4,7 +4,7 @@ import { StatusBadge } from '../ui/StatusBadge';
 import { ToggleSwitch } from '../ui/ToggleSwitch';
 import {
   Wallet, CheckCircle, XCircle, Shield, AlertTriangle, Plus, Edit2, Trash2,
-  RefreshCw, Copy, ExternalLink, Clock, Ban,
+  RefreshCw, Copy, ExternalLink,
 } from 'lucide-react';
 
 export const AdminDeposits: React.FC = () => {

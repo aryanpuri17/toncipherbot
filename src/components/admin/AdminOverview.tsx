@@ -35,7 +35,7 @@ type ApiAlert = {
 };
 
 export const AdminOverview: React.FC = () => {
-  const { transactions, tasks, campaigns } = useAppStore();
+  const { transactions, tasks, campaigns, users } = useAppStore();
   const [apiStats, setApiStats] = useState<ApiStats | null>(null);
   const [recentAlerts, setRecentAlerts] = useState<ApiAlert[]>([]);
 

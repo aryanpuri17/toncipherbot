@@ -467,12 +467,9 @@ export const MiniAppTasks: React.FC = () => {
             )}
             <button
               onClick={() => void handleVerify(card)}
-              disabled={phase === 'verifying'}
-              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-blue-500/15 border border-blue-500/30 text-blue-400 text-xs font-semibold hover:bg-blue-500/25 transition-all disabled:opacity-50"
+              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-blue-500/15 border border-blue-500/30 text-blue-400 text-xs font-semibold hover:bg-blue-500/25 transition-all"
             >
-              {phase === 'verifying'
-                ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Vérification en cours...</>
-                : <><ShieldCheck className="w-3.5 h-3.5" /> Vérifier</>}
+              <ShieldCheck className="w-3.5 h-3.5" /> Vérifier
             </button>
           </div>
         )}
