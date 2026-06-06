@@ -22,6 +22,7 @@ export interface User {
   lastActive: string;
   ip?: string;
   deviceHash?: string;
+  taskCredits: number;
   withdrawalBlocked: boolean;
   verificationStatus: 'none' | 'pending' | 'verified';
   dailyWithdrawn: number;
@@ -119,7 +120,7 @@ export interface ShopItem {
   description: string;
   price: number;
   currency: 'main' | 'bonus' | 'xp';
-  type: 'multiplier' | 'bonus_pack' | 'premium' | 'special' | 'badge' | 'vip';
+  type: 'multiplier' | 'bonus_pack' | 'premium' | 'special' | 'badge' | 'vip' | 'task_credit';
   value: number;
   duration?: number; // hours
   isActive: boolean;
@@ -454,7 +455,7 @@ export interface LogEntry {
 
 // ===================== MOCK DATA =====================
 
-const _savedBalance: { balanceMain?: number; totalEarnings?: number; todayEarnings?: number; tasksCompleted?: number } = (() => {
+const _savedBalance: { balanceMain?: number; totalEarnings?: number; todayEarnings?: number; tasksCompleted?: number; taskCredits?: number } = (() => {
   try { return JSON.parse(localStorage.getItem('tc_balance') || '{}'); }
   catch { return {}; }
 })();
@@ -462,11 +463,24 @@ const _savedCompleted: string[] = (() => {
   try { return JSON.parse(localStorage.getItem('tc_completed_tasks') || '[]'); }
   catch { return []; }
 })();
+const _savedBoosters: { multiplier: number; expiresAt: string }[] = (() => {
+  try {
+    const raw = JSON.parse(localStorage.getItem('tc_boosters') || '[]') as { multiplier: number; expiresAt: string }[];
+    return raw.filter(b => new Date(b.expiresAt) > new Date());
+  }
+  catch { return []; }
+})();
+const _savedRefBoost: string | null = (() => {
+  try {
+    const v = localStorage.getItem('tc_ref_boost');
+    return v && new Date(v) > new Date() ? v : null;
+  } catch { return null; }
+})();
 
 const mockUsers: User[] = [
   {
     id: '1', telegramId: 0, username: 'vous', firstName: 'Vous', lastName: '',
-    balanceMain: _savedBalance.balanceMain ?? 0, totalEarnings: _savedBalance.totalEarnings ?? 0, todayEarnings: _savedBalance.todayEarnings ?? 0, tasksCompleted: _savedBalance.tasksCompleted ?? 0,
+    balanceMain: _savedBalance.balanceMain ?? 0, totalEarnings: _savedBalance.totalEarnings ?? 0, todayEarnings: _savedBalance.todayEarnings ?? 0, tasksCompleted: _savedBalance.tasksCompleted ?? 0, taskCredits: _savedBalance.taskCredits ?? 0,
     referralCount: 0, referralCode: 'START00',
     riskScore: 0, status: 'active', createdAt: new Date().toISOString(), lastActive: new Date().toISOString(),
     withdrawalBlocked: false, verificationStatus: 'none',
@@ -497,11 +511,11 @@ const mockCampaigns: Campaign[] = [];
 const mockChannels: Channel[] = [];
 
 const mockShopItems: ShopItem[] = [
-  { id: '1', name: 'Double Récompenses (24h)', description: 'Multipliez vos récompenses de tâches par 2 pendant 24 heures', price: 5.00, currency: 'main', type: 'multiplier', value: 2, duration: 24, isActive: true, purchases: 0, icon: '⚡', category: 'boosters' },
-  { id: '2', name: 'Pack Bonus 50', description: 'Recevez 50 crédits bonus instantanément', price: 10.00, currency: 'main', type: 'bonus_pack', value: 50, isActive: true, purchases: 0, icon: '🎁', category: 'packs' },
-  { id: '3', name: 'Triple Récompenses (12h)', description: 'Triplez vos récompenses de tâches', price: 15.00, currency: 'main', type: 'multiplier', value: 3, duration: 12, isActive: true, purchases: 0, icon: '🚀', category: 'boosters' },
-  { id: '4', name: 'Statut Premium (7j)', description: 'Accédez aux tâches premium pendant 7 jours', price: 25.00, currency: 'main', type: 'premium', value: 1, duration: 168, isActive: true, purchases: 0, icon: '👑', category: 'premium' },
-  { id: '5', name: 'Badge Exclusif', description: 'Obtenez un badge rare pour votre profil', price: 100.00, currency: 'main', type: 'badge', value: 1, isActive: true, purchases: 0, maxPurchases: 50, icon: '💎', category: 'collectibles' },
+  { id: '1', name: 'Booster ×1.5 (6h)', description: 'Multipliez vos récompenses de tâches par 1.5 pendant 6 heures', price: 0.20, currency: 'main', type: 'multiplier', value: 1.5, duration: 6, isActive: true, purchases: 0, icon: '⚡', category: 'boosters' },
+  { id: '2', name: 'Booster ×2 (12h)', description: 'Doublez vos récompenses de tâches pendant 12 heures', price: 0.50, currency: 'main', type: 'multiplier', value: 2, duration: 12, isActive: true, purchases: 0, icon: '🚀', category: 'boosters' },
+  { id: '3', name: 'Pack Créateur 0.75 TON', description: 'Recevez 0.75 TON de crédits pour financer vos campagnes', price: 0.50, currency: 'main', type: 'task_credit', value: 0.75, isActive: true, purchases: 0, icon: '📦', category: 'packs' },
+  { id: '4', name: 'Pack Créateur 2 TON', description: 'Recevez 2 TON de crédits pour financer vos campagnes', price: 1.50, currency: 'main', type: 'task_credit', value: 2.0, isActive: true, purchases: 0, icon: '📦', category: 'packs' },
+  { id: '5', name: 'Boost Parrainage (7j)', description: 'Doublez vos gains de parrainage pendant 7 jours', price: 1.00, currency: 'main', type: 'special', value: 2, duration: 168, isActive: true, purchases: 0, icon: '🎯', category: 'premium' },
 ];
 
 const mockNotifications: Notification[] = [];
@@ -743,6 +757,8 @@ interface AppState {
   claimedReferralMilestoneIds: string[];
   usedPromoCodeIds: string[];
   lastSyncedReferralBalance: number;
+  activeBoosters: { multiplier: number; expiresAt: string }[];
+  referralBoostExpiresAt: string | null;
 
   // Actions - Mini App
   confirmDeposit: (txId: string, txHash: string) => void;
@@ -893,6 +909,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   claimedReferralMilestoneIds: [],
   usedPromoCodeIds: [],
   lastSyncedReferralBalance: 0,
+  activeBoosters: _savedBoosters,
+  referralBoostExpiresAt: _savedRefBoost,
 
   // Mini App Actions
   confirmDeposit: (txId, txHash) => {
@@ -965,7 +983,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     const task = state.tasks.find(t => t.id === taskId);
     if (!task || state.completedTaskIds.includes(taskId)) return;
     const isPromoActive = task.promotion && new Date(task.promotion.endsAt) > new Date();
-    const multiplier = isPromoActive ? task.promotion!.multiplier : 1;
+    const promoMult = isPromoActive ? task.promotion!.multiplier : 1;
+    const now = new Date();
+    const liveBoosts = state.activeBoosters.filter(b => new Date(b.expiresAt) > now);
+    const boosterMult = liveBoosts.length > 0 ? Math.max(...liveBoosts.map(b => b.multiplier)) : 1;
+    const multiplier = promoMult * boosterMult;
     const earned = task.reward * multiplier;
     const updatedUser = {
       balanceMain: state.currentUser.balanceMain + earned,
@@ -1000,8 +1022,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   }),
 
   syncUserFromApi: (data) => set(s => {
-    // Compute bonus delta: only add what hasn't been applied yet (preserves local task earnings)
-    const delta = Math.max(0, data.referralBalance - s.lastSyncedReferralBalance);
+    const isRefBoostActive = s.referralBoostExpiresAt && new Date(s.referralBoostExpiresAt) > new Date();
+    const refMult = isRefBoostActive ? 2 : 1;
+    const delta = Math.max(0, data.referralBalance - s.lastSyncedReferralBalance) * refMult;
     const updatedUser = {
       ...s.currentUser,
       referralCount:     data.referralCount,
@@ -1050,6 +1073,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (amount < network.minWithdrawal) return { success: false, error: `Minimum: ${network.minWithdrawal} ${network.symbol}` };
     if (amount > network.maxWithdrawal) return { success: false, error: `Maximum: ${network.maxWithdrawal} ${network.symbol}` };
     if (state.currentUser.balanceMain < amount) return { success: false, error: 'Solde insuffisant' };
+    const maxWithdrawable = state.currentUser.balanceMain - state.currentUser.taskCredits;
+    if (amount > maxWithdrawable) {
+      return { success: false, error: `${state.currentUser.taskCredits.toFixed(2)} TON sont réservés à la création de campagnes et ne peuvent pas être retirés.` };
+    }
     if (!address || address.trim().length < 20) return { success: false, error: 'Adresse invalide (trop courte)' };
     // Per-user daily withdrawal limit
     const perUserDailyLimit = state.dailyLimits.find(l => l.type === 'withdrawal' && l.perUser && l.isActive);
@@ -1291,14 +1318,32 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (!item || !item.isActive) return { success: false, error: 'Article introuvable.' };
     if (item.maxPurchases != null && item.purchases >= item.maxPurchases) return { success: false, error: 'Stock épuisé.' };
     if (state.currentUser.balanceMain < item.price) return { success: false, error: `Solde insuffisant. Requis: ${item.price.toFixed(2)} TON.` };
-    const balanceUpdate = { balanceMain: state.currentUser.balanceMain - item.price };
+
+    const balanceUpdate: Partial<typeof state.currentUser> = { balanceMain: state.currentUser.balanceMain - item.price };
+    if (item.type === 'task_credit') {
+      balanceUpdate.taskCredits = state.currentUser.taskCredits + item.value;
+    }
+
+    const now = Date.now();
+    const newBoosters = item.type === 'multiplier'
+      ? [...state.activeBoosters.filter(b => new Date(b.expiresAt).getTime() > now),
+         { multiplier: item.value, expiresAt: new Date(now + (item.duration ?? 6) * 3600000).toISOString() }]
+      : state.activeBoosters;
+
+    const newRefBoost = (item.type === 'special' && item.duration)
+      ? new Date(now + item.duration * 3600000).toISOString()
+      : state.referralBoostExpiresAt;
+
     set(s => ({
       currentUser: { ...s.currentUser, ...balanceUpdate },
       users: s.users.map(u => u.id === state.currentUser.id ? { ...u, ...balanceUpdate } : u),
       shopItems: s.shopItems.map(i => i.id === itemId ? { ...i, purchases: i.purchases + 1 } : i),
+      activeBoosters: newBoosters,
+      referralBoostExpiresAt: newRefBoost,
     }));
     get().addTransaction({ userId: state.currentUser.id, type: 'purchase', amount: item.price, currency: 'TON', status: 'completed', completedAt: new Date().toISOString() });
-    get().addNotification({ userId: state.currentUser.id, type: 'system', title: 'Achat effectué! ✅', message: `${item.icon} ${item.name} activé${item.duration ? ` pour ${item.duration}h` : ''}.`, isRead: false });
+    const durationLabel = item.duration ? ` pour ${item.duration >= 24 ? `${item.duration / 24}j` : `${item.duration}h`}` : '';
+    get().addNotification({ userId: state.currentUser.id, type: 'system', title: 'Achat effectué! ✅', message: `${item.icon} ${item.name} activé${durationLabel}.`, isRead: false });
     return { success: true };
   },
 }));
@@ -1311,7 +1356,14 @@ useAppStore.subscribe((state) => {
       totalEarnings:  u.totalEarnings,
       todayEarnings:  u.todayEarnings,
       tasksCompleted: u.tasksCompleted,
+      taskCredits:    u.taskCredits,
     }));
     localStorage.setItem('tc_completed_tasks', JSON.stringify(state.completedTaskIds));
+    localStorage.setItem('tc_boosters', JSON.stringify(state.activeBoosters));
+    if (state.referralBoostExpiresAt) {
+      localStorage.setItem('tc_ref_boost', state.referralBoostExpiresAt);
+    } else {
+      localStorage.removeItem('tc_ref_boost');
+    }
   } catch {}
 });

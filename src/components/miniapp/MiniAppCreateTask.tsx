@@ -44,7 +44,8 @@ export const MiniAppCreateTask: React.FC = () => {
     }
     if (execCount < minExec) { setError(`Minimum ${minExec} exécutions`); return; }
     if (execCount > maxExec) { setError(`Maximum ${maxExec.toLocaleString()} exécutions`); return; }
-    if (currentUser.balanceMain < totalCost) {
+    const totalAvailable = currentUser.balanceMain + currentUser.taskCredits;
+    if (totalAvailable < totalCost) {
       setError(`Solde insuffisant. Coût total : ${totalCost.toFixed(4)} TON`);
       return;
     }
@@ -71,8 +72,12 @@ export const MiniAppCreateTask: React.FC = () => {
         return;
       }
 
-      // Deduct balance locally + track for potential refund
-      updateUser(currentUser.id, { balanceMain: currentUser.balanceMain - totalCost });
+      // Deduct task credits first, then balance
+      const creditsUsed = Math.min(currentUser.taskCredits, totalCost);
+      updateUser(currentUser.id, {
+        taskCredits: currentUser.taskCredits - creditsUsed,
+        balanceMain: currentUser.balanceMain - (totalCost - creditsUsed),
+      });
       addPlatformRevenue(platformFee);
 
       if (result.id) {
@@ -236,10 +241,17 @@ export const MiniAppCreateTask: React.FC = () => {
             {execCount > 0 ? totalCost.toFixed(4) : '—'} TON
           </span>
         </div>
+        {currentUser.taskCredits > 0 && execCount > 0 && (
+          <div className="flex justify-between text-xs">
+            <span className="text-blue-400">Crédits campagnes</span>
+            <span className="text-blue-400 font-semibold">-{Math.min(currentUser.taskCredits, totalCost).toFixed(4)} TON</span>
+          </div>
+        )}
         <div className="flex justify-between text-xs">
           <span className="text-slate-400">Votre solde</span>
-          <span className={`font-semibold ${currentUser.balanceMain >= totalCost && totalCost > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+          <span className={`font-semibold ${(currentUser.balanceMain + currentUser.taskCredits) >= totalCost && totalCost > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
             {currentUser.balanceMain.toFixed(4)} TON
+            {currentUser.taskCredits > 0 && <span className="text-blue-400"> +{currentUser.taskCredits.toFixed(4)} crédits</span>}
           </span>
         </div>
       </div>
@@ -253,7 +265,7 @@ export const MiniAppCreateTask: React.FC = () => {
 
       <button
         onClick={() => void handleSubmit()}
-        disabled={submitting || execCount < minExec || currentUser.balanceMain < totalCost || totalCost === 0}
+        disabled={submitting || execCount < minExec || (currentUser.balanceMain + currentUser.taskCredits) < totalCost || totalCost === 0}
         className="w-full btn-primary py-3.5 rounded-xl text-sm font-semibold text-white disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
       >
         {submitting

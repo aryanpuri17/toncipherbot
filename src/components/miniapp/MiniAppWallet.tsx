@@ -18,6 +18,9 @@ export const MiniAppWallet: React.FC = () => {
           <p className="text-xs text-slate-400 mb-0.5">Solde disponible</p>
           <p className="text-2xl font-bold text-white">{u.balanceMain.toFixed(2)} TON</p>
           <p className="text-xs text-emerald-400 mt-0.5">Total gagné: {u.totalEarnings.toFixed(2)} TON</p>
+          {u.taskCredits > 0 && (
+            <p className="text-xs text-blue-400 mt-0.5">dont {u.taskCredits.toFixed(2)} TON crédits campagnes</p>
+          )}
         </div>
       </div>
 
@@ -520,9 +523,19 @@ export const MiniAppWithdraw: React.FC = () => {
       </div>
 
       {/* Balance available */}
-      <div className="glass-card-light p-3 flex items-center justify-between">
-        <span className="text-xs text-slate-400">Solde disponible</span>
-        <span className="text-sm font-bold text-blue-400">{currentUser.balanceMain.toFixed(2)} {selected?.symbol ?? 'TON'}</span>
+      <div className="glass-card-light p-3 space-y-1">
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-slate-400">Retirable</span>
+          <span className="text-sm font-bold text-blue-400">
+            {Math.max(0, currentUser.balanceMain - currentUser.taskCredits).toFixed(2)} {selected?.symbol ?? 'TON'}
+          </span>
+        </div>
+        {currentUser.taskCredits > 0 && (
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] text-slate-500">Crédits campagnes (non retirables)</span>
+            <span className="text-[10px] text-blue-400 font-medium">{currentUser.taskCredits.toFixed(2)} TON</span>
+          </div>
+        )}
       </div>
 
       {/* Network */}
@@ -572,9 +585,10 @@ export const MiniAppWithdraw: React.FC = () => {
           <p className="text-xs text-slate-400">Montant</p>
           <button
             onClick={() => {
+              const withdrawable = Math.max(0, currentUser.balanceMain - currentUser.taskCredits);
               const maxAllowed = dailyRemaining !== null
-                ? Math.min(currentUser.balanceMain, dailyRemaining)
-                : currentUser.balanceMain;
+                ? Math.min(withdrawable, dailyRemaining)
+                : withdrawable;
               setAmount(maxAllowed.toFixed(2));
             }}
             className="text-xs text-blue-400"
