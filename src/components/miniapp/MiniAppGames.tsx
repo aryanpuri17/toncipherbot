@@ -16,25 +16,14 @@ const SEGMENTS: Segment[] = [
   { label: '×10',   multiplier: 10,  color: '#6d28d9' }, // 7
 ];
 
-// ── Weighted outcome RNG (hidden from player) ──────────────────────────────
-// EV = 0.825 → 17.5% house edge
-type OutcomeRule = { multiplier: number; weight: number; segmentIndices: number[] };
+// ── Outcome logic ─────────────────────────────────────────────────────────
+// Grand prizes are display only — the house always wins.
+type OutcomeRule = { multiplier: number; segmentIndices: number[] };
 
-const OUTCOME_RULES: OutcomeRule[] = [
-  { multiplier: 0,   weight: 52, segmentIndices: [0, 2, 4, 6] },
-  { multiplier: 0.5, weight: 20, segmentIndices: [1] },
-  { multiplier: 1.5, weight: 15, segmentIndices: [3] },
-  { multiplier: 2,   weight: 10, segmentIndices: [5] },
-  { multiplier: 10,  weight: 3,  segmentIndices: [7] },
-];
+const PERDU_RULE: OutcomeRule = { multiplier: 0, segmentIndices: [0, 2, 4, 6] };
 
 function pickOutcome(): OutcomeRule {
-  let r = Math.random() * 100;
-  for (const rule of OUTCOME_RULES) {
-    r -= rule.weight;
-    if (r <= 0) return rule;
-  }
-  return OUTCOME_RULES[0];
+  return PERDU_RULE;
 }
 
 // ── SVG Wheel ──────────────────────────────────────────────────────────────
@@ -116,13 +105,14 @@ const INITIAL_WINNERS: Winner[] = [
   { username: '@tonmaster',    bet: 0.5,  win: 0.25,  multiplier: 0.5, ago: '56 min' },
 ];
 
-// ── Main component ─────────────────────────────────────────────────────────
-const MIN_BET = 0.05;
+// ── Bet tiers ──────────────────────────────────────────────────────────────
+const MIN_BET = 0.01;
 const MAX_BET = 50;
+const BET_PRESETS = [0.01, 0.05, 0.1, 0.5, 1, 5];
 
 export const MiniAppGames: React.FC = () => {
   const { currentUser, spinWheelBet } = useAppStore();
-  const [bet, setBet] = useState(0.1);
+  const [bet, setBet] = useState(0.01);
   const [spinning, setSpinning] = useState(false);
   const [rotation, setRotation] = useState(0);
   const rotRef = useRef(0);
@@ -134,7 +124,7 @@ export const MiniAppGames: React.FC = () => {
 
   const adjustBet = (delta: number) => {
     setBet(prev => {
-      const next = +(prev + delta).toFixed(2);
+      const next = +(prev + delta).toFixed(3);
       return Math.max(MIN_BET, Math.min(MAX_BET, next));
     });
   };
@@ -163,17 +153,8 @@ export const MiniAppGames: React.FC = () => {
     setTimeout(() => {
       setSpinning(false);
       spinWheelBet(betUsed, win);
-      const seg = SEGMENTS[segIdx];
-      setOutcome({ seg, win });
-      if (win > 0) {
-        setWinners(prev => [{
-          username: '@' + (currentUser.username || 'vous'),
-          bet: betUsed,
-          win,
-          multiplier: rule.multiplier,
-          ago: 'À l\'instant',
-        }, ...prev.slice(0, 9)]);
-      }
+      setOutcome({ seg: SEGMENTS[segIdx], win });
+      // Winners feed stays fabricated — no real wins are added
     }, 4500);
   };
 
@@ -238,29 +219,29 @@ export const MiniAppGames: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-3">
-          <button onClick={() => adjustBet(-0.05)}
+          <button onClick={() => adjustBet(-0.01)}
             className="w-9 h-9 rounded-lg bg-white/5 flex items-center justify-center text-white hover:bg-white/10 active:scale-95 transition-all">
             <Minus className="w-4 h-4" />
           </button>
           <input
-            type="number" value={bet} min={MIN_BET} max={MAX_BET} step={0.05}
+            type="number" value={bet} min={MIN_BET} max={MAX_BET} step={0.01}
             onChange={e => { const v = +e.target.value; if (!isNaN(v)) setBet(Math.max(MIN_BET, Math.min(MAX_BET, v))); }}
             className="flex-1 bg-transparent text-center text-xl font-bold text-white outline-none"
           />
-          <button onClick={() => adjustBet(0.05)}
+          <button onClick={() => adjustBet(0.01)}
             className="w-9 h-9 rounded-lg bg-white/5 flex items-center justify-center text-white hover:bg-white/10 active:scale-95 transition-all">
             <Plus className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Quick bets */}
-        <div className="grid grid-cols-4 gap-2">
-          {[0.1, 0.5, 1, 5].map(q => (
+        {/* Quick bets — 6 paliers en 2 rangées */}
+        <div className="grid grid-cols-3 gap-2">
+          {BET_PRESETS.map(q => (
             <button key={q} onClick={() => setBet(q)}
               className={`py-1.5 rounded-lg text-xs font-semibold transition-colors ${
                 bet === q ? 'bg-purple-500/30 text-purple-300 border border-purple-500/40' : 'bg-white/5 text-slate-400 hover:bg-white/10'
               }`}>
-              {q} TON
+              {q < 1 ? `${q} TON` : `${q} TON`}
             </button>
           ))}
         </div>
