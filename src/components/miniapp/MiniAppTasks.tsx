@@ -279,20 +279,6 @@ export const MiniAppTasks: React.FC = () => {
             </div>
             <p className="text-xs text-slate-400 mb-2">{card.description}</p>
 
-            {card.maxCompletions && (
-              <div className="mb-2">
-                <div className="progress-bar">
-                  <div
-                    className="progress-bar-fill bg-gradient-to-r from-blue-500 to-purple-500"
-                    style={{ width: `${Math.min((card.totalCompletions / card.maxCompletions) * 100, 100)}%` }}
-                  />
-                </div>
-                <p className="text-[10px] text-slate-500 mt-0.5">
-                  {card.totalCompletions.toLocaleString()}/{card.maxCompletions.toLocaleString()} places
-                </p>
-              </div>
-            )}
-
             <div className="flex items-center gap-2">
               {card.promoMultiplier ? (
                 <>
