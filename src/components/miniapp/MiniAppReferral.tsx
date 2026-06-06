@@ -140,6 +140,7 @@ export const MiniAppReferral: React.FC = () => {
     miniAppPage === 'leaderboard' ? 'classement' : 'invite'
   );
   const [copied, setCopied] = useState(false);
+  const [toast,  setToast]  = useState(false);
 
   // Keep tab in sync if miniAppPage changes while component is already mounted
   useEffect(() => {
@@ -152,7 +153,8 @@ export const MiniAppReferral: React.FC = () => {
   const handleCopy = () => {
     navigator.clipboard.writeText(referralLink).catch(() => {});
     setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    setToast(true);
+    setTimeout(() => { setCopied(false); setToast(false); }, 3000);
   };
 
   const handleShare = () => {
@@ -327,6 +329,14 @@ export const MiniAppReferral: React.FC = () => {
 
       {/* ── CLASSEMENT TAB ── */}
       {tab === 'classement' && <Leaderboard />}
+
+      {/* Copy toast */}
+      {toast && (
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-xl bg-emerald-500 text-white text-xs font-semibold shadow-lg shadow-emerald-500/30 flex items-center gap-2 pointer-events-none">
+          <Check className="w-3.5 h-3.5" />
+          Lien copié !
+        </div>
+      )}
     </div>
   );
 };

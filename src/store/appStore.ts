@@ -454,10 +454,19 @@ export interface LogEntry {
 
 // ===================== MOCK DATA =====================
 
+const _savedBalance: { balanceMain?: number; totalEarnings?: number; todayEarnings?: number; tasksCompleted?: number } = (() => {
+  try { return JSON.parse(localStorage.getItem('tc_balance') || '{}'); }
+  catch { return {}; }
+})();
+const _savedCompleted: string[] = (() => {
+  try { return JSON.parse(localStorage.getItem('tc_completed_tasks') || '[]'); }
+  catch { return []; }
+})();
+
 const mockUsers: User[] = [
   {
     id: '1', telegramId: 0, username: 'vous', firstName: 'Vous', lastName: '',
-    balanceMain: 0, totalEarnings: 0, todayEarnings: 0, tasksCompleted: 0,
+    balanceMain: _savedBalance.balanceMain ?? 0, totalEarnings: _savedBalance.totalEarnings ?? 0, todayEarnings: _savedBalance.todayEarnings ?? 0, tasksCompleted: _savedBalance.tasksCompleted ?? 0,
     referralCount: 0, referralCode: 'START00',
     riskScore: 0, status: 'active', createdAt: new Date().toISOString(), lastActive: new Date().toISOString(),
     withdrawalBlocked: false, verificationStatus: 'none',
@@ -851,7 +860,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   adminSidebarOpen: false,
   modalOpen: null,
   modalData: null,
-  completedTaskIds: [],
+  completedTaskIds: _savedCompleted,
 
   currentUser: mockUsers[0],
   users: mockUsers,
@@ -1293,3 +1302,16 @@ export const useAppStore = create<AppState>((set, get) => ({
     return { success: true };
   },
 }));
+
+useAppStore.subscribe((state) => {
+  try {
+    const u = state.currentUser;
+    localStorage.setItem('tc_balance', JSON.stringify({
+      balanceMain:    u.balanceMain,
+      totalEarnings:  u.totalEarnings,
+      todayEarnings:  u.todayEarnings,
+      tasksCompleted: u.tasksCompleted,
+    }));
+    localStorage.setItem('tc_completed_tasks', JSON.stringify(state.completedTaskIds));
+  } catch {}
+});

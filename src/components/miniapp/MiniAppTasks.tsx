@@ -43,12 +43,12 @@ const typeConfig: Record<string, { icon: React.ReactNode; color: string; label: 
   special:      { icon: <Star className="w-4 h-4" />,     color: 'bg-pink-500/20 text-pink-400',     label: 'Spécial' },
 };
 
-const SECTIONS: { type: string; label: string; icon: string; creatable: boolean }[] = [
+const SECTIONS: { type: string; label: string; icon: string; creatable: boolean; groupBefore?: string }[] = [
   { type: 'daily',        label: 'Tâches quotidiennes', icon: '📅', creatable: false },
   { type: 'special',      label: 'Tâches spéciales',    icon: '⭐', creatable: false },
-  { type: 'join_channel', label: 'Canaux Telegram',     icon: '📢', creatable: true  },
-  { type: 'join_group',   label: 'Groupes Telegram',    icon: '👥', creatable: true  },
-  { type: 'start_bot',    label: 'Bots & Mini Apps',    icon: '🤖', creatable: true  },
+  { type: 'join_channel', label: 'Canaux',               icon: '📢', creatable: true,  groupBefore: 'Communautés Telegram' },
+  { type: 'join_group',   label: 'Groupes',              icon: '👥', creatable: true  },
+  { type: 'start_bot',    label: 'Bots & Mini Apps',     icon: '🤖', creatable: true,  groupBefore: 'Applications' },
 ];
 
 type TaskPhase = 'idle' | 'step_verify' | 'verifying' | 'not_subscribed' | 'completing' | 'done';
@@ -58,6 +58,11 @@ function openUrl(url: string) {
   if (tg?.openTelegramLink && url.includes('t.me')) tg.openTelegramLink(url);
   else if (tg?.openLink) tg.openLink(url);
   else window.open(url, '_blank');
+}
+
+function taskAvatarColor(name: string): string {
+  const hue = [...name].reduce((acc, c) => acc + c.charCodeAt(0), 0) % 360;
+  return `hsl(${hue}, 60%, 45%)`;
 }
 
 // ── Component ──────────────────────────────────────────────────────────────────
@@ -169,10 +174,7 @@ export const MiniAppTasks: React.FC = () => {
         setPhase(taskId, 'step_verify');
       }
     } catch {
-      const state = useAppStore.getState();
-      state.updateUser(state.currentUser.id, { balanceMain: state.currentUser.balanceMain + reward });
-      setCompletedApiTaskIds(prev => [...prev, taskId]);
-      setApiTasks(prev => prev.filter(t => t.id !== taskId));
+      setPhase(taskId, 'idle');
     }
   };
 
@@ -255,6 +257,12 @@ export const MiniAppTasks: React.FC = () => {
     const needsVerify = card.type === 'join_channel' || card.type === 'join_group';
     const isBot       = card.type === 'start_bot';
     const notSubbed   = phase === 'not_subscribed';
+    const actionLabel = card.type === 'join_channel' || card.type === 'join_group'
+      ? 'Rejoindre'
+      : card.type === 'start_bot'
+      ? 'Lancer'
+      : 'Faire';
+    const avatarBg = card.source === 'api' ? taskAvatarColor(card.title) : null;
 
     return (
       <div
@@ -263,9 +271,18 @@ export const MiniAppTasks: React.FC = () => {
       >
         <div className="flex items-start gap-3">
           {/* Icon */}
-          <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${config.color}`}>
-            {card.icon ? <span className="text-base">{card.icon}</span> : config.icon}
-          </div>
+          {avatarBg ? (
+            <div
+              className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 text-sm font-bold"
+              style={{ backgroundColor: avatarBg + '33', color: avatarBg }}
+            >
+              {card.title.charAt(0).toUpperCase()}
+            </div>
+          ) : (
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${config.color}`}>
+              {card.icon ? <span className="text-base">{card.icon}</span> : config.icon}
+            </div>
+          )}
 
           {/* Content */}
           <div className="flex-1 min-w-0">
@@ -306,7 +323,7 @@ export const MiniAppTasks: React.FC = () => {
                 onClick={() => handleStart(card)}
                 className="px-4 py-2 rounded-xl btn-primary text-xs font-semibold text-white flex items-center gap-1.5"
               >
-                Faire <ExternalLink className="w-3 h-3" />
+                {actionLabel} <ExternalLink className="w-3 h-3" />
               </button>
             ) : null}
           </div>
@@ -394,6 +411,14 @@ export const MiniAppTasks: React.FC = () => {
 
         return (
           <div key={section.type} className="space-y-3">
+            {/* Group separator */}
+            {section.groupBefore && (
+              <div className="flex items-center gap-2 pt-1">
+                <div className="flex-1 h-px bg-white/[0.06]" />
+                <span className="text-[10px] text-slate-500 font-medium uppercase tracking-wider">{section.groupBefore}</span>
+                <div className="flex-1 h-px bg-white/[0.06]" />
+              </div>
+            )}
             {/* Section header */}
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-bold text-white flex items-center gap-2">

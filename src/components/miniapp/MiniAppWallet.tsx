@@ -636,6 +636,13 @@ export const MiniAppWithdraw: React.FC = () => {
         </div>
       )}
 
+      <div className="flex items-start gap-2 p-3 rounded-xl bg-amber-500/5 border border-amber-500/20">
+        <AlertCircle className="w-3.5 h-3.5 text-amber-400 flex-shrink-0 mt-0.5" />
+        <p className="text-[11px] text-amber-400/90 leading-relaxed">
+          Votre solde sera réservé immédiatement. Le retrait sera traité sous 24-48h après validation par l'équipe.
+        </p>
+      </div>
+
       <button
         onClick={handleSubmit}
         disabled={!parsedAmount || !address.trim()}
