@@ -1172,7 +1172,10 @@ async def api_user_task_complete(request: web.Request) -> web.Response:
     except Exception:
         return web.json_response({"error": "Invalid JSON"}, status=400, headers=_CORS)
 
-    telegram_id = data.get("telegramId")
+    try:
+        telegram_id = int(data.get("telegramId", 0))
+    except (ValueError, TypeError):
+        return web.json_response({"error": "Invalid telegramId"}, status=400, headers=_CORS)
     if not telegram_id:
         return web.json_response({"error": "Missing telegramId"}, status=400, headers=_CORS)
 
@@ -1223,7 +1226,12 @@ async def api_user_task_pause(request: web.Request) -> web.Response:
     except Exception:
         return web.json_response({"error": "Invalid JSON"}, status=400, headers=_CORS)
 
-    telegram_id = data.get("telegramId")
+    try:
+        telegram_id = int(data.get("telegramId", 0))
+    except (ValueError, TypeError):
+        return web.json_response({"error": "Invalid telegramId"}, status=400, headers=_CORS)
+    if not telegram_id:
+        return web.json_response({"error": "Missing telegramId"}, status=400, headers=_CORS)
 
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(
@@ -1252,7 +1260,12 @@ async def api_user_task_delete(request: web.Request) -> web.Response:
     except Exception:
         return web.json_response({"error": "Invalid JSON"}, status=400, headers=_CORS)
 
-    telegram_id = data.get("telegramId")
+    try:
+        telegram_id = int(data.get("telegramId", 0))
+    except (ValueError, TypeError):
+        return web.json_response({"error": "Invalid telegramId"}, status=400, headers=_CORS)
+    if not telegram_id:
+        return web.json_response({"error": "Missing telegramId"}, status=400, headers=_CORS)
 
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(
@@ -1283,7 +1296,12 @@ async def api_user_task_fund(request: web.Request) -> web.Response:
     except Exception:
         return web.json_response({"error": "Invalid JSON"}, status=400, headers=_CORS)
 
-    telegram_id      = data.get("telegramId")
+    try:
+        telegram_id = int(data.get("telegramId", 0))
+    except (ValueError, TypeError):
+        return web.json_response({"error": "Invalid telegramId"}, status=400, headers=_CORS)
+    if not telegram_id:
+        return web.json_response({"error": "Missing telegramId"}, status=400, headers=_CORS)
     extra_executions = int(data.get("extraExecutions", 0))
     extra_budget     = float(data.get("extraBudget", 0))
 

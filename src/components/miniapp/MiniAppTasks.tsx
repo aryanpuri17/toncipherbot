@@ -212,7 +212,7 @@ export const MiniAppTasks: React.FC = () => {
         const res  = await fetch(`/api/check-bot-start?telegram_id=${telegramId}`);
         const data = await res.json() as { started: boolean };
         if (data.started) await succeed();
-        else setPhase(card.id, 'step_verify');
+        else setPhase(card.id, 'not_subscribed');
       } else {
         const chatId = card.targetUrl
           ? '@' + card.targetUrl.replace('https://t.me/', '').split('/')[0]
@@ -353,12 +353,17 @@ export const MiniAppTasks: React.FC = () => {
         )}
 
         {/* Verify step — bot */}
-        {isBot && (phase === 'step_verify' || phase === 'verifying') && (
+        {isBot && (phase === 'step_verify' || phase === 'verifying' || notSubbed) && (
           <div className="border-t border-white/5 pt-3 space-y-2">
             <div className="flex items-center gap-2 p-2.5 rounded-lg bg-blue-500/5 border border-blue-500/15">
               <ShieldCheck className="w-4 h-4 text-blue-400 flex-shrink-0" />
               <p className="text-xs text-blue-300">Envoyez /start au bot ci-dessus, puis vérifiez.</p>
             </div>
+            {notSubbed && (
+              <p className="text-xs text-red-400 text-center">
+                Bot non démarré — envoyez /start d'abord.
+              </p>
+            )}
             <button
               onClick={() => void handleVerify(card)}
               disabled={phase === 'verifying'}
