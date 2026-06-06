@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useAppStore } from '../../store/appStore';
 import {
   Hash, Users, Bot, Calendar, Star, CheckCircle, ExternalLink, Plus,
-  AlertCircle, Flame, Loader2, ShieldCheck, Clock, FileText, Send, X,
+  AlertCircle, Flame, Loader2, ShieldCheck, Clock, FileText, Send, X, RotateCcw,
 } from 'lucide-react';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -51,7 +51,10 @@ const SECTIONS: { type: string; label: string; icon: string; creatable: boolean;
   { type: 'start_bot',    label: 'Bots & Mini Apps',     icon: '🤖', creatable: true,  groupBefore: 'Applications' },
 ];
 
-type TaskPhase = 'idle' | 'step_verify' | 'verifying' | 'not_subscribed' | 'completing' | 'done';
+type TaskPhase = 'idle' | 'too_early' | 'ready' | 'verifying' | 'not_subscribed' | 'completing' | 'done';
+
+const REQUIRED_MS = 30_000;
+const departKey   = (id: string) => `tc_task_depart_${id}`;
 
 function openUrl(url: string) {
   const tg = (window as unknown as { Telegram?: { WebApp?: { openTelegramLink?: (u: string) => void; openLink?: (u: string) => void } } }).Telegram?.WebApp;
@@ -74,7 +77,9 @@ export const MiniAppTasks: React.FC = () => {
   } = useAppStore();
 
   const [taskStates,    setTaskStates]    = useState<Record<string, { phase: TaskPhase }>>({});
+  const [countdowns,    setCountdowns]    = useState<Record<string, number>>({});
   const timerRefs                          = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const countdownRefs                      = useRef<Record<string, ReturnType<typeof setInterval>>>({});
 
   const [apiTasks,            setApiTasks]            = useState<ApiTask[]>([]);
   const [completedApiTaskIds, setCompletedApiTaskIds] = useState<string[]>([]);
@@ -84,10 +89,83 @@ export const MiniAppTasks: React.FC = () => {
   const [proofSubmitting, setProofSubmitting] = useState(false);
   const [proofResult,     setProofResult]     = useState<{ taskId: string; success: boolean; message: string } | null>(null);
 
+  // ── Helpers ──────────────────────────────────────────────────────────────────
+
+  const setPhase = (id: string, phase: TaskPhase) =>
+    setTaskStates(prev => ({ ...prev, [id]: { phase } }));
+  const getPhase = (id: string): TaskPhase =>
+    taskStates[id]?.phase ?? 'idle';
+
+  const clearCountdown = (id: string) => {
+    if (countdownRefs.current[id]) {
+      clearInterval(countdownRefs.current[id]);
+      delete countdownRefs.current[id];
+    }
+  };
+
+  // Check departure times and update phases
+  const checkDepartures = () => {
+    const now  = Date.now();
+    const keys = Object.keys(localStorage).filter(k => k.startsWith('tc_task_depart_'));
+    keys.forEach(key => {
+      const id     = key.replace('tc_task_depart_', '');
+      const depart = parseInt(localStorage.getItem(key) ?? '0', 10);
+      if (!depart) return;
+      const elapsed   = now - depart;
+      const remaining = Math.ceil((REQUIRED_MS - elapsed) / 1000);
+
+      if (remaining <= 0) {
+        setTaskStates(prev => ({ ...prev, [id]: { phase: 'ready' } }));
+        clearCountdown(id);
+        setCountdowns(prev => { const n = { ...prev }; delete n[id]; return n; });
+      } else {
+        setTaskStates(prev => ({ ...prev, [id]: { phase: 'too_early' } }));
+        // Only start a new countdown if one isn't already running
+        if (!countdownRefs.current[id]) {
+          let secs = remaining;
+          setCountdowns(prev => ({ ...prev, [id]: secs }));
+          countdownRefs.current[id] = setInterval(() => {
+            secs--;
+            if (secs <= 0) {
+              clearInterval(countdownRefs.current[id]);
+              delete countdownRefs.current[id];
+              setTaskStates(prev => ({ ...prev, [id]: { phase: 'ready' } }));
+              setCountdowns(prev => { const n = { ...prev }; delete n[id]; return n; });
+            } else {
+              setCountdowns(prev => ({ ...prev, [id]: secs }));
+            }
+          }, 1000);
+        }
+      }
+    });
+  };
+
+  // ── Effects ──────────────────────────────────────────────────────────────────
+
   useEffect(() => {
-    const refs = timerRefs.current;
-    return () => { Object.values(refs).forEach(clearTimeout); };
+    const timerRefsSnap    = timerRefs.current;
+    const countdownRefsSnap = countdownRefs.current;
+    return () => {
+      Object.values(timerRefsSnap).forEach(clearTimeout);
+      Object.values(countdownRefsSnap).forEach(clearInterval);
+    };
   }, []);
+
+  // Restore departure timers on mount + listen for app return
+  useEffect(() => {
+    checkDepartures();
+
+    const onVisible = () => { if (document.visibilityState === 'visible') checkDepartures(); };
+    document.addEventListener('visibilitychange', onVisible);
+
+    const tg = (window as unknown as { Telegram?: { WebApp?: { onEvent?: (e: string, cb: () => void) => void; offEvent?: (e: string, cb: () => void) => void } } }).Telegram?.WebApp;
+    tg?.onEvent?.('activated', checkDepartures);
+
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      tg?.offEvent?.('activated', checkDepartures);
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const tid = useAppStore.getState().currentUser.telegramId;
@@ -98,12 +176,8 @@ export const MiniAppTasks: React.FC = () => {
       .catch(() => {});
   }, []);
 
-  const setPhase = (id: string, phase: TaskPhase) =>
-    setTaskStates(prev => ({ ...prev, [id]: { phase } }));
-  const getPhase = (id: string): TaskPhase =>
-    taskStates[id]?.phase ?? 'idle';
+  // ── Build unified card pool ──────────────────────────────────────────────────
 
-  // ── Build unified card pool ──────────────────────────────────────
   const promoTasks = tasks.filter(t => t.isActive && t.isPromoTask);
   const allActive  = tasks.filter(
     t => t.isActive && !t.isPromoTask &&
@@ -145,7 +219,8 @@ export const MiniAppTasks: React.FC = () => {
 
   const allCards = [...platformCards, ...apiCards];
 
-  // ── Completion helpers ───────────────────────────────────────────
+  // ── Completion helpers ───────────────────────────────────────────────────────
+
   const creditApiTask = async (taskId: string, reward: number) => {
     try {
       const telegramId = useAppStore.getState().currentUser.telegramId;
@@ -171,14 +246,26 @@ export const MiniAppTasks: React.FC = () => {
         setCompletedApiTaskIds(prev => [...prev, taskId]);
         setApiTasks(prev => prev.filter(t => t.id !== taskId));
       } else {
-        setPhase(taskId, 'step_verify');
+        setPhase(taskId, 'not_subscribed');
       }
     } catch {
       setPhase(taskId, 'idle');
     }
   };
 
-  // ── Unified action handlers ──────────────────────────────────────
+  // ── Action handlers ──────────────────────────────────────────────────────────
+
+  // Open the task URL and start the 30-second departure timer
+  const handleJoin = (card: CardTask) => {
+    if (!card.targetUrl) return;
+    clearCountdown(card.id);
+    localStorage.setItem(departKey(card.id), Date.now().toString());
+    // Reset to idle so phase is clean while user is away
+    setTaskStates(prev => ({ ...prev, [card.id]: { phase: 'idle' } }));
+    setCountdowns(prev => { const n = { ...prev }; delete n[card.id]; return n; });
+    openUrl(card.targetUrl);
+  };
+
   const handleStart = (card: CardTask) => {
     const phase = getPhase(card.id);
     if (phase === 'completing' || phase === 'done') return;
@@ -191,8 +278,8 @@ export const MiniAppTasks: React.FC = () => {
       timerRefs.current[card.id] = setTimeout(() => setPhase(card.id, 'done'), 1200);
       return;
     }
-    if (card.targetUrl) openUrl(card.targetUrl);
-    setPhase(card.id, 'step_verify');
+
+    handleJoin(card);
   };
 
   const handleVerify = async (card: CardTask) => {
@@ -200,6 +287,8 @@ export const MiniAppTasks: React.FC = () => {
     const telegramId = useAppStore.getState().currentUser.telegramId;
 
     const succeed = async () => {
+      localStorage.removeItem(departKey(card.id));
+      clearCountdown(card.id);
       setPhase(card.id, 'completing');
       if (card.source === 'api') {
         await creditApiTask(card.id, card.reward);
@@ -229,7 +318,8 @@ export const MiniAppTasks: React.FC = () => {
     }
   };
 
-  // ── Promo proof ─────────────────────────────────────────────────
+  // ── Promo proof ──────────────────────────────────────────────────────────────
+
   const handleSubmitProof = (taskId: string) => {
     if (proofSubmitting || !proofText.trim()) return;
     setProofSubmitting(true);
@@ -246,7 +336,8 @@ export const MiniAppTasks: React.FC = () => {
     }, 700);
   };
 
-  // ── Card renderer ────────────────────────────────────────────────
+  // ── Card renderer ────────────────────────────────────────────────────────────
+
   const renderCard = (card: CardTask) => {
     const config      = typeConfig[card.type] ?? typeConfig.special;
     const phase       = getPhase(card.id);
@@ -254,15 +345,17 @@ export const MiniAppTasks: React.FC = () => {
                         (card.source === 'api'      && completedApiTaskIds.includes(card.id));
     const isDone      = isCompleted || phase === 'done';
     const displayReward = card.reward * (card.promoMultiplier ?? 1);
-    const needsVerify = card.type === 'join_channel' || card.type === 'join_group';
-    const isBot       = card.type === 'start_bot';
-    const notSubbed   = phase === 'not_subscribed';
+    const avatarBg    = card.source === 'api' ? taskAvatarColor(card.title) : null;
+
     const actionLabel = card.type === 'join_channel' || card.type === 'join_group'
       ? 'Rejoindre'
       : card.type === 'start_bot'
       ? 'Lancer'
       : 'Faire';
-    const avatarBg = card.source === 'api' ? taskAvatarColor(card.title) : null;
+
+    const isBot      = card.type === 'start_bot';
+    const notSubbed  = phase === 'not_subscribed';
+    const countdown  = countdowns[card.id] ?? 0;
 
     return (
       <div
@@ -270,7 +363,7 @@ export const MiniAppTasks: React.FC = () => {
         className={`glass-card p-4 transition-all space-y-3 ${isDone ? 'opacity-50' : ''} ${card.promoMultiplier ? 'border border-amber-500/30' : ''}`}
       >
         <div className="flex items-start gap-3">
-          {/* Icon */}
+          {/* Avatar */}
           {avatarBg ? (
             <div
               className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 text-sm font-bold"
@@ -308,7 +401,7 @@ export const MiniAppTasks: React.FC = () => {
             </div>
           </div>
 
-          {/* Action button */}
+          {/* Top-right action */}
           <div className="flex-shrink-0">
             {isDone ? (
               <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400">
@@ -318,54 +411,77 @@ export const MiniAppTasks: React.FC = () => {
               <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-500/10 text-emerald-400 text-xs font-medium">
                 <Loader2 className="w-3.5 h-3.5 animate-spin" /> Crédit...
               </div>
-            ) : phase === 'idle' ? (
+            ) : phase === 'verifying' ? (
+              <div className="px-3 py-2 rounded-xl bg-blue-500/10 text-blue-400">
+                <Loader2 className="w-4 h-4 animate-spin" />
+              </div>
+            ) : phase === 'too_early' ? (
+              <div className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-orange-500/10 text-orange-400 text-xs font-mono font-bold">
+                <Clock className="w-3 h-3" />
+                {countdown}s
+              </div>
+            ) : phase === 'ready' || phase === 'not_subscribed' ? null : (
               <button
                 onClick={() => handleStart(card)}
                 className="px-4 py-2 rounded-xl btn-primary text-xs font-semibold text-white flex items-center gap-1.5"
               >
                 {actionLabel} <ExternalLink className="w-3 h-3" />
               </button>
-            ) : null}
+            )}
           </div>
         </div>
 
-        {/* Verify step — channel / group */}
-        {needsVerify && (phase === 'step_verify' || phase === 'verifying' || notSubbed) && (
+        {/* Too early — must go back */}
+        {phase === 'too_early' && (
           <div className="border-t border-white/5 pt-3 space-y-2">
-            <div className="flex items-center gap-2 p-2.5 rounded-lg bg-blue-500/5 border border-blue-500/15">
-              <ShieldCheck className="w-4 h-4 text-blue-400 flex-shrink-0" />
-              <p className="text-xs text-blue-300">
-                {card.type === 'join_channel'
-                  ? 'Abonnez-vous au canal ci-dessus, puis vérifiez.'
-                  : 'Rejoignez le groupe ci-dessus, puis vérifiez.'}
-              </p>
+            <div className="flex items-start gap-2.5 p-3 rounded-xl bg-orange-500/10 border border-orange-500/20">
+              <Clock className="w-4 h-4 text-orange-400 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-xs font-semibold text-orange-300">Vous êtes revenu trop tôt !</p>
+                <p className="text-xs text-orange-400/70 mt-0.5">
+                  Restez encore <span className="font-bold text-orange-300">{countdown} seconde{countdown > 1 ? 's' : ''}</span> puis revenez ici.
+                </p>
+              </div>
             </div>
-            {notSubbed && (
-              <p className="text-xs text-red-400 text-center">Abonnement non détecté — abonnez-vous d'abord.</p>
+            {card.targetUrl && (
+              <button
+                onClick={() => handleJoin(card)}
+                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-white/5 border border-white/10 text-slate-300 text-xs font-medium hover:bg-white/10 transition-all"
+              >
+                <RotateCcw className="w-3.5 h-3.5" /> Retourner au {isBot ? 'bot' : card.type === 'join_channel' ? 'canal' : 'groupe'}
+              </button>
             )}
-            <button
-              onClick={() => void handleVerify(card)}
-              disabled={phase === 'verifying'}
-              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-blue-500/15 border border-blue-500/30 text-blue-400 text-xs font-semibold hover:bg-blue-500/25 transition-all disabled:opacity-50"
-            >
-              {phase === 'verifying'
-                ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Vérification en cours...</>
-                : <><ShieldCheck className="w-3.5 h-3.5" /> Vérifier mon abonnement</>}
-            </button>
           </div>
         )}
 
-        {/* Verify step — bot */}
-        {isBot && (phase === 'step_verify' || phase === 'verifying' || notSubbed) && (
+        {/* Ready — can verify */}
+        {(phase === 'ready' || notSubbed) && (
           <div className="border-t border-white/5 pt-3 space-y-2">
-            <div className="flex items-center gap-2 p-2.5 rounded-lg bg-blue-500/5 border border-blue-500/15">
-              <ShieldCheck className="w-4 h-4 text-blue-400 flex-shrink-0" />
-              <p className="text-xs text-blue-300">Envoyez /start au bot ci-dessus, puis vérifiez.</p>
-            </div>
+            {!notSubbed && (
+              <div className="flex items-center gap-2 p-2.5 rounded-lg bg-emerald-500/5 border border-emerald-500/20">
+                <CheckCircle className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                <p className="text-xs text-emerald-300">
+                  ✓ 30 secondes écoulées — {isBot ? 'envoyez /start puis vérifiez' : 'vérifiez votre abonnement'}
+                </p>
+              </div>
+            )}
             {notSubbed && (
-              <p className="text-xs text-red-400 text-center">
-                Bot non démarré — envoyez /start d'abord.
-              </p>
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-2 p-2.5 rounded-lg bg-red-500/5 border border-red-500/20">
+                  <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
+                  <p className="text-xs text-red-400">
+                    {isBot ? 'Bot non démarré — envoyez /start d\'abord.' : 'Abonnement non détecté — rejoignez d\'abord.'}
+                  </p>
+                </div>
+                {card.targetUrl && (
+                  <button
+                    onClick={() => handleJoin(card)}
+                    className="w-full flex items-center justify-center gap-2 py-2 rounded-xl bg-white/5 border border-white/10 text-slate-300 text-xs font-medium hover:bg-white/10 transition-all"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" /> Retourner au {isBot ? 'bot' : card.type === 'join_channel' ? 'canal' : 'groupe'}
+                  </button>
+                )}
+              </div>
             )}
             <button
               onClick={() => void handleVerify(card)}
@@ -382,7 +498,8 @@ export const MiniAppTasks: React.FC = () => {
     );
   };
 
-  // ── Render ───────────────────────────────────────────────────────
+  // ── Render ───────────────────────────────────────────────────────────────────
+
   const totalAvailable = allCards.length;
 
   return (
@@ -411,7 +528,6 @@ export const MiniAppTasks: React.FC = () => {
 
         return (
           <div key={section.type} className="space-y-3">
-            {/* Group separator */}
             {section.groupBefore && (
               <div className="flex items-center gap-2 pt-1">
                 <div className="flex-1 h-px bg-white/[0.06]" />
@@ -419,7 +535,6 @@ export const MiniAppTasks: React.FC = () => {
                 <div className="flex-1 h-px bg-white/[0.06]" />
               </div>
             )}
-            {/* Section header */}
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-bold text-white flex items-center gap-2">
                 <span>{section.icon}</span>
@@ -436,7 +551,6 @@ export const MiniAppTasks: React.FC = () => {
               )}
             </div>
 
-            {/* Cards or empty state */}
             {cards.length === 0 ? (
               <div className="glass-card p-5 flex flex-col items-center gap-2 text-center">
                 <AlertCircle className="w-6 h-6 text-slate-600" />
@@ -457,7 +571,7 @@ export const MiniAppTasks: React.FC = () => {
         );
       })}
 
-      {/* Promo / Special tasks */}
+      {/* Promo tasks */}
       {promoTasks.length > 0 && (
         <div className="space-y-3">
           <div className="flex items-center gap-3">
