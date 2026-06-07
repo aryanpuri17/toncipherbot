@@ -17,19 +17,19 @@ const SEGMENTS: Segment[] = [
   { label: '×10',   multiplier: 10,  fill: '#6d28d9', text: '#fde68a' }, // 7 – JACKPOT
 ];
 
-// ── RNG pondéré — EV ≈ 0.868 → ~13% house edge ────────────────────────────
-// Joueurs peuvent gagner mais la maison profite toujours en moyenne
+// ── RNG pondéré — EV ≈ 0.73 → ~27% house edge ────────────────────────────
+// Le ×10 JACKPOT est affiché sur la roue mais ne sort JAMAIS.
+// Les autres prix sortent rarement — la maison gagne toujours en moyenne.
 type Outcome = { multiplier: number; weight: number; segIndices: number[] };
 
 const OUTCOMES: Outcome[] = [
-  { multiplier: 0,   weight: 45, segIndices: [0, 3, 6] }, // ~45% PERDU
-  { multiplier: 0.4, weight: 22, segIndices: [1] },        // ~22% récupère 40%
-  { multiplier: 1,   weight: 18, segIndices: [2] },        // ~18% mise récupérée
-  { multiplier: 3,   weight: 10, segIndices: [4] },        // ~10% ×3
-  { multiplier: 5,   weight: 4,  segIndices: [5] },        //  ~4% ×5
-  { multiplier: 10,  weight: 1,  segIndices: [7] },        //  ~1% JACKPOT ×10
+  { multiplier: 0,   weight: 50, segIndices: [0, 3, 6] }, // 50% PERDU
+  { multiplier: 0.4, weight: 22, segIndices: [1] },        // 22% récupère 40%
+  { multiplier: 1,   weight: 15, segIndices: [2] },        // 15% remboursé
+  { multiplier: 3,   weight: 8,  segIndices: [4] },        //  8% ×3
+  { multiplier: 5,   weight: 5,  segIndices: [5] },        //  5% ×5
+  // Segment 7 (×10) : présent sur la roue visuellement, probabilité = 0 → impossible
 ];
-// EV = 0+0.4×0.22+1×0.18+3×0.10+5×0.04+10×0.01 = 0.868
 
 function pickOutcome(): Outcome {
   let r = Math.random() * 100;
