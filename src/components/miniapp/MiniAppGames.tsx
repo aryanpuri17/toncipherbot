@@ -6,8 +6,10 @@ import { ArrowLeft, RotateCcw, Trophy, Zap } from 'lucide-react';
 // AUDIO ENGINE (Web Audio API — aucun fichier externe)
 // ══════════════════════════════════════════════════════════════════
 
+let _soundMuted = false;
 const _AC: { ctx: AudioContext | null } = { ctx: null };
 function _ac(): AudioContext | null {
+  if (_soundMuted) return null;
   if (typeof window === 'undefined') return null;
   const Ctor = (window as any).AudioContext || (window as any).webkitAudioContext;
   if (!Ctor) return null;
@@ -132,7 +134,7 @@ const BetQuickButtons: React.FC<{ setBet: React.Dispatch<React.SetStateAction<nu
     <div className="grid grid-cols-4 gap-2">
       {labels.map(l => (
         <button key={l} onClick={handlers[l]}
-          className="py-2.5 rounded-xl text-sm font-bold bg-white/5 border border-white/10 text-slate-400 hover:bg-white/10 hover:text-white transition-all">
+          className="py-3 rounded-xl text-sm font-bold bg-white/5 border border-white/10 text-slate-400 hover:bg-white/10 hover:text-white transition-all">
           {l}
         </button>
       ))}
@@ -172,7 +174,17 @@ function arcPath(i: number): string {
   return `M${CX} ${CY} L${s.x.toFixed(2)} ${s.y.toFixed(2)} A${WRADIUS} ${WRADIUS} 0 0 1 ${e.x.toFixed(2)} ${e.y.toFixed(2)}Z`;
 }
 
-function rollWheel(streak: number): { mult: number; idx: number[] } {
+function rollWheel(streak: number, demo = false): { mult: number; idx: number[] } {
+  if (demo) {
+    const r = Math.random();
+    if (r < 0.18) return { mult: 0,   idx: [0] };
+    if (r < 0.32) return { mult: 0.4, idx: [1] };
+    if (r < 0.50) return { mult: 1,   idx: [2] };
+    if (r < 0.70) return { mult: 2,   idx: [4] };
+    if (r < 0.85) return { mult: 3,   idx: [5] };
+    if (r < 0.95) return { mult: 5,   idx: [7] };
+    return { mult: 10, idx: [9] };
+  }
   const bonus = Math.min(28, streak * 10);
   const loseW = 42 + bonus;
   const f = (100 - loseW) / 58;
@@ -242,7 +254,8 @@ const WheelSVG: React.FC<{ rotation: number }> = ({ rotation }) => {
 };
 
 const WheelGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResult }> = ({ onBack, streak, onResult }) => {
-  const { currentUser, placeGameBet } = useAppStore();
+  const { currentUser, placeGameBet, demoMode, demoBalance } = useAppStore();
+  const bal = demoMode ? demoBalance : currentUser.balanceMain;
   const [bet, setBet]       = useState(0.01);
   const [spinning, setSpin] = useState(false);
   const [rotation, setRot]  = useState(0);
@@ -250,12 +263,12 @@ const WheelGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
   const [result, setResult] = useState<{ seg: Seg; win: number } | null>(null);
   const [hist, setHist]     = useState<number[]>([]);
 
-  const effBet  = Math.min(bet, currentUser.balanceMain);
-  const canSpin = !spinning && effBet >= 0.01 && currentUser.balanceMain >= 0.01;
+  const effBet  = Math.min(bet, bal);
+  const canSpin = !spinning && effBet >= 0.01 && bal >= 0.01;
 
   const spin = () => {
     if (!canSpin) return;
-    const rule = rollWheel(streak);
+    const rule = rollWheel(streak, demoMode);
     const idx = rule.idx[Math.floor(Math.random() * rule.idx.length)];
     const target = (360 - idx * SEG_DEG + 360) % 360;
     const cur = rotRef.current % 360;
@@ -267,7 +280,7 @@ const WheelGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
     setSpin(true);
     snd.spin();
     setResult(null);
-    const used = Math.min(effBet, currentUser.balanceMain);
+    const used = Math.min(effBet, bal);
     const win = +(used * rule.mult).toFixed(6);
     setTimeout(() => {
       setSpin(false);
@@ -279,7 +292,7 @@ const WheelGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
     }, 4300);
   };
 
-  const displayBet = Math.max(0.01, effBet);
+  const displayBet = demoMode ? Math.max(0.01, effBet) : Math.max(0.01, effBet);
   const pf = (m: number) => (displayBet * m).toFixed(m < 1 ? 4 : 3);
 
   return (
@@ -294,7 +307,7 @@ const WheelGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
         </div>
         <div className="glass-card px-3 py-1.5 text-right">
           <p className="text-[10px] text-slate-500 uppercase">Solde</p>
-          <p className="text-sm font-bold text-white">{currentUser.balanceMain.toFixed(3)} TON</p>
+          <p className="text-sm font-bold text-white">{bal.toFixed(3)} TON</p>
         </div>
       </div>
 
@@ -346,21 +359,21 @@ const WheelGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
       {/* Bet controls */}
       <div className="glass-card p-4 space-y-3">
         <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Montant de la mise</p>
-        <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-xl px-3 py-2">
+        <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-xl px-4 py-3">
           <input type="number" value={bet} min={0.01} max={50} step={0.01}
             onChange={e => { const v = +e.target.value; if (!isNaN(v)) setBet(Math.max(0.01, Math.min(50, v))); }}
-            className="flex-1 bg-transparent text-xl font-bold text-white outline-none" />
-          <span className="text-sm font-bold text-slate-500">TON</span>
+            className="flex-1 bg-transparent text-2xl font-bold text-white outline-none" />
+          <span className="text-base font-bold text-slate-500">TON</span>
         </div>
-        <BetQuickButtons setBet={setBet} maxBal={currentUser.balanceMain} />
+        <BetQuickButtons setBet={setBet} maxBal={bal} />
         <button onClick={spin} disabled={!canSpin}
-          className={`w-full py-3.5 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 ${
+          className={`w-full py-4 rounded-xl font-bold text-base transition-all flex items-center justify-center gap-2 ${
             canSpin
               ? 'bg-gradient-to-r from-amber-500 to-yellow-500 text-amber-950 hover:from-amber-400 hover:to-yellow-400 active:scale-[0.98] shadow-lg shadow-amber-500/25'
               : 'bg-white/5 text-slate-600 cursor-not-allowed'
           }`}>
           {spinning ? <><RotateCcw className="w-4 h-4 animate-spin" /> La roue tourne…</>
-            : currentUser.balanceMain < 0.01 ? 'Solde insuffisant'
+            : bal < 0.01 ? 'Solde insuffisant'
             : <><Zap className="w-4 h-4" /> Tourner ({effBet.toFixed(2)} TON)</>}
         </button>
       </div>
@@ -407,8 +420,14 @@ const GROWTH   = 0.13;  // mult = e^(0.13·t) → ×2 à ~5.3s, ×10 à ~17.7s
 // Distribution du point de crash.
 // Spectateur (le joueur ne mise pas) : généreuse → l'historique donne envie.
 // Joueur misé : resserrée selon la série de victoires.
-function rollCrashPoint(playerStreak: number | null): number {
+function rollCrashPoint(playerStreak: number | null, demo = false): number {
   const r = Math.random();
+  if (demo) {
+    // Démo : crash points très généreux, rarement sous ×1.5
+    if (r < 0.04) return 1.00;
+    if (r < 0.12) return +(1.1 + Math.random() * 0.4).toFixed(2);
+    return Math.min(200, Math.max(1.5, +(0.995 / (1 - r)).toFixed(2)));
+  }
   if (playerStreak === null) {
     if (r < 0.03) return 1.00;
     return Math.min(100, Math.max(1.01, +(0.985 / (1 - r)).toFixed(2)));
@@ -488,7 +507,8 @@ function niceStep(range: number): number {
 }
 
 const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResult }> = ({ onBack, streak, onResult }) => {
-  const { currentUser, placeGameBet } = useAppStore();
+  const { currentUser, placeGameBet, demoMode, demoBalance } = useAppStore();
+  const bal = demoMode ? demoBalance : currentUser.balanceMain;
 
   // mise
   const [bet, setBet]           = useState(0.05);
@@ -580,7 +600,7 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
         if (changed) setFakes([...fakesRef.current]);
         setCountdown(Math.max(0, cdRef.current / 1000));
         if (cdRef.current <= 0) {
-          crashAtRef.current = rollCrashPoint(myBetRef.current !== null ? streakRef.current : null);
+          crashAtRef.current = rollCrashPoint(myBetRef.current !== null ? streakRef.current : null, demoMode);
           phaseRef.current = 'flying';
           tRef.current = 0;
           setPhase('flying');
@@ -646,7 +666,7 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
   }, []);
 
   // ── Actions du joueur ──
-  const effBet = Math.min(bet, currentUser.balanceMain);
+  const effBet = Math.min(bet, bal);
 
   const placeBet = () => {
     if (phaseRef.current !== 'betting' || myBetRef.current !== null) return;
@@ -779,7 +799,7 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
           </div>
           <div style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid #1e2847' }} className="px-3 py-1.5 rounded-xl text-right">
             <p className="text-[10px] uppercase" style={{ color: '#64748b' }}>Solde</p>
-            <p className="text-sm font-bold" style={{ color: '#f8fafc' }}>{currentUser.balanceMain.toFixed(3)} TON</p>
+            <p className="text-sm font-bold" style={{ color: '#f8fafc' }}>{bal.toFixed(3)} TON</p>
           </div>
         </div>
 
@@ -994,7 +1014,7 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
         <button onClick={mainBtn.onClick} disabled={mainBtn.disabled}
           className="w-full py-4 rounded-xl font-black text-sm active:scale-[0.98] transition-all tracking-wide uppercase"
           style={btnStyle}>
-          {currentUser.balanceMain < 0.01 && mainBtn.kind === 'bet' ? 'Solde insuffisant' : mainBtn.label}
+          {bal < 0.01 && mainBtn.kind === 'bet' ? 'Solde insuffisant' : mainBtn.label}
         </button>
       </div>
 
@@ -1062,7 +1082,7 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
             style={{ flex: 1, background: 'transparent', color: '#f8fafc', fontSize: 20, fontWeight: 700, outline: 'none', border: 'none' }} />
           <span style={{ fontSize: 13, fontWeight: 700, color: '#64748b' }}>TON</span>
         </div>
-        <BetQuickButtons setBet={setBet} maxBal={currentUser.balanceMain} />
+        <BetQuickButtons setBet={setBet} maxBal={bal} />
 
         <div className="grid grid-cols-2 gap-2">
           <div style={{ background: '#080c1e', border: '1px solid #1e2847', borderRadius: 10 }} className="px-3 py-2">
@@ -1104,7 +1124,8 @@ function minesMult(n: number, k: number): number {
   return +(0.97 / p).toFixed(2);
 }
 
-function effectiveMines(selected: number, streak: number): number {
+function effectiveMines(selected: number, streak: number, demo = false): number {
+  if (demo) return Math.max(1, selected - 1); // démo : 1 mine de moins
   const extra = streak >= 2 ? 2 : streak >= 1 ? 1 : 0;
   return Math.min(GRID_SIZE - 2, selected + extra);
 }
@@ -1124,7 +1145,8 @@ const MINES_FEED_INIT: MinesFeedEntry[] = [
 ];
 
 const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResult }> = ({ onBack, streak, onResult }) => {
-  const { currentUser, placeGameBet } = useAppStore();
+  const { currentUser, placeGameBet, demoMode, demoBalance } = useAppStore();
+  const bal = demoMode ? demoBalance : currentUser.balanceMain;
   const [bet, setBet]             = useState(0.01);
   const [mineCount, setMineCount] = useState<number>(3);
   const [phase, setPhase]         = useState<MinesPhase>('waiting');
@@ -1138,7 +1160,7 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
   const activeBetRef              = useRef(0);
   const effMinesRef               = useRef<number>(mineCount);
 
-  const effBet   = Math.min(bet, currentUser.balanceMain);
+  const effBet   = Math.min(bet, bal);
   const curMult  = minesMult(mineCount, safeCount);
   const curWin   = +(activeBetRef.current * curMult).toFixed(6);
   const nextMult = minesMult(mineCount, safeCount + 1);
@@ -1146,8 +1168,8 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
   const maxPossibleMult = minesMult(mineCount, GRID_SIZE - mineCount);
 
   const startGame = () => {
-    if (effBet < 0.01 || currentUser.balanceMain < 0.01) return;
-    const effM = effectiveMines(mineCount, streak);
+    if (effBet < 0.01 || bal < 0.01) return;
+    const effM = effectiveMines(mineCount, streak, demoMode);
     effMinesRef.current = effM;
     const arr = Array.from({ length: GRID_SIZE }, (_, i) => i);
     for (let i = arr.length - 1; i > 0; i--) {
@@ -1172,7 +1194,7 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
       snd.boom();
       onResult(false);
       const entry: MinesFeedEntry = { username: 'Vous', bet: activeBetRef.current, payout: 0, profit: -activeBetRef.current, mines: mineCount };
-      setFeed(f => [entry, ...f.slice(0, 9)]);
+      if (!demoMode) setFeed(f => [entry, ...f.slice(0, 9)]);
       setMyFeed(f => [entry, ...f.slice(0, 9)]);
     } else {
       snd.reveal();
@@ -1185,7 +1207,7 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
         onResult(true);
         setPhase('won');
         const entry: MinesFeedEntry = { username: 'Vous', bet: activeBetRef.current, payout: win, profit: +(win - activeBetRef.current).toFixed(4), mines: mineCount };
-        setFeed(f => [entry, ...f.slice(0, 9)]);
+        if (!demoMode) setFeed(f => [entry, ...f.slice(0, 9)]);
         setMyFeed(f => [entry, ...f.slice(0, 9)]);
       }
     }
@@ -1213,7 +1235,7 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
     onResult(true);
     setPhase('won');
     const entry: MinesFeedEntry = { username: 'Vous', bet: activeBetRef.current, payout: curWin, profit: +(curWin - activeBetRef.current).toFixed(4), mines: mineCount };
-    setFeed(f => [entry, ...f.slice(0, 9)]);
+    if (!demoMode) setFeed(f => [entry, ...f.slice(0, 9)]);
     setMyFeed(f => [entry, ...f.slice(0, 9)]);
   };
 
@@ -1236,7 +1258,7 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
           </div>
           <div style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid #1e2847' }} className="px-3 py-1.5 rounded-xl text-right">
             <p className="text-[10px] uppercase" style={{ color: '#64748b' }}>Solde</p>
-            <p className="text-sm font-bold" style={{ color: '#f8fafc' }}>{currentUser.balanceMain.toFixed(3)} TON</p>
+            <p className="text-sm font-bold" style={{ color: '#f8fafc' }}>{bal.toFixed(3)} TON</p>
           </div>
         </div>
       </div>
@@ -1311,7 +1333,7 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
                 <span style={{ fontSize: 13, fontWeight: 700, color: '#64748b' }}>TON</span>
               </div>
             </div>
-            <BetQuickButtons setBet={setBet} maxBal={currentUser.balanceMain} />
+            <BetQuickButtons setBet={setBet} maxBal={bal} />
 
             {/* Mines selector */}
             <div>
@@ -1344,8 +1366,8 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
             </div>
 
             <button onClick={startGame}
-              disabled={effBet < 0.01 || currentUser.balanceMain < 0.01}
-              style={effBet >= 0.01 && currentUser.balanceMain >= 0.01 ? {
+              disabled={effBet < 0.01 || bal < 0.01}
+              style={effBet >= 0.01 && bal >= 0.01 ? {
                 background: 'linear-gradient(135deg,#ef4444,#dc2626)',
                 boxShadow: '0 4px 16px rgba(239,68,68,0.3)',
               } : { background: 'rgba(255,255,255,0.05)', cursor: 'not-allowed' }}
@@ -1366,7 +1388,7 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
               </button>
             )}
             <button onClick={hint}
-              disabled={hinting || currentUser.balanceMain < activeBetRef.current * 0.1}
+              disabled={hinting || bal < activeBetRef.current * 0.1}
               style={{ background: 'rgba(79,111,240,0.12)', border: '1px solid rgba(79,111,240,0.25)' }}
               className={`${safeCount > 0 ? 'w-14' : 'flex-1'} py-3 rounded-xl font-bold text-sm transition-all active:scale-[0.98] flex items-center justify-center gap-1 ${
                 hinting ? 'animate-pulse' : ''
@@ -1457,7 +1479,8 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
 const R_RED = new Set([1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]);
 const R_WHEEL_SEQ = [0,32,15,19,4,21,2,25,17,34,6,27,13,36,11,30,8,23,10,5,24,16,33,1,20,14,31,9,22,18,29,7,28,12,35,3,26];
 
-function rollRoulette(streak: number): number {
+function rollRoulette(streak: number, demo = false): number {
+  if (demo) return 1 + Math.floor(Math.random() * 36); // démo : jamais de zéro
   const zeroBoost = streak >= 2 ? 0.12 : streak >= 1 ? 0.07 : 0.03;
   if (Math.random() < zeroBoost) return 0;
   return 1 + Math.floor(Math.random() * 36);
@@ -1482,7 +1505,8 @@ function roulettePayout(bet: RouletteBetType, result: number): number {
 }
 
 const RouletteGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResult }> = ({ onBack, streak, onResult }) => {
-  const { currentUser, placeGameBet } = useAppStore();
+  const { currentUser, placeGameBet, demoMode, demoBalance } = useAppStore();
+  const bal = demoMode ? demoBalance : currentUser.balanceMain;
   const [bet, setBet]             = useState(0.01);
   const [selectedBet, setSelected]= useState<RouletteBetType>('red');
   const [phase, setPhase]         = useState<RoulettePhase>('idle');
@@ -1491,16 +1515,18 @@ const RouletteGame: React.FC<{ onBack: () => void; streak: number; onResult: OnR
   const [result, setResult]       = useState<number | null>(null);
   const [payout, setPayout]       = useState(0);
   const [hist, setHist]           = useState<number[]>([]);
+  const [ballAngle, setBallAngle] = useState(110);
+  const ballRef                   = useRef(110);
 
-  const effBet  = Math.min(bet, currentUser.balanceMain);
-  const canSpin = phase === 'idle' && effBet >= 0.01 && currentUser.balanceMain >= 0.01;
+  const effBet  = Math.min(bet, bal);
+  const canSpin = phase === 'idle' && effBet >= 0.01 && bal >= 0.01;
 
   const NUM_SLOTS = 37;
   const DEG_PER_SLOT = 360 / NUM_SLOTS;
 
   const spin = () => {
     if (!canSpin) return;
-    const n = rollRoulette(streak);
+    const n = rollRoulette(streak, demoMode);
     const slotIndex = R_WHEEL_SEQ.indexOf(n);
     const slotCenter = slotIndex * DEG_PER_SLOT + DEG_PER_SLOT / 2;
     const cur = rotRef.current % 360;
@@ -1509,6 +1535,11 @@ const RouletteGame: React.FC<{ onBack: () => void; streak: number; onResult: OnR
     const newRot = rotRef.current + 8 * 360 + delta + (Math.random() * DEG_PER_SLOT * 0.4 - DEG_PER_SLOT * 0.2);
     rotRef.current = newRot;
     setRotation(newRot);
+    // Ball counter-clockwise, settles near pointer (top)
+    const curBall = ballRef.current % 360;
+    const newBall = ballRef.current - 14 * 360 - curBall + (Math.random() * DEG_PER_SLOT * 0.5 - DEG_PER_SLOT * 0.25);
+    ballRef.current = newBall;
+    setBallAngle(newBall);
     setPhase('spinning');
     snd.spin();
     setResult(null);
@@ -1573,7 +1604,7 @@ const RouletteGame: React.FC<{ onBack: () => void; streak: number; onResult: OnR
           </div>
           <div style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid #1e2847' }} className="px-3 py-1.5 rounded-xl text-right">
             <p className="text-[10px] uppercase" style={{ color: '#64748b' }}>Solde</p>
-            <p className="text-sm font-bold" style={{ color: '#f8fafc' }}>{currentUser.balanceMain.toFixed(3)} TON</p>
+            <p className="text-sm font-bold" style={{ color: '#f8fafc' }}>{bal.toFixed(3)} TON</p>
           </div>
         </div>
 
@@ -1595,18 +1626,20 @@ const RouletteGame: React.FC<{ onBack: () => void; streak: number; onResult: OnR
       <div className="px-4 pt-4 space-y-4">
         {/* Wheel */}
         <div className="flex flex-col items-center gap-3">
-          <div className="relative">
+          <div className="relative" style={{ maxWidth: 270, margin: '0 auto' }}>
+            {/* Pointer */}
             <div style={{
               position: 'absolute', top: -8, left: '50%', transform: 'translateX(-50%)',
-              width: 0, height: 0, zIndex: 10,
+              width: 0, height: 0, zIndex: 20,
               borderLeft: '10px solid transparent', borderRight: '10px solid transparent',
               borderTop: '22px solid #fbbf24',
               filter: 'drop-shadow(0 2px 6px rgba(251,191,36,0.7))',
             }} />
-            <svg width="100%" viewBox="-15 -15 290 290" style={{ maxWidth: 270, display: 'block', margin: '0 auto',
+            {/* Rotating wheel */}
+            <svg width="100%" viewBox="-15 -15 290 290" style={{
+              display: 'block',
               transform: `rotate(${rotation}deg)`,
               transition: phase === 'spinning' ? 'transform 5.0s cubic-bezier(0.25,0.00,0.00,1.00)' : 'none',
-              display: 'block',
             }}>
               <circle cx={CX2} cy={CY2} r={SVG_R + 20} fill="#1a0e00" stroke="#fbbf24" strokeWidth="2.5" />
               {R_WHEEL_SEQ.map((n, i) => {
@@ -1628,6 +1661,24 @@ const RouletteGame: React.FC<{ onBack: () => void; streak: number; onResult: OnR
               })}
               <circle cx={CX2} cy={CY2} r={24} fill="#1a0800" stroke="#fbbf24" strokeWidth="2" />
               <circle cx={CX2} cy={CY2} r={10} fill="#fbbf24" opacity="0.3" />
+            </svg>
+            {/* Ball overlay — not rotating with wheel */}
+            <svg width="100%" viewBox="-15 -15 290 290" style={{
+              position: 'absolute', top: 0, left: 0, pointerEvents: 'none',
+            }}>
+              <g style={{
+                transform: `rotate(${ballAngle}deg)`,
+                transformOrigin: `${CX2}px ${CY2}px`,
+                transition: phase === 'spinning' ? 'transform 5.0s cubic-bezier(0.28,0.02,0.0,0.98)' : 'none',
+              }}>
+                {/* Ball sits in the track between outer rim and segment starts */}
+                <circle cx={CX2} cy={CY2 - SVG_R - 9} r={6}
+                  fill="white" stroke="#94a3b8" strokeWidth="1.5"
+                  style={{ filter: 'drop-shadow(0 0 5px rgba(255,255,255,0.9))' }} />
+                {/* Shine */}
+                <circle cx={CX2 - 1} cy={CY2 - SVG_R - 12} r={2}
+                  fill="white" opacity="0.6" />
+              </g>
             </svg>
           </div>
 
@@ -1684,7 +1735,7 @@ const RouletteGame: React.FC<{ onBack: () => void; streak: number; onResult: OnR
               <span style={{ fontSize: 13, fontWeight: 700, color: '#64748b' }}>TON</span>
             </div>
           </div>
-          <BetQuickButtons setBet={setBet} maxBal={currentUser.balanceMain} />
+          <BetQuickButtons setBet={setBet} maxBal={bal} />
 
           <div className="grid grid-cols-2 gap-2">
             <div style={{ background: '#080c1e', border: '1px solid #1e2847', borderRadius: 10 }} className="px-3 py-2">
@@ -1705,7 +1756,7 @@ const RouletteGame: React.FC<{ onBack: () => void; streak: number; onResult: OnR
           ) : (
             <button onClick={spin} disabled={!canSpin}
               style={canSpin ? { background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', boxShadow: '0 4px 16px rgba(124,58,237,0.35)', width: '100%', padding: '14px', borderRadius: 12, color: '#fff', fontWeight: 900, fontSize: 14, cursor: 'pointer', letterSpacing: '0.05em' } : { background: 'rgba(255,255,255,0.05)', width: '100%', padding: '14px', borderRadius: 12, color: '#475569', fontWeight: 700, fontSize: 14, cursor: 'not-allowed' }}>
-              {phase === 'spinning' ? '🎰 La roue tourne…' : currentUser.balanceMain < 0.01 ? 'Solde insuffisant' : `🎰 LANCER · ${effBet.toFixed(2)} TON`}
+              {phase === 'spinning' ? '🎰 La roue tourne…' : bal < 0.01 ? 'Solde insuffisant' : `🎰 LANCER · ${effBet.toFixed(2)} TON`}
             </button>
           )}
         </div>
@@ -1740,11 +1791,11 @@ const PLINKO_MULTS: Record<PlinkoRisk, Record<PlinkoRows, number[]>> = {
   },
 };
 
-function rollPlinko(rows: PlinkoRows, risk: PlinkoRisk, streak: number): { slot: number; path: boolean[] } {
+function rollPlinko(rows: PlinkoRows, risk: PlinkoRisk, streak: number, demo = false): { slot: number; path: boolean[] } {
   const slots = rows + 1;
   const center = rows / 2;
   const spreadFactor = risk === 'low' ? 0.45 : risk === 'medium' ? 0.70 : 1.0;
-  const houseEdge = streak >= 2 ? 0.15 : streak >= 1 ? 0.08 : 0.03;
+  const houseEdge = demo ? -0.08 : streak >= 2 ? 0.15 : streak >= 1 ? 0.08 : 0.03; // démo : léger avantage
   const path: boolean[] = [];
   let pos = 0;
   for (let r = 0; r < rows; r++) {
@@ -1758,7 +1809,8 @@ function rollPlinko(rows: PlinkoRows, risk: PlinkoRisk, streak: number): { slot:
 }
 
 const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResult }> = ({ onBack, streak, onResult }) => {
-  const { currentUser, placeGameBet } = useAppStore();
+  const { currentUser, placeGameBet, demoMode, demoBalance } = useAppStore();
+  const bal = demoMode ? demoBalance : currentUser.balanceMain;
   const [bet, setBet]     = useState(0.01);
   const [rows, setRows]   = useState<PlinkoRows>(12);
   const [risk, setRisk]   = useState<PlinkoRisk>('medium');
@@ -1768,7 +1820,7 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
   const [lastWin, setLastWin]     = useState<{ mult: number; win: number } | null>(null);
   const [hist, setHist]           = useState<Array<{ slot: number; mult: number }>>([]);
 
-  const effBet = Math.min(bet, currentUser.balanceMain);
+  const effBet = Math.min(bet, bal);
   const mults  = PLINKO_MULTS[risk][rows];
   const slots  = rows + 1;
 
@@ -1782,11 +1834,11 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
   };
 
   const drop = () => {
-    if (dropping || effBet < 0.01 || currentUser.balanceMain < 0.01) return;
+    if (dropping || effBet < 0.01 || bal < 0.01) return;
     setDropping(true);
     setFinalSlot(null);
     setLastWin(null);
-    const { slot, path } = rollPlinko(rows, risk, streak);
+    const { slot, path } = rollPlinko(rows, risk, streak, demoMode);
     const used = effBet;
     placeGameBet(used, 0);
 
@@ -1844,7 +1896,7 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
           </div>
           <div style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid #1e2847' }} className="px-3 py-1.5 rounded-xl text-right">
             <p className="text-[10px] uppercase" style={{ color: '#64748b' }}>Solde</p>
-            <p className="text-sm font-bold" style={{ color: '#f8fafc' }}>{currentUser.balanceMain.toFixed(3)} TON</p>
+            <p className="text-sm font-bold" style={{ color: '#f8fafc' }}>{bal.toFixed(3)} TON</p>
           </div>
         </div>
       </div>
@@ -1971,7 +2023,7 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
               <span style={{ fontSize: 13, fontWeight: 700, color: '#64748b' }}>TON</span>
             </div>
           </div>
-          <BetQuickButtons setBet={setBet} maxBal={currentUser.balanceMain} />
+          <BetQuickButtons setBet={setBet} maxBal={bal} />
 
           <button onClick={drop} disabled={dropping || effBet < 0.01 || currentUser.balanceMain < 0.01}
             style={!dropping && effBet >= 0.01 && currentUser.balanceMain >= 0.01 ? {
@@ -1980,7 +2032,7 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
               width: '100%', padding: '14px', borderRadius: 12,
               color: '#451a03', fontWeight: 900, fontSize: 14, cursor: 'pointer', letterSpacing: '0.05em',
             } : { background: 'rgba(255,255,255,0.05)', width: '100%', padding: '14px', borderRadius: 12, color: '#475569', fontWeight: 700, fontSize: 14, cursor: 'not-allowed' }}>
-            {dropping ? '🎯 En chute…' : currentUser.balanceMain < 0.01 ? 'Solde insuffisant' : `🎯 LÂCHER · ${effBet.toFixed(2)} TON`}
+            {dropping ? '🎯 En chute…' : bal < 0.01 ? 'Solde insuffisant' : `🎯 LÂCHER · ${effBet.toFixed(2)} TON`}
           </button>
         </div>
       </div>
@@ -2077,11 +2129,15 @@ const CATALOG = [
 ] as const;
 
 export const MiniAppGames: React.FC = () => {
-  const { currentUser } = useAppStore();
+  const { currentUser, demoMode, demoBalance, toggleDemoMode } = useAppStore();
   const [activeGame, setActiveGame] = useState<ActiveGame>(null);
   const [streak, setStreak]         = useState(0);
+  const [muted, setMuted]           = useState(false);
 
   const handleResult = (won: boolean) => setStreak(s => won ? s + 1 : 0);
+  const toggleMute   = () => { _soundMuted = !_soundMuted; setMuted(_soundMuted); };
+
+  const bal = demoMode ? demoBalance : currentUser.balanceMain;
 
   if (activeGame === 'wheel')    return <WheelGame    onBack={() => setActiveGame(null)} streak={streak} onResult={handleResult} />;
   if (activeGame === 'roulette') return <RouletteGame onBack={() => setActiveGame(null)} streak={streak} onResult={handleResult} />;
@@ -2097,9 +2153,33 @@ export const MiniAppGames: React.FC = () => {
           <p className="text-xs text-slate-400 mt-0.5">Misez des TON · Tentez votre chance</p>
         </div>
         <div style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid #1e2847' }} className="px-3 py-2 rounded-xl text-right">
-          <p className="text-[10px] uppercase" style={{ color: '#64748b' }}>Solde</p>
-          <p className="text-sm font-bold" style={{ color: '#f8fafc' }}>{currentUser.balanceMain.toFixed(3)} TON</p>
+          <p className="text-[10px] uppercase" style={{ color: '#64748b' }}>
+            {demoMode ? '🎮 Démo' : 'Solde'}
+          </p>
+          <p className="text-sm font-bold" style={{ color: demoMode ? '#f59e0b' : '#f8fafc' }}>{bal.toFixed(3)} TON</p>
         </div>
+      </div>
+
+      {/* Demo + Sound controls */}
+      <div className="flex gap-2">
+        <button onClick={toggleDemoMode} style={{
+          flex: 1, padding: '10px 12px', borderRadius: 12, fontWeight: 700, fontSize: 13, cursor: 'pointer',
+          background: demoMode ? 'linear-gradient(135deg,#d97706,#f59e0b)' : 'rgba(255,255,255,0.05)',
+          border: demoMode ? '1px solid #f59e0b' : '1px solid #1e2847',
+          color: demoMode ? '#1c1400' : '#94a3b8',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+        }}>
+          <span>🎮</span>
+          <span>{demoMode ? `Mode Démo · ${demoBalance.toFixed(2)} TON` : 'Mode Démo'}</span>
+        </button>
+        <button onClick={toggleMute} style={{
+          width: 46, borderRadius: 12, fontWeight: 700, fontSize: 18, cursor: 'pointer',
+          background: 'rgba(255,255,255,0.05)', border: '1px solid #1e2847',
+          color: muted ? '#475569' : '#94a3b8',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          {muted ? '🔇' : '🔊'}
+        </button>
       </div>
 
       {/* Game catalog */}

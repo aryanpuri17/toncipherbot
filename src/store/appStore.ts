@@ -754,6 +754,11 @@ interface AppState {
   activeBoosters: { multiplier: number; expiresAt: string }[];
   referralBoostExpiresAt: string | null;
 
+  // Demo / Jeu
+  demoMode: boolean;
+  demoBalance: number;
+  toggleDemoMode: () => void;
+
   // Actions - Mini App
   confirmDeposit: (txId: string, txHash: string) => void;
   creditDeposit: (userId: string, amount: number, currency: string, txHash: string, network: string) => void;
@@ -908,6 +913,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   lastSyncedReferralBalance: 0,
   activeBoosters: _savedBoosters,
   referralBoostExpiresAt: _savedRefBoost,
+  demoMode: false,
+  demoBalance: 10.0,
 
   // Mini App Actions
   confirmDeposit: (txId, txHash) => {
@@ -1158,8 +1165,21 @@ export const useAppStore = create<AppState>((set, get) => ({
     });
   },
 
+  toggleDemoMode: () => set(s => {
+    const turningOn = !s.demoMode;
+    return {
+      demoMode: turningOn,
+      demoBalance: turningOn && s.demoBalance < 0.5 ? 10.0 : s.demoBalance,
+    };
+  }),
+
   placeGameBet: (bet, win) => {
     set(s => {
+      if (s.demoMode) {
+        // En mode démo : ne toucher que demoBalance
+        const nb = +(Math.max(0, s.demoBalance - bet + win)).toFixed(6);
+        return { demoBalance: nb < 0.05 ? 10.0 : nb }; // recharge auto si presque vide
+      }
       const newBalance = +(Math.max(0, s.currentUser.balanceMain - bet + win)).toFixed(6);
       const updatedUser = { ...s.currentUser, balanceMain: newBalance };
       try {
