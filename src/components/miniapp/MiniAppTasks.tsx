@@ -72,7 +72,7 @@ function taskAvatarColor(name: string): string {
 
 export const MiniAppTasks: React.FC = () => {
   const {
-    tasks, completedTaskIds, completeTask,
+    tasks, completedTaskIds, completeTask, creditReferralBonus,
     setMiniAppPage, currentUser, taskSubmissions, submitTaskProof,
   } = useAppStore();
 
@@ -216,6 +216,7 @@ export const MiniAppTasks: React.FC = () => {
           todayEarnings:  state.currentUser.todayEarnings  + earned,
           tasksCompleted: state.currentUser.tasksCompleted + 1,
         });
+        creditReferralBonus(earned);
         state.addNotification({
           type: 'reward', title: 'Tâche complétée !',
           message: `+${earned.toFixed(4)} TON crédité.`, isRead: false,

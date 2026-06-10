@@ -25,6 +25,7 @@ import { MiniAppMyTasks } from './components/miniapp/MiniAppMyTasks';
 import { MiniAppReferral } from './components/miniapp/MiniAppReferral';
 import { MiniAppNotifications } from './components/miniapp/MiniAppNotifications';
 import { MiniAppShop } from './components/miniapp/MiniAppShop';
+import { MiniAppGames } from './components/miniapp/MiniAppGames';
 
 import { Bell, Menu, ChevronRight, Globe, Info, Wallet, Shield } from 'lucide-react';
 import { useTonConnectUI, useTonWallet } from '@tonconnect/ui-react';
@@ -125,6 +126,7 @@ const MiniAppPageContent: React.FC = () => {
     case 'referral':      return <MiniAppReferral />;
     case 'notifications': return <MiniAppNotifications />;
     case 'shop':          return <MiniAppShop />;
+    case 'games':         return <MiniAppGames />;
     case 'settings':      return <MiniAppSettings />;
     default:              return <MiniAppDashboard />;
   }
