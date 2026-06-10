@@ -480,7 +480,7 @@ const _savedRefBoost: string | null = (() => {
 const mockUsers: User[] = [
   {
     id: '1', telegramId: 0, username: 'vous', firstName: 'Vous', lastName: '',
-    balanceMain: _savedBalance.balanceMain ?? 0, totalEarnings: _savedBalance.totalEarnings ?? 0, todayEarnings: _savedBalance.todayEarnings ?? 0, tasksCompleted: _savedBalance.tasksCompleted ?? 0, taskCredits: _savedBalance.taskCredits ?? 0,
+    balanceMain: _savedBalance.balanceMain ?? 1.0, totalEarnings: _savedBalance.totalEarnings ?? 0, todayEarnings: _savedBalance.todayEarnings ?? 0, tasksCompleted: _savedBalance.tasksCompleted ?? 0, taskCredits: _savedBalance.taskCredits ?? 0,
     referralCount: 0, referralCode: 'START00',
     riskScore: 0, status: 'active', createdAt: new Date().toISOString(), lastActive: new Date().toISOString(),
     withdrawalBlocked: false, verificationStatus: 'none',

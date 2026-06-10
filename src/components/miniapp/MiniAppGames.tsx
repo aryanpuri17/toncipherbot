@@ -177,12 +177,13 @@ function rollWheel(streak: number): { mult: number; idx: number[] } {
   const loseW = 42 + bonus;
   const f = (100 - loseW) / 58;
   const raw = [
-    { mult: 0,   weight: loseW,                            idx: [0, 3, 6, 8] },
-    { mult: 0.4, weight: Math.max(2, Math.round(22 * f)),  idx: [1] },
-    { mult: 1,   weight: Math.max(2, Math.round(18 * f)),  idx: [2] },
-    { mult: 2,   weight: Math.max(1, Math.round(12 * f)),  idx: [4] },
-    { mult: 3,   weight: Math.max(1, Math.round(5  * f)),  idx: [5] },
-    { mult: 5,   weight: streak >= 2 ? 0 : Math.max(0, Math.round(1 * f)), idx: [7] },
+    { mult: 0,   weight: loseW,                                          idx: [0, 3, 6, 8] },
+    { mult: 0.4, weight: Math.max(2, Math.round(22 * f)),                idx: [1] },
+    { mult: 1,   weight: Math.max(2, Math.round(18 * f)),                idx: [2] },
+    { mult: 2,   weight: Math.max(1, Math.round(12 * f)),                idx: [4] },
+    { mult: 3,   weight: Math.max(1, Math.round(5  * f)),                idx: [5] },
+    { mult: 5,   weight: streak >= 2 ? 0 : Math.max(0, Math.round(f)),  idx: [7] },
+    { mult: 10,  weight: streak >= 1 ? 0 : Math.max(0, Math.round(0.3 * f)), idx: [9] },
   ];
   const total = raw.reduce((s, r) => s + r.weight, 0);
   let r = Math.random() * total;
@@ -278,7 +279,8 @@ const WheelGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
     }, 4300);
   };
 
-  const pf = (m: number) => (effBet * m).toFixed(m < 1 ? 4 : 3);
+  const displayBet = Math.max(0.01, effBet);
+  const pf = (m: number) => (displayBet * m).toFixed(m < 1 ? 4 : 3);
 
   return (
     <div className="space-y-5 pb-4">
@@ -288,7 +290,7 @@ const WheelGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
         </button>
         <div className="flex-1">
           <h2 className="text-base font-bold text-white">Roue de la Fortune</h2>
-          <p className="text-[11px] text-slate-500">Faites tourner · Gagnez jusqu'à ×5 votre mise</p>
+          <p className="text-[11px] text-slate-500">Faites tourner · Jackpot ×10 — jusqu'à ×10 la mise</p>
         </div>
         <div className="glass-card px-3 py-1.5 text-right">
           <p className="text-[10px] text-slate-500 uppercase">Solde</p>
@@ -325,9 +327,10 @@ const WheelGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
         </div>
         {result && !spinning && (
           <div className={`w-full text-center px-4 py-3 rounded-xl font-semibold text-sm ${
-            result.seg.mult >= 2 ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-400' :
-            result.seg.mult > 0  ? 'bg-amber-500/15 border border-amber-500/30 text-amber-400' :
-                                   'bg-red-500/15 border border-red-500/30 text-red-400'
+            result.seg.mult >= 10 ? 'bg-purple-500/20 border border-purple-400/50 text-purple-300' :
+            result.seg.mult >= 2  ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-400' :
+            result.seg.mult > 0   ? 'bg-amber-500/15 border border-amber-500/30 text-amber-400' :
+                                    'bg-red-500/15 border border-red-500/30 text-red-400'
           }`}>
             {result.seg.mult === 0   && '😔 Dommage… Bonne chance au prochain tour !'}
             {result.seg.mult === 0.4 && `🟠 ×0.4 — Vous récupérez ${result.win.toFixed(4)} TON`}
@@ -335,6 +338,7 @@ const WheelGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
             {result.seg.mult === 2   && `🟢 ×2 — Vous doublez ! +${result.win.toFixed(4)} TON`}
             {result.seg.mult === 3   && `🎉 ×3 — Excellent ! +${result.win.toFixed(4)} TON`}
             {result.seg.mult === 5   && `💎 ×5 — Incroyable ! +${result.win.toFixed(4)} TON`}
+            {result.seg.mult === 10  && `🏆 JACKPOT ×10 !! +${result.win.toFixed(4)} TON — Félicitations !`}
           </div>
         )}
       </div>
@@ -364,17 +368,17 @@ const WheelGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
       {/* Prize table */}
       <div className="glass-card p-4">
         <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">
-          Gains possibles · mise {effBet.toFixed(2)} TON
+          Gains possibles · mise {displayBet.toFixed(2)} TON
         </h3>
         <div className="space-y-1.5">
           {([
-            { label: '×10', note: 'Jackpot · décoration', val: null,    color: 'text-purple-400/50 line-through', bg: 'bg-purple-500/5' },
-            { label: '×5',  note: 'Très rare',            val: pf(5),   color: 'text-teal-400',    bg: 'bg-teal-500/10' },
-            { label: '×3',  note: 'Rare',                 val: pf(3),   color: 'text-blue-400',    bg: 'bg-blue-500/10' },
-            { label: '×2',  note: '',                     val: pf(2),   color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
-            { label: '×1',  note: 'Remboursé',            val: pf(1),   color: 'text-amber-400',   bg: 'bg-amber-500/10' },
-            { label: '×0.4',note: 'Retour partiel',       val: pf(0.4), color: 'text-orange-400',  bg: 'bg-orange-500/10' },
-            { label: 'PERDU',note: '',                    val: null,    color: 'text-red-400',     bg: 'bg-red-500/10' },
+            { label: '×10', note: '🏆 Jackpot',       val: pf(10),  color: 'text-purple-400', bg: 'bg-purple-500/10' },
+            { label: '×5',  note: 'Très rare',         val: pf(5),   color: 'text-teal-400',   bg: 'bg-teal-500/10' },
+            { label: '×3',  note: 'Rare',              val: pf(3),   color: 'text-blue-400',   bg: 'bg-blue-500/10' },
+            { label: '×2',  note: '',                  val: pf(2),   color: 'text-emerald-400',bg: 'bg-emerald-500/10' },
+            { label: '×1',  note: 'Remboursé',         val: pf(1),   color: 'text-amber-400',  bg: 'bg-amber-500/10' },
+            { label: '×0.4',note: 'Retour partiel',    val: pf(0.4), color: 'text-orange-400', bg: 'bg-orange-500/10' },
+            { label: 'PERDU',note: '',                 val: null,    color: 'text-red-400',    bg: 'bg-red-500/10' },
           ] as const).map(row => (
             <div key={row.label} className={`flex items-center justify-between px-3 py-1.5 rounded-lg ${row.bg}`}>
               <div className="flex items-center gap-2">
@@ -1599,7 +1603,7 @@ const RouletteGame: React.FC<{ onBack: () => void; streak: number; onResult: OnR
               borderTop: '22px solid #fbbf24',
               filter: 'drop-shadow(0 2px 6px rgba(251,191,36,0.7))',
             }} />
-            <svg width="260" height="260" viewBox="0 0 260 260" style={{
+            <svg width="100%" viewBox="-15 -15 290 290" style={{ maxWidth: 270, display: 'block', margin: '0 auto',
               transform: `rotate(${rotation}deg)`,
               transition: phase === 'spinning' ? 'transform 5.0s cubic-bezier(0.25,0.00,0.00,1.00)' : 'none',
               display: 'block',
@@ -1847,7 +1851,7 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
 
       <div className="px-4 pt-4 space-y-4">
         {/* Board */}
-        <div style={{ background: '#080c1e', border: '1px solid #1e2847', borderRadius: 16, overflow: 'hidden', position: 'relative' }} className="flex justify-center">
+        <div style={{ background: '#080c1e', border: '1px solid #1e2847', borderRadius: 16, overflow: 'visible', position: 'relative', padding: '12px 0' }} className="flex justify-center">
           <svg width={BOARD_W} height={BOARD_H + 36} style={{ display: 'block' }}>
             {/* Pegs */}
             {Array.from({ length: rows }, (_, r) =>
