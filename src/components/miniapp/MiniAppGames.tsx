@@ -264,6 +264,7 @@ const WheelGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
     rotRef.current = newRot;
     setRot(newRot);
     setSpin(true);
+    snd.spin();
     setResult(null);
     const used = Math.min(effBet, currentUser.balanceMain);
     const win = +(used * rule.mult).toFixed(6);
@@ -273,6 +274,7 @@ const WheelGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
       setResult({ seg: SEGS[idx], win });
       setHist(h => [rule.mult, ...h.slice(0, 7)]);
       onResult(rule.mult > 0);
+      if (rule.mult >= 2) snd.win(); else if (rule.mult > 0) snd.cashout(); else snd.lose();
     }, 4300);
   };
 
@@ -613,6 +615,7 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
           setLastCrash(cp);
           setHistory(h => [cp, ...h.slice(0, 19)]);
           setMult(cp);
+          snd.crash();
           if (myBetRef.current !== null && cashedRef.current === null) {
             onResultRef.current(false);
             setToast({ id: Date.now(), text: `−${myBetRef.current.toFixed(2)} TON`, win: false });
@@ -1162,16 +1165,19 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
     if (minePos.has(idx)) {
       setPhase('lost');
       placeGameBet(activeBetRef.current, 0);
+      snd.boom();
       onResult(false);
       const entry: MinesFeedEntry = { username: 'Vous', bet: activeBetRef.current, payout: 0, profit: -activeBetRef.current, mines: mineCount };
       setFeed(f => [entry, ...f.slice(0, 9)]);
       setMyFeed(f => [entry, ...f.slice(0, 9)]);
     } else {
+      snd.reveal();
       const ns = safeCount + 1;
       setSafeCount(ns);
       if (ns === GRID_SIZE - effMinesRef.current) {
         const win = +(activeBetRef.current * minesMult(mineCount, ns)).toFixed(6);
         placeGameBet(activeBetRef.current, win);
+        snd.win();
         onResult(true);
         setPhase('won');
         const entry: MinesFeedEntry = { username: 'Vous', bet: activeBetRef.current, payout: win, profit: +(win - activeBetRef.current).toFixed(4), mines: mineCount };
@@ -1199,6 +1205,7 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
   const cashout = () => {
     if (phase !== 'playing' || safeCount === 0) return;
     placeGameBet(activeBetRef.current, curWin);
+    snd.win();
     onResult(true);
     setPhase('won');
     const entry: MinesFeedEntry = { username: 'Vous', bet: activeBetRef.current, payout: curWin, profit: +(curWin - activeBetRef.current).toFixed(4), mines: mineCount };
@@ -1273,7 +1280,8 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
                   borderRadius: 12,
                   fontSize: 18,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  transition: 'background 0.15s, border-color 0.15s, transform 0.1s',
+                  transition: 'background 0.18s, border-color 0.18s, transform 0.12s',
+                  animation: (showGem || showBoom) ? 'mineReveal 0.25s ease-out' : undefined,
                   cursor: phase === 'playing' && !isRev ? 'pointer' : 'default',
                   opacity: showGhost ? 0.5 : 1,
                 }}
@@ -1498,6 +1506,7 @@ const RouletteGame: React.FC<{ onBack: () => void; streak: number; onResult: OnR
     rotRef.current = newRot;
     setRotation(newRot);
     setPhase('spinning');
+    snd.spin();
     setResult(null);
     const used = effBet;
     setTimeout(() => {
@@ -1509,6 +1518,7 @@ const RouletteGame: React.FC<{ onBack: () => void; streak: number; onResult: OnR
       setHist(h => [n, ...h.slice(0, 11)]);
       setPhase('result');
       onResult(mult > 0);
+      if (mult > 0) snd.win(); else snd.lose();
     }, 5100);
   };
 
@@ -1790,10 +1800,12 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
         setBallPos(null);
         setDropping(false);
         onResult(mult >= 1);
+        if (mult >= 1) snd.win(); else snd.lose();
         return;
       }
       if (path[row]) col++;
       row++;
+      snd.tick();
       setBallPos({ row, col });
       setTimeout(animStep, rows <= 8 ? 180 : rows <= 12 ? 130 : 90);
     };
@@ -1840,15 +1852,22 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
             {/* Pegs */}
             {Array.from({ length: rows }, (_, r) =>
               Array.from({ length: r + 1 }, (_, c) => (
-                <circle key={`${r}-${c}`} cx={pegX(r, c)} cy={pegY(r)} r={PEG_R}
-                  fill="#334155" stroke="#475569" strokeWidth="1" />
+                <g key={`${r}-${c}`}>
+                  <circle cx={pegX(r, c)} cy={pegY(r)} r={PEG_R + 1} fill="#1e2847" opacity="0.5" />
+                  <circle cx={pegX(r, c)} cy={pegY(r)} r={PEG_R} fill="#475569" stroke="#64748b" strokeWidth="0.8" />
+                  <circle cx={pegX(r, c) - 1} cy={pegY(r) - 1} r={PEG_R * 0.35} fill="#94a3b8" opacity="0.5" />
+                </g>
               ))
             )}
-            {/* Ball */}
+            {/* Ball glow */}
             {ballPos !== null && (
-              <circle cx={ballSvgX} cy={ballSvgY} r={PEG_R + 2}
-                fill="#fbbf24" stroke="#fde68a" strokeWidth="1.5"
-                style={{ transition: `cx ${rows <= 8 ? 170 : rows <= 12 ? 120 : 80}ms ease, cy ${rows <= 8 ? 170 : rows <= 12 ? 120 : 80}ms ease` }} />
+              <g>
+                <circle cx={ballSvgX} cy={ballSvgY} r={PEG_R + 5} fill="#fbbf24" opacity="0.18" />
+                <circle cx={ballSvgX} cy={ballSvgY} r={PEG_R + 2.5} fill="#fbbf24" stroke="#fde68a" strokeWidth="1.5"
+                  style={{ transition: `cx ${rows <= 8 ? 165 : rows <= 12 ? 118 : 78}ms ease-out, cy ${rows <= 8 ? 165 : rows <= 12 ? 118 : 78}ms ease-out` }} />
+                <circle cx={ballSvgX - 1} cy={ballSvgY - 1.5} r={1.5} fill="#fff" opacity="0.6"
+                  style={{ transition: `cx ${rows <= 8 ? 165 : rows <= 12 ? 118 : 78}ms ease-out, cy ${rows <= 8 ? 165 : rows <= 12 ? 118 : 78}ms ease-out` }} />
+              </g>
             )}
             {/* Slots */}
             {mults.map((m, i) => {
