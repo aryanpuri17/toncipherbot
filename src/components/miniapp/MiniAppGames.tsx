@@ -126,8 +126,8 @@ const WheelGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
   const [result, setResult] = useState<{ seg: Seg; win: number } | null>(null);
   const [hist, setHist]     = useState<number[]>([]);
 
-  const effBet  = Math.min(bet, currentUser.gameBalance);
-  const canSpin = !spinning && effBet >= 0.01 && currentUser.gameBalance >= 0.01;
+  const effBet  = Math.min(bet, currentUser.balanceMain);
+  const canSpin = !spinning && effBet >= 0.01 && currentUser.balanceMain >= 0.01;
   const adj = (d: number) => setBet(p => Math.max(0.01, Math.min(50, +(p + d).toFixed(3))));
 
   const spin = () => {
@@ -143,7 +143,7 @@ const WheelGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
     setRot(newRot);
     setSpin(true);
     setResult(null);
-    const used = Math.min(effBet, currentUser.gameBalance);
+    const used = Math.min(effBet, currentUser.balanceMain);
     const win = +(used * rule.mult).toFixed(6);
     setTimeout(() => {
       setSpin(false);
@@ -167,8 +167,8 @@ const WheelGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
           <p className="text-[11px] text-slate-500">Faites tourner · Gagnez jusqu'à ×5 votre mise</p>
         </div>
         <div className="glass-card px-3 py-1.5 text-right">
-          <p className="text-[10px] text-slate-500 uppercase">Jeux</p>
-          <p className="text-sm font-bold text-white">{currentUser.gameBalance.toFixed(3)} TON</p>
+          <p className="text-[10px] text-slate-500 uppercase">Solde</p>
+          <p className="text-sm font-bold text-white">{currentUser.balanceMain.toFixed(3)} TON</p>
         </div>
       </div>
 
@@ -254,7 +254,7 @@ const WheelGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
               : 'bg-white/5 text-slate-600 cursor-not-allowed'
           }`}>
           {spinning ? <><RotateCcw className="w-4 h-4 animate-spin" /> La roue tourne…</>
-            : currentUser.gameBalance < 0.01 ? 'Solde jeux insuffisant'
+            : currentUser.balanceMain < 0.01 ? 'Solde insuffisant'
             : <><Zap className="w-4 h-4" /> Tourner ({effBet.toFixed(2)} TON)</>}
         </button>
       </div>
@@ -326,8 +326,8 @@ const PenaltyGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRe
   const [keeperTilt, setKeeperTilt] = useState(0); // deg rotation for dive
   const [outcome, setOutcome] = useState<{ goal: boolean; win: number } | null>(null);
 
-  const effBet   = Math.min(bet, currentUser.gameBalance);
-  const canShoot = phase === 'idle' && effBet >= 0.01 && currentUser.gameBalance >= 0.01;
+  const effBet   = Math.min(bet, currentUser.balanceMain);
+  const canShoot = phase === 'idle' && effBet >= 0.01 && currentUser.balanceMain >= 0.01;
   const adj = (d: number) => setBet(p => Math.max(0.01, Math.min(50, +(p + d).toFixed(3))));
 
   const shoot = (zoneId: number) => {
@@ -384,8 +384,8 @@ const PenaltyGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRe
           <p className="text-[11px] text-slate-500">Choisissez votre angle · ×{PENALTY_WIN_MULT} si but</p>
         </div>
         <div className="glass-card px-3 py-1.5 text-right">
-          <p className="text-[10px] text-slate-500 uppercase">Jeux</p>
-          <p className="text-sm font-bold text-white">{currentUser.gameBalance.toFixed(3)} TON</p>
+          <p className="text-[10px] text-slate-500 uppercase">Solde</p>
+          <p className="text-sm font-bold text-white">{currentUser.balanceMain.toFixed(3)} TON</p>
         </div>
       </div>
 
@@ -570,7 +570,7 @@ const CRASH_INIT_HIST = [2.43, 1.00, 5.67, 1.23, 8.91, 1.00, 3.14, 1.87, 12.0, 1
 const CRASH_PRESETS   = [0.01, 0.1, 0.5, 1, 2, 5, 10, 50];
 
 // Fake live bets updated each round
-const CRASH_PLAYERS = ['@cryptoking', '@ton_hunter', '@whale_x', '@anon_777', '@moon_bet', '@diamond_hd'];
+const CRASH_PLAYERS = ['Marco T.', 'Léa R.', 'Yusuf K.', 'Chen W.', 'Amira S.', 'Dmytro P.'];
 
 type CrashPhase = 'waiting' | 'flying' | 'crashed';
 type LiveBet = { user: string; bet: number; cashout: number | null; color: string };
@@ -593,8 +593,8 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
   const cashedRef                  = useRef<number | null>(null);
   const activeBetRef               = useRef(0);
 
-  const effBet   = Math.min(bet, currentUser.gameBalance);
-  const canBet   = phase === 'waiting' && effBet >= 0.01 && currentUser.gameBalance >= 0.01;
+  const effBet   = Math.min(bet, currentUser.balanceMain);
+  const canBet   = phase === 'waiting' && effBet >= 0.01 && currentUser.balanceMain >= 0.01;
   const canCash  = phase === 'flying' && cashedRef.current === null;
   const adj = (d: number) => setBet(p => Math.max(0.01, Math.min(50, +(p + d).toFixed(3))));
 
@@ -689,8 +689,8 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
           <p className="text-[11px] text-slate-500">Encaissez avant que la fusée explose !</p>
         </div>
         <div className="glass-card px-3 py-1.5 text-right">
-          <p className="text-[10px] text-slate-500 uppercase">Jeux</p>
-          <p className="text-sm font-bold text-white">{currentUser.gameBalance.toFixed(3)} TON</p>
+          <p className="text-[10px] text-slate-500 uppercase">Solde</p>
+          <p className="text-sm font-bold text-white">{currentUser.balanceMain.toFixed(3)} TON</p>
         </div>
       </div>
 
@@ -854,7 +854,7 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
                   : 'bg-white/5 text-slate-600 cursor-not-allowed'
               }`}>
               <Zap className="w-4 h-4" />
-              {currentUser.gameBalance < 0.01 ? 'Solde jeux insuffisant' : `Lancer · ${effBet.toFixed(2)} TON`}
+              {currentUser.balanceMain < 0.01 ? 'Solde insuffisant' : `Lancer · ${effBet.toFixed(2)} TON`}
             </button>
           )}
         </div>
@@ -899,7 +899,7 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
   const activeBetRef              = useRef(0);
   const effMinesRef               = useRef<number>(mineCount);
 
-  const effBet   = Math.min(bet, currentUser.gameBalance);
+  const effBet   = Math.min(bet, currentUser.balanceMain);
   // Use visible mineCount for display, effective for game logic
   const curMult  = minesMult(mineCount, safeCount); // display uses visible
   const curWin   = +(activeBetRef.current * curMult).toFixed(6);
@@ -907,7 +907,7 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
   const adj = (d: number) => setBet(p => Math.max(0.01, Math.min(50, +(p + d).toFixed(3))));
 
   const startGame = () => {
-    if (effBet < 0.01 || currentUser.gameBalance < 0.01) return;
+    if (effBet < 0.01 || currentUser.balanceMain < 0.01) return;
     const effM = effectiveMines(mineCount, streak);
     effMinesRef.current = effM;
     const arr = Array.from({ length: GRID_SIZE }, (_, i) => i);
@@ -981,8 +981,8 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
           <p className="text-[11px] text-slate-500">Évitez les mines · Encaissez au bon moment</p>
         </div>
         <div className="glass-card px-3 py-1.5 text-right">
-          <p className="text-[10px] text-slate-500 uppercase">Jeux</p>
-          <p className="text-sm font-bold text-white">{currentUser.gameBalance.toFixed(3)} TON</p>
+          <p className="text-[10px] text-slate-500 uppercase">Solde</p>
+          <p className="text-sm font-bold text-white">{currentUser.balanceMain.toFixed(3)} TON</p>
         </div>
       </div>
 
@@ -1065,9 +1065,9 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
             ))}
           </div>
           <button onClick={startGame}
-            disabled={effBet < 0.01 || currentUser.gameBalance < 0.01}
+            disabled={effBet < 0.01 || currentUser.balanceMain < 0.01}
             className={`w-full py-3.5 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 ${
-              effBet >= 0.01 && currentUser.gameBalance >= 0.01
+              effBet >= 0.01 && currentUser.balanceMain >= 0.01
                 ? 'bg-gradient-to-r from-red-600 to-rose-600 text-white hover:from-red-500 hover:to-rose-500 active:scale-[0.98] shadow-lg shadow-red-500/20'
                 : 'bg-white/5 text-slate-600 cursor-not-allowed'
             }`}>
@@ -1086,7 +1086,7 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
             </button>
           )}
           <button onClick={hint}
-            disabled={hinting || currentUser.gameBalance < activeBetRef.current * 0.1}
+            disabled={hinting || currentUser.balanceMain < activeBetRef.current * 0.1}
             className={`${safeCount > 0 ? 'w-14' : 'flex-1'} py-3 rounded-xl font-bold text-sm transition-all active:scale-[0.98] flex items-center justify-center gap-1 ${
               hinting ? 'bg-blue-500/30 text-blue-300 animate-pulse' :
               'bg-blue-500/15 border border-blue-500/25 text-blue-400 hover:bg-blue-500/25'
@@ -1142,78 +1142,21 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
 };
 
 // ══════════════════════════════════════════════════════════════════
-// GAME BALANCE MODAL
 // ══════════════════════════════════════════════════════════════════
-
-const GameBalanceModal: React.FC<{ mode: 'charge' | 'withdraw'; onClose: () => void }> = ({ mode, onClose }) => {
-  const { currentUser, chargeGameBalance, withdrawFromGameBalance } = useAppStore();
-  const [amount, setAmount] = useState(1);
-  const maxAmt = mode === 'charge' ? currentUser.balanceMain : currentUser.gameBalance;
-
-  const confirm = () => {
-    const capped = Math.min(amount, maxAmt);
-    if (capped <= 0) return;
-    if (mode === 'charge') chargeGameBalance(capped);
-    else withdrawFromGameBalance(capped);
-    onClose();
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/65 backdrop-blur-sm" />
-      <div
-        className="relative w-full max-w-lg bg-[#0d0b22] border-t border-white/10 rounded-t-3xl p-5 space-y-4 animate-slide-up"
-        onClick={e => e.stopPropagation()}
-      >
-        <div className="w-10 h-1 rounded-full bg-white/20 mx-auto" />
-        <h3 className="text-base font-bold text-white">
-          {mode === 'charge' ? '⬇ Recharger le solde Jeux' : '⬆ Retirer vers solde principal'}
-        </h3>
-        <div className="flex items-center justify-between text-xs bg-white/5 px-3 py-2.5 rounded-xl">
-          <span className="text-slate-500">Disponible</span>
-          <span className="font-bold text-white">{maxAmt.toFixed(3)} TON</span>
-        </div>
-        <input type="number" value={amount} min={0.01} max={maxAmt} step={0.01}
-          onChange={e => setAmount(Math.min(maxAmt, Math.max(0, +e.target.value || 0)))}
-          className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-center text-2xl font-bold text-white outline-none focus:border-white/25" />
-        <div className="grid grid-cols-4 gap-2">
-          {[0.1, 0.5, 1, maxAmt].map((v, i) => (
-            <button key={i} onClick={() => setAmount(Math.min(v, maxAmt))}
-              className="py-1.5 rounded-lg text-xs font-semibold bg-white/5 text-slate-400 hover:bg-white/10 transition-colors">
-              {i === 3 ? 'Tout' : v}
-            </button>
-          ))}
-        </div>
-        <button onClick={confirm} disabled={amount <= 0 || maxAmt <= 0}
-          className={`w-full py-3.5 rounded-xl font-bold text-sm transition-all active:scale-[0.98] ${
-            amount > 0 && maxAmt > 0
-              ? mode === 'charge'
-                ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/20'
-                : 'bg-gradient-to-r from-emerald-600 to-green-500 text-white shadow-lg shadow-emerald-500/20'
-              : 'bg-white/5 text-slate-600 cursor-not-allowed'
-          }`}>
-          Confirmer · {Math.min(amount, maxAmt).toFixed(3)} TON
-        </button>
-      </div>
-    </div>
-  );
-};
-
-// ══════════════════════════════════════════════════════════════════
-// LIVE FEED (shared across hub + games)
+// LIVE FEED
 // ══════════════════════════════════════════════════════════════════
 
 type FeedEntry = { username: string; bet: number; win: number; mult: number; game: string; time: string };
 
 const FEED_DATA: FeedEntry[] = [
-  { username: '@cryptoking',  bet: 5.0,  win: 25.0, mult: 5,   game: 'Roue',    time: '1m' },
-  { username: '@ton_hunter',  bet: 0.1,  win: 0.18, mult: 1.8, game: 'Penalty', time: '4m' },
-  { username: '@whale_x',     bet: 10.0, win: 0.0,  mult: 0,   game: 'Crash',   time: '8m' },
-  { username: '@anon_777',    bet: 1.0,  win: 2.0,  mult: 2,   game: 'Roue',    time: '13m' },
-  { username: '@moon_bet',    bet: 0.5,  win: 1.28, mult: 2.56,game: 'Crash',   time: '21m' },
-  { username: '@diamond_hd',  bet: 0.05, win: 0.0,  mult: 0,   game: 'Mines',   time: '29m' },
-  { username: '@lucky_99',    bet: 2.0,  win: 6.0,  mult: 3,   game: 'Roue',    time: '37m' },
-  { username: '@tonmaster',   bet: 0.1,  win: 0.1,  mult: 1,   game: 'Penalty', time: '46m' },
+  { username: 'Marco T.',   bet: 5.0,  win: 25.0, mult: 5,    game: 'Roue',    time: '1m'  },
+  { username: 'Léa R.',     bet: 0.1,  win: 0.18, mult: 1.8,  game: 'Penalty', time: '4m'  },
+  { username: 'Yusuf K.',   bet: 10.0, win: 0.0,  mult: 0,    game: 'Crash',   time: '8m'  },
+  { username: 'Chen W.',    bet: 1.0,  win: 2.0,  mult: 2,    game: 'Roue',    time: '13m' },
+  { username: 'Amira S.',   bet: 0.5,  win: 1.28, mult: 2.56, game: 'Crash',   time: '21m' },
+  { username: 'Dmytro P.',  bet: 0.05, win: 0.0,  mult: 0,    game: 'Mines',   time: '29m' },
+  { username: 'Fatou D.',   bet: 2.0,  win: 6.0,  mult: 3,    game: 'Roue',    time: '37m' },
+  { username: 'Nicolás V.', bet: 0.1,  win: 0.1,  mult: 1,    game: 'Penalty', time: '46m' },
 ];
 
 // ══════════════════════════════════════════════════════════════════
@@ -1264,13 +1207,9 @@ const CATALOG = [
 export const MiniAppGames: React.FC = () => {
   const { currentUser } = useAppStore();
   const [activeGame, setActiveGame] = useState<ActiveGame>(null);
-  const [modal, setModal]           = useState<'charge' | 'withdraw' | null>(null);
-  // Consecutive wins tracker — increases house edge after streaks
   const [streak, setStreak]         = useState(0);
 
-  const handleResult = (won: boolean) => {
-    setStreak(s => won ? s + 1 : 0);
-  };
+  const handleResult = (won: boolean) => setStreak(s => won ? s + 1 : 0);
 
   if (activeGame === 'wheel')   return <WheelGame   onBack={() => setActiveGame(null)} streak={streak} onResult={handleResult} />;
   if (activeGame === 'penalty') return <PenaltyGame onBack={() => setActiveGame(null)} streak={streak} onResult={handleResult} />;
@@ -1278,54 +1217,17 @@ export const MiniAppGames: React.FC = () => {
   if (activeGame === 'mines')   return <MinesGame   onBack={() => setActiveGame(null)} streak={streak} onResult={handleResult} />;
 
   return (
-    <>
-      {modal && <GameBalanceModal mode={modal} onClose={() => setModal(null)} />}
-
-      <div className="space-y-5 animate-slide-up pb-4">
+    <div className="space-y-5 animate-slide-up pb-4">
+      <div className="flex items-center justify-between">
         <div>
           <h1 className="text-lg font-bold text-white">Jeux</h1>
           <p className="text-xs text-slate-400 mt-0.5">Misez des TON · Tentez votre chance</p>
         </div>
-
-        {/* Game balance card */}
-        <div className="glass-card p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-[10px] text-slate-500 uppercase tracking-wide">Solde Jeux</p>
-              <p className="text-2xl font-black text-white">
-                {currentUser.gameBalance.toFixed(3)}{' '}
-                <span className="text-sm font-semibold text-slate-400">TON</span>
-              </p>
-            </div>
-            <div className="text-right">
-              <p className="text-[10px] text-slate-500 uppercase tracking-wide">Principal</p>
-              <p className="text-sm font-semibold text-slate-300">{currentUser.balanceMain.toFixed(3)} TON</p>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <button onClick={() => setModal('charge')}
-              disabled={currentUser.balanceMain <= 0}
-              className={`py-2.5 rounded-xl font-bold text-sm transition-colors flex items-center justify-center gap-1.5 ${
-                currentUser.balanceMain > 0
-                  ? 'bg-blue-500/15 border border-blue-500/25 text-blue-400 hover:bg-blue-500/25'
-                  : 'bg-white/5 border border-white/10 text-slate-600 cursor-not-allowed'
-              }`}>⬇ Recharger</button>
-            <button onClick={() => setModal('withdraw')}
-              disabled={currentUser.gameBalance <= 0}
-              className={`py-2.5 rounded-xl font-bold text-sm transition-colors flex items-center justify-center gap-1.5 ${
-                currentUser.gameBalance > 0
-                  ? 'bg-emerald-500/15 border border-emerald-500/25 text-emerald-400 hover:bg-emerald-500/25'
-                  : 'bg-white/5 border border-white/10 text-slate-600 cursor-not-allowed'
-              }`}>⬆ Retirer</button>
-          </div>
-          {currentUser.gameBalance === 0 && (
-            <p className="text-[11px] text-slate-500 text-center">
-              {currentUser.balanceMain > 0
-                ? 'Rechargez depuis votre solde principal pour jouer'
-                : 'Déposez des TON pour commencer à jouer'}
-            </p>
-          )}
+        <div className="glass-card px-3 py-2 text-right">
+          <p className="text-[10px] text-slate-500 uppercase">Solde</p>
+          <p className="text-sm font-bold text-white">{currentUser.balanceMain.toFixed(3)} TON</p>
         </div>
+      </div>
 
         {/* Game catalog */}
         <div className="space-y-3">
@@ -1401,7 +1303,6 @@ export const MiniAppGames: React.FC = () => {
             </div>
           </div>
         </div>
-      </div>
-    </>
+    </div>
   );
 };
