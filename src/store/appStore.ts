@@ -510,22 +510,7 @@ const mockCampaigns: Campaign[] = [];
 
 const mockChannels: Channel[] = [];
 
-const mockShopItems: ShopItem[] = [
-  // ── Boosters ───────────────────────────────────────────────────────────────
-  { id: '1', name: 'Booster ×1.5 (6h)',  description: 'Multipliez vos récompenses de tâches par 1.5 pendant 6 heures', price: 0.20, currency: 'main', type: 'multiplier',  value: 1.5, duration: 6,   isActive: true, purchases: 0, icon: '⚡', category: 'boosters' },
-  { id: '2', name: 'Booster ×2 (12h)',   description: 'Doublez vos récompenses de tâches pendant 12 heures',            price: 0.50, currency: 'main', type: 'multiplier',  value: 2,   duration: 12,  isActive: true, purchases: 0, icon: '🚀', category: 'boosters' },
-  // ── Packs Créateur ─ bonus 20-33%, marge 7-16% ─────────────────────────────
-  { id: '3',  name: 'Pack Starter',   description: 'Obtenez 0.60 TON de crédits campagne (+20% offerts)',                                   price: 0.50,  currency: 'main', type: 'task_credit', value: 0.60,  isActive: true, purchases: 0, icon: '📦', category: 'packs' },
-  { id: '4',  name: 'Pack Basic',     description: 'Obtenez 1.80 TON de crédits campagne (+20% offerts)',                                   price: 1.50,  currency: 'main', type: 'task_credit', value: 1.80,  isActive: true, purchases: 0, icon: '📦', category: 'packs' },
-  { id: '5',  name: 'Pack Standard',  description: 'Obtenez 3.66 TON de crédits campagne (+22% offerts) — traitement prioritaire',          price: 3.00,  currency: 'main', type: 'task_credit', value: 3.66,  isActive: true, purchases: 0, icon: '📦', category: 'packs' },
-  { id: '6',  name: 'Pack Pro',       description: 'Obtenez 6.25 TON de crédits campagne (+25% offerts) — traitement prioritaire',          price: 5.00,  currency: 'main', type: 'task_credit', value: 6.25,  isActive: true, purchases: 0, icon: '💼', category: 'packs' },
-  { id: '7',  name: 'Pack Business',  description: 'Obtenez 12.70 TON de crédits campagne (+27% offerts) — approbation rapide garantie',   price: 10.00, currency: 'main', type: 'task_credit', value: 12.70, isActive: true, purchases: 0, icon: '💼', category: 'packs' },
-  { id: '8',  name: 'Pack Premium',   description: 'Obtenez 32 TON de crédits campagne (+28% offerts) — support dédié',                    price: 25.00, currency: 'main', type: 'task_credit', value: 32.00, isActive: true, purchases: 0, icon: '👑', category: 'packs' },
-  { id: '9',  name: 'Pack Elite',     description: 'Obtenez 65 TON de crédits campagne (+30% offerts) — accès VIP annonceur',              price: 50.00, currency: 'main', type: 'task_credit', value: 65.00, isActive: true, purchases: 0, icon: '👑', category: 'packs' },
-  { id: '10', name: 'Pack Ultimate',  description: 'Obtenez 133 TON de crédits campagne (+33% offerts) — partenariat annonceur premium',   price: 100.00,currency: 'main', type: 'task_credit', value: 133.00,isActive: true, purchases: 0, icon: '💎', category: 'packs' },
-  // ── Premium ─────────────────────────────────────────────────────────────────
-  { id: '11', name: 'Boost Parrainage (7j)', description: 'Doublez vos gains de parrainage pendant 7 jours', price: 1.00, currency: 'main', type: 'special', value: 2, duration: 168, isActive: true, purchases: 0, icon: '🎯', category: 'premium' },
-];
+const mockShopItems: ShopItem[] = [];
 
 const mockNotifications: Notification[] = [];
 

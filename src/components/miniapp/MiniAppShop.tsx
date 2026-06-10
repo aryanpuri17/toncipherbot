@@ -108,18 +108,20 @@ export const MiniAppShop: React.FC = () => {
         </div>
       )}
 
-      {/* Category tabs */}
-      <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 no-scrollbar">
-        {categories.map(cat => (
-          <button
-            key={cat}
-            onClick={() => setActiveCategory(cat)}
-            className={`px-3 py-2 rounded-xl text-xs font-medium whitespace-nowrap transition-all ${activeCategory === cat ? 'bg-blue-500/15 text-blue-400 border border-blue-500/30' : 'bg-white/5 text-slate-400 border border-transparent'}`}
-          >
-            {cat === 'all' ? '🛒 Tout' : (categoryLabels[cat] ?? cat)}
-          </button>
-        ))}
-      </div>
+      {/* Category tabs — only show if there are items */}
+      {activeItems.length > 0 && (
+        <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 no-scrollbar">
+          {categories.map(cat => (
+            <button
+              key={cat}
+              onClick={() => setActiveCategory(cat)}
+              className={`px-3 py-2 rounded-xl text-xs font-medium whitespace-nowrap transition-all ${activeCategory === cat ? 'bg-blue-500/15 text-blue-400 border border-blue-500/30' : 'bg-white/5 text-slate-400 border border-transparent'}`}
+            >
+              {cat === 'all' ? '🛒 Tout' : (categoryLabels[cat] ?? cat)}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Items */}
       <div className="space-y-3">
@@ -187,9 +189,16 @@ export const MiniAppShop: React.FC = () => {
         })}
 
         {filtered.length === 0 && (
-          <div className="flex flex-col items-center gap-3 py-14">
-            <Store className="w-10 h-10 text-slate-600" />
-            <p className="text-sm text-slate-400">Aucun article disponible</p>
+          <div className="flex flex-col items-center gap-4 py-16 text-center">
+            <div className="w-16 h-16 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-3xl">
+              🛒
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-white mb-1">Boutique bientôt disponible</p>
+              <p className="text-xs text-slate-500 leading-relaxed max-w-[220px]">
+                De nouveaux articles numériques arrivent prochainement. Reste connecté !
+              </p>
+            </div>
           </div>
         )}
       </div>
