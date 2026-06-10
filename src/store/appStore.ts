@@ -27,6 +27,7 @@ export interface User {
   verificationStatus: 'none' | 'pending' | 'verified';
   dailyWithdrawn: number;
   dailyTasksCompleted: number;
+  gameBalance: number;
 }
 
 export interface Task {
@@ -459,6 +460,10 @@ const _savedBalance: { balanceMain?: number; totalEarnings?: number; todayEarnin
   try { return JSON.parse(localStorage.getItem('tc_balance') || '{}'); }
   catch { return {}; }
 })();
+const _savedGameBalance: number = (() => {
+  try { return parseFloat(localStorage.getItem('tc_game_balance') || '0') || 0; }
+  catch { return 0; }
+})();
 const _savedCompleted: string[] = (() => {
   try { return JSON.parse(localStorage.getItem('tc_completed_tasks') || '[]'); }
   catch { return []; }
@@ -484,7 +489,7 @@ const mockUsers: User[] = [
     referralCount: 0, referralCode: 'START00',
     riskScore: 0, status: 'active', createdAt: new Date().toISOString(), lastActive: new Date().toISOString(),
     withdrawalBlocked: false, verificationStatus: 'none',
-    dailyWithdrawn: 0, dailyTasksCompleted: 0
+    dailyWithdrawn: 0, dailyTasksCompleted: 0, gameBalance: _savedGameBalance,
   },
 ];
 
@@ -784,6 +789,9 @@ interface AppState {
   syncUserFromApi: (data: { referralCount: number; referralBalance: number; flagged: boolean; banned?: boolean; withdrawalBlocked?: boolean }) => void;
   processIncomingReferral: (referrerId: string) => void;
   spinWheelBet: (bet: number, win: number) => void;
+  placeGameBet: (bet: number, win: number) => void;
+  chargeGameBalance: (amount: number) => void;
+  withdrawFromGameBalance: (amount: number) => void;
 
   // Actions - View
   setCurrentView: (view: 'miniapp' | 'admin') => void;
@@ -1165,6 +1173,54 @@ export const useAppStore = create<AppState>((set, get) => ({
         balanceMain: newBalance,
         totalEarnings: win > 0 ? s.currentUser.totalEarnings + win : s.currentUser.totalEarnings,
       };
+      return {
+        currentUser: updatedUser,
+        users: s.users.map(u => u.id === s.currentUser.id ? { ...u, ...updatedUser } : u),
+      };
+    });
+  },
+
+  placeGameBet: (bet, win) => {
+    set(s => {
+      const newGameBalance = +(Math.max(0, s.currentUser.gameBalance - bet + win)).toFixed(6);
+      const updatedUser = { ...s.currentUser, gameBalance: newGameBalance };
+      try { localStorage.setItem('tc_game_balance', newGameBalance.toString()); } catch { /* noop */ }
+      return {
+        currentUser: updatedUser,
+        users: s.users.map(u => u.id === s.currentUser.id ? { ...u, ...updatedUser } : u),
+      };
+    });
+  },
+
+  chargeGameBalance: (amount) => {
+    set(s => {
+      const capped = Math.min(amount, s.currentUser.balanceMain);
+      const newMain = +(s.currentUser.balanceMain - capped).toFixed(6);
+      const newGame = +(s.currentUser.gameBalance + capped).toFixed(6);
+      const updatedUser = { ...s.currentUser, balanceMain: newMain, gameBalance: newGame };
+      try {
+        localStorage.setItem('tc_game_balance', newGame.toString());
+        const saved = JSON.parse(localStorage.getItem('tc_balance') || '{}') as Record<string, number>;
+        localStorage.setItem('tc_balance', JSON.stringify({ ...saved, balanceMain: newMain }));
+      } catch { /* noop */ }
+      return {
+        currentUser: updatedUser,
+        users: s.users.map(u => u.id === s.currentUser.id ? { ...u, ...updatedUser } : u),
+      };
+    });
+  },
+
+  withdrawFromGameBalance: (amount) => {
+    set(s => {
+      const capped = Math.min(amount, s.currentUser.gameBalance);
+      const newGame = +(s.currentUser.gameBalance - capped).toFixed(6);
+      const newMain = +(s.currentUser.balanceMain + capped).toFixed(6);
+      const updatedUser = { ...s.currentUser, balanceMain: newMain, gameBalance: newGame };
+      try {
+        localStorage.setItem('tc_game_balance', newGame.toString());
+        const saved = JSON.parse(localStorage.getItem('tc_balance') || '{}') as Record<string, number>;
+        localStorage.setItem('tc_balance', JSON.stringify({ ...saved, balanceMain: newMain }));
+      } catch { /* noop */ }
       return {
         currentUser: updatedUser,
         users: s.users.map(u => u.id === s.currentUser.id ? { ...u, ...updatedUser } : u),

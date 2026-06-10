@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useAppStore } from '../../store/appStore';
 import { ArrowLeft, Lock, Minus, Plus, RotateCcw, Trophy, Zap } from 'lucide-react';
 
@@ -149,15 +149,15 @@ const MAX_BET = 50;
 const BET_PRESETS = [0.01, 0.05, 0.1, 0.5, 1, 5];
 
 const WheelGame: React.FC<{ onBack: () => void }> = ({ onBack }) => {
-  const { currentUser, spinWheelBet } = useAppStore();
+  const { currentUser, placeGameBet } = useAppStore();
   const [bet, setBet] = useState(0.01);
   const [spinning, setSpinning] = useState(false);
   const [rotation, setRotation] = useState(0);
   const rotRef = useRef(0);
   const [result, setResult] = useState<{ seg: Seg; win: number } | null>(null);
 
-  const effectiveBet = Math.min(bet, currentUser.balanceMain);
-  const canSpin = !spinning && effectiveBet >= MIN_BET && currentUser.balanceMain >= MIN_BET;
+  const effectiveBet = Math.min(bet, currentUser.gameBalance);
+  const canSpin = !spinning && effectiveBet >= MIN_BET && currentUser.gameBalance >= MIN_BET;
 
   const adjustBet = (delta: number) =>
     setBet(prev => Math.max(MIN_BET, Math.min(MAX_BET, +(prev + delta).toFixed(3))));
@@ -179,12 +179,12 @@ const WheelGame: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     setSpinning(true);
     setResult(null);
 
-    const usedBet = Math.min(effectiveBet, currentUser.balanceMain);
+    const usedBet = Math.min(effectiveBet, currentUser.gameBalance);
     const winAmount = +(usedBet * rule.mult).toFixed(6);
 
     setTimeout(() => {
       setSpinning(false);
-      spinWheelBet(usedBet, winAmount);
+      placeGameBet(usedBet, winAmount);
       setResult({ seg: SEGS[segIdx], win: winAmount });
     }, 4500);
   };
@@ -205,8 +205,8 @@ const WheelGame: React.FC<{ onBack: () => void }> = ({ onBack }) => {
           <p className="text-[11px] text-slate-500">Faites tourner la roue et gagnez des TON !</p>
         </div>
         <div className="glass-card px-3 py-1.5 text-right">
-          <p className="text-[10px] text-slate-500 uppercase tracking-wide">Solde</p>
-          <p className="text-sm font-bold text-white">{currentUser.balanceMain.toFixed(3)} TON</p>
+          <p className="text-[10px] text-slate-500 uppercase tracking-wide">Jeux</p>
+          <p className="text-sm font-bold text-white">{currentUser.gameBalance.toFixed(3)} TON</p>
         </div>
       </div>
 
@@ -290,8 +290,8 @@ const WheelGame: React.FC<{ onBack: () => void }> = ({ onBack }) => {
           }`}>
           {spinning
             ? <><RotateCcw className="w-4 h-4 animate-spin" /> La roue tourne…</>
-            : currentUser.balanceMain < MIN_BET
-            ? 'Solde insuffisant — Déposez des TON'
+            : currentUser.gameBalance < MIN_BET
+            ? 'Solde jeux insuffisant — Rechargez'
             : <><Zap className="w-4 h-4" /> Tourner ({effectiveBet.toFixed(2)} TON)</>
           }
         </button>
@@ -393,7 +393,7 @@ const PENALTY_PRESETS   = [0.01, 0.05, 0.1, 0.5, 1, 5];
 type PenaltyPhase = 'idle' | 'flying' | 'result';
 
 const PenaltyGame: React.FC<{ onBack: () => void }> = ({ onBack }) => {
-  const { currentUser, spinWheelBet } = useAppStore();
+  const { currentUser, placeGameBet } = useAppStore();
   const [bet, setBet]             = useState(0.01);
   const [phase, setPhase]         = useState<PenaltyPhase>('idle');
   const [ballPos, setBallPos]     = useState({ x: 50, y: 77 });
@@ -401,7 +401,7 @@ const PenaltyGame: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const [keeperX, setKeeperX]     = useState(50);
   const [outcome, setOutcome]     = useState<{ goal: boolean; win: number } | null>(null);
 
-  const effBet   = Math.min(bet, currentUser.balanceMain);
+  const effBet   = Math.min(bet, currentUser.gameBalance);
   const canShoot = phase === 'idle' && effBet >= PENALTY_MIN_BET;
 
   const adjustBet = (d: number) =>
@@ -437,7 +437,7 @@ const PenaltyGame: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     setTimeout(() => {
       setOutcome({ goal: scored, win });
       setPhase('result');
-      spinWheelBet(used, win);
+      placeGameBet(used, win);
     }, 950);
   };
 
@@ -463,7 +463,7 @@ const PenaltyGame: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         </div>
         <div className="glass-card px-3 py-1.5 text-right">
           <p className="text-[10px] text-slate-500 uppercase tracking-wide">Solde</p>
-          <p className="text-sm font-bold text-white">{currentUser.balanceMain.toFixed(3)} TON</p>
+          <p className="text-sm font-bold text-white">{currentUser.gameBalance.toFixed(3)} TON</p>
         </div>
       </div>
 
@@ -643,10 +643,512 @@ const PenaltyGame: React.FC<{ onBack: () => void }> = ({ onBack }) => {
 };
 
 // ══════════════════════════════════════════════════════════════════
-// GAMES HUB — lobby d'entrée, scalable pour ajouter d'autres jeux
+// CRASH — Rocket multiplier game
 // ══════════════════════════════════════════════════════════════════
 
-type ActiveGame = 'wheel' | 'penalty' | null;
+// House edge ~10%: crash = max(1.0, 0.90 / (1 - random))
+function rollCrash(): number {
+  const r = Math.random();
+  if (r < 0.1) return 1.0;
+  return Math.max(1.01, +(0.90 / (1 - r)).toFixed(2));
+}
+
+const CRASH_INIT_HISTORY = [2.43, 1.00, 5.67, 1.23, 8.91, 1.00, 3.14, 1.87, 12.0, 1.00];
+
+type CrashPhase = 'waiting' | 'flying' | 'crashed';
+
+const CrashGame: React.FC<{ onBack: () => void }> = ({ onBack }) => {
+  const { currentUser, placeGameBet } = useAppStore();
+  const [bet, setBet]               = useState(0.01);
+  const [phase, setPhase]           = useState<CrashPhase>('waiting');
+  const [mult, setMult]             = useState(1.00);
+  const [crashAt, setCrashAt]       = useState(2.00);
+  const [cashedOut, setCashedOut]   = useState<number | null>(null);
+  const [history, setHistory]       = useState<number[]>(CRASH_INIT_HISTORY);
+  const intervalRef                 = useRef<ReturnType<typeof setInterval> | null>(null);
+  const multRef                     = useRef(1.00);
+  const activeBetRef                = useRef(0);
+  const cashedOutRef                = useRef<number | null>(null);
+
+  const effBet   = Math.min(bet, currentUser.gameBalance);
+  const canBet   = phase === 'waiting' && effBet >= 0.01 && currentUser.gameBalance >= 0.01;
+  const canCash  = phase === 'flying' && cashedOut === null;
+
+  const adjustBet = (d: number) => setBet(p => Math.max(0.01, Math.min(50, +(p + d).toFixed(3))));
+
+  const startRound = () => {
+    if (!canBet) return;
+    const crash = rollCrash();
+    setCrashAt(crash);
+    activeBetRef.current = effBet;
+    multRef.current = 1.00;
+    cashedOutRef.current = null;
+    setMult(1.00);
+    setCashedOut(null);
+    setPhase('flying');
+
+    intervalRef.current = setInterval(() => {
+      multRef.current = +(multRef.current * 1.012).toFixed(2);
+      setMult(multRef.current);
+      if (multRef.current >= crash) {
+        clearInterval(intervalRef.current!);
+        intervalRef.current = null;
+        setPhase('crashed');
+        if (cashedOutRef.current === null) {
+          placeGameBet(activeBetRef.current, 0);
+        }
+        setHistory(h => [crash, ...h.slice(0, 11)]);
+      }
+    }, 80);
+  };
+
+  const cashout = () => {
+    if (!canCash) return;
+    const locked = multRef.current;
+    cashedOutRef.current = locked;
+    setCashedOut(locked);
+    const win = +(activeBetRef.current * locked).toFixed(6);
+    placeGameBet(activeBetRef.current, win);
+  };
+
+  useEffect(() => () => { if (intervalRef.current) clearInterval(intervalRef.current); }, []);
+
+  const reset = () => { setPhase('waiting'); setMult(1.00); setCashedOut(null); cashedOutRef.current = null; };
+
+  // SVG trail
+  const svgW = 300, svgH = 120;
+  const pct = phase === 'waiting' ? 0 : Math.min(0.98, (mult - 1) / Math.max(1, crashAt - 1));
+  const trailX = 20 + pct * (svgW - 40);
+  const trailY = svgH - 20 - pct * (svgH - 30);
+
+  return (
+    <div className="space-y-4 pb-4">
+      <div className="flex items-center gap-3">
+        <button onClick={onBack} className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center text-slate-400 hover:text-white transition-colors">
+          <ArrowLeft className="w-4 h-4" />
+        </button>
+        <div className="flex-1">
+          <h2 className="text-base font-bold text-white">Crash 🚀</h2>
+          <p className="text-[11px] text-slate-500">Encaissez avant que la fusée explose !</p>
+        </div>
+        <div className="glass-card px-3 py-1.5 text-right">
+          <p className="text-[10px] text-slate-500 uppercase tracking-wide">Jeux</p>
+          <p className="text-sm font-bold text-white">{currentUser.gameBalance.toFixed(3)} TON</p>
+        </div>
+      </div>
+
+      {/* History chips */}
+      <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide">
+        {history.map((h, i) => (
+          <span key={i} className={`flex-shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full ${
+            h <= 1.5 ? 'bg-red-500/25 text-red-400' :
+            h <= 3   ? 'bg-amber-500/25 text-amber-400' :
+                       'bg-emerald-500/25 text-emerald-400'
+          }`}>{h.toFixed(2)}×</span>
+        ))}
+      </div>
+
+      {/* Main display */}
+      <div className="relative rounded-2xl overflow-hidden" style={{ height: 200, background: 'linear-gradient(135deg, #070714 0%, #0f0c29 60%, #08091a 100%)' }}>
+        {/* Stars */}
+        {Array.from({ length: 22 }, (_, i) => (
+          <div key={i} className="absolute rounded-full bg-white" style={{
+            left: `${(i * 41 + 13) % 100}%`, top: `${(i * 37 + 5) % 75}%`,
+            width: i % 4 === 0 ? 2 : 1, height: i % 4 === 0 ? 2 : 1,
+            opacity: 0.2 + (i % 5) * 0.12,
+          }} />
+        ))}
+        {/* Trail SVG */}
+        <svg width="100%" height={svgH} viewBox={`0 0 ${svgW} ${svgH}`}
+          preserveAspectRatio="none"
+          style={{ position: 'absolute', bottom: 0, left: 0 }}>
+          {phase !== 'waiting' && (
+            <>
+              <defs>
+                <linearGradient id="trailGrad" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0%" stopColor={phase === 'crashed' && cashedOut === null ? '#ef4444' : '#22c55e'} stopOpacity="0.1" />
+                  <stop offset="100%" stopColor={phase === 'crashed' && cashedOut === null ? '#ef4444' : '#22c55e'} stopOpacity="0.8" />
+                </linearGradient>
+              </defs>
+              <path
+                d={`M 20 ${svgH - 5} Q ${trailX * 0.6} ${svgH - 5} ${trailX} ${trailY}`}
+                stroke="url(#trailGrad)" strokeWidth="2.5" fill="none" strokeLinecap="round"
+              />
+              {/* Rocket dot */}
+              <circle cx={trailX} cy={trailY} r="5"
+                fill={phase === 'crashed' && cashedOut === null ? '#ef4444' : '#22c55e'}
+                style={{ filter: 'drop-shadow(0 0 6px currentColor)' }}
+              />
+            </>
+          )}
+        </svg>
+        {/* Big multiplier */}
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className="text-center">
+            {phase === 'crashed' && cashedOut === null ? (
+              <>
+                <p className="text-5xl font-black text-red-400 tabular-nums">{crashAt.toFixed(2)}×</p>
+                <p className="text-red-400 text-sm font-bold mt-1">💥 CRASH !</p>
+              </>
+            ) : cashedOut !== null ? (
+              <>
+                <p className="text-4xl font-black text-emerald-400 tabular-nums">{cashedOut.toFixed(2)}×</p>
+                <p className="text-emerald-300 text-sm font-bold mt-1">
+                  +{(activeBetRef.current * cashedOut).toFixed(4)} TON ✓
+                </p>
+              </>
+            ) : (
+              <>
+                <p className={`text-5xl font-black tabular-nums transition-colors duration-200 ${
+                  mult >= 3 ? 'text-emerald-400' : mult >= 1.5 ? 'text-amber-400' : 'text-white'
+                }`}>{mult.toFixed(2)}×</p>
+                <p className={`text-xs mt-1 ${phase === 'waiting' ? 'text-slate-600' : 'text-slate-400 animate-pulse'}`}>
+                  {phase === 'waiting' ? 'Prêt' : '🚀 En vol…'}
+                </p>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Cashout CTA */}
+      {canCash && (
+        <button onClick={cashout}
+          className="w-full py-4 rounded-xl font-black text-lg bg-gradient-to-r from-emerald-500 to-green-400 text-emerald-950 active:scale-[0.98] transition-all shadow-lg shadow-emerald-500/30">
+          ENCAISSER · {(activeBetRef.current * mult).toFixed(4)} TON
+        </button>
+      )}
+
+      {/* Bet controls */}
+      {(phase === 'waiting' || phase === 'crashed') && (
+        <div className="glass-card p-4 space-y-3">
+          <div className="flex items-center gap-3">
+            <button onClick={() => adjustBet(-0.01)} className="w-9 h-9 rounded-lg bg-white/5 flex items-center justify-center text-white hover:bg-white/10 active:scale-95 transition-all">
+              <Minus className="w-4 h-4" />
+            </button>
+            <input type="number" value={bet} min={0.01} max={50} step={0.01}
+              onChange={e => { const v = +e.target.value; if (!isNaN(v)) setBet(Math.max(0.01, Math.min(50, v))); }}
+              className="flex-1 bg-transparent text-center text-xl font-bold text-white outline-none" />
+            <button onClick={() => adjustBet(0.01)} className="w-9 h-9 rounded-lg bg-white/5 flex items-center justify-center text-white hover:bg-white/10 active:scale-95 transition-all">
+              <Plus className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="grid grid-cols-4 gap-1.5">
+            {[0.01, 0.1, 0.5, 1, 2, 5, 10, 50].map(q => (
+              <button key={q} onClick={() => setBet(q)}
+                className={`py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                  bet === q ? 'bg-blue-500/30 text-blue-300 border border-blue-500/40' : 'bg-white/5 text-slate-400 hover:bg-white/10'
+                }`}>{q}</button>
+            ))}
+          </div>
+          {phase === 'crashed' ? (
+            <button onClick={reset} className="w-full py-3 rounded-xl font-bold text-sm bg-white/10 text-white hover:bg-white/15 transition-colors flex items-center justify-center gap-2">
+              <RotateCcw className="w-4 h-4" /> Nouvelle partie
+            </button>
+          ) : (
+            <button onClick={startRound} disabled={!canBet}
+              className={`w-full py-3.5 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 ${
+                canBet
+                  ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-500 hover:to-indigo-500 active:scale-[0.98] shadow-lg shadow-blue-500/20'
+                  : 'bg-white/5 text-slate-600 cursor-not-allowed'
+              }`}>
+              <Zap className="w-4 h-4" />
+              {currentUser.gameBalance < 0.01 ? 'Solde jeux insuffisant' : `Lancer · ${effBet.toFixed(2)} TON`}
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ══════════════════════════════════════════════════════════════════
+// MINES — Mine field game (5×4 grid)
+// ══════════════════════════════════════════════════════════════════
+
+const GRID_COLS = 5;
+const GRID_ROWS = 4;
+const GRID_SIZE = GRID_COLS * GRID_ROWS;
+const MINES_OPTIONS = [3, 5, 10] as const;
+type MinesCount = (typeof MINES_OPTIONS)[number];
+
+// mult_k = 0.97 / P(k safe out of GRID_SIZE-n safe tiles)
+function minesMult(n: number, k: number): number {
+  if (k === 0) return 1.0;
+  let p = 1;
+  for (let i = 0; i < k; i++) p *= (GRID_SIZE - n - i) / (GRID_SIZE - i);
+  return +(0.97 / p).toFixed(2);
+}
+
+type MinesPhase = 'waiting' | 'playing' | 'won' | 'lost';
+
+const MinesGame: React.FC<{ onBack: () => void }> = ({ onBack }) => {
+  const { currentUser, placeGameBet } = useAppStore();
+  const [bet, setBet]               = useState(0.01);
+  const [mineCount, setMineCount]   = useState<MinesCount>(3);
+  const [phase, setPhase]           = useState<MinesPhase>('waiting');
+  const [minePos, setMinePos]       = useState<Set<number>>(new Set());
+  const [revealed, setRevealed]     = useState<Set<number>>(new Set());
+  const [safeCount, setSafeCount]   = useState(0);
+  const activeBetRef                = useRef(0);
+
+  const effBet       = Math.min(bet, currentUser.gameBalance);
+  const curMult      = minesMult(mineCount, safeCount);
+  const curWin       = +(activeBetRef.current * curMult).toFixed(6);
+  const nextMult     = minesMult(mineCount, safeCount + 1);
+
+  const adjustBet = (d: number) => setBet(p => Math.max(0.01, Math.min(50, +(p + d).toFixed(3))));
+
+  const startGame = () => {
+    if (effBet < 0.01 || currentUser.gameBalance < 0.01) return;
+    const arr = Array.from({ length: GRID_SIZE }, (_, i) => i);
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    setMinePos(new Set(arr.slice(0, mineCount)));
+    setRevealed(new Set());
+    setSafeCount(0);
+    activeBetRef.current = effBet;
+    setPhase('playing');
+  };
+
+  const revealTile = (idx: number) => {
+    if (phase !== 'playing' || revealed.has(idx)) return;
+    const nr = new Set(revealed).add(idx);
+    setRevealed(nr);
+    if (minePos.has(idx)) {
+      setPhase('lost');
+      placeGameBet(activeBetRef.current, 0);
+    } else {
+      const ns = safeCount + 1;
+      setSafeCount(ns);
+      if (ns === GRID_SIZE - mineCount) {
+        const win = +(activeBetRef.current * minesMult(mineCount, ns)).toFixed(6);
+        placeGameBet(activeBetRef.current, win);
+        setPhase('won');
+      }
+    }
+  };
+
+  const cashout = () => {
+    if (phase !== 'playing' || safeCount === 0) return;
+    placeGameBet(activeBetRef.current, curWin);
+    setPhase('won');
+  };
+
+  const reset = () => { setPhase('waiting'); setRevealed(new Set()); setMinePos(new Set()); setSafeCount(0); };
+
+  return (
+    <div className="space-y-4 pb-4">
+      <div className="flex items-center gap-3">
+        <button onClick={onBack} className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center text-slate-400 hover:text-white transition-colors">
+          <ArrowLeft className="w-4 h-4" />
+        </button>
+        <div className="flex-1">
+          <h2 className="text-base font-bold text-white">Mines 💣</h2>
+          <p className="text-[11px] text-slate-500">Évitez les mines · Encaissez au bon moment</p>
+        </div>
+        <div className="glass-card px-3 py-1.5 text-right">
+          <p className="text-[10px] text-slate-500 uppercase tracking-wide">Jeux</p>
+          <p className="text-sm font-bold text-white">{currentUser.gameBalance.toFixed(3)} TON</p>
+        </div>
+      </div>
+
+      {/* Live multiplier bar */}
+      {phase === 'playing' && (
+        <div className="glass-card p-3 flex items-center justify-between">
+          <div>
+            <p className="text-[10px] text-slate-500 uppercase">Gain actuel</p>
+            <p className="text-lg font-black text-emerald-400">{curWin.toFixed(4)} TON</p>
+          </div>
+          <div className="text-center">
+            <p className="text-[10px] text-slate-500 uppercase">×</p>
+            <p className="text-lg font-black text-white">{curMult.toFixed(2)}×</p>
+          </div>
+          <div className="text-right">
+            <p className="text-[10px] text-slate-500 uppercase">Prochain</p>
+            <p className="text-lg font-black text-amber-400">{nextMult.toFixed(2)}×</p>
+          </div>
+        </div>
+      )}
+
+      {/* Grid */}
+      <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${GRID_COLS}, 1fr)` }}>
+        {Array.from({ length: GRID_SIZE }, (_, idx) => {
+          const isMine = minePos.has(idx);
+          const isRev  = revealed.has(idx);
+          const showBoom  = isRev && isMine;
+          const showGem   = isRev && !isMine;
+          const showGhost = (phase === 'lost' || phase === 'won') && isMine && !isRev;
+          return (
+            <button key={idx} onClick={() => revealTile(idx)}
+              disabled={phase !== 'playing' || isRev}
+              className={`aspect-square rounded-xl text-xl flex items-center justify-center transition-all active:scale-95 select-none ${
+                showBoom  ? 'bg-red-500/35 border border-red-500/70' :
+                showGem   ? 'bg-emerald-500/30 border border-emerald-500/50' :
+                showGhost ? 'bg-red-500/15 border border-red-500/20 opacity-60' :
+                phase === 'playing' ? 'bg-white/8 border border-white/15 hover:bg-white/18 hover:border-white/35 cursor-pointer' :
+                'bg-white/5 border border-white/8 cursor-default'
+              }`}>
+              {showBoom ? '💣' : showGem ? '💎' : showGhost ? '💣' : ''}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Controls */}
+      {phase === 'waiting' && (
+        <div className="glass-card p-4 space-y-3">
+          <div>
+            <p className="text-xs text-slate-500 mb-2">Nombre de mines</p>
+            <div className="grid grid-cols-3 gap-2">
+              {MINES_OPTIONS.map(n => (
+                <button key={n} onClick={() => setMineCount(n)}
+                  className={`py-2 rounded-lg text-sm font-bold transition-colors ${
+                    mineCount === n ? 'bg-red-500/30 text-red-300 border border-red-500/40' : 'bg-white/5 text-slate-400 hover:bg-white/10'
+                  }`}>{n} 💣</button>
+              ))}
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <button onClick={() => adjustBet(-0.01)} className="w-9 h-9 rounded-lg bg-white/5 flex items-center justify-center text-white hover:bg-white/10 active:scale-95 transition-all">
+              <Minus className="w-4 h-4" />
+            </button>
+            <input type="number" value={bet} min={0.01} max={50} step={0.01}
+              onChange={e => { const v = +e.target.value; if (!isNaN(v)) setBet(Math.max(0.01, Math.min(50, v))); }}
+              className="flex-1 bg-transparent text-center text-xl font-bold text-white outline-none" />
+            <button onClick={() => adjustBet(0.01)} className="w-9 h-9 rounded-lg bg-white/5 flex items-center justify-center text-white hover:bg-white/10 active:scale-95 transition-all">
+              <Plus className="w-4 h-4" />
+            </button>
+          </div>
+          <button onClick={startGame}
+            disabled={effBet < 0.01 || currentUser.gameBalance < 0.01}
+            className={`w-full py-3.5 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 ${
+              effBet >= 0.01 && currentUser.gameBalance >= 0.01
+                ? 'bg-gradient-to-r from-red-600 to-rose-600 text-white hover:from-red-500 hover:to-rose-500 active:scale-[0.98] shadow-lg shadow-red-500/20'
+                : 'bg-white/5 text-slate-600 cursor-not-allowed'
+            }`}>
+            💣 Commencer · {effBet.toFixed(2)} TON
+          </button>
+        </div>
+      )}
+
+      {phase === 'playing' && safeCount > 0 && (
+        <button onClick={cashout}
+          className="w-full py-3.5 rounded-xl font-black text-base bg-gradient-to-r from-emerald-500 to-green-400 text-emerald-950 active:scale-[0.98] transition-all shadow-lg shadow-emerald-500/25">
+          ENCAISSER · {curWin.toFixed(4)} TON ({curMult.toFixed(2)}×)
+        </button>
+      )}
+
+      {(phase === 'won' || phase === 'lost') && (
+        <div className={`glass-card p-4 text-center space-y-2 ${
+          phase === 'won' ? 'border border-emerald-500/30' : 'border border-red-500/30'
+        }`}>
+          <p className="text-3xl">{phase === 'won' ? '💎' : '💥'}</p>
+          <p className="text-lg font-black text-white">
+            {phase === 'won' ? `+${curWin.toFixed(4)} TON` : `−${activeBetRef.current.toFixed(4)} TON`}
+          </p>
+          <p className="text-sm text-slate-400">
+            {phase === 'won' ? `${safeCount} cases révélées · ×${curMult.toFixed(2)}` : 'Touché une mine ! Dommage…'}
+          </p>
+          <button onClick={reset}
+            className="w-full py-2.5 rounded-xl font-bold text-sm bg-white/10 text-white hover:bg-white/15 transition-colors flex items-center justify-center gap-2">
+            <RotateCcw className="w-4 h-4" /> Rejouer
+          </button>
+        </div>
+      )}
+
+      {/* Multiplier table */}
+      <div className="glass-card p-4">
+        <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">
+          Table des gains · {mineCount} mines
+        </h3>
+        <div className="grid grid-cols-2 gap-1.5">
+          {Array.from({ length: Math.min(8, GRID_SIZE - mineCount) }, (_, k) => {
+            const kk = k + 1;
+            const m = minesMult(mineCount, kk);
+            return (
+              <div key={kk} className={`flex items-center justify-between px-3 py-1.5 rounded-lg ${
+                kk <= safeCount && phase !== 'waiting' ? 'bg-emerald-500/20 border border-emerald-500/30' : 'bg-white/5'
+              }`}>
+                <span className="text-xs text-slate-400">{kk} case{kk > 1 ? 's' : ''}</span>
+                <span className="text-sm font-bold text-white">{m.toFixed(2)}×</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ══════════════════════════════════════════════════════════════════
+// GAME BALANCE MODAL — Transfer between main ↔ game balance
+// ══════════════════════════════════════════════════════════════════
+
+const GameBalanceModal: React.FC<{ mode: 'charge' | 'withdraw'; onClose: () => void }> = ({ mode, onClose }) => {
+  const { currentUser, chargeGameBalance, withdrawFromGameBalance } = useAppStore();
+  const [amount, setAmount] = useState(1);
+  const maxAmt = mode === 'charge' ? currentUser.balanceMain : currentUser.gameBalance;
+  const canConfirm = amount > 0 && amount <= maxAmt + 0.0001;
+
+  const confirm = () => {
+    if (!canConfirm) return;
+    const capped = Math.min(amount, maxAmt);
+    if (mode === 'charge') chargeGameBalance(capped);
+    else withdrawFromGameBalance(capped);
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/65 backdrop-blur-sm" />
+      <div
+        className="relative w-full max-w-lg bg-[#0d0b22] border-t border-white/10 rounded-t-3xl p-5 space-y-4 animate-slide-up"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-1" />
+        <h3 className="text-base font-bold text-white">
+          {mode === 'charge' ? '⬇ Recharger le solde Jeux' : '⬆ Retirer vers solde principal'}
+        </h3>
+        <div className="flex items-center justify-between text-xs bg-white/5 px-3 py-2.5 rounded-xl">
+          <span className="text-slate-500">Disponible</span>
+          <span className="font-bold text-white">{maxAmt.toFixed(3)} TON</span>
+        </div>
+        <input
+          type="number" value={amount} min={0.01} max={maxAmt} step={0.01}
+          onChange={e => setAmount(Math.min(maxAmt, Math.max(0, +e.target.value || 0)))}
+          className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-center text-2xl font-bold text-white outline-none focus:border-white/25"
+        />
+        <div className="grid grid-cols-4 gap-2">
+          {[0.1, 0.5, 1, Math.floor(maxAmt * 100) / 100 || 0].map((v, i) => (
+            <button key={i} onClick={() => setAmount(v)}
+              className="py-1.5 rounded-lg text-xs font-semibold bg-white/5 text-slate-400 hover:bg-white/10 transition-colors">
+              {v === Math.floor(maxAmt * 100) / 100 ? 'Tout' : v}
+            </button>
+          ))}
+        </div>
+        <button onClick={confirm} disabled={!canConfirm || maxAmt <= 0}
+          className={`w-full py-3.5 rounded-xl font-bold text-sm transition-all active:scale-[0.98] ${
+            canConfirm && maxAmt > 0
+              ? mode === 'charge'
+                ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/20'
+                : 'bg-gradient-to-r from-emerald-600 to-green-500 text-white shadow-lg shadow-emerald-500/20'
+              : 'bg-white/5 text-slate-600 cursor-not-allowed'
+          }`}>
+          Confirmer · {Math.min(amount, maxAmt).toFixed(3)} TON
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// ══════════════════════════════════════════════════════════════════
+// GAMES HUB — lobby with game balance management
+// ══════════════════════════════════════════════════════════════════
+
+type ActiveGame = 'wheel' | 'penalty' | 'crash' | 'mines' | null;
 
 const CATALOG = [
   {
@@ -654,107 +1156,145 @@ const CATALOG = [
     title: 'Roue de la Fortune',
     description: 'Faites tourner la roue · Gagnez jusqu\'à ×5 votre mise',
     emoji: '🎡',
-    available: true,
-    badge: null as string | null,
     color: 'bg-amber-500/15 border-amber-500/25',
+    btnCls: 'bg-gradient-to-r from-amber-500 to-yellow-500 text-amber-950 shadow-amber-500/20',
   },
   {
     id: 'penalty' as ActiveGame,
     title: 'Penalty Kick',
     description: 'Tirez au but · Marquez et gagnez ×1.8 votre mise',
     emoji: '⚽',
-    available: true,
-    badge: null as string | null,
     color: 'bg-emerald-500/15 border-emerald-500/25',
+    btnCls: 'bg-gradient-to-r from-emerald-600 to-green-500 text-white shadow-emerald-500/20',
   },
   {
-    id: null,
+    id: 'crash' as ActiveGame,
     title: 'Crash',
     description: 'Multipliez avant le crash · Plus vous attendez, plus vous gagnez',
     emoji: '🚀',
-    available: false,
-    badge: 'Bientôt',
-    color: 'bg-white/5 border-white/10',
+    color: 'bg-blue-500/15 border-blue-500/25',
+    btnCls: 'bg-gradient-to-r from-blue-600 to-indigo-500 text-white shadow-blue-500/20',
   },
   {
-    id: null,
+    id: 'mines' as ActiveGame,
     title: 'Mines',
     description: 'Évitez les mines · Chaque case sûre augmente votre gain',
     emoji: '💣',
-    available: false,
-    badge: 'Bientôt',
-    color: 'bg-white/5 border-white/10',
+    color: 'bg-red-500/15 border-red-500/25',
+    btnCls: 'bg-gradient-to-r from-red-600 to-rose-500 text-white shadow-red-500/20',
   },
 ] as const;
 
 export const MiniAppGames: React.FC = () => {
+  const { currentUser } = useAppStore();
   const [activeGame, setActiveGame] = useState<ActiveGame>(null);
+  const [modal, setModal]           = useState<'charge' | 'withdraw' | null>(null);
 
   if (activeGame === 'wheel')   return <WheelGame   onBack={() => setActiveGame(null)} />;
   if (activeGame === 'penalty') return <PenaltyGame onBack={() => setActiveGame(null)} />;
+  if (activeGame === 'crash')   return <CrashGame   onBack={() => setActiveGame(null)} />;
+  if (activeGame === 'mines')   return <MinesGame   onBack={() => setActiveGame(null)} />;
 
   return (
-    <div className="space-y-5 animate-slide-up pb-4">
-      <div>
-        <h1 className="text-lg font-bold text-white">Jeux</h1>
-        <p className="text-xs text-slate-400 mt-0.5">Misez vos TON et tentez votre chance</p>
-      </div>
+    <>
+      {modal && <GameBalanceModal mode={modal} onClose={() => setModal(null)} />}
 
-      {/* Catalogue de jeux */}
-      <div className="space-y-3">
-        {CATALOG.map((game, i) => {
-          const btnCls = game.id === 'penalty'
-            ? 'bg-gradient-to-r from-emerald-600 to-green-500 text-white shadow-emerald-500/20'
-            : 'bg-gradient-to-r from-amber-500 to-yellow-500 text-amber-950 shadow-amber-500/20';
-          return (
-            <div key={i} className={`glass-card p-4 ${!game.available ? 'opacity-55' : ''}`}>
+      <div className="space-y-5 animate-slide-up pb-4">
+        <div>
+          <h1 className="text-lg font-bold text-white">Jeux</h1>
+          <p className="text-xs text-slate-400 mt-0.5">Misez et tentez votre chance</p>
+        </div>
+
+        {/* Game balance card */}
+        <div className="glass-card p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-[10px] text-slate-500 uppercase tracking-wide">Solde Jeux</p>
+              <p className="text-2xl font-black text-white">
+                {currentUser.gameBalance.toFixed(3)}{' '}
+                <span className="text-base font-semibold text-slate-400">TON</span>
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="text-[10px] text-slate-500 uppercase tracking-wide">Principal</p>
+              <p className="text-sm font-semibold text-slate-300">{currentUser.balanceMain.toFixed(3)} TON</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={() => setModal('charge')}
+              disabled={currentUser.balanceMain <= 0}
+              className={`py-2.5 rounded-xl font-bold text-sm transition-colors flex items-center justify-center gap-1.5 ${
+                currentUser.balanceMain > 0
+                  ? 'bg-blue-500/15 border border-blue-500/25 text-blue-400 hover:bg-blue-500/25'
+                  : 'bg-white/5 border border-white/10 text-slate-600 cursor-not-allowed'
+              }`}>
+              ⬇ Recharger
+            </button>
+            <button
+              onClick={() => setModal('withdraw')}
+              disabled={currentUser.gameBalance <= 0}
+              className={`py-2.5 rounded-xl font-bold text-sm transition-colors flex items-center justify-center gap-1.5 ${
+                currentUser.gameBalance > 0
+                  ? 'bg-emerald-500/15 border border-emerald-500/25 text-emerald-400 hover:bg-emerald-500/25'
+                  : 'bg-white/5 border border-white/10 text-slate-600 cursor-not-allowed'
+              }`}>
+              ⬆ Retirer
+            </button>
+          </div>
+          {currentUser.gameBalance === 0 && currentUser.balanceMain > 0 && (
+            <p className="text-[11px] text-slate-500 text-center">
+              Rechargez depuis votre solde principal pour jouer
+            </p>
+          )}
+          {currentUser.balanceMain === 0 && currentUser.gameBalance === 0 && (
+            <p className="text-[11px] text-slate-500 text-center">
+              Déposez des TON pour commencer à jouer
+            </p>
+          )}
+        </div>
+
+        {/* Game catalog */}
+        <div className="space-y-3">
+          {CATALOG.map((game, i) => (
+            <div key={i} className="glass-card p-4">
               <div className="flex items-center gap-4">
                 <div className={`w-14 h-14 rounded-xl flex items-center justify-center text-2xl flex-shrink-0 border ${game.color}`}>
                   {game.emoji}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="text-sm font-bold text-white">{game.title}</h3>
-                    {game.badge && (
-                      <span className="inline-flex items-center gap-1 text-[10px] bg-slate-700/80 text-slate-400 px-2 py-0.5 rounded-full">
-                        <Lock className="w-2.5 h-2.5" />{game.badge}
-                      </span>
-                    )}
-                  </div>
+                  <h3 className="text-sm font-bold text-white">{game.title}</h3>
                   <p className="text-xs text-slate-400 mt-0.5 leading-snug">{game.description}</p>
                 </div>
-                {game.available && game.id && (
-                  <button
-                    onClick={() => setActiveGame(game.id)}
-                    className={`flex-shrink-0 px-4 py-2 font-bold text-sm rounded-xl hover:opacity-90 active:scale-95 transition-all shadow-md ${btnCls}`}
-                  >
-                    Jouer
-                  </button>
-                )}
+                <button
+                  onClick={() => setActiveGame(game.id)}
+                  className={`flex-shrink-0 px-4 py-2 font-bold text-sm rounded-xl hover:opacity-90 active:scale-95 transition-all shadow-md ${game.btnCls}`}>
+                  Jouer
+                </button>
               </div>
             </div>
-          );
-        })}
-      </div>
+          ))}
+        </div>
 
-      {/* Infos rapides */}
-      <div className="glass-card p-4">
-        <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Infos</h3>
-        <div className="grid grid-cols-3 gap-3 text-center">
-          <div className="bg-white/5 rounded-xl py-3">
-            <p className="text-base font-bold text-amber-400">0.01</p>
-            <p className="text-[10px] text-slate-500 mt-0.5">Mise min (TON)</p>
-          </div>
-          <div className="bg-white/5 rounded-xl py-3">
-            <p className="text-base font-bold text-teal-400">×5</p>
-            <p className="text-[10px] text-slate-500 mt-0.5">Gain max réel</p>
-          </div>
-          <div className="bg-white/5 rounded-xl py-3">
-            <p className="text-base font-bold text-slate-300">50</p>
-            <p className="text-[10px] text-slate-500 mt-0.5">Mise max (TON)</p>
+        {/* Info bar */}
+        <div className="glass-card p-4">
+          <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Infos</h3>
+          <div className="grid grid-cols-3 gap-3 text-center">
+            <div className="bg-white/5 rounded-xl py-3">
+              <p className="text-base font-bold text-amber-400">0.01</p>
+              <p className="text-[10px] text-slate-500 mt-0.5">Mise min (TON)</p>
+            </div>
+            <div className="bg-white/5 rounded-xl py-3">
+              <p className="text-base font-bold text-teal-400">×5+</p>
+              <p className="text-[10px] text-slate-500 mt-0.5">Gain possible</p>
+            </div>
+            <div className="bg-white/5 rounded-xl py-3">
+              <p className="text-base font-bold text-slate-300">50</p>
+              <p className="text-[10px] text-slate-500 mt-0.5">Mise max (TON)</p>
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </>
   );
 };
