@@ -3,6 +3,114 @@ import { useAppStore } from '../../store/appStore';
 import { ArrowLeft, RotateCcw, Trophy, Zap } from 'lucide-react';
 
 // ══════════════════════════════════════════════════════════════════
+// AUDIO ENGINE (Web Audio API — aucun fichier externe)
+// ══════════════════════════════════════════════════════════════════
+
+const _AC: { ctx: AudioContext | null } = { ctx: null };
+function _ac(): AudioContext | null {
+  if (typeof window === 'undefined') return null;
+  const Ctor = (window as any).AudioContext || (window as any).webkitAudioContext;
+  if (!Ctor) return null;
+  if (!_AC.ctx || _AC.ctx.state === 'closed') { try { _AC.ctx = new Ctor(); } catch { return null; } }
+  if (_AC.ctx.state === 'suspended') _AC.ctx.resume().catch(() => {});
+  return _AC.ctx;
+}
+
+const snd = {
+  bet() {
+    const ctx = _ac(); if (!ctx) return;
+    const t = ctx.currentTime, o = ctx.createOscillator(), g = ctx.createGain();
+    o.connect(g); g.connect(ctx.destination);
+    o.frequency.setValueAtTime(660, t); o.frequency.exponentialRampToValueAtTime(880, t + 0.06);
+    g.gain.setValueAtTime(0.12, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.09);
+    o.start(t); o.stop(t + 0.1);
+  },
+  cashout() {
+    const ctx = _ac(); if (!ctx) return;
+    const t = ctx.currentTime;
+    [523, 659, 784, 1047].forEach((f, i) => {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.connect(g); g.connect(ctx.destination);
+      o.type = 'sine'; o.frequency.value = f;
+      const s = t + i * 0.055;
+      g.gain.setValueAtTime(0, s); g.gain.linearRampToValueAtTime(0.18, s + 0.018); g.gain.exponentialRampToValueAtTime(0.001, s + 0.16);
+      o.start(s); o.stop(s + 0.18);
+    });
+  },
+  crash() {
+    const ctx = _ac(); if (!ctx) return;
+    const t = ctx.currentTime;
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.connect(g); g.connect(ctx.destination); o.type = 'sawtooth';
+    o.frequency.setValueAtTime(320, t); o.frequency.exponentialRampToValueAtTime(35, t + 0.55);
+    g.gain.setValueAtTime(0.28, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.6);
+    o.start(t); o.stop(t + 0.6);
+    const sr = ctx.sampleRate, len = Math.floor(sr * 0.45);
+    const buf = ctx.createBuffer(1, len, sr), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const ns = ctx.createBufferSource(), ng = ctx.createGain();
+    ns.buffer = buf; ns.connect(ng); ng.connect(ctx.destination);
+    ng.gain.setValueAtTime(0.45, t); ng.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+    ns.start(t); ns.stop(t + 0.5);
+  },
+  win() {
+    const ctx = _ac(); if (!ctx) return;
+    const t = ctx.currentTime;
+    [523, 659, 784, 1047, 1319].forEach((f, i) => {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.connect(g); g.connect(ctx.destination); o.type = 'triangle'; o.frequency.value = f;
+      const s = t + i * 0.065;
+      g.gain.setValueAtTime(0, s); g.gain.linearRampToValueAtTime(0.2, s + 0.02); g.gain.exponentialRampToValueAtTime(0.001, s + 0.22);
+      o.start(s); o.stop(s + 0.25);
+    });
+  },
+  lose() {
+    const ctx = _ac(); if (!ctx) return;
+    const t = ctx.currentTime, o = ctx.createOscillator(), g = ctx.createGain();
+    o.connect(g); g.connect(ctx.destination); o.type = 'sine';
+    o.frequency.setValueAtTime(280, t); o.frequency.exponentialRampToValueAtTime(140, t + 0.32);
+    g.gain.setValueAtTime(0.2, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.36);
+    o.start(t); o.stop(t + 0.38);
+  },
+  tick() {
+    const ctx = _ac(); if (!ctx) return;
+    const t = ctx.currentTime, o = ctx.createOscillator(), g = ctx.createGain();
+    o.connect(g); g.connect(ctx.destination);
+    o.frequency.value = 900 + Math.random() * 500;
+    g.gain.setValueAtTime(0.06, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.032);
+    o.start(t); o.stop(t + 0.04);
+  },
+  boom() {
+    const ctx = _ac(); if (!ctx) return;
+    const t = ctx.currentTime;
+    const sr = ctx.sampleRate, len = Math.floor(sr * 0.32);
+    const buf = ctx.createBuffer(1, len, sr), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.exp(-i / (sr * 0.07));
+    const ns = ctx.createBufferSource(), ng = ctx.createGain();
+    ns.buffer = buf; ns.connect(ng); ng.connect(ctx.destination);
+    ng.gain.value = 0.5; ns.start(t); ns.stop(t + 0.35);
+  },
+  reveal() {
+    const ctx = _ac(); if (!ctx) return;
+    const t = ctx.currentTime, o = ctx.createOscillator(), g = ctx.createGain();
+    o.connect(g); g.connect(ctx.destination); o.type = 'sine'; o.frequency.value = 880;
+    g.gain.setValueAtTime(0.09, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.11);
+    o.start(t); o.stop(t + 0.12);
+  },
+  spin() {
+    const ctx = _ac(); if (!ctx) return;
+    const t = ctx.currentTime;
+    const sr = ctx.sampleRate, len = Math.floor(sr * 0.22);
+    const buf = ctx.createBuffer(1, len, sr), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const ns = ctx.createBufferSource(), filt = ctx.createBiquadFilter(), ng = ctx.createGain();
+    filt.type = 'bandpass'; filt.frequency.value = 600; filt.Q.value = 0.9;
+    ns.buffer = buf; ns.connect(filt); filt.connect(ng); ng.connect(ctx.destination);
+    ng.gain.value = 0.16; ns.start(t); ns.stop(t + 0.25);
+  },
+};
+
+// ══════════════════════════════════════════════════════════════════
 // SHARED TYPES & STREAK SYSTEM
 // ══════════════════════════════════════════════════════════════════
 
@@ -421,6 +529,7 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
     myCashRef.current = { t: tRef.current, m };
     const win = +(myBetRef.current * m).toFixed(6);
     placeGameBet(0, win);
+    snd.cashout();
     onResultRef.current(true);
     setCashedOut(m);
     setToast({ id: Date.now(), text: `+${win.toFixed(4)} TON`, win: true });
@@ -536,6 +645,7 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
     if (phaseRef.current !== 'betting' || myBetRef.current !== null) return;
     if (effBet < 0.01) return;
     placeGameBet(effBet, 0);
+    snd.bet();
     myBetRef.current = effBet;
     setMyBet(effBet);
   };
@@ -631,12 +741,16 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
   return (
     <div className="pb-4" style={{ background: '#060a18', minHeight: '100%' }}>
       <style>{`
-        @keyframes crashShake { 0%,100%{transform:translate(0,0)} 20%{transform:translate(-3px,2px)} 40%{transform:translate(3px,-2px)} 60%{transform:translate(-2px,-1px)} 80%{transform:translate(2px,1px)} }
-        @keyframes crashFloatUp { 0%{opacity:0;transform:translate(-50%,10px)} 15%{opacity:1} 75%{opacity:1} 100%{opacity:0;transform:translate(-50%,-30px)} }
-        @keyframes crashPulse { 0%,100%{box-shadow:0 4px 18px rgba(34,197,94,0.35)} 50%{box-shadow:0 4px 32px rgba(34,197,94,0.65)} }
-        @keyframes crashBlink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+        @keyframes crashShake { 0%,100%{transform:translate(0,0)} 15%{transform:translate(-4px,3px)} 30%{transform:translate(4px,-3px)} 45%{transform:translate(-3px,-2px)} 60%{transform:translate(3px,2px)} 80%{transform:translate(-2px,1px)} }
+        @keyframes crashFloatUp { 0%{opacity:0;transform:translate(-50%,10px)} 15%{opacity:1} 75%{opacity:1} 100%{opacity:0;transform:translate(-50%,-34px)} }
+        @keyframes crashPulse { 0%,100%{box-shadow:0 4px 18px rgba(34,197,94,0.35)} 50%{box-shadow:0 6px 36px rgba(34,197,94,0.72)} }
+        @keyframes crashBlink { 0%,100%{opacity:1} 50%{opacity:0.25} }
         @keyframes starDrift { from{transform:translateX(0)} to{transform:translateX(-${VB_W}px)} }
-        @keyframes chipIn { from{opacity:0;transform:scale(0.6)} to{opacity:1;transform:scale(1)} }
+        @keyframes chipIn { from{opacity:0;transform:scale(0.5)} to{opacity:1;transform:scale(1)} }
+        @keyframes multGlow { 0%,100%{text-shadow:0 0 20px rgba(34,197,94,0.4)} 50%{text-shadow:0 0 40px rgba(34,197,94,0.9)} }
+        @keyframes rocketThrust { 0%,100%{opacity:0.82} 50%{opacity:0.45} }
+        @keyframes mineReveal { 0%{transform:scale(0.6);opacity:0} 60%{transform:scale(1.12)} 100%{transform:scale(1);opacity:1} }
+        @keyframes gemShine { 0%,100%{filter:brightness(1)} 50%{filter:brightness(1.5)} }
       `}</style>
 
       {/* En-tête */}
@@ -770,16 +884,44 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
             </g>
           )}
 
-          {/* avion / explosion */}
+          {/* fusée / explosion */}
           {phase === 'flying' && (
             <g transform={`translate(${tipX},${tipY}) rotate(${planeAngle})`}>
-              <circle r="9" fill="#f43f5e" opacity="0.18" />
-              <path d="M14,0 L2,-3.2 L-7,-8.5 L-3.5,-2 L-12,0 L-3.5,2 L-7,8.5 L2,3.2 Z"
-                fill="#f43f5e" stroke="#fecdd3" strokeWidth="0.8" strokeLinejoin="round" />
+              {/* Flammes du réacteur */}
+              <ellipse cx="-16" cy="0" rx="11" ry="5.5" fill="#f97316" opacity="0.22" />
+              <ellipse cx="-13" cy="0" rx="8"  ry="3.8" fill="#fb923c" opacity="0.50" />
+              <ellipse cx="-11" cy="0" rx="5"  ry="2.2" fill="#fde68a" opacity="0.82" />
+              {/* Corps principal */}
+              <path d="M18,0 L12,-2 L-9,-4 L-14,-2 L-14,2 L-9,4 L12,2 Z" fill="#f43f5e" />
+              {/* Nez */}
+              <path d="M12,-2 L18,0 L12,2 Z" fill="#fda4af" />
+              {/* Aile haute */}
+              <path d="M-1,-4 L-8,-13 L-12,-4 Z" fill="#fb7185" opacity="0.9" />
+              {/* Aile basse */}
+              <path d="M-1,4 L-8,13 L-12,4 Z" fill="#fb7185" opacity="0.9" />
+              {/* Aileron haut */}
+              <path d="M-10,-4 L-14,-9 L-14,-4 Z" fill="#be123c" />
+              {/* Aileron bas */}
+              <path d="M-10,4 L-14,9 L-14,4 Z" fill="#be123c" />
+              {/* Hublot */}
+              <circle cx="5" cy="0" r="3.2" fill="#bfdbfe" opacity="0.95" />
+              <circle cx="5" cy="0" r="1.9" fill="#60a5fa" />
+              <circle cx="4.2" cy="-0.8" r="0.7" fill="#fff" opacity="0.6" />
+              {/* Halo de vitesse */}
+              <circle r="10" fill="#f43f5e" opacity="0.06" />
             </g>
           )}
           {isCrashed && (
-            <text x={tipX} y={tipY + 6} textAnchor="middle" fontSize="20">💥</text>
+            <g>
+              {Array.from({length: 10}, (_, i) => {
+                const a = (i * 36) * Math.PI / 180;
+                const r = 10 + (i % 3) * 5;
+                return <circle key={i} cx={+(tipX + Math.cos(a) * r).toFixed(1)} cy={+(tipY + Math.sin(a) * r).toFixed(1)}
+                  r={2 + (i % 3)} fill={['#ef4444','#f97316','#fbbf24'][i % 3]} opacity="0.75" />;
+              })}
+              <circle cx={tipX} cy={tipY} r="14" fill="#f97316" opacity="0.15" />
+              <text x={tipX} y={tipY + 7} textAnchor="middle" fontSize="22">💥</text>
+            </g>
           )}
         </svg>
 
