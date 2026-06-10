@@ -363,10 +363,290 @@ const WheelGame: React.FC<{ onBack: () => void }> = ({ onBack }) => {
 };
 
 // ══════════════════════════════════════════════════════════════════
+// PENALTY KICK — Jeu de tirs au but
+// ══════════════════════════════════════════════════════════════════
+
+// 6 zones de tir : 3 colonnes × 2 rangées
+// Colonne 0 = gauche, 1 = centre, 2 = droite
+// Rangée  0 = haut,   1 = bas
+const PENALTY_ZONES = [
+  { id: 0, col: 0, row: 0, label: '↖', hint: 'Gauche haut' },
+  { id: 1, col: 1, row: 0, label: '↑', hint: 'Centre haut' },
+  { id: 2, col: 2, row: 0, label: '↗', hint: 'Droite haut' },
+  { id: 3, col: 0, row: 1, label: '↙', hint: 'Gauche bas'  },
+  { id: 4, col: 1, row: 1, label: '↓', hint: 'Centre bas'  },
+  { id: 5, col: 2, row: 1, label: '↘', hint: 'Droite bas'  },
+] as const;
+
+// Positions cibles dans le conteneur (% x/y) : but = top:16 → top:185 dans 280px
+const BALL_TARGETS: Record<number, { x: number; y: number }> = {
+  0: { x: 22, y: 16 }, 1: { x: 50, y: 16 }, 2: { x: 78, y: 16 },
+  3: { x: 22, y: 44 }, 4: { x: 50, y: 44 }, 5: { x: 78, y: 44 },
+};
+
+// P(gardien arrête) = 0.52 → EV = 1.8 × 0.48 = 0.864 → ~14% house edge
+const PENALTY_SAVE_PROB = 0.52;
+const PENALTY_WIN_MULT  = 1.8;
+const PENALTY_MIN_BET   = 0.01;
+const PENALTY_PRESETS   = [0.01, 0.05, 0.1, 0.5, 1, 5];
+
+type PenaltyPhase = 'idle' | 'flying' | 'result';
+
+const PenaltyGame: React.FC<{ onBack: () => void }> = ({ onBack }) => {
+  const { currentUser, spinWheelBet } = useAppStore();
+  const [bet, setBet]             = useState(0.01);
+  const [phase, setPhase]         = useState<PenaltyPhase>('idle');
+  const [ballPos, setBallPos]     = useState({ x: 50, y: 77 });
+  const [ballScale, setBallScale] = useState(1);
+  const [keeperX, setKeeperX]     = useState(50);
+  const [outcome, setOutcome]     = useState<{ goal: boolean; win: number } | null>(null);
+
+  const effBet   = Math.min(bet, currentUser.balanceMain);
+  const canShoot = phase === 'idle' && effBet >= PENALTY_MIN_BET;
+
+  const adjustBet = (d: number) =>
+    setBet(p => Math.max(PENALTY_MIN_BET, Math.min(50, +(p + d).toFixed(3))));
+
+  const shoot = (zoneId: number) => {
+    if (!canShoot) return;
+
+    // Résultat déterminé avant l'animation
+    const scored = Math.random() > PENALTY_SAVE_PROB;
+    const col = PENALTY_ZONES[zoneId].col; // 0 | 1 | 2
+
+    // Direction du plongeon du gardien
+    let kx: number;
+    if (!scored) {
+      // Gardien plonge du bon côté → rattrape
+      kx = col === 0 ? 22 : col === 1 ? 50 : 78;
+    } else {
+      // Gardien plonge du mauvais côté
+      const other = ([0, 1, 2] as const).filter(c => c !== col);
+      const miss  = other[Math.floor(Math.random() * other.length)];
+      kx = miss === 0 ? 22 : miss === 1 ? 50 : 78;
+    }
+
+    setBallPos(BALL_TARGETS[zoneId]);
+    setBallScale(0.38);
+    setKeeperX(kx);
+    setPhase('flying');
+
+    const used = effBet;
+    const win  = scored ? +(used * PENALTY_WIN_MULT).toFixed(6) : 0;
+
+    setTimeout(() => {
+      setOutcome({ goal: scored, win });
+      setPhase('result');
+      spinWheelBet(used, win);
+    }, 950);
+  };
+
+  const reset = () => {
+    setBallPos({ x: 50, y: 77 });
+    setBallScale(1);
+    setKeeperX(50);
+    setPhase('idle');
+    setOutcome(null);
+  };
+
+  return (
+    <div className="space-y-4 pb-4">
+      {/* En-tête */}
+      <div className="flex items-center gap-3">
+        <button onClick={onBack}
+          className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center text-slate-400 hover:text-white transition-colors">
+          <ArrowLeft className="w-4 h-4" />
+        </button>
+        <div className="flex-1">
+          <h2 className="text-base font-bold text-white">Penalty Kick ⚽</h2>
+          <p className="text-[11px] text-slate-500">Choisissez où tirer · ×{PENALTY_WIN_MULT} si but</p>
+        </div>
+        <div className="glass-card px-3 py-1.5 text-right">
+          <p className="text-[10px] text-slate-500 uppercase tracking-wide">Solde</p>
+          <p className="text-sm font-bold text-white">{currentUser.balanceMain.toFixed(3)} TON</p>
+        </div>
+      </div>
+
+      {/* Terrain + but */}
+      <div
+        className="relative rounded-2xl overflow-hidden select-none"
+        style={{
+          height: 280,
+          background: 'linear-gradient(180deg, #052e16 0%, #16a34a 45%, #15803d 100%)',
+        }}
+      >
+        {/* Lignes de pelouse */}
+        {[30, 55, 78].map(p => (
+          <div key={p} className="absolute left-0 right-0"
+            style={{ top: `${p}%`, height: 1, background: 'rgba(255,255,255,0.06)' }} />
+        ))}
+
+        {/* But */}
+        <div className="absolute" style={{ top: 16, left: 26, right: 26, height: 166 }}>
+          {/* Filet */}
+          <div className="absolute inset-0" style={{
+            background: 'rgba(0,0,0,0.52)',
+            backgroundImage: `
+              repeating-linear-gradient(0deg,  rgba(255,255,255,0.07) 0, rgba(255,255,255,0.07) 1px, transparent 1px, transparent 20px),
+              repeating-linear-gradient(90deg, rgba(255,255,255,0.07) 0, rgba(255,255,255,0.07) 1px, transparent 1px, transparent 20px)
+            `,
+          }} />
+          {/* Poteaux */}
+          <div className="absolute inset-0 border-t-[4px] border-l-[4px] border-r-[4px] border-white/95 rounded-t-sm" />
+          {/* Ombre sous la barre */}
+          <div className="absolute left-0 right-0" style={{ top: 4, height: 6, background: 'rgba(0,0,0,0.3)' }} />
+        </div>
+
+        {/* Gardien */}
+        <div
+          className="absolute flex flex-col items-center pointer-events-none"
+          style={{
+            left: `${keeperX}%`,
+            top: 20,
+            transform: 'translateX(-50%)',
+            transition: 'left 0.48s cubic-bezier(0.4, 0, 0.2, 1)',
+          }}
+        >
+          {/* Corps SVG simplifié */}
+          <svg width="52" height="62" viewBox="0 0 52 62" style={{ overflow: 'visible' }}>
+            {/* Tête */}
+            <circle cx="26" cy="12" r="11" fill="#fbbf24" />
+            {/* Corps (maillot jaune fluo) */}
+            <rect x="13" y="22" width="26" height="22" rx="4" fill="#84cc16" />
+            {/* Bras gauche + gant */}
+            <rect x="-8" y="24" width="22" height="8" rx="4" fill="#84cc16" />
+            <ellipse cx="-10" cy="28" rx="9" ry="7" fill="#15803d" />
+            {/* Bras droit + gant */}
+            <rect x="38" y="24" width="22" height="8" rx="4" fill="#84cc16" />
+            <ellipse cx="62" cy="28" rx="9" ry="7" fill="#15803d" />
+            {/* Jambes */}
+            <rect x="14" y="44" width="9" height="14" rx="3" fill="#1e3a5f" />
+            <rect x="29" y="44" width="9" height="14" rx="3" fill="#1e3a5f" />
+            {/* Chaussures */}
+            <rect x="12" y="55" width="13" height="5" rx="2" fill="#0f172a" />
+            <rect x="27" y="55" width="13" height="5" rx="2" fill="#0f172a" />
+          </svg>
+        </div>
+
+        {/* Ballon ⚽ */}
+        <div
+          className="absolute pointer-events-none"
+          style={{
+            left: `${ballPos.x}%`,
+            top: `${ballPos.y}%`,
+            transform: `translateX(-50%) translateY(-50%) scale(${ballScale})`,
+            transition: 'left 0.8s cubic-bezier(0.2,0.8,0.35,1), top 0.8s cubic-bezier(0.2,0.8,0.35,1), transform 0.8s ease',
+            fontSize: 30,
+            lineHeight: 1,
+          }}
+        >
+          ⚽
+        </div>
+
+        {/* Point de penalty */}
+        <div className="absolute rounded-full"
+          style={{ left: '50%', top: '70%', width: 7, height: 7, marginLeft: -3.5, background: 'rgba(255,255,255,0.45)' }} />
+
+        {/* Overlay résultat */}
+        {outcome && (
+          <div
+            className="absolute inset-0 flex items-center justify-center"
+            style={{ background: outcome.goal ? 'rgba(16,185,129,0.35)' : 'rgba(220,38,38,0.35)' }}
+          >
+            <div className={`text-center px-7 py-5 rounded-2xl border shadow-2xl ${
+              outcome.goal
+                ? 'bg-emerald-950/95 border-emerald-500/60'
+                : 'bg-red-950/95 border-red-500/60'
+            }`}>
+              <p className="text-5xl mb-2">{outcome.goal ? '⚽' : '🧤'}</p>
+              <p className="text-2xl font-black text-white mb-1">
+                {outcome.goal ? 'BUT !!!' : 'ARRÊTÉ !'}
+              </p>
+              <p className={`text-sm font-semibold ${outcome.goal ? 'text-emerald-400' : 'text-red-400'}`}>
+                {outcome.goal
+                  ? `+${outcome.win.toFixed(4)} TON`
+                  : `−${effBet.toFixed(4)} TON`}
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Boutons de direction (idle uniquement) */}
+      {phase === 'idle' && (
+        <div className="glass-card p-4">
+          <p className="text-xs text-slate-500 text-center mb-3 font-medium">Choisissez votre angle de tir</p>
+          <div className="grid grid-cols-3 gap-2">
+            {PENALTY_ZONES.map(z => (
+              <button
+                key={z.id}
+                onClick={() => shoot(z.id)}
+                disabled={!canShoot}
+                className={`py-3 rounded-xl text-sm font-bold transition-all active:scale-95 flex flex-col items-center gap-0.5 ${
+                  canShoot
+                    ? 'bg-white/8 border border-white/20 text-white hover:bg-emerald-500/20 hover:border-emerald-500/50'
+                    : 'bg-white/5 border border-white/10 text-slate-600 cursor-not-allowed'
+                }`}
+              >
+                <span className="text-lg leading-none">{z.label}</span>
+                <span className="text-[10px] text-slate-400 leading-none">{z.hint}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Bouton rejouer */}
+      {phase === 'result' && (
+        <button onClick={reset}
+          className="w-full py-3.5 rounded-xl font-bold text-sm bg-gradient-to-r from-emerald-600 to-green-600 text-white hover:from-emerald-500 hover:to-green-500 active:scale-[0.98] transition-all flex items-center justify-center gap-2">
+          <RotateCcw className="w-4 h-4" /> Rejouer
+        </button>
+      )}
+
+      {/* Contrôles de mise */}
+      <div className="glass-card p-4 space-y-3">
+        <div className="flex justify-between text-xs">
+          <span className="text-slate-400 font-medium">Mise</span>
+          <span className="text-slate-500">
+            But = <span className="text-emerald-400 font-semibold">+{(effBet * PENALTY_WIN_MULT).toFixed(4)} TON</span>
+          </span>
+        </div>
+        <div className="flex items-center gap-3">
+          <button onClick={() => adjustBet(-0.01)}
+            className="w-9 h-9 rounded-lg bg-white/5 flex items-center justify-center text-white hover:bg-white/10 active:scale-95 transition-all">
+            <Minus className="w-4 h-4" />
+          </button>
+          <input
+            type="number" value={bet} min={PENALTY_MIN_BET} max={50} step={0.01}
+            onChange={e => { const v = +e.target.value; if (!isNaN(v)) setBet(Math.max(PENALTY_MIN_BET, Math.min(50, v))); }}
+            className="flex-1 bg-transparent text-center text-xl font-bold text-white outline-none"
+          />
+          <button onClick={() => adjustBet(0.01)}
+            className="w-9 h-9 rounded-lg bg-white/5 flex items-center justify-center text-white hover:bg-white/10 active:scale-95 transition-all">
+            <Plus className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          {PENALTY_PRESETS.map(q => (
+            <button key={q} onClick={() => setBet(q)}
+              className={`py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                bet === q ? 'bg-emerald-500/30 text-emerald-300 border border-emerald-500/40' : 'bg-white/5 text-slate-400 hover:bg-white/10'
+              }`}>
+              {q} TON
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ══════════════════════════════════════════════════════════════════
 // GAMES HUB — lobby d'entrée, scalable pour ajouter d'autres jeux
 // ══════════════════════════════════════════════════════════════════
 
-type ActiveGame = 'wheel' | null;
+type ActiveGame = 'wheel' | 'penalty' | null;
 
 const CATALOG = [
   {
@@ -376,31 +656,42 @@ const CATALOG = [
     emoji: '🎡',
     available: true,
     badge: null as string | null,
+    color: 'bg-amber-500/15 border-amber-500/25',
+  },
+  {
+    id: 'penalty' as ActiveGame,
+    title: 'Penalty Kick',
+    description: 'Tirez au but · Marquez et gagnez ×1.8 votre mise',
+    emoji: '⚽',
+    available: true,
+    badge: null as string | null,
+    color: 'bg-emerald-500/15 border-emerald-500/25',
   },
   {
     id: null,
-    title: 'Pile ou Face',
-    description: 'Doublez votre mise en une seule décision',
-    emoji: '🪙',
+    title: 'Crash',
+    description: 'Multipliez avant le crash · Plus vous attendez, plus vous gagnez',
+    emoji: '🚀',
     available: false,
     badge: 'Bientôt',
+    color: 'bg-white/5 border-white/10',
   },
   {
     id: null,
     title: 'Mines',
-    description: 'Évitez les mines et multipliez vos gains',
+    description: 'Évitez les mines · Chaque case sûre augmente votre gain',
     emoji: '💣',
     available: false,
     badge: 'Bientôt',
+    color: 'bg-white/5 border-white/10',
   },
 ] as const;
 
 export const MiniAppGames: React.FC = () => {
   const [activeGame, setActiveGame] = useState<ActiveGame>(null);
 
-  if (activeGame === 'wheel') {
-    return <WheelGame onBack={() => setActiveGame(null)} />;
-  }
+  if (activeGame === 'wheel')   return <WheelGame   onBack={() => setActiveGame(null)} />;
+  if (activeGame === 'penalty') return <PenaltyGame onBack={() => setActiveGame(null)} />;
 
   return (
     <div className="space-y-5 animate-slide-up pb-4">
@@ -411,41 +702,39 @@ export const MiniAppGames: React.FC = () => {
 
       {/* Catalogue de jeux */}
       <div className="space-y-3">
-        {CATALOG.map((game, i) => (
-          <div key={i} className={`glass-card p-4 ${!game.available ? 'opacity-55' : ''}`}>
-            <div className="flex items-center gap-4">
-              <div className={`w-14 h-14 rounded-xl flex items-center justify-center text-2xl flex-shrink-0 ${
-                game.available
-                  ? 'bg-amber-500/15 border border-amber-500/25'
-                  : 'bg-white/5 border border-white/10'
-              }`}>
-                {game.emoji}
-              </div>
-
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h3 className="text-sm font-bold text-white">{game.title}</h3>
-                  {game.badge && (
-                    <span className="inline-flex items-center gap-1 text-[10px] bg-slate-700/80 text-slate-400 px-2 py-0.5 rounded-full">
-                      <Lock className="w-2.5 h-2.5" />
-                      {game.badge}
-                    </span>
-                  )}
+        {CATALOG.map((game, i) => {
+          const btnCls = game.id === 'penalty'
+            ? 'bg-gradient-to-r from-emerald-600 to-green-500 text-white shadow-emerald-500/20'
+            : 'bg-gradient-to-r from-amber-500 to-yellow-500 text-amber-950 shadow-amber-500/20';
+          return (
+            <div key={i} className={`glass-card p-4 ${!game.available ? 'opacity-55' : ''}`}>
+              <div className="flex items-center gap-4">
+                <div className={`w-14 h-14 rounded-xl flex items-center justify-center text-2xl flex-shrink-0 border ${game.color}`}>
+                  {game.emoji}
                 </div>
-                <p className="text-xs text-slate-400 mt-0.5 leading-snug">{game.description}</p>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-sm font-bold text-white">{game.title}</h3>
+                    {game.badge && (
+                      <span className="inline-flex items-center gap-1 text-[10px] bg-slate-700/80 text-slate-400 px-2 py-0.5 rounded-full">
+                        <Lock className="w-2.5 h-2.5" />{game.badge}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-slate-400 mt-0.5 leading-snug">{game.description}</p>
+                </div>
+                {game.available && game.id && (
+                  <button
+                    onClick={() => setActiveGame(game.id)}
+                    className={`flex-shrink-0 px-4 py-2 font-bold text-sm rounded-xl hover:opacity-90 active:scale-95 transition-all shadow-md ${btnCls}`}
+                  >
+                    Jouer
+                  </button>
+                )}
               </div>
-
-              {game.available && game.id && (
-                <button
-                  onClick={() => setActiveGame(game.id)}
-                  className="flex-shrink-0 px-4 py-2 bg-gradient-to-r from-amber-500 to-yellow-500 text-amber-950 font-bold text-sm rounded-xl hover:from-amber-400 hover:to-yellow-400 active:scale-95 transition-all shadow-md shadow-amber-500/20"
-                >
-                  Jouer
-                </button>
-              )}
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Infos rapides */}
