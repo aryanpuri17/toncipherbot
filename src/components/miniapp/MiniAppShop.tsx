@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAppStore, ShopItem } from '../../store/appStore';
-import { Store, ShoppingCart, X, AlertCircle } from 'lucide-react';
+import { ShoppingCart, X, AlertCircle } from 'lucide-react';
 
 const categoryLabels: Record<string, string> = {
   boosters:    '⚡ Boosters',

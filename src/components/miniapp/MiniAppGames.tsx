@@ -52,7 +52,7 @@ const SEGS: Seg[] = [
 ];
 
 const CX = 150, CY = 150, WRADIUS = 118;
-const SEG_COUNT = 10, SEG_DEG = 36;
+const SEG_DEG = 36;
 
 function pt(deg: number, r = WRADIUS) {
   const rad = (deg - 90) * (Math.PI / 180);
@@ -508,174 +508,357 @@ const PenaltyGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRe
 };
 
 // ══════════════════════════════════════════════════════════════════
-// CRASH
+// CRASH — tours continus multijoueur (style Aviator)
+// Le serveur tourne en boucle : MISE (7s) → VOL → CRASH (3s) → MISE…
 // ══════════════════════════════════════════════════════════════════
 
-function rollCrash(streak: number): number {
-  const he = streak >= 2 ? 0.68 : streak >= 1 ? 0.80 : 0.90;
-  const r  = Math.random();
-  if (r < (1 - he)) return 1.0;
-  return Math.max(1.01, +(he / (1 - r)).toFixed(2));
+const BET_MS   = 7000;  // fenêtre de mise
+const PAUSE_MS = 3200;  // pause après crash
+const TICK_MS  = 50;
+const GROWTH   = 0.13;  // mult = e^(0.13·t) → ×2 à ~5.3s, ×10 à ~17.7s
+
+// Distribution du point de crash.
+// Spectateur (le joueur ne mise pas) : généreuse → l'historique donne envie.
+// Joueur misé : resserrée selon la série de victoires.
+function rollCrashPoint(playerStreak: number | null): number {
+  const r = Math.random();
+  if (playerStreak === null) {
+    if (r < 0.03) return 1.00;
+    return Math.min(100, Math.max(1.01, +(0.985 / (1 - r)).toFixed(2)));
+  }
+  const he = playerStreak >= 2 ? 0.68 : playerStreak >= 1 ? 0.80 : 0.90;
+  if (r < (1 - he)) return 1.00;
+  return Math.min(50, Math.max(1.01, +(he / (1 - r)).toFixed(2)));
 }
 
-const CRASH_INIT_HIST = [2.43, 1.00, 5.67, 1.23, 8.91, 1.00, 3.14, 1.87, 12.0, 1.00];
-const CRASH_PLAYERS = ['Marco T.', 'Léa R.', 'Yusuf K.', 'Chen W.', 'Amira S.', 'Dmytro P.'];
+const CRASH_INIT_HIST = [2.43, 1.18, 5.67, 1.00, 12.41, 1.23, 3.14, 1.87, 47.20, 1.55, 2.08, 6.91];
 
-type CrashPhase = 'waiting' | 'flying' | 'crashed';
-type LiveBet = { user: string; bet: number; cashout: number | null; color: string };
+const CRASH_NAMES = [
+  'Marco T.', 'Léa R.', 'Yusuf K.', 'Chen W.', 'Amira S.', 'Dmytro P.',
+  'Fatou D.', 'Nicolás V.', 'Sofia M.', 'Jamal B.', 'Elena G.', 'Pierre L.',
+  'Aisha N.', 'Viktor S.', 'Mina H.', 'Diego F.',
+];
 
-const PLAYER_COLORS = ['text-blue-400', 'text-purple-400', 'text-amber-400', 'text-emerald-400', 'text-pink-400', 'text-teal-400'];
+type CrashPhase = 'betting' | 'flying' | 'crashed';
 
-// Chart constants
-const CHART_VB_W = 298, CHART_VB_H = 128;
-const CHART_X0 = 38, CHART_Y0 = 8, CHART_W = 252, CHART_H = 108;
-const Y_LABELS = [1.5, 2.5, 4.0, 6.5];
-const X_TICKS  = [6, 12, 18, 24, 30]; // seconds
+type FakePlayer = {
+  name: string;
+  bet: number;
+  joinAt: number;               // seconde d'arrivée pendant la phase de mise
+  target: number | null;        // null = ne sort jamais (perd)
+  joined: boolean;
+  cashedAt: number | null;
+  cashPoint: { t: number; m: number } | null;
+};
 
-function multToY(m: number): number {
-  return CHART_Y0 + CHART_H - Math.min(CHART_H, Math.max(0, (m - 1) / (8 - 1) * CHART_H));
+function makeFakeRoster(): FakePlayer[] {
+  const pool = [...CRASH_NAMES].sort(() => Math.random() - 0.5);
+  const n = 6 + Math.floor(Math.random() * 4); // 6–9 joueurs par tour
+  return pool.slice(0, n).map(name => ({
+    name,
+    bet: +Math.pow(10, Math.random() * 2.3 - 1).toFixed(2), // 0.10 → ~20 TON
+    joinAt: 0.3 + Math.random() * 5.8,
+    target: Math.random() < 0.28
+      ? null
+      : Math.min(30, +(1.05 - 0.9 * Math.log(1 - Math.random())).toFixed(2)),
+    joined: false,
+    cashedAt: null,
+    cashPoint: null,
+  }));
 }
-function timeToX(ms: number): number {
-  return CHART_X0 + Math.min(CHART_W, ms / 30000 * CHART_W);
+
+// Géométrie du graphique
+const VB_W = 320, VB_H = 196;
+const PX0 = 34, PY0 = 12, PW = 274, PH = 152;
+
+function niceStep(range: number): number {
+  const c = [0.2, 0.25, 0.5, 1, 2, 2.5, 5, 10, 20, 25, 50];
+  const raw = range / 4;
+  return c.find(v => v >= raw) ?? 100;
 }
 
 const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResult }> = ({ onBack, streak, onResult }) => {
   const { currentUser, placeGameBet } = useAppStore();
-  const [bet, setBet]              = useState(0.01);
-  const [autoCash, setAutoCash]    = useState('');
-  const [phase, setPhase]          = useState<CrashPhase>('waiting');
-  const [mult, setMult]            = useState(1.00);
-  const [crashAt, setCrashAt]      = useState(2.00);
-  const [cashedOut, setCashedOut]  = useState<number | null>(null);
-  const [history, setHistory]      = useState<number[]>(CRASH_INIT_HIST);
-  const [liveBets, setLiveBets]    = useState<LiveBet[]>([]);
-  const [elapsed, setElapsed]      = useState(0);
-  const [chartPath, setChartPath]  = useState('');
-  const intervalRef                = useRef<ReturnType<typeof setInterval> | null>(null);
-  const multRef                    = useRef(1.00);
-  const cashedRef                  = useRef<number | null>(null);
-  const activeBetRef               = useRef(0);
-  const elapsedRef                 = useRef(0);
-  const tickRef                    = useRef(0);
-  const pathPointsRef              = useRef<Array<[number, number]>>([]);
 
-  const effBet   = Math.min(bet, currentUser.balanceMain);
-  const canBet   = phase === 'waiting' && effBet >= 0.01 && currentUser.balanceMain >= 0.01;
-  const canCash  = phase === 'flying' && cashedRef.current === null;
+  // mise
+  const [bet, setBet]           = useState(0.05);
+  const [autoCash, setAutoCash] = useState('');
 
-  const startRound = () => {
-    if (!canBet) return;
-    const crash = rollCrash(streak);
-    setCrashAt(crash);
-    activeBetRef.current = effBet;
-    multRef.current = 1.00;
-    cashedRef.current = null;
-    elapsedRef.current = 0;
-    tickRef.current = 0;
-    pathPointsRef.current = [[CHART_X0, CHART_Y0 + CHART_H]];
-    setMult(1.00);
-    setCashedOut(null);
-    setElapsed(0);
-    setChartPath(`M${CHART_X0},${CHART_Y0 + CHART_H}`);
-    setPhase('flying');
+  // état du tour (rendu)
+  const [phase, setPhase]         = useState<CrashPhase>('betting');
+  const [countdown, setCountdown] = useState(BET_MS / 1000);
+  const [mult, setMult]           = useState(1.0);
+  const [lastCrash, setLastCrash] = useState<number | null>(null);
+  const [history, setHistory]     = useState<number[]>(CRASH_INIT_HIST);
+  const [fakes, setFakes]         = useState<FakePlayer[]>([]);
+  const [roundId, setRoundId]     = useState(() => 18200 + Math.floor(Math.random() * 600));
+  const [myBet, setMyBet]         = useState<number | null>(null);
+  const [cashedOut, setCashedOut] = useState<number | null>(null);
+  const [queuedBet, setQueuedBet] = useState<number | null>(null);
+  const [toast, setToast]         = useState<{ id: number; text: string; win: boolean } | null>(null);
 
-    const fakes: LiveBet[] = CRASH_PLAYERS.map((u, i) => ({
-      user: u,
-      bet: +(Math.random() * 4 + 0.1).toFixed(2),
-      cashout: null,
-      color: PLAYER_COLORS[i],
-    }));
-    setLiveBets(fakes);
+  // refs moteur (évitent les fermetures périmées dans l'interval)
+  const phaseRef      = useRef<CrashPhase>('betting');
+  const cdRef         = useRef(BET_MS);
+  const pauseRef      = useRef(PAUSE_MS);
+  const tRef          = useRef(0);
+  const multRef       = useRef(1.0);
+  const crashAtRef    = useRef(2.0);
+  const myBetRef      = useRef<number | null>(null);
+  const queuedRef     = useRef<number | null>(null);
+  const cashedRef     = useRef<number | null>(null);
+  const samplesRef    = useRef<Array<[number, number]>>([]);
+  const fakesRef      = useRef<FakePlayer[]>([]);
+  const streakRef     = useRef(streak);
+  const autoRef       = useRef('');
+  const myCashRef     = useRef<{ t: number; m: number } | null>(null);
+  const onResultRef   = useRef(onResult);
 
-    intervalRef.current = setInterval(() => {
-      elapsedRef.current += 80;
-      multRef.current = +(multRef.current * 1.012).toFixed(2);
-      tickRef.current += 1;
-      setMult(multRef.current);
-      setElapsed(elapsedRef.current);
+  useEffect(() => { streakRef.current = streak; }, [streak]);
+  useEffect(() => { autoRef.current = autoCash; }, [autoCash]);
+  useEffect(() => { onResultRef.current = onResult; }, [onResult]);
 
-      // Update chart path every 4 ticks
-      if (tickRef.current % 4 === 0) {
-        const x = timeToX(elapsedRef.current);
-        const y = multToY(multRef.current);
-        pathPointsRef.current.push([x, y]);
-        const pts = pathPointsRef.current;
-        if (pts.length >= 2) {
-          let d = `M${pts[0][0].toFixed(1)},${pts[0][1].toFixed(1)}`;
-          for (let i = 1; i < pts.length; i++) {
-            d += ` L${pts[i][0].toFixed(1)},${pts[i][1].toFixed(1)}`;
-          }
-          setChartPath(d);
-        }
-      }
-
-      // Auto-cashout
-      const ac = parseFloat(autoCash);
-      if (!isNaN(ac) && ac >= 1.01 && cashedRef.current === null && multRef.current >= ac) {
-        doFlushCashout(multRef.current);
-      }
-
-      setLiveBets(prev => prev.map(p => {
-        if (p.cashout !== null) return p;
-        if (Math.random() < 0.06) return { ...p, cashout: multRef.current };
-        return p;
-      }));
-
-      if (multRef.current >= crash) {
-        if (intervalRef.current) clearInterval(intervalRef.current);
-        setPhase('crashed');
-        if (cashedRef.current === null) {
-          placeGameBet(activeBetRef.current, 0);
-          onResult(false);
-        }
-        setHistory(h => [crash, ...h.slice(0, 11)]);
-        setLiveBets(prev => prev.map(p => ({ ...p, cashout: p.cashout ?? null })));
-      }
-    }, 80);
-  };
-
-  const doFlushCashout = (m: number) => {
+  const doCashout = (m: number) => {
+    if (phaseRef.current !== 'flying') return;
+    if (myBetRef.current === null || cashedRef.current !== null) return;
     cashedRef.current = m;
+    myCashRef.current = { t: tRef.current, m };
+    const win = +(myBetRef.current * m).toFixed(6);
+    placeGameBet(0, win);
+    onResultRef.current(true);
     setCashedOut(m);
-    const win = +(activeBetRef.current * m).toFixed(6);
-    placeGameBet(activeBetRef.current, win);
-    onResult(true);
+    setToast({ id: Date.now(), text: `+${win.toFixed(4)} TON`, win: true });
   };
 
-  const cashout = () => {
-    if (!canCash) return;
-    doFlushCashout(multRef.current);
+  // ── Moteur de tours continus ──
+  useEffect(() => {
+    const beginBetting = () => {
+      phaseRef.current = 'betting';
+      cdRef.current    = BET_MS;
+      tRef.current     = 0;
+      multRef.current  = 1;
+      cashedRef.current = null;
+      myCashRef.current = null;
+      samplesRef.current = [];
+      // mise en file d'attente → devient la mise active du tour
+      myBetRef.current = queuedRef.current;
+      queuedRef.current = null;
+      fakesRef.current = makeFakeRoster();
+      setFakes([...fakesRef.current]);
+      setPhase('betting');
+      setCountdown(BET_MS / 1000);
+      setMult(1);
+      setMyBet(myBetRef.current);
+      setQueuedBet(null);
+      setCashedOut(null);
+      setRoundId(r => r + 1);
+    };
+
+    beginBetting();
+
+    const id = setInterval(() => {
+      const ph = phaseRef.current;
+
+      if (ph === 'betting') {
+        cdRef.current -= TICK_MS;
+        const elapsed = (BET_MS - cdRef.current) / 1000;
+        let changed = false;
+        fakesRef.current.forEach(f => {
+          if (!f.joined && f.joinAt <= elapsed) { f.joined = true; changed = true; }
+        });
+        if (changed) setFakes([...fakesRef.current]);
+        setCountdown(Math.max(0, cdRef.current / 1000));
+        if (cdRef.current <= 0) {
+          crashAtRef.current = rollCrashPoint(myBetRef.current !== null ? streakRef.current : null);
+          phaseRef.current = 'flying';
+          tRef.current = 0;
+          setPhase('flying');
+        }
+        return;
+      }
+
+      if (ph === 'flying') {
+        tRef.current += TICK_MS / 1000;
+        const m = Math.exp(GROWTH * tRef.current);
+        multRef.current = m;
+        samplesRef.current.push([tRef.current, Math.min(m, crashAtRef.current)]);
+
+        // encaissements des autres joueurs
+        let changed = false;
+        fakesRef.current.forEach(f => {
+          if (f.joined && f.cashedAt === null && f.target !== null && m >= f.target && f.target < crashAtRef.current) {
+            f.cashedAt = f.target;
+            f.cashPoint = { t: tRef.current, m: f.target };
+            changed = true;
+          }
+        });
+        if (changed) setFakes([...fakesRef.current]);
+
+        // encaissement auto du joueur
+        const ac = parseFloat(autoRef.current);
+        if (myBetRef.current !== null && cashedRef.current === null &&
+            !isNaN(ac) && ac >= 1.01 && m >= ac && ac < crashAtRef.current) {
+          doCashout(ac);
+        }
+
+        if (m >= crashAtRef.current) {
+          const cp = crashAtRef.current;
+          phaseRef.current = 'crashed';
+          pauseRef.current = PAUSE_MS;
+          setLastCrash(cp);
+          setHistory(h => [cp, ...h.slice(0, 19)]);
+          setMult(cp);
+          if (myBetRef.current !== null && cashedRef.current === null) {
+            onResultRef.current(false);
+            setToast({ id: Date.now(), text: `−${myBetRef.current.toFixed(2)} TON`, win: false });
+          }
+          setPhase('crashed');
+        } else {
+          setMult(m);
+        }
+        return;
+      }
+
+      // crashed → pause puis nouveau tour
+      pauseRef.current -= TICK_MS;
+      if (pauseRef.current <= 0) beginBetting();
+    }, TICK_MS);
+
+    return () => {
+      clearInterval(id);
+      // rembourse les mises non résolues (fenêtre de mise / file d'attente)
+      if (phaseRef.current === 'betting' && myBetRef.current !== null) placeGameBet(0, myBetRef.current);
+      if (queuedRef.current !== null) placeGameBet(0, queuedRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── Actions du joueur ──
+  const effBet = Math.min(bet, currentUser.balanceMain);
+
+  const placeBet = () => {
+    if (phaseRef.current !== 'betting' || myBetRef.current !== null) return;
+    if (effBet < 0.01) return;
+    placeGameBet(effBet, 0);
+    myBetRef.current = effBet;
+    setMyBet(effBet);
+  };
+  const cancelBet = () => {
+    if (phaseRef.current !== 'betting' || myBetRef.current === null) return;
+    placeGameBet(0, myBetRef.current);
+    myBetRef.current = null;
+    setMyBet(null);
+  };
+  const queueBet = () => {
+    if (phaseRef.current === 'betting' || queuedRef.current !== null) return;
+    if (effBet < 0.01) return;
+    placeGameBet(effBet, 0);
+    queuedRef.current = effBet;
+    setQueuedBet(effBet);
+  };
+  const cancelQueued = () => {
+    if (queuedRef.current === null) return;
+    placeGameBet(0, queuedRef.current);
+    queuedRef.current = null;
+    setQueuedBet(null);
   };
 
-  useEffect(() => () => { if (intervalRef.current) clearInterval(intervalRef.current); }, []);
+  // ── Géométrie du graphique (échelle dynamique) ──
+  const samples  = samplesRef.current;
+  const elapsedS = samples.length ? samples[samples.length - 1][0] : 0;
+  const curM     = phase === 'crashed' ? (lastCrash ?? mult) : mult;
+  const maxT     = Math.max(8, elapsedS * 1.12);
+  const maxM     = Math.max(2.2, curM * 1.3);
+  const xOf = (tt: number) => PX0 + (tt / maxT) * PW;
+  const yOf = (mm: number) => PY0 + PH - ((Math.min(mm, maxM) - 1) / (maxM - 1)) * PH;
 
-  const reset = () => {
-    setPhase('waiting'); setMult(1.00); setCashedOut(null);
-    cashedRef.current = null; setLiveBets([]);
-    setChartPath(''); pathPointsRef.current = [];
-  };
-
-  const isCrashed = phase === 'crashed' && cashedOut === null;
-  const curX = timeToX(elapsed);
-  const curY = multToY(mult);
-
-  // Build fill path (area under curve)
-  const fillPath = chartPath
-    ? `${chartPath} L${curX.toFixed(1)},${(CHART_Y0 + CHART_H).toFixed(1)} L${CHART_X0},${(CHART_Y0 + CHART_H).toFixed(1)} Z`
+  let curvePath = '';
+  if (samples.length > 0) {
+    const step = Math.max(1, Math.floor(samples.length / 120));
+    curvePath = `M${PX0},${PY0 + PH}`;
+    for (let i = 0; i < samples.length; i += step) {
+      curvePath += ` L${xOf(samples[i][0]).toFixed(1)},${yOf(samples[i][1]).toFixed(1)}`;
+    }
+    curvePath += ` L${xOf(elapsedS).toFixed(1)},${yOf(Math.min(curM, crashAtRef.current)).toFixed(1)}`;
+  }
+  const fillPath = curvePath
+    ? `${curvePath} L${xOf(elapsedS).toFixed(1)},${PY0 + PH} L${PX0},${PY0 + PH} Z`
     : '';
+
+  // angle de l'avion (pente du dernier segment à l'écran)
+  let planeAngle = -18;
+  if (samples.length >= 3) {
+    const a = samples[Math.max(0, samples.length - 4)];
+    const b = samples[samples.length - 1];
+    planeAngle = Math.atan2(yOf(b[1]) - yOf(a[1]), xOf(b[0]) - xOf(a[0])) * 180 / Math.PI;
+  }
+  const tipX = samples.length ? xOf(elapsedS) : PX0;
+  const tipY = samples.length ? yOf(Math.min(curM, crashAtRef.current)) : PY0 + PH;
+  const isCrashed = phase === 'crashed';
+
+  // graduations
+  const yStep  = niceStep(maxM - 1);
+  const yTicks = [1, 2, 3, 4].map(i => 1 + yStep * i).filter(v => v <= maxM * 0.99);
+  const xStep  = [2, 4, 5, 10, 15, 30, 60].find(v => v >= maxT / 5) ?? 60;
+  const xTicks: number[] = [];
+  for (let v = xStep; v <= maxT; v += xStep) xTicks.push(v);
+
+  // pot du tour
+  const joinedFakes = fakes.filter(f => f.joined);
+  const potTotal = joinedFakes.reduce((s, f) => s + f.bet, 0) + (myBet ?? 0);
+  const cashedCount = joinedFakes.filter(f => f.cashedAt !== null).length + (cashedOut !== null ? 1 : 0);
+
+  // bouton principal selon l'état
+  const mainBtn = (() => {
+    if (phase === 'betting') {
+      if (myBet !== null) return { label: `ANNULER LA MISE · ${myBet.toFixed(2)} TON`, onClick: cancelBet, kind: 'cancel' as const, disabled: false };
+      return { label: `MISER · ${effBet.toFixed(2)} TON`, onClick: placeBet, kind: 'bet' as const, disabled: effBet < 0.01 };
+    }
+    if (phase === 'flying' && myBet !== null && cashedOut === null) {
+      return { label: `ENCAISSER · ${(myBet * mult).toFixed(4)} TON`, onClick: () => doCashout(multRef.current), kind: 'cash' as const, disabled: false };
+    }
+    if (queuedBet !== null) {
+      return { label: 'MISE PLACÉE POUR LE PROCHAIN TOUR ✓ · toucher pour annuler', onClick: cancelQueued, kind: 'queued' as const, disabled: false };
+    }
+    return { label: `MISER AU PROCHAIN TOUR · ${effBet.toFixed(2)} TON`, onClick: queueBet, kind: 'bet' as const, disabled: effBet < 0.01 };
+  })();
+
+  const btnStyle: React.CSSProperties =
+    mainBtn.kind === 'cash'   ? { background: 'linear-gradient(135deg,#22c55e,#16a34a)', animation: 'crashPulse 1.1s ease-in-out infinite', color: '#052e16' } :
+    mainBtn.kind === 'cancel' ? { background: 'rgba(239,68,68,0.14)', border: '1px solid rgba(239,68,68,0.45)', color: '#f87171' } :
+    mainBtn.kind === 'queued' ? { background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.4)', color: '#4ade80' } :
+    mainBtn.disabled          ? { background: 'rgba(255,255,255,0.05)', color: '#475569', cursor: 'not-allowed' } :
+                                { background: 'linear-gradient(135deg,#4f6ff0,#6366f1)', boxShadow: '0 4px 16px rgba(79,111,240,0.35)', color: '#fff' };
+
+  const ac = parseFloat(autoCash) || 2;
 
   return (
     <div className="pb-4" style={{ background: '#060a18', minHeight: '100%' }}>
+      <style>{`
+        @keyframes crashShake { 0%,100%{transform:translate(0,0)} 20%{transform:translate(-3px,2px)} 40%{transform:translate(3px,-2px)} 60%{transform:translate(-2px,-1px)} 80%{transform:translate(2px,1px)} }
+        @keyframes crashFloatUp { 0%{opacity:0;transform:translate(-50%,10px)} 15%{opacity:1} 75%{opacity:1} 100%{opacity:0;transform:translate(-50%,-30px)} }
+        @keyframes crashPulse { 0%,100%{box-shadow:0 4px 18px rgba(34,197,94,0.35)} 50%{box-shadow:0 4px 32px rgba(34,197,94,0.65)} }
+        @keyframes crashBlink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+        @keyframes starDrift { from{transform:translateX(0)} to{transform:translateX(-${VB_W}px)} }
+        @keyframes chipIn { from{opacity:0;transform:scale(0.6)} to{opacity:1;transform:scale(1)} }
+      `}</style>
+
+      {/* En-tête */}
       <div style={{ background: '#0d1021', borderBottom: '1px solid #1e2847' }} className="px-4 pt-4 pb-3 space-y-3">
-        {/* Header */}
         <div className="flex items-center gap-3">
           <button onClick={onBack} style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid #1e2847' }}
             className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-white transition-colors">
             <ArrowLeft className="w-4 h-4" />
           </button>
           <div className="flex-1">
-            <h2 className="text-base font-bold text-white">Crash 🚀</h2>
-            <p className="text-[11px]" style={{ color: '#64748b' }}>Encaissez avant que la fusée explose !</p>
+            <div className="flex items-center gap-2">
+              <h2 className="text-base font-bold text-white">Crash ✈️</h2>
+              <span className="flex items-center gap-1" style={{ fontSize: 9, fontWeight: 800, color: '#f87171', letterSpacing: '0.08em' }}>
+                <span style={{ width: 6, height: 6, borderRadius: 99, background: '#ef4444', animation: 'crashBlink 1.2s infinite' }} />
+                EN DIRECT
+              </span>
+            </div>
+            <p className="text-[11px]" style={{ color: '#64748b' }}>Misez avant le décollage · Encaissez avant le crash</p>
           </div>
           <div style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid #1e2847' }} className="px-3 py-1.5 rounded-xl text-right">
             <p className="text-[10px] uppercase" style={{ color: '#64748b' }}>Solde</p>
@@ -683,191 +866,270 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
           </div>
         </div>
 
-        {/* History chips */}
-        <div className="flex gap-1.5 overflow-x-auto pb-0.5">
-          {history.slice(0, 10).map((h, i) => (
-            <span key={i} style={{
+        {/* Historique des tours */}
+        <div className="flex gap-1.5 overflow-x-auto pb-0.5 no-scrollbar">
+          {history.slice(0, 14).map((h, i) => (
+            <span key={`${roundId}-${i}`} style={{
               flexShrink: 0, fontSize: 11, fontWeight: 700,
               padding: '2px 8px', borderRadius: 20,
-              background: h < 2 ? 'rgba(239,68,68,0.18)' : h < 5 ? 'rgba(79,111,240,0.18)' : 'rgba(34,197,94,0.18)',
-              color: h < 2 ? '#ef4444' : h < 5 ? '#818cf8' : '#22c55e',
+              animation: i === 0 ? 'chipIn 0.3s ease' : undefined,
+              background: h < 2 ? 'rgba(239,68,68,0.16)' : h < 10 ? 'rgba(79,111,240,0.16)' : 'rgba(34,197,94,0.16)',
+              color: h < 2 ? '#f87171' : h < 10 ? '#818cf8' : '#4ade80',
             }}>
-              ● {h.toFixed(2)}
+              {h.toFixed(2)}×
             </span>
           ))}
         </div>
       </div>
 
-      {/* Chart */}
-      <div style={{ background: '#060a18', position: 'relative', padding: '12px 0 8px' }}>
-        <svg width="100%" viewBox={`0 0 ${CHART_VB_W} ${CHART_VB_H}`} preserveAspectRatio="xMidYMid meet"
-          style={{ display: 'block' }}>
+      {/* Méta du tour */}
+      <div className="px-4 pt-3 pb-1 flex items-center justify-between">
+        <span style={{ fontSize: 11, color: '#64748b' }}>Tour <span style={{ color: '#94a3b8', fontWeight: 700 }}>#{roundId}</span></span>
+        <span style={{ fontSize: 11, color: '#64748b' }}>👥 {joinedFakes.length + (myBet !== null ? 1 : 0)} joueurs · 💰 {potTotal.toFixed(2)} TON</span>
+      </div>
+
+      {/* Graphique */}
+      <div className="mx-4 mt-1 relative" style={{
+        borderRadius: 16,
+        border: isCrashed ? '1px solid rgba(239,68,68,0.4)' : cashedOut !== null && phase === 'flying' ? '1px solid rgba(34,197,94,0.4)' : '1px solid #1e2847',
+        background: 'radial-gradient(120% 120% at 20% 100%, #0c1230 0%, #060a18 60%)',
+        overflow: 'hidden',
+        animation: isCrashed ? 'crashShake 0.45s ease' : undefined,
+        transition: 'border-color 0.2s',
+      }}>
+        <svg width="100%" viewBox={`0 0 ${VB_W} ${VB_H}`} style={{ display: 'block' }}>
           <defs>
-            <linearGradient id="cFillGreen" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#22c55e" stopOpacity="0.35" />
-              <stop offset="100%" stopColor="#22c55e" stopOpacity="0.03" />
+            <linearGradient id="avFillG" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#22c55e" stopOpacity="0.32" />
+              <stop offset="100%" stopColor="#22c55e" stopOpacity="0.02" />
             </linearGradient>
-            <linearGradient id="cFillRed" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#ef4444" stopOpacity="0.35" />
-              <stop offset="100%" stopColor="#ef4444" stopOpacity="0.03" />
+            <linearGradient id="avFillR" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#ef4444" stopOpacity="0.32" />
+              <stop offset="100%" stopColor="#ef4444" stopOpacity="0.02" />
             </linearGradient>
           </defs>
 
-          {/* Background speed lines */}
-          {Array.from({ length: 10 }, (_, i) => {
-            const x1 = CHART_X0 + (i / 9) * CHART_W;
-            return (
-              <line key={i}
-                x1={x1} y1={CHART_Y0 + CHART_H}
-                x2={x1 + 30} y2={CHART_Y0}
-                stroke="rgba(255,255,255,0.025)" strokeWidth="1" />
-            );
-          })}
+          {/* étoiles en dérive (2 couches) */}
+          <g style={{ animation: 'starDrift 70s linear infinite' }}>
+            {Array.from({ length: 36 }, (_, i) => (
+              <circle key={i}
+                cx={(i * 53 + 17) % (VB_W * 2)} cy={(i * 37 + 11) % (PH + 20)}
+                r={i % 6 === 0 ? 1.4 : 0.8}
+                fill="#fff" opacity={0.10 + (i % 4) * 0.07} />
+            ))}
+          </g>
+          <g style={{ animation: 'starDrift 130s linear infinite' }}>
+            {Array.from({ length: 24 }, (_, i) => (
+              <circle key={i}
+                cx={(i * 79 + 41) % (VB_W * 2)} cy={(i * 53 + 29) % (PH + 20)}
+                r={0.6} fill="#93c5fd" opacity={0.12} />
+            ))}
+          </g>
 
-          {/* Y-axis grid lines + labels */}
-          {Y_LABELS.map(yv => {
-            const y = multToY(yv);
-            return (
-              <g key={yv}>
-                <line x1={CHART_X0} y1={y} x2={CHART_X0 + CHART_W} y2={y}
-                  stroke="rgba(255,255,255,0.07)" strokeWidth="1" strokeDasharray="4,3" />
-                <text x={CHART_X0 - 4} y={y + 4} textAnchor="end" fontSize="9" fill="#64748b">{yv.toFixed(1)}×</text>
-              </g>
-            );
-          })}
+          {/* graduations Y */}
+          {yTicks.map(v => (
+            <g key={v}>
+              <line x1={PX0} y1={yOf(v)} x2={PX0 + PW} y2={yOf(v)}
+                stroke="rgba(255,255,255,0.06)" strokeWidth="1" strokeDasharray="4,4" />
+              <text x={PX0 - 5} y={yOf(v) + 3.5} textAnchor="end" fontSize="9" fill="#64748b">
+                {v < 10 ? v.toFixed(1) : Math.round(v)}×
+              </text>
+            </g>
+          ))}
 
-          {/* X-axis ticks */}
-          {X_TICKS.map(sec => {
-            const x = timeToX(sec * 1000);
-            return (
-              <g key={sec}>
-                <line x1={x} y1={CHART_Y0 + CHART_H} x2={x} y2={CHART_Y0 + CHART_H + 4}
-                  stroke="rgba(255,255,255,0.15)" strokeWidth="1" />
-                <text x={x} y={CHART_VB_H - 1} textAnchor="middle" fontSize="8" fill="#64748b">{sec}</text>
-              </g>
-            );
-          })}
+          {/* graduations X */}
+          {xTicks.map(v => (
+            <g key={v}>
+              <line x1={xOf(v)} y1={PY0 + PH} x2={xOf(v)} y2={PY0 + PH + 4} stroke="rgba(255,255,255,0.18)" strokeWidth="1" />
+              <text x={xOf(v)} y={VB_H - 6} textAnchor="middle" fontSize="8" fill="#64748b">{v}s</text>
+            </g>
+          ))}
+          <line x1={PX0} y1={PY0 + PH} x2={PX0 + PW} y2={PY0 + PH} stroke="rgba(255,255,255,0.12)" strokeWidth="1" />
 
-          {/* Bottom axis line */}
-          <line x1={CHART_X0} y1={CHART_Y0 + CHART_H} x2={CHART_X0 + CHART_W} y2={CHART_Y0 + CHART_H}
-            stroke="rgba(255,255,255,0.1)" strokeWidth="1" />
-
-          {/* Curve fill */}
-          {fillPath && phase !== 'waiting' && (
-            <path d={fillPath} fill={isCrashed ? 'url(#cFillRed)' : 'url(#cFillGreen)'} />
+          {/* courbe */}
+          {fillPath && phase !== 'betting' && (
+            <path d={fillPath} fill={isCrashed ? 'url(#avFillR)' : 'url(#avFillG)'} />
           )}
-
-          {/* Curve stroke */}
-          {chartPath && phase !== 'waiting' && (
-            <path d={`${chartPath} L${curX.toFixed(1)},${curY.toFixed(1)}`}
-              fill="none"
+          {curvePath && phase !== 'betting' && (
+            <path d={curvePath} fill="none"
               stroke={isCrashed ? '#ef4444' : '#22c55e'}
               strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
           )}
 
-          {/* Rocket / explosion at tip */}
-          {phase !== 'waiting' && (
-            <text x={curX} y={curY - 4} textAnchor="middle" fontSize="14">
-              {isCrashed ? '💥' : '🚀'}
-            </text>
+          {/* marqueurs d'encaissement des autres joueurs */}
+          {phase !== 'betting' && fakes.filter(f => f.cashPoint).map((f, i) => (
+            <circle key={i} cx={xOf(f.cashPoint!.t)} cy={yOf(f.cashPoint!.m)} r="2.2"
+              fill="#4ade80" opacity="0.55" />
+          ))}
+
+          {/* marqueur d'encaissement du joueur */}
+          {myCashRef.current && phase !== 'betting' && (
+            <g>
+              <circle cx={xOf(myCashRef.current.t)} cy={yOf(myCashRef.current.m)} r="3.5"
+                fill="#22c55e" stroke="#dcfce7" strokeWidth="1" />
+              <text x={xOf(myCashRef.current.t)} y={yOf(myCashRef.current.m) - 7}
+                textAnchor="middle" fontSize="9" fontWeight="800" fill="#4ade80">
+                Vous ×{myCashRef.current.m.toFixed(2)}
+              </text>
+            </g>
           )}
 
-          {/* Big multiplier overlay */}
-          <text x={CHART_X0 + CHART_W / 2} y={CHART_Y0 + CHART_H / 2 - 6} textAnchor="middle"
-            fontSize="28" fontWeight="900"
-            fill={isCrashed ? '#ef4444' : cashedOut !== null ? '#22c55e' : '#f8fafc'}
-            style={{ fontVariantNumeric: 'tabular-nums' }}>
-            {isCrashed ? `${crashAt.toFixed(2)}×` : `${mult.toFixed(2)}×`}
-          </text>
-          <text x={CHART_X0 + CHART_W / 2} y={CHART_Y0 + CHART_H / 2 + 14} textAnchor="middle"
-            fontSize="11" fill={isCrashed ? '#ef4444' : cashedOut !== null ? '#22c55e' : '#64748b'}>
-            {isCrashed ? '💥 CRASH !' : cashedOut !== null ? `✓ +${(activeBetRef.current * cashedOut).toFixed(4)} TON` : phase === 'flying' ? '🚀 En vol…' : 'Prêt à lancer'}
-          </text>
+          {/* avion / explosion */}
+          {phase === 'flying' && (
+            <g transform={`translate(${tipX},${tipY}) rotate(${planeAngle})`}>
+              <circle r="9" fill="#f43f5e" opacity="0.18" />
+              <path d="M14,0 L2,-3.2 L-7,-8.5 L-3.5,-2 L-12,0 L-3.5,2 L-7,8.5 L2,3.2 Z"
+                fill="#f43f5e" stroke="#fecdd3" strokeWidth="0.8" strokeLinejoin="round" />
+            </g>
+          )}
+          {isCrashed && (
+            <text x={tipX} y={tipY + 6} textAnchor="middle" fontSize="20">💥</text>
+          )}
         </svg>
+
+        {/* superposition centrale */}
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          {phase === 'betting' ? (
+            <div className="text-center">
+              <p style={{ fontSize: 10, fontWeight: 800, color: '#64748b', letterSpacing: '0.2em', textTransform: 'uppercase' }}>Prochain décollage</p>
+              <p style={{ fontSize: 44, fontWeight: 900, color: '#f8fafc', fontVariantNumeric: 'tabular-nums', lineHeight: 1.1 }}>
+                {countdown.toFixed(1)}s
+              </p>
+              <div style={{ width: 130, height: 4, background: 'rgba(255,255,255,0.08)', borderRadius: 99, margin: '8px auto 0', overflow: 'hidden' }}>
+                <div style={{
+                  width: `${(countdown / (BET_MS / 1000)) * 100}%`, height: '100%',
+                  background: 'linear-gradient(90deg,#4f6ff0,#818cf8)', borderRadius: 99,
+                  transition: 'width 0.05s linear',
+                }} />
+              </div>
+              {myBet !== null && (
+                <p style={{ fontSize: 11, fontWeight: 700, color: '#4ade80', marginTop: 8 }}>✓ Mise placée · {myBet.toFixed(2)} TON</p>
+              )}
+            </div>
+          ) : (
+            <div className="text-center">
+              <p style={{
+                fontSize: 46, fontWeight: 900, lineHeight: 1.05, fontVariantNumeric: 'tabular-nums',
+                color: isCrashed ? '#ef4444' : cashedOut !== null ? '#4ade80' : '#f8fafc',
+                textShadow: isCrashed ? '0 0 24px rgba(239,68,68,0.5)' : '0 0 24px rgba(34,197,94,0.25)',
+              }}>
+                {curM.toFixed(2)}×
+              </p>
+              <p style={{
+                fontSize: 12, fontWeight: 700, marginTop: 2,
+                color: isCrashed ? '#f87171' : cashedOut !== null ? '#4ade80' : '#94a3b8',
+              }}>
+                {isCrashed
+                  ? '💥 CRASHÉ'
+                  : cashedOut !== null
+                    ? `✓ Encaissé à ×${cashedOut.toFixed(2)}`
+                    : myBet !== null ? 'En vol · encaissez !' : 'En vol (spectateur)'}
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* toast résultat */}
+        {toast && (
+          <div key={toast.id} style={{
+            position: 'absolute', left: '50%', bottom: 26,
+            animation: 'crashFloatUp 1.8s ease forwards',
+            fontSize: 17, fontWeight: 900,
+            color: toast.win ? '#4ade80' : '#f87171',
+            textShadow: '0 2px 8px rgba(0,0,0,0.6)',
+            pointerEvents: 'none',
+          }}>
+            {toast.text}
+          </div>
+        )}
       </div>
 
-      {/* Cashout CTA */}
-      {canCash && (
-        <div className="px-4 pb-3">
-          <button onClick={cashout}
-            className="w-full py-4 rounded-xl font-black text-lg text-emerald-950 active:scale-[0.98] transition-all shadow-lg"
-            style={{ background: 'linear-gradient(135deg,#22c55e,#16a34a)', boxShadow: '0 4px 20px rgba(34,197,94,0.35)' }}>
-            ENCAISSER · {(activeBetRef.current * mult).toFixed(4)} TON
-          </button>
-        </div>
-      )}
+      {/* Bouton principal */}
+      <div className="px-4 pt-3">
+        <button onClick={mainBtn.onClick} disabled={mainBtn.disabled}
+          className="w-full py-4 rounded-xl font-black text-sm active:scale-[0.98] transition-all tracking-wide uppercase"
+          style={btnStyle}>
+          {currentUser.balanceMain < 0.01 && mainBtn.kind === 'bet' ? 'Solde insuffisant' : mainBtn.label}
+        </button>
+      </div>
 
-      {/* Live players table */}
-      {liveBets.length > 0 && (
-        <div style={{ background: '#0d1021', border: '1px solid #1e2847' }} className="mx-4 rounded-xl overflow-hidden mb-3">
-          <div style={{ borderBottom: '1px solid #1e2847' }} className="grid grid-cols-4 px-3 py-2">
-            {['JOUEUR', '@', 'MISE', 'PROFIT'].map(h => (
-              <span key={h} style={{ fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{h}</span>
+      {/* Tableau des joueurs en direct */}
+      <div style={{ background: '#0d1021', border: '1px solid #1e2847' }} className="mx-4 mt-3 rounded-xl overflow-hidden">
+        <div style={{ borderBottom: '1px solid #1e2847' }} className="flex items-center justify-between px-3 py-2">
+          <div className="grid grid-cols-4 flex-1">
+            {['JOUEUR', 'ENC.', 'MISE', 'PROFIT'].map(h => (
+              <span key={h} style={{ fontSize: 10, fontWeight: 700, color: '#64748b', letterSpacing: '0.06em' }}>{h}</span>
             ))}
           </div>
-          {/* Current user row */}
-          <div style={{ background: 'rgba(79,111,240,0.12)', borderBottom: '1px solid #1e2847' }} className="grid grid-cols-4 px-3 py-2 items-center">
-            <span style={{ fontSize: 12, fontWeight: 700, color: '#4f6ff0' }}>Vous</span>
-            <span style={{ fontSize: 12, color: '#64748b' }}>
-              {cashedOut !== null ? `×${cashedOut.toFixed(2)}` : isCrashed ? '—' : '—'}
+          <span style={{ fontSize: 10, color: '#64748b' }}>{cashedCount} sortis</span>
+        </div>
+
+        {/* ligne du joueur */}
+        {(myBet !== null || queuedBet !== null) && (
+          <div style={{ background: 'rgba(79,111,240,0.10)', borderBottom: '1px solid #1e2847' }} className="grid grid-cols-4 px-3 py-2 items-center">
+            <span style={{ fontSize: 12, fontWeight: 800, color: '#818cf8' }}>Vous</span>
+            <span style={{ fontSize: 12, color: cashedOut !== null ? '#4ade80' : '#64748b', fontWeight: 700 }}>
+              {cashedOut !== null ? `×${cashedOut.toFixed(2)}` : queuedBet !== null ? 'File' : '—'}
             </span>
-            <span style={{ fontSize: 12, color: '#f8fafc' }}>{effBet.toFixed(2)}</span>
-            <span style={{ fontSize: 12, fontWeight: 700 }}>
+            <span style={{ fontSize: 12, color: '#f8fafc' }}>{(myBet ?? queuedBet ?? 0).toFixed(2)}</span>
+            <span style={{ fontSize: 12, fontWeight: 800 }}>
               {cashedOut !== null
-                ? <span style={{ color: '#22c55e' }}>+{(activeBetRef.current * cashedOut - activeBetRef.current).toFixed(2)}</span>
-                : isCrashed
-                  ? <span style={{ color: '#ef4444' }}>-{activeBetRef.current.toFixed(2)}</span>
-                  : <span style={{ color: '#4f6ff0' }}>En vol…</span>}
+                ? <span style={{ color: '#4ade80' }}>+{((myBet ?? 0) * cashedOut - (myBet ?? 0)).toFixed(2)}</span>
+                : myBet !== null && isCrashed
+                  ? <span style={{ color: '#f87171' }}>−{myBet.toFixed(2)}</span>
+                  : myBet !== null && phase === 'flying'
+                    ? <span style={{ color: '#818cf8' }}>En vol…</span>
+                    : <span style={{ color: '#64748b' }}>—</span>}
             </span>
           </div>
-          {liveBets.map((lb, i) => (
-            <div key={i} style={{ borderBottom: i < liveBets.length - 1 ? '1px solid rgba(30,40,71,0.5)' : 'none' }}
-              className="grid grid-cols-4 px-3 py-2 items-center">
-              <span style={{ fontSize: 12, color: '#94a3b8' }}>{lb.user}</span>
-              <span style={{ fontSize: 12, color: lb.cashout !== null ? '#22c55e' : isCrashed ? '#ef4444' : '#64748b' }}>
-                {lb.cashout !== null ? `×${lb.cashout.toFixed(2)}` : isCrashed ? 'CRASH' : 'En vol…'}
-              </span>
-              <span style={{ fontSize: 12, color: '#f8fafc' }}>{lb.bet.toFixed(2)}</span>
-              <span style={{ fontSize: 12, fontWeight: 700 }}>
-                {lb.cashout !== null
-                  ? <span style={{ color: '#22c55e' }}>+{(lb.bet * lb.cashout - lb.bet).toFixed(2)}</span>
-                  : isCrashed
-                    ? <span style={{ color: '#ef4444' }}>-{lb.bet.toFixed(2)}</span>
-                    : <span style={{ color: '#4f6ff0' }}>…</span>}
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
+        )}
 
-      {/* Bet controls */}
-      <div style={{ background: '#0d1021', border: '1px solid #1e2847' }} className="mx-4 rounded-xl p-4 space-y-3">
+        {joinedFakes.length === 0 && (
+          <p className="px-3 py-3 text-center" style={{ fontSize: 11, color: '#475569' }}>Les joueurs rejoignent le tour…</p>
+        )}
+        {joinedFakes.map((f, i) => (
+          <div key={f.name} style={{ borderBottom: i < joinedFakes.length - 1 ? '1px solid rgba(30,40,71,0.45)' : 'none' }}
+            className="grid grid-cols-4 px-3 py-2 items-center">
+            <span style={{ fontSize: 12, color: '#94a3b8' }}>{f.name}</span>
+            <span style={{ fontSize: 12, fontWeight: 700, color: f.cashedAt !== null ? '#4ade80' : isCrashed ? '#f87171' : '#64748b' }}>
+              {f.cashedAt !== null ? `×${f.cashedAt.toFixed(2)}` : isCrashed ? 'CRASH' : phase === 'flying' ? '…' : '—'}
+            </span>
+            <span style={{ fontSize: 12, color: '#cbd5e1' }}>{f.bet.toFixed(2)}</span>
+            <span style={{ fontSize: 12, fontWeight: 700 }}>
+              {f.cashedAt !== null
+                ? <span style={{ color: '#4ade80' }}>+{(f.bet * f.cashedAt - f.bet).toFixed(2)}</span>
+                : isCrashed
+                  ? <span style={{ color: '#f87171' }}>−{f.bet.toFixed(2)}</span>
+                  : <span style={{ color: '#64748b' }}>—</span>}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      {/* Panneau de mise */}
+      <div style={{ background: '#0d1021', border: '1px solid #1e2847' }} className="mx-4 mt-3 rounded-xl p-4 space-y-3">
         <p style={{ fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Montant de la mise</p>
-        <div style={{ background: '#080c1e', border: '1px solid #1e2847', borderRadius: 12 }} className="flex items-center px-3 py-2.5">
+        <div style={{ background: '#080c1e', border: '1px solid #1e2847', borderRadius: 12, opacity: myBet !== null ? 0.5 : 1 }}
+          className="flex items-center px-3 py-2.5">
           <input type="number" value={bet} min={0.01} max={50} step={0.01}
+            disabled={myBet !== null}
             onChange={e => { const v = +e.target.value; if (!isNaN(v)) setBet(Math.max(0.01, Math.min(50, v))); }}
             style={{ flex: 1, background: 'transparent', color: '#f8fafc', fontSize: 20, fontWeight: 700, outline: 'none', border: 'none' }} />
           <span style={{ fontSize: 13, fontWeight: 700, color: '#64748b' }}>TON</span>
         </div>
         <BetQuickButtons setBet={setBet} maxBal={currentUser.balanceMain} />
 
-        {/* Profit if won */}
         <div className="grid grid-cols-2 gap-2">
           <div style={{ background: '#080c1e', border: '1px solid #1e2847', borderRadius: 10 }} className="px-3 py-2">
-            <p style={{ fontSize: 10, color: '#64748b', fontWeight: 600, textTransform: 'uppercase', marginBottom: 2 }}>Profit si gagné</p>
-            <p style={{ fontSize: 14, fontWeight: 700, color: '#22c55e' }}>
-              +{(effBet * (parseFloat(autoCash) || 2) - effBet).toFixed(4)} TON
-            </p>
+            <p style={{ fontSize: 10, color: '#64748b', fontWeight: 600, textTransform: 'uppercase', marginBottom: 2 }}>Profit à ×{ac.toFixed(2)}</p>
+            <p style={{ fontSize: 14, fontWeight: 700, color: '#22c55e' }}>+{(effBet * ac - effBet).toFixed(4)} TON</p>
           </div>
           <div style={{ background: '#080c1e', border: '1px solid #1e2847', borderRadius: 10 }} className="px-3 py-2">
             <p style={{ fontSize: 10, color: '#64748b', fontWeight: 600, textTransform: 'uppercase', marginBottom: 2 }}>Chance de gagner</p>
-            <p style={{ fontSize: 14, fontWeight: 700, color: '#f8fafc' }}>
-              {Math.min(97, (97 / (parseFloat(autoCash) || 2))).toFixed(1)}%
-            </p>
+            <p style={{ fontSize: 14, fontWeight: 700, color: '#f8fafc' }}>{Math.min(97, 97 / ac).toFixed(1)}%</p>
           </div>
         </div>
 
-        {/* Auto cashout */}
         <div>
           <p style={{ fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>Encaissement auto (×)</p>
           <div style={{ background: '#080c1e', border: '1px solid #1e2847', borderRadius: 12 }} className="flex items-center px-3 py-2.5 gap-2">
@@ -879,23 +1141,6 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
             )}
           </div>
         </div>
-
-        {phase === 'crashed' ? (
-          <button onClick={reset}
-            style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid #1e2847' }}
-            className="w-full py-3 rounded-xl font-bold text-sm text-white hover:opacity-90 transition-all flex items-center justify-center gap-2">
-            <RotateCcw className="w-4 h-4" /> Nouvelle partie
-          </button>
-        ) : (
-          <button onClick={startRound} disabled={!canBet}
-            style={canBet ? {
-              background: 'linear-gradient(135deg,#4f6ff0,#6366f1)',
-              boxShadow: '0 4px 16px rgba(79,111,240,0.35)',
-            } : { background: 'rgba(255,255,255,0.05)', cursor: 'not-allowed' }}
-            className="w-full py-3.5 rounded-xl font-black text-sm text-white active:scale-[0.98] transition-all flex items-center justify-center gap-2 tracking-widest uppercase">
-            {currentUser.balanceMain < 0.01 ? 'Solde insuffisant' : `Miser au prochain tour · ${effBet.toFixed(2)} TON`}
-          </button>
-        )}
       </div>
     </div>
   );
@@ -905,7 +1150,7 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
 // MINES
 // ══════════════════════════════════════════════════════════════════
 
-const GRID_COLS = 5, GRID_ROWS = 4, GRID_SIZE = 20;
+const GRID_COLS = 5, GRID_SIZE = 20;
 
 function minesMult(n: number, k: number): number {
   if (k === 0) return 1.0;
@@ -1306,14 +1551,14 @@ const CATALOG = [
   {
     id: 'crash' as ActiveGame,
     title: 'Crash',
-    desc: 'Multipliez avant le crash · Sans limite',
-    emoji: '🚀',
+    desc: 'Tours en direct · Encaissez avant le crash',
+    emoji: '✈️',
     accent: '#4f6ff0',
     borderColor: 'rgba(79,111,240,0.25)',
     bgColor: 'rgba(79,111,240,0.08)',
     btnGrad: 'linear-gradient(135deg,#4f6ff0,#6366f1)',
     btnText: '#fff',
-    stats: '~10% avantage · illimité',
+    stats: 'Multijoueur · jusqu\'à ×100',
   },
   {
     id: 'mines' as ActiveGame,
