@@ -255,25 +255,25 @@ function arcPath(i: number): string {
 function rollWheel(streak: number, demo = false): { mult: number; idx: number[] } {
   if (demo) {
     const r = Math.random();
-    if (r < 0.18) return { mult: 0,   idx: [0] };
-    if (r < 0.32) return { mult: 0.4, idx: [1] };
-    if (r < 0.50) return { mult: 1,   idx: [2] };
-    if (r < 0.70) return { mult: 2,   idx: [4] };
-    if (r < 0.85) return { mult: 3,   idx: [5] };
-    if (r < 0.95) return { mult: 5,   idx: [7] };
+    if (r < 0.35) return { mult: 0,   idx: [0] };
+    if (r < 0.52) return { mult: 0.4, idx: [1] };
+    if (r < 0.68) return { mult: 1,   idx: [2] };
+    if (r < 0.83) return { mult: 2,   idx: [4] };
+    if (r < 0.93) return { mult: 3,   idx: [5] };
+    if (r < 0.99) return { mult: 5,   idx: [7] };
     return { mult: 10, idx: [9] };
   }
-  const bonus = Math.min(28, streak * 10);
-  const loseW = 42 + bonus;
-  const f = (100 - loseW) / 58;
+  const bonus = Math.min(35, streak * 12);
+  const loseW = 58 + bonus;
+  const f = (100 - loseW) / 42;
   const raw = [
-    { mult: 0,   weight: loseW,                                          idx: [0, 3, 6, 8] },
-    { mult: 0.4, weight: Math.max(2, Math.round(22 * f)),                idx: [1] },
-    { mult: 1,   weight: Math.max(2, Math.round(18 * f)),                idx: [2] },
-    { mult: 2,   weight: Math.max(1, Math.round(12 * f)),                idx: [4] },
-    { mult: 3,   weight: Math.max(1, Math.round(5  * f)),                idx: [5] },
-    { mult: 5,   weight: streak >= 2 ? 0 : Math.max(0, Math.round(f)),  idx: [7] },
-    { mult: 10,  weight: streak >= 1 ? 0 : Math.max(0, Math.round(0.3 * f)), idx: [9] },
+    { mult: 0,   weight: loseW,                                                idx: [0, 3, 6, 8] },
+    { mult: 0.4, weight: Math.max(1, Math.round(18 * f)),                      idx: [1] },
+    { mult: 1,   weight: Math.max(1, Math.round(13 * f)),                      idx: [2] },
+    { mult: 2,   weight: Math.max(1, Math.round(8  * f)),                      idx: [4] },
+    { mult: 3,   weight: Math.max(1, Math.round(3  * f)),                      idx: [5] },
+    { mult: 5,   weight: streak >= 1 ? 0 : Math.max(0, Math.round(0.6 * f)),  idx: [7] },
+    { mult: 10,  weight: streak >= 1 ? 0 : Math.max(0, Math.round(0.15 * f)), idx: [9] },
   ];
   const total = raw.reduce((s, r) => s + r.weight, 0);
   let r = Math.random() * total;
@@ -510,18 +510,17 @@ const GROWTH   = 0.13;  // mult = e^(0.13·t) → ×2 à ~5.3s, ×10 à ~17.7s
 function rollCrashPoint(playerStreak: number | null, demo = false): number {
   const r = Math.random();
   if (demo) {
-    // Démo : crash points très généreux, rarement sous ×1.5
-    if (r < 0.04) return 1.00;
-    if (r < 0.12) return +(1.1 + Math.random() * 0.4).toFixed(2);
-    return Math.min(200, Math.max(1.5, +(0.995 / (1 - r)).toFixed(2)));
+    if (r < 0.10) return 1.00;
+    if (r < 0.28) return +(1.1 + Math.random() * 0.5).toFixed(2);
+    return Math.min(50, Math.max(1.5, +(0.975 / (1 - r)).toFixed(2)));
   }
   if (playerStreak === null) {
-    if (r < 0.03) return 1.00;
-    return Math.min(100, Math.max(1.01, +(0.985 / (1 - r)).toFixed(2)));
+    if (r < 0.06) return 1.00;
+    return Math.min(80, Math.max(1.01, +(0.962 / (1 - r)).toFixed(2)));
   }
-  const he = playerStreak >= 2 ? 0.68 : playerStreak >= 1 ? 0.80 : 0.90;
+  const he = playerStreak >= 2 ? 0.52 : playerStreak >= 1 ? 0.66 : 0.80;
   if (r < (1 - he)) return 1.00;
-  return Math.min(50, Math.max(1.01, +(he / (1 - r)).toFixed(2)));
+  return Math.min(40, Math.max(1.01, +(he / (1 - r)).toFixed(2)));
 }
 
 const CRASH_INIT_HIST = [2.43, 1.18, 5.67, 1.00, 12.41, 1.23, 3.14, 1.87, 47.20, 1.55, 2.08, 6.91];
@@ -1234,12 +1233,14 @@ function minesMult(n: number, k: number): number {
   if (k === 0) return 1.0;
   let p = 1;
   for (let i = 0; i < k; i++) p *= (GRID_SIZE - n - i) / (GRID_SIZE - i);
-  return +(0.97 / p).toFixed(2);
+  return +(0.93 / p).toFixed(2); // 93% RTP
 }
 
+// Real mode: always +1 hidden mine minimum; more with win streak.
+// Demo: no hidden mines — displayed odds are accurate.
 function effectiveMines(selected: number, streak: number, demo = false): number {
-  if (demo) return Math.max(1, selected - 1); // démo : 1 mine de moins
-  const extra = streak >= 2 ? 2 : streak >= 1 ? 1 : 0;
+  if (demo) return selected;
+  const extra = streak >= 2 ? 3 : streak >= 1 ? 2 : 1;
   return Math.min(GRID_SIZE - 2, selected + extra);
 }
 
@@ -1266,7 +1267,6 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
   const [minePos, setMinePos]     = useState<Set<number>>(new Set());
   const [revealed, setRevealed]   = useState<Set<number>>(new Set());
   const [safeCount, setSafeCount] = useState(0);
-  const [hinting, setHinting]     = useState(false);
   const [feedTab, setFeedTab]     = useState<'all' | 'mine'>('all');
   const [feed, setFeed]           = useState<MinesFeedEntry[]>(MINES_FEED_INIT);
   const [myFeed, setMyFeed]       = useState<MinesFeedEntry[]>([]);
@@ -1293,16 +1293,27 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
     setMinePos(new Set(arr.slice(0, effM)));
     setRevealed(new Set());
     setSafeCount(0);
-    setHinting(false);
     activeBetRef.current = effBet;
     setPhase('playing');
   };
 
   const revealTile = (idx: number) => {
     if (phase !== 'playing' || revealed.has(idx)) return;
-    const nr = new Set(revealed).add(idx);
-    setRevealed(nr);
-    if (minePos.has(idx)) {
+
+    // Greed trap (real mode only): after 4+ safe reveals the house boosts mine probability
+    let isMine = minePos.has(idx);
+    if (!isMine && !demoMode && safeCount >= 4) {
+      const greedP = Math.min(0.45, 0.10 + (safeCount - 4) * 0.07);
+      if (Math.random() < greedP) isMine = true;
+    }
+
+    if (isMine) {
+      // Build display mine set: the hit tile + up to mineCount-1 others from minePos
+      const others = [...minePos].filter(m => m !== idx && !revealed.has(m));
+      others.sort(() => Math.random() - 0.5);
+      const displayMines = new Set([idx, ...others.slice(0, mineCount - 1)]);
+      setMinePos(displayMines);
+      setRevealed(new Set([...revealed, idx]));
       setPhase('lost');
       placeGameBet(activeBetRef.current, 0);
       recordGameResult('Mines', activeBetRef.current, 0);
@@ -1312,6 +1323,7 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
       if (!demoMode) setFeed(f => [entry, ...f.slice(0, 9)]);
       setMyFeed(f => [entry, ...f.slice(0, 9)]);
     } else {
+      setRevealed(new Set([...revealed, idx]));
       snd.reveal();
       const ns = safeCount + 1;
       setSafeCount(ns);
@@ -1331,21 +1343,6 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
     }
   };
 
-  const hint = () => {
-    if (phase !== 'playing' || hinting) return;
-    const safe = Array.from({ length: GRID_SIZE }, (_, i) => i)
-      .filter(i => !minePos.has(i) && !revealed.has(i));
-    if (safe.length === 0) return;
-    const pick = safe[Math.floor(Math.random() * safe.length)];
-    setHinting(true);
-    setTimeout(() => {
-      revealTile(pick);
-      setHinting(false);
-    }, 600);
-    const cost = +(activeBetRef.current * 0.10).toFixed(6);
-    placeGameBet(cost, 0);
-  };
-
   const cashout = () => {
     if (phase !== 'playing' || safeCount === 0) return;
     placeGameBet(activeBetRef.current, curWin);
@@ -1359,7 +1356,7 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
     setMyFeed(f => [entry, ...f.slice(0, 9)]);
   };
 
-  const reset = () => { setPhase('waiting'); setRevealed(new Set()); setMinePos(new Set()); setSafeCount(0); setHinting(false); };
+  const reset = () => { setPhase('waiting'); setRevealed(new Set()); setMinePos(new Set()); setSafeCount(0); };
 
   const displayFeed = feedTab === 'all' ? feed : myFeed;
 
@@ -1500,25 +1497,12 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
         )}
 
         {/* Playing controls */}
-        {phase === 'playing' && (
-          <div className="flex gap-2">
-            {safeCount > 0 && (
-              <button onClick={cashout}
-                style={{ background: 'linear-gradient(135deg,#22c55e,#16a34a)', boxShadow: '0 4px 16px rgba(34,197,94,0.3)' }}
-                className="flex-1 py-3 rounded-xl font-black text-sm text-emerald-950 active:scale-[0.98] transition-all">
-                ENCAISSER · {curWin.toFixed(4)} TON
-              </button>
-            )}
-            <button onClick={hint}
-              disabled={hinting || bal < activeBetRef.current * 0.1}
-              style={{ background: 'rgba(79,111,240,0.12)', border: '1px solid rgba(79,111,240,0.25)' }}
-              className={`${safeCount > 0 ? 'w-14' : 'flex-1'} py-3 rounded-xl font-bold text-sm transition-all active:scale-[0.98] flex items-center justify-center gap-1 ${
-                hinting ? 'animate-pulse' : ''
-              }`}
-              >
-              <span style={{ color: '#4f6ff0' }}>{safeCount > 0 ? '💡' : '💡 Indice (−10%)'}</span>
-            </button>
-          </div>
+        {phase === 'playing' && safeCount > 0 && (
+          <button onClick={cashout}
+            style={{ background: 'linear-gradient(135deg,#22c55e,#16a34a)', boxShadow: '0 4px 16px rgba(34,197,94,0.3)' }}
+            className="w-full py-3 rounded-xl font-black text-sm text-emerald-950 active:scale-[0.98] transition-all">
+            ENCAISSER · {curWin.toFixed(4)} TON
+          </button>
         )}
 
         {/* End state */}
@@ -1602,9 +1586,10 @@ const R_RED = new Set([1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]);
 const R_WHEEL_SEQ = [0,32,15,19,4,21,2,25,17,34,6,27,13,36,11,30,8,23,10,5,24,16,33,1,20,14,31,9,22,18,29,7,28,12,35,3,26];
 
 function rollRoulette(streak: number, demo = false): number {
-  if (demo) return 1 + Math.floor(Math.random() * 36); // démo : jamais de zéro
-  const zeroBoost = streak >= 2 ? 0.12 : streak >= 1 ? 0.07 : 0.03;
-  if (Math.random() < zeroBoost) return 0;
+  const zeroP = demo
+    ? 0.04
+    : streak >= 2 ? 0.22 : streak >= 1 ? 0.13 : 0.06;
+  if (Math.random() < zeroP) return 0;
   return 1 + Math.floor(Math.random() * 36);
 }
 
@@ -1926,13 +1911,16 @@ function rollPlinko(rows: PlinkoRows, risk: PlinkoRisk, streak: number, demo = f
   const slots = rows + 1;
   const center = rows / 2;
   const spreadFactor = risk === 'low' ? 0.45 : risk === 'medium' ? 0.70 : 1.0;
-  const houseEdge = demo ? -0.08 : streak >= 2 ? 0.15 : streak >= 1 ? 0.08 : 0.03; // démo : léger avantage
+  // Positive houseEdge → ball pushed toward edges (lower multipliers in low risk, higher variance)
+  // In medium/high risk, edges = high multiplier BUT the probability is already heavily tailed
+  // Net effect: lower EV for player
+  const houseEdge = demo ? 0.04 : streak >= 2 ? 0.24 : streak >= 1 ? 0.16 : 0.10;
   const path: boolean[] = [];
   let pos = 0;
   for (let r = 0; r < rows; r++) {
     const pull = (pos - center) / center;
     const pRight = 0.5 + pull * spreadFactor * 0.38 + houseEdge * 0.5;
-    const goRight = Math.random() > Math.max(0.18, Math.min(0.82, pRight));
+    const goRight = Math.random() > Math.max(0.15, Math.min(0.85, pRight));
     path.push(goRight);
     if (goRight) pos++;
   }
@@ -2008,7 +1996,7 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
 
   const BOARD_W = 280;
   const PEG_SPACING = Math.min(22, BOARD_W / (rows + 2));
-  const PEG_R = 4;
+  const PEG_R = 3;
   const ROW_H = PEG_SPACING * 0.95;
   const BOARD_H = rows * ROW_H + 60;
 
@@ -2058,10 +2046,10 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
             {/* Ball glow */}
             {ballPos !== null && (
               <g>
-                <circle cx={ballSvgX} cy={ballSvgY} r={PEG_R + 5} fill="#fbbf24" opacity="0.18" />
-                <circle cx={ballSvgX} cy={ballSvgY} r={PEG_R + 2.5} fill="#fbbf24" stroke="#fde68a" strokeWidth="1.5"
+                <circle cx={ballSvgX} cy={ballSvgY} r={PEG_R + 3} fill="#fbbf24" opacity="0.12" />
+                <circle cx={ballSvgX} cy={ballSvgY} r={PEG_R + 1.2} fill="#fbbf24" stroke="#fde68a" strokeWidth="1"
                   style={{ transition: `cx ${rows <= 8 ? 165 : rows <= 12 ? 118 : 78}ms ease-out, cy ${rows <= 8 ? 165 : rows <= 12 ? 118 : 78}ms ease-out` }} />
-                <circle cx={ballSvgX - 1} cy={ballSvgY - 1.5} r={1.5} fill="#fff" opacity="0.6"
+                <circle cx={ballSvgX - 0.6} cy={ballSvgY - 1} r={0.9} fill="#fff" opacity="0.65"
                   style={{ transition: `cx ${rows <= 8 ? 165 : rows <= 12 ? 118 : 78}ms ease-out, cy ${rows <= 8 ? 165 : rows <= 12 ? 118 : 78}ms ease-out` }} />
               </g>
             )}
