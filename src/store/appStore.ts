@@ -31,6 +31,13 @@ export interface User {
   dailyTasksCompleted: number;
 }
 
+export interface GameResult {
+  game: string;
+  bet: number;
+  win: number;
+  ts: number;
+}
+
 export interface Task {
   id: string;
   type: 'join_channel' | 'join_group' | 'start_bot' | 'invite_friends' | 'daily' | 'special' | 'social' | 'watch_video';
@@ -760,7 +767,9 @@ interface AppState {
   // Demo / Jeu
   demoMode: boolean;
   demoBalance: number;
+  gameHistory: GameResult[];
   toggleDemoMode: () => void;
+  recordGameResult: (game: string, bet: number, win: number) => void;
 
   // Actions - Mini App
   confirmDeposit: (txId: string, txHash: string) => void;
@@ -920,6 +929,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   referralBoostExpiresAt: _savedRefBoost,
   demoMode: false,
   demoBalance: 10.0,
+  gameHistory: (() => { try { return JSON.parse(localStorage.getItem('tc_game_history') || '[]'); } catch { return []; } })(),
 
   // Mini App Actions
   confirmDeposit: (txId, txHash) => {
@@ -1255,6 +1265,16 @@ export const useAppStore = create<AppState>((set, get) => ({
         currentUser: updatedUser,
         users: s.users.map(u => u.id === s.currentUser.id ? { ...u, ...updatedUser } : u),
       };
+    });
+  },
+
+  recordGameResult: (game, bet, win) => {
+    set(s => {
+      if (s.demoMode) return {};
+      const entry: GameResult = { game, bet, win, ts: Date.now() };
+      const updated = [entry, ...s.gameHistory].slice(0, 50);
+      try { localStorage.setItem('tc_game_history', JSON.stringify(updated)); } catch { /* noop */ }
+      return { gameHistory: updated };
     });
   },
 
