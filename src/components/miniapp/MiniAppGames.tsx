@@ -750,8 +750,8 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
 
     return () => {
       clearInterval(id);
-      // rembourse les mises non résolues (fenêtre de mise / file d'attente)
-      if (phaseRef.current === 'betting' && myBetRef.current !== null) placeGameBet(0, myBetRef.current);
+      // Refund any unresolved bets on unmount (including mid-flight)
+      if (myBetRef.current !== null && cashedRef.current === null) placeGameBet(0, myBetRef.current);
       if (queuedRef.current !== null) placeGameBet(0, queuedRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1277,11 +1277,15 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
   const [bigWin, setBigWin]       = useState(false);
 
   const effBet   = Math.min(bet, bal);
-  const curMult  = minesMult(mineCount, safeCount);
+  // Use effective mines for honest multiplier display — matches actual placement
+  const effMinesCalc = phase === 'waiting'
+    ? (demoMode ? mineCount : effectiveMines(mineCount, streak))
+    : (effMinesRef.current || mineCount);
+  const curMult  = minesMult(effMinesCalc, safeCount);
   const curWin   = +(activeBetRef.current * curMult).toFixed(6);
-  const nextMult = minesMult(mineCount, safeCount + 1);
-  const firstCaseMult = minesMult(mineCount, 1);
-  const maxPossibleMult = minesMult(mineCount, GRID_SIZE - mineCount);
+  const nextMult = minesMult(effMinesCalc, safeCount + 1);
+  const firstCaseMult = minesMult(effMinesCalc, 1);
+  const maxPossibleMult = minesMult(effMinesCalc, GRID_SIZE - effMinesCalc);
 
   const startGame = () => {
     if (effBet < 0.01 || bal < 0.01) return;
@@ -1330,7 +1334,7 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
       const ns = safeCount + 1;
       setSafeCount(ns);
       if (ns === GRID_SIZE - effMinesRef.current) {
-        const win = +(activeBetRef.current * minesMult(mineCount, ns)).toFixed(6);
+        const win = +(activeBetRef.current * minesMult(effMinesRef.current, ns)).toFixed(6);
         trimMinesForDisplay();
         placeGameBet(activeBetRef.current, win);
         recordGameResult('Mines', activeBetRef.current, win);
