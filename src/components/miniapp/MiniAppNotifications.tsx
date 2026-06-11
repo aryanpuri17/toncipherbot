@@ -29,17 +29,13 @@ function timeAgo(iso: string): string {
 }
 
 export const MiniAppNotifications: React.FC = () => {
-  const { notifications, currentUser, markNotificationRead, setMiniAppPage } = useAppStore();
+  const { notifications, currentUser, markNotificationRead, markAllNotificationsRead, setMiniAppPage } = useAppStore();
 
   const myNotifs = notifications
     .filter(n => !n.userId || n.userId === currentUser.id)
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
   const unread = myNotifs.filter(n => !n.isRead).length;
-
-  const markAll = () => {
-    myNotifs.filter(n => !n.isRead).forEach(n => markNotificationRead(n.id));
-  };
 
   return (
     <div className="space-y-5 animate-slide-up">
@@ -53,7 +49,7 @@ export const MiniAppNotifications: React.FC = () => {
         </div>
         {unread > 0 && (
           <button
-            onClick={markAll}
+            onClick={markAllNotificationsRead}
             className="text-xs text-slate-400 hover:text-white transition-colors px-2 py-1 rounded-lg hover:bg-white/5"
           >
             Tout lire

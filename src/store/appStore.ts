@@ -881,6 +881,7 @@ interface AppState {
 
   updateFraudAlert: (id: string, data: Partial<FraudAlert>) => void;
   markNotificationRead: (id: string) => void;
+  markAllNotificationsRead: () => void;
   addNotification: (n: Omit<Notification, 'id' | 'createdAt'>) => void;
   updatePlatformConfig: (data: Partial<PlatformConfig>) => void;
   addPlatformRevenue: (amount: number) => void;
@@ -1441,6 +1442,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   // Others
   updateFraudAlert: (id, data) => set((s) => ({ fraudAlerts: s.fraudAlerts.map(a => a.id === id ? { ...a, ...data } : a) })),
   markNotificationRead: (id) => set((s) => ({ notifications: s.notifications.map(n => n.id === id ? { ...n, isRead: true } : n) })),
+  markAllNotificationsRead: () => set((s) => ({ notifications: s.notifications.map(n => ({ ...n, isRead: true })) })),
   addNotification: (n) => set((s) => ({ notifications: [{ ...n, id: generateId(), createdAt: new Date().toISOString() }, ...s.notifications] })),
   updatePlatformConfig: (data) => set((s) => ({ platformConfig: { ...s.platformConfig, ...data } })),
   addPlatformRevenue: (amount) => set((s) => ({ platformStats: { ...s.platformStats, platformRevenue: s.platformStats.platformRevenue + amount } })),
