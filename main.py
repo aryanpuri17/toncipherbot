@@ -1198,13 +1198,14 @@ async def api_admin_approve_withdrawal(request: web.Request) -> web.Response:
         except Exception:
             pass
 
-    await _notify_channel(
-        WITHDRAWAL_CHANNEL,
-        f"✅ <b>Retrait approuvé</b>\n"
-        f"🆔 TX ID: <code>{tx_id}</code>\n"
-        f"💰 {tx_row[1]:.2f} {tx_row[2] if tx_row else ''}\n"
-        + (f'🔗 <a href="{tx_link}">Voir sur TonScan</a>' if tx_link else ""),
-    )
+    if tx_row:
+        await _notify_channel(
+            WITHDRAWAL_CHANNEL,
+            f"✅ <b>Retrait approuvé</b>\n"
+            f"🆔 TX ID: <code>{tx_id}</code>\n"
+            f"💰 {tx_row[1]:.2f} {tx_row[2]}\n"
+            + (f'🔗 <a href="{tx_link}">Voir sur TonScan</a>' if tx_link else ""),
+        )
 
     return web.json_response({"success": True}, headers=_CORS)
 
@@ -1247,13 +1248,14 @@ async def api_admin_reject_withdrawal(request: web.Request) -> web.Response:
         except Exception:
             pass
 
-    await _notify_channel(
-        WITHDRAWAL_CHANNEL,
-        f"❌ <b>Retrait refusé</b>\n"
-        f"🆔 TX ID: <code>{tx_id}</code>\n"
-        f"💰 {tx_row[1]:.2f} {tx_row[2] if tx_row else ''}\n"
-        + (f"📝 Motif : {note}" if note else ""),
-    )
+    if tx_row:
+        await _notify_channel(
+            WITHDRAWAL_CHANNEL,
+            f"❌ <b>Retrait refusé</b>\n"
+            f"🆔 TX ID: <code>{tx_id}</code>\n"
+            f"💰 {tx_row[1]:.2f} {tx_row[2]}\n"
+            + (f"📝 Motif : {note}" if note else ""),
+        )
 
     return web.json_response({"success": True}, headers=_CORS)
 
@@ -1306,7 +1308,7 @@ async def api_admin_resolve_alert(request: web.Request) -> web.Response:
         if action == "ban":
             async with db.execute("SELECT telegram_id FROM fraud_alerts WHERE id = ?", (alert_id,)) as cur:
                 row = await cur.fetchone()
-            if row:
+            if row and row[0] > 0:
                 await db.execute(
                     "UPDATE users SET banned = 1, flagged = 1 WHERE telegram_id = ?", (row[0],)
                 )
@@ -1661,11 +1663,19 @@ async def api_user_task_fund(request: web.Request) -> web.Response:
         return web.json_response({"error": "Invalid telegramId"}, status=400, headers=_CORS)
     if not telegram_id:
         return web.json_response({"error": "Missing telegramId"}, status=400, headers=_CORS)
-    extra_executions = int(data.get("extraExecutions", 0))
-    extra_budget     = float(data.get("extraBudget", 0))
+    try:
+        extra_executions = int(data.get("extraExecutions", 0))
+    except (TypeError, ValueError):
+        extra_executions = 0
+    try:
+        extra_budget = float(data.get("extraBudget", 0))
+    except (TypeError, ValueError):
+        extra_budget = 0.0
 
     if extra_executions < 1:
         return web.json_response({"error": "Invalid extra executions"}, status=400, headers=_CORS)
+    if extra_budget <= 0:
+        return web.json_response({"error": "Invalid extra budget"}, status=400, headers=_CORS)
 
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(
