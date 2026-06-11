@@ -6,7 +6,7 @@ import { ArrowLeft, RotateCcw, Trophy, Zap } from 'lucide-react';
 // AUDIO ENGINE (Web Audio API — aucun fichier externe)
 // ══════════════════════════════════════════════════════════════════
 
-let _soundMuted = false;
+let _soundMuted = localStorage.getItem('tc_sound_muted') === '1';
 const _AC: { ctx: AudioContext | null } = { ctx: null };
 function _ac(): AudioContext | null {
   if (_soundMuted) return null;
@@ -159,7 +159,7 @@ const BigWinEffect: React.FC<{ show: boolean }> = ({ show }) => (
 const MuteButton: React.FC = () => {
   const [m, setM] = React.useState(_soundMuted);
   return (
-    <button onClick={() => { _soundMuted = !_soundMuted; setM(_soundMuted); }}
+    <button onClick={() => { _soundMuted = !_soundMuted; localStorage.setItem('tc_sound_muted', _soundMuted ? '1' : '0'); setM(_soundMuted); }}
       title={m ? 'Activer le son' : 'Couper le son'}
       style={{
         width: 32, height: 32, borderRadius: 8, flexShrink: 0, cursor: 'pointer',
@@ -183,6 +183,18 @@ const GameBalanceChip: React.FC<{ bal: number; demo: boolean }> = ({ bal, demo }
     <p style={{ fontSize: 14, fontWeight: 700, color: demo ? '#fbbf24' : '#f8fafc', marginTop: 1 }}>{bal.toFixed(3)} TON</p>
   </div>
 );
+
+const StreakChip: React.FC<{ streak: number }> = ({ streak }) =>
+  streak >= 2 ? (
+    <span title={`${streak} victoires consécutives`} style={{
+      display: 'inline-flex', alignItems: 'center', gap: 3, padding: '2px 8px',
+      borderRadius: 99, fontSize: 11, fontWeight: 700, flexShrink: 0,
+      background: 'rgba(249,115,22,0.18)', color: '#fb923c',
+      border: '1px solid rgba(249,115,22,0.3)',
+    }}>
+      🔥 {streak}
+    </span>
+  ) : null;
 
 // ══════════════════════════════════════════════════════════════════
 // SHARED BET QUICK BUTTONS (MIN / ½ / 2× / MAX)
@@ -376,7 +388,10 @@ const WheelGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
           <ArrowLeft className="w-4 h-4" />
         </button>
         <div className="flex-1">
-          <h2 className="text-base font-bold text-white">Roue de la Fortune</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-base font-bold text-white">Roue de la Fortune</h2>
+            <StreakChip streak={streak} />
+          </div>
           <p className="text-[11px] text-slate-500">Faites tourner · Jackpot ×10 — jusqu'à ×10 la mise</p>
         </div>
         <MuteButton />
@@ -445,7 +460,7 @@ const WheelGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
               : 'bg-white/5 text-slate-600 cursor-not-allowed'
           }`}>
           {spinning ? <><RotateCcw className="w-4 h-4 animate-spin" /> La roue tourne…</>
-            : bal < 0.01 ? 'Solde insuffisant'
+            : bal < 0.01 ? (demoMode ? '🎮 Démo épuisé' : '💸 Solde insuffisant')
             : <><Zap className="w-4 h-4" /> Tourner ({effBet.toFixed(2)} TON)</>}
         </button>
       </div>
@@ -863,12 +878,13 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
             <ArrowLeft className="w-4 h-4" />
           </button>
           <div className="flex-1">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <h2 className="text-base font-bold text-white">Crash ✈️</h2>
               <span className="flex items-center gap-1" style={{ fontSize: 9, fontWeight: 800, color: '#f87171', letterSpacing: '0.08em' }}>
                 <span style={{ width: 6, height: 6, borderRadius: 99, background: '#ef4444', animation: 'crashBlink 1.2s infinite' }} />
                 EN DIRECT
               </span>
+              <StreakChip streak={streak} />
             </div>
             <p className="text-[11px]" style={{ color: '#64748b' }}>Misez avant le décollage · Encaissez avant le crash</p>
           </div>
@@ -965,6 +981,24 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
               stroke={isCrashed ? '#ef4444' : '#22c55e'}
               strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
           )}
+
+          {/* ligne cible d'encaissement auto */}
+          {(() => {
+            const acv = parseFloat(autoCash);
+            if (!isNaN(acv) && acv >= 1.01 && acv <= maxM && phase !== 'betting') {
+              const y = yOf(acv);
+              return (
+                <g>
+                  <line x1={PX0} y1={y} x2={PX0 + PW} y2={y}
+                    stroke="#f59e0b" strokeWidth="1.2" strokeDasharray="5,4" opacity="0.6" />
+                  <text x={PX0 + PW - 2} y={y - 4} textAnchor="end" fontSize="9" fontWeight="700" fill="#f59e0b" opacity="0.9">
+                    AUTO ×{acv.toFixed(2)}
+                  </text>
+                </g>
+              );
+            }
+            return null;
+          })()}
 
           {/* marqueurs d'encaissement des autres joueurs */}
           {phase !== 'betting' && fakes.filter(f => f.cashPoint).map((f, i) => (
@@ -1091,7 +1125,7 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
         <button onClick={mainBtn.onClick} disabled={mainBtn.disabled}
           className="w-full py-4 rounded-xl font-black text-sm active:scale-[0.98] transition-all tracking-wide uppercase"
           style={btnStyle}>
-          {bal < 0.01 && mainBtn.kind === 'bet' ? 'Solde insuffisant' : mainBtn.label}
+          {bal < 0.01 && mainBtn.kind === 'bet' ? (demoMode ? '🎮 Démo épuisé' : '💸 Solde insuffisant') : mainBtn.label}
         </button>
       </div>
 
@@ -1236,6 +1270,7 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
   const [myFeed, setMyFeed]       = useState<MinesFeedEntry[]>([]);
   const activeBetRef              = useRef(0);
   const effMinesRef               = useRef<number>(mineCount);
+  const [bigWin, setBigWin]       = useState(false);
 
   const effBet   = Math.min(bet, bal);
   const curMult  = minesMult(mineCount, safeCount);
@@ -1282,6 +1317,8 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
         placeGameBet(activeBetRef.current, win);
         snd.win();
         onResult(true);
+        const finalMult = minesMult(mineCount, ns);
+        if (finalMult >= 5) { setBigWin(true); setTimeout(() => setBigWin(false), 2600); }
         setPhase('won');
         const entry: MinesFeedEntry = { username: 'Vous', bet: activeBetRef.current, payout: win, profit: +(win - activeBetRef.current).toFixed(4), mines: mineCount };
         if (!demoMode) setFeed(f => [entry, ...f.slice(0, 9)]);
@@ -1310,6 +1347,7 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
     placeGameBet(activeBetRef.current, curWin);
     snd.win();
     onResult(true);
+    if (curMult >= 5) { setBigWin(true); setTimeout(() => setBigWin(false), 2600); }
     setPhase('won');
     const entry: MinesFeedEntry = { username: 'Vous', bet: activeBetRef.current, payout: curWin, profit: +(curWin - activeBetRef.current).toFixed(4), mines: mineCount };
     if (!demoMode) setFeed(f => [entry, ...f.slice(0, 9)]);
@@ -1322,6 +1360,7 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
 
   return (
     <div className="pb-4" style={{ background: '#060a18', minHeight: '100%' }}>
+      <BigWinEffect show={bigWin} />
       {/* Header */}
       <div style={{ background: '#0d1021', borderBottom: '1px solid #1e2847' }} className="px-4 pt-4 pb-3">
         <div className="flex items-center gap-3">
@@ -1330,7 +1369,10 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
             <ArrowLeft className="w-4 h-4" />
           </button>
           <div className="flex-1">
-            <h2 className="text-base font-bold" style={{ color: '#f8fafc' }}>Mines 💣</h2>
+            <div className="flex items-center gap-2">
+              <h2 className="text-base font-bold" style={{ color: '#f8fafc' }}>Mines 💣</h2>
+              <StreakChip streak={streak} />
+            </div>
             <p className="text-[11px]" style={{ color: '#64748b' }}>Évitez les mines · Encaissez au bon moment</p>
           </div>
           <MuteButton />
@@ -1681,7 +1723,10 @@ const RouletteGame: React.FC<{ onBack: () => void; streak: number; onResult: OnR
             <ArrowLeft className="w-4 h-4" />
           </button>
           <div className="flex-1">
-            <h2 className="text-base font-bold" style={{ color: '#f8fafc' }}>Roulette 🎰</h2>
+            <div className="flex items-center gap-2">
+              <h2 className="text-base font-bold" style={{ color: '#f8fafc' }}>Roulette 🎰</h2>
+              <StreakChip streak={streak} />
+            </div>
             <p className="text-[11px]" style={{ color: '#64748b' }}>Roulette européenne · 37 cases</p>
           </div>
           <MuteButton />
@@ -1978,7 +2023,10 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
             <ArrowLeft className="w-4 h-4" />
           </button>
           <div className="flex-1">
-            <h2 className="text-base font-bold" style={{ color: '#f8fafc' }}>Plinko 🎯</h2>
+            <div className="flex items-center gap-2">
+              <h2 className="text-base font-bold" style={{ color: '#f8fafc' }}>Plinko 🎯</h2>
+              <StreakChip streak={streak} />
+            </div>
             <p className="text-[11px]" style={{ color: '#64748b' }}>Lâchez la balle · Visez les multiplicateurs élevés</p>
           </div>
           <MuteButton />
@@ -2129,19 +2177,28 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
 // LIVE FEED
 // ══════════════════════════════════════════════════════════════════
 
-type FeedEntry = { username: string; bet: number; win: number; mult: number; game: string; time: string };
+type FeedEntry = { username: string; bet: number; win: number; mult: number; game: string; createdAt: number };
 
+function formatFeedTime(ts: number): string {
+  const s = Math.floor((Date.now() - ts) / 1000);
+  if (s < 5)    return 'maintenant';
+  if (s < 60)   return `il y a ${s}s`;
+  if (s < 3600) return `il y a ${Math.floor(s / 60)}m`;
+  return `il y a ${Math.floor(s / 3600)}h`;
+}
+
+const _NOW = Date.now();
 const FEED_DATA: FeedEntry[] = [
-  { username: 'Léa R.',      bet: 0.05, win: 0.00, mult: 0,    game: 'Crash',    time: '1m'  },
-  { username: 'Yusuf K.',    bet: 0.10, win: 2.80, mult: 2.80, game: 'Plinko',   time: '3m'  },
-  { username: 'Marco T.',    bet: 1.0,  win: 0.00, mult: 0,    game: 'Roulette', time: '6m'  },
-  { username: 'Chen W.',     bet: 0.02, win: 0.04, mult: 1.9,  game: 'Roulette', time: '9m'  },
-  { username: 'Amira S.',    bet: 0.50, win: 1.28, mult: 2.56, game: 'Crash',    time: '14m' },
-  { username: 'Priya S.',    bet: 0.05, win: 0.00, mult: 0,    game: 'Mines',    time: '19m' },
-  { username: 'Fatou D.',    bet: 0.10, win: 0.19, mult: 1.9,  game: 'Roulette', time: '25m' },
-  { username: 'Nicolás V.',  bet: 0.03, win: 1.08, mult: 36,   game: 'Roulette', time: '33m' },
-  { username: 'Kwame O.',    bet: 0.20, win: 0.00, mult: 0,    game: 'Plinko',   time: '41m' },
-  { username: 'Hana P.',     bet: 0.01, win: 0.02, mult: 2.1,  game: 'Roue',     time: '48m' },
+  { username: 'Léa R.',      bet: 0.05, win: 0.00, mult: 0,    game: 'Crash',    createdAt: _NOW -  1 * 60000 },
+  { username: 'Yusuf K.',    bet: 0.10, win: 2.80, mult: 2.80, game: 'Plinko',   createdAt: _NOW -  3 * 60000 },
+  { username: 'Marco T.',    bet: 1.0,  win: 0.00, mult: 0,    game: 'Roulette', createdAt: _NOW -  6 * 60000 },
+  { username: 'Chen W.',     bet: 0.02, win: 0.04, mult: 2,    game: 'Roulette', createdAt: _NOW -  9 * 60000 },
+  { username: 'Amira S.',    bet: 0.50, win: 1.28, mult: 2.56, game: 'Crash',    createdAt: _NOW - 14 * 60000 },
+  { username: 'Priya S.',    bet: 0.05, win: 0.00, mult: 0,    game: 'Mines',    createdAt: _NOW - 19 * 60000 },
+  { username: 'Fatou D.',    bet: 0.10, win: 0.19, mult: 2,    game: 'Roulette', createdAt: _NOW - 25 * 60000 },
+  { username: 'Nicolás V.',  bet: 0.03, win: 1.08, mult: 36,   game: 'Roulette', createdAt: _NOW - 33 * 60000 },
+  { username: 'Kwame O.',    bet: 0.20, win: 0.00, mult: 0,    game: 'Plinko',   createdAt: _NOW - 41 * 60000 },
+  { username: 'Hana P.',     bet: 0.01, win: 0.02, mult: 2,    game: 'Roue',     createdAt: _NOW - 48 * 60000 },
 ];
 
 // ══════════════════════════════════════════════════════════════════
@@ -2217,14 +2274,21 @@ export const MiniAppGames: React.FC = () => {
   const { currentUser, demoMode, demoBalance, toggleDemoMode } = useAppStore();
   const [activeGame, setActiveGame] = useState<ActiveGame>(null);
   const [streak, setStreak]         = useState(0);
-  const [muted, setMuted]           = useState(false);
+  const [muted, setMuted]           = useState(_soundMuted);
   const [liveFeed, setLiveFeed]     = useState<FeedEntry[]>(FEED_DATA);
+  const [, setTick]                 = useState(0);
   const feedIdxRef                  = useRef(0);
 
   const handleResult = (won: boolean) => setStreak(s => won ? s + 1 : 0);
-  const toggleMute   = () => { _soundMuted = !_soundMuted; setMuted(_soundMuted); };
+  const toggleMute   = () => { _soundMuted = !_soundMuted; localStorage.setItem('tc_sound_muted', _soundMuted ? '1' : '0'); setMuted(_soundMuted); };
 
   const bal = demoMode ? demoBalance : currentUser.balanceMain;
+
+  // Tick every 10s to refresh relative timestamps in live feed
+  useEffect(() => {
+    const id = setInterval(() => setTick(t => t + 1), 10000);
+    return () => clearInterval(id);
+  }, []);
 
   // Live feed auto-rotation — new fake entry every 8–18 seconds
   useEffect(() => {
@@ -2237,10 +2301,10 @@ export const MiniAppGames: React.FC = () => {
         const game = GAME_NAMES[Math.floor(Math.random() * GAME_NAMES.length)];
         const bet  = randomFakeBet();
         const r    = Math.random();
-        const mult = r < 0.42 ? 0 : r < 0.65 ? 1.9 : r < 0.78 ? 2 : r < 0.89 ? 3 : r < 0.96 ? 5 : 10;
+        const mult = r < 0.42 ? 0 : r < 0.65 ? 2 : r < 0.78 ? 2 : r < 0.89 ? 3 : r < 0.96 ? 5 : 10;
         const win  = +(bet * mult).toFixed(4);
         setLiveFeed(prev => [
-          { username: name, bet, win, mult, game, time: 'maintenant' },
+          { username: name, bet, win, mult, game, createdAt: Date.now() },
           ...prev.slice(0, 9),
         ]);
         timerRef.current = scheduleNext();
@@ -2260,7 +2324,19 @@ export const MiniAppGames: React.FC = () => {
     <div className="space-y-5 animate-slide-up pb-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-lg font-bold text-white">Jeux</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-lg font-bold text-white">Jeux</h1>
+            {streak >= 2 && (
+              <span style={{
+                display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 10px',
+                borderRadius: 99, fontSize: 12, fontWeight: 700,
+                background: 'rgba(249,115,22,0.18)', color: '#fb923c',
+                border: '1px solid rgba(249,115,22,0.3)',
+              }}>
+                🔥 {streak} en série
+              </span>
+            )}
+          </div>
           <p className="text-xs text-slate-400 mt-0.5">Misez des TON · Tentez votre chance</p>
         </div>
         <div style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid #1e2847' }} className="px-3 py-2 rounded-xl text-right">
@@ -2331,15 +2407,18 @@ export const MiniAppGames: React.FC = () => {
       </div>
 
       {/* Live activity feed */}
+      <style>{`@keyframes feedIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}} @keyframes liveDot{0%,100%{opacity:1}50%{opacity:0.2}}`}</style>
       <div style={{ background: '#0d1021', border: '1px solid #1e2847', borderRadius: 16 }} className="p-4">
         <div className="flex items-center gap-2 mb-3">
           <Trophy className="w-4 h-4" style={{ color: '#f59e0b' }} />
           <h3 className="text-sm font-semibold" style={{ color: '#f8fafc' }}>Activité récente</h3>
+          <span style={{ marginLeft: 'auto', width: 7, height: 7, borderRadius: '50%', background: '#22c55e', animation: 'liveDot 2s ease-in-out infinite' }} title="En direct" />
         </div>
         <div className="space-y-2">
           {liveFeed.map((f, i) => (
-            <div key={i} className="flex items-center justify-between py-1.5" style={{
+            <div key={f.createdAt} className="flex items-center justify-between py-1.5" style={{
               borderBottom: i < liveFeed.length - 1 ? '1px solid rgba(30,40,71,0.6)' : 'none',
+              animation: 'feedIn 0.35s ease',
             }}>
               <div className="flex items-center gap-2.5">
                 <span style={{
@@ -2363,7 +2442,7 @@ export const MiniAppGames: React.FC = () => {
                 }}>
                   {f.win > 0 ? `+${f.win.toFixed(2)} TON` : `−${f.bet.toFixed(2)} TON`}
                 </span>
-                <p style={{ fontSize: 10, color: '#64748b' }}>{f.time}</p>
+                <p style={{ fontSize: 10, color: '#64748b' }}>{formatFeedTime(f.createdAt)}</p>
               </div>
             </div>
           ))}

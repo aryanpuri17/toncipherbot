@@ -302,7 +302,13 @@ export const MiniAppTasks: React.FC = () => {
         else setPhase(card.id, 'not_subscribed');
       }
     } catch {
-      await succeed();
+      // Network error: be generous for platform tasks (API check unreachable),
+      // but never credit API tasks without server confirmation
+      if (card.source === 'platform') {
+        await succeed();
+      } else {
+        setPhase(card.id, 'idle');
+      }
     }
   };
 
