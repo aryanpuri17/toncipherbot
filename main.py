@@ -660,7 +660,7 @@ async def api_withdrawal_create(request: web.Request) -> web.Response:
     fee         = _parse_amount(data.get("fee")) or 0.0
     init_data   = str(data.get("initData", "")).strip()
 
-    if not telegram_id or amount is None or len(address) < 10:
+    if not telegram_id or amount is None or len(address) < 20:
         return web.json_response({"error": "Invalid data"}, status=400, headers=_CORS)
 
     # Authenticate: verify initData signature and confirm the caller is who they claim
