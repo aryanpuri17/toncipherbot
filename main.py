@@ -1686,6 +1686,9 @@ async def start_web() -> None:
     await runner.setup()
     await web.TCPSite(runner, "0.0.0.0", PORT).start()
     log.info("Web server listening on port %s", PORT)
+    # Keep the coroutine alive — without this the server stops as soon as
+    # start_web() returns (fatal when the bot polling task isn't running).
+    await asyncio.Event().wait()
 
 
 async def main() -> None:
