@@ -50,7 +50,7 @@ export const AdminUsers: React.FC = () => {
         setUsers(await res.json() as ApiUser[]);
         setFetchError('');
       } else {
-        setFetchError(res.status === 401 ? 'Clé API admin invalide — allez dans Sécurité → Anti-Fraude pour la configurer.' : `Erreur serveur (${res.status}).`);
+        setFetchError(res.status === 401 ? 'Clé API admin invalide — configurez-la dans l\'onglet Sécurité.' : `Erreur serveur (${res.status}).`);
       }
     } catch {
       setFetchError('Backend injoignable — vérifiez que le serveur tourne.');

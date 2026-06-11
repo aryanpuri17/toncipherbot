@@ -150,7 +150,7 @@ export const AdminWithdrawals: React.FC = () => {
         setWithdrawals(await res.json() as ApiWithdrawal[]);
         setActionError('');
       } else {
-        setActionError(res.status === 401 ? 'Clé API admin invalide (voir Anti-Fraude → Clé API Admin).' : `Erreur serveur (${res.status}).`);
+        setActionError(res.status === 401 ? 'Clé API admin invalide — configurez-la dans l\'onglet Sécurité.' : `Erreur serveur (${res.status}).`);
       }
     } catch {
       setActionError('Backend injoignable — vérifiez que le serveur tourne.');
