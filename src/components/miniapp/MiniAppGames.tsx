@@ -2013,6 +2013,7 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
   const animTimerRef              = useRef<ReturnType<typeof setTimeout> | null>(null);
   const plinkoBigWinTimer         = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mountedRef                = useRef(true);
+  const pendingBetRef             = useRef<{ win: number } | null>(null);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -2020,6 +2021,11 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
       mountedRef.current = false;
       if (animTimerRef.current) clearTimeout(animTimerRef.current);
       if (plinkoBigWinTimer.current) clearTimeout(plinkoBigWinTimer.current);
+      // Animation was interrupted — still credit the win so the bet isn't lost
+      if (pendingBetRef.current !== null) {
+        useAppStore.getState().placeGameBet(0, pendingBetRef.current.win);
+        pendingBetRef.current = null;
+      }
     };
   }, []);
 
@@ -2043,17 +2049,19 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
     setLastWin(null);
     const { slot, path } = rollPlinko(rows, risk, streak, demoMode);
     const used = effBet;
+    const mult = mults[slot];
+    const win  = +(used * mult).toFixed(6);
     placeGameBet(used, 0);
+    pendingBetRef.current = { win };
 
     let row = 0, col = 0;
     setBallPos({ row: -1, col: 0 });
 
     const rowDelay = rows <= 8 ? 180 : rows <= 12 ? 130 : 90;
     const animStep = () => {
-      if (!mountedRef.current) return; // component unmounted — stop, bet already deducted
+      if (!mountedRef.current) return; // cleanup effect handles the win credit
       if (row >= rows) {
-        const mult = mults[slot];
-        const win  = +(used * mult).toFixed(6);
+        pendingBetRef.current = null; // normal completion — clear before crediting
         placeGameBet(0, win);
         recordGameResult('Plinko', used, win);
         setFinalSlot(slot);
