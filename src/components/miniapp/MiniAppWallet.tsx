@@ -504,8 +504,11 @@ export const MiniAppWithdraw: React.FC = () => {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4 animate-slide-up">
         <div className="text-5xl">✅</div>
-        <h2 className="text-xl font-bold text-white">Retrait soumis!</h2>
-        <p className="text-sm text-slate-400 text-center">Votre retrait de {parsedAmount} {selected?.symbol} est en cours de traitement.</p>
+        <h2 className="text-xl font-bold text-white">Retrait soumis !</h2>
+        <p className="text-sm text-slate-400 text-center">
+          Votre retrait de {parsedAmount.toFixed(2)} {selected?.symbol} est en cours de traitement.<br />
+          Vous recevrez <span className="text-emerald-400 font-semibold">{Math.max(0, netReceived).toFixed(2)} {selected?.symbol}</span> après frais de réseau.
+        </p>
         <button onClick={() => useAppStore.getState().setMiniAppPage('wallet')} className="btn-primary px-6 py-3 rounded-xl text-sm font-semibold text-white">
           Retour au wallet
         </button>

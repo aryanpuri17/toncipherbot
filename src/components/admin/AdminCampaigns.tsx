@@ -16,8 +16,11 @@ export const AdminCampaigns: React.FC = () => {
     <div className="space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-white">Campagnes</h2>
-          <p className="text-slate-400 text-sm mt-1">Système annonceur</p>
+          <div className="flex items-center gap-2">
+            <h2 className="text-2xl font-bold text-white">Campagnes</h2>
+            <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30">DÉMO</span>
+          </div>
+          <p className="text-slate-400 text-sm mt-1">Système annonceur — données de démonstration, non connectées au serveur</p>
         </div>
         <button onClick={() => openModal('campaign')} className="btn-primary px-4 py-2.5 rounded-xl text-sm font-medium text-white flex items-center gap-2">
           <Plus className="w-4 h-4" /> Nouvelle campagne

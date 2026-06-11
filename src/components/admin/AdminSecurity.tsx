@@ -1,3 +1,4 @@
+import { adminFetch, getAdminKey, setAdminKey } from '../../utils/adminFetch';
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAppStore } from '../../store/appStore';
 import { StatusBadge } from '../ui/StatusBadge';
@@ -27,7 +28,7 @@ export const AdminAntiFraud: React.FC = () => {
   const fetchAlerts = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/admin/fraud-alerts');
+      const res = await adminFetch('/api/admin/fraud-alerts');
       if (res.ok) setAlerts(await res.json() as ApiAlert[]);
     } catch { /* backend unavailable */ }
     setLoading(false);
@@ -37,13 +38,22 @@ export const AdminAntiFraud: React.FC = () => {
 
   const handleAction = async (alertId: number, action: 'resolve' | 'ban') => {
     try {
-      await fetch(`/api/admin/fraud-alerts/${alertId}/resolve`, {
+      await adminFetch(`/api/admin/fraud-alerts/${alertId}/resolve`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action }),
       });
       await fetchAlerts();
     } catch { /* ignore */ }
+  };
+
+  const [apiKey, setApiKey]       = useState(getAdminKey());
+  const [keySaved, setKeySaved]   = useState(false);
+  const saveApiKey = () => {
+    setAdminKey(apiKey.trim());
+    setKeySaved(true);
+    setTimeout(() => setKeySaved(false), 2000);
+    void fetchAlerts();
   };
 
   const displayed = filter === 'unresolved' ? alerts.filter(a => !a.resolved) : alerts;
@@ -65,6 +75,23 @@ export const AdminAntiFraud: React.FC = () => {
         <button onClick={() => void fetchAlerts()} className="p-2 rounded-lg hover:bg-white/5 text-slate-400 transition-colors" title="Actualiser">
           <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
         </button>
+      </div>
+
+      {/* Admin API key — required if ADMIN_SECRET is set on the server */}
+      <div className="glass-card p-4 flex flex-col sm:flex-row sm:items-center gap-3">
+        <div className="flex-1">
+          <p className="text-sm font-semibold text-white flex items-center gap-2"><Shield className="w-4 h-4 text-blue-400" /> Clé API Admin</p>
+          <p className="text-xs text-slate-400 mt-0.5">Requise si ADMIN_SECRET est configuré côté serveur. Stockée localement sur cet appareil.</p>
+        </div>
+        <div className="flex gap-2">
+          <input type="password" value={apiKey} onChange={e => setApiKey(e.target.value)}
+            placeholder="Clé secrète…"
+            className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-blue-500/50 w-48" />
+          <button onClick={saveApiKey}
+            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${keySaved ? 'bg-emerald-500/20 text-emerald-400' : 'bg-blue-500/20 text-blue-400 hover:bg-blue-500/30'}`}>
+            {keySaved ? '✓ Enregistrée' : 'Enregistrer'}
+          </button>
+        </div>
       </div>
 
       {/* Severity Overview */}

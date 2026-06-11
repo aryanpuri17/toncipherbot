@@ -1,3 +1,4 @@
+import { adminFetch } from '../../utils/adminFetch';
 import React, { useState, useEffect, useCallback } from 'react';
 import { Search, Filter, UserCheck, UserX, Eye, Shield, ChevronDown, RefreshCw, AlertTriangle, ArrowDownLeft, ArrowUpRight, Lock, Unlock, Clock } from 'lucide-react';
 
@@ -34,6 +35,7 @@ export const AdminUsers: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [selected, setSelected]     = useState<ApiUser | null>(null);
   const [actioning, setActioning]   = useState<number | null>(null);
+  const [fetchError, setFetchError] = useState('');
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
@@ -41,9 +43,16 @@ export const AdminUsers: React.FC = () => {
       const params = new URLSearchParams();
       if (search) params.set('search', search);
       if (statusFilter !== 'all') params.set('status', statusFilter);
-      const res = await fetch(`/api/admin/users?${params.toString()}`);
-      if (res.ok) setUsers(await res.json() as ApiUser[]);
-    } catch { /* backend unavailable */ }
+      const res = await adminFetch(`/api/admin/users?${params.toString()}`);
+      if (res.ok) {
+        setUsers(await res.json() as ApiUser[]);
+        setFetchError('');
+      } else {
+        setFetchError(res.status === 401 ? 'Clé API admin invalide (voir Anti-Fraude → Clé API Admin).' : `Erreur serveur (${res.status}).`);
+      }
+    } catch {
+      setFetchError('Backend injoignable — vérifiez que le serveur tourne.');
+    }
     setLoading(false);
   }, [search, statusFilter]);
 
@@ -52,7 +61,7 @@ export const AdminUsers: React.FC = () => {
   const doAction = async (telegramId: number, action: 'ban' | 'unban' | 'unflag' | 'block-withdrawals' | 'unblock-withdrawals') => {
     setActioning(telegramId);
     try {
-      await fetch(`/api/admin/users/${telegramId}/${action}`, { method: 'POST' });
+      await adminFetch(`/api/admin/users/${telegramId}/${action}`, { method: 'POST' });
       await fetchUsers();
       setSelected(prev => {
         if (!prev || prev.telegram_id !== telegramId) return prev;
@@ -89,6 +98,13 @@ export const AdminUsers: React.FC = () => {
           <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
         </button>
       </div>
+
+      {fetchError && (
+        <div className="glass-card p-3 border-red-500/30 bg-red-500/10 text-sm text-red-400 flex items-center justify-between">
+          <span>⚠ {fetchError}</span>
+          <button onClick={() => void fetchUsers()} className="text-xs font-semibold underline hover:text-red-300">Réessayer</button>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-3">

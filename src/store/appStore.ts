@@ -797,11 +797,10 @@ interface AppState {
   deleteReferralMilestone: (id: string) => void;
   initFromTelegram: (user: { id: number; first_name: string; last_name?: string; username?: string; photo_url?: string }) => void;
   syncUserFromApi: (data: { referralCount: number; referralBalance: number; flagged: boolean; banned?: boolean; withdrawalBlocked?: boolean }) => void;
-  processIncomingReferral: (referrerId: string) => void;
-  spinWheelBet: (bet: number, win: number) => void;
   placeGameBet: (bet: number, win: number) => void;
   activatePromoEvent: (multiplier: number, hours: number, label: string) => void;
   deactivatePromoEvent: () => void;
+  syncConfigFromBackend: () => Promise<void>;
 
   // Actions - View
   setCurrentView: (view: 'miniapp' | 'admin') => void;
@@ -897,6 +896,19 @@ interface AppState {
 }
 
 const generateId = () => Math.random().toString(36).substr(2, 9);
+
+// Persist a platform-config key on the backend so every user's app sees it
+// (the store itself is per-device; without this, admin changes stay local).
+async function pushConfigToBackend(key: string, value: unknown): Promise<void> {
+  try {
+    const adminKey = localStorage.getItem('tc_admin_key') ?? '';
+    await fetch('/api/admin/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(adminKey ? { 'X-Admin-Key': adminKey } : {}) },
+      body: JSON.stringify({ key, value }),
+    });
+  } catch { /* offline — config stays local-only */ }
+}
 
 export const useAppStore = create<AppState>((set, get) => ({
   currentView: 'miniapp',
@@ -1072,6 +1084,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     const state = get();
     const task = state.tasks.find(t => t.id === taskId);
     if (!task || state.completedTaskIds.includes(taskId)) return;
+    if (state.currentUser.dailyTasksCompleted >= state.platformConfig.maxDailyTasks) {
+      get().addNotification({ userId: state.currentUser.id, type: 'system', title: 'Limite atteinte', message: `Maximum ${state.platformConfig.maxDailyTasks} tâches par jour. Revenez demain !`, isRead: false });
+      return;
+    }
     const isPromoActive = task.promotion && new Date(task.promotion.endsAt) > new Date();
     const promoMult = isPromoActive ? task.promotion!.multiplier : 1;
     const now = new Date();
@@ -1085,6 +1101,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const updatedUser = {
       balanceMain: state.currentUser.balanceMain + earned,
       tasksCompleted: state.currentUser.tasksCompleted + 1,
+      dailyTasksCompleted: state.currentUser.dailyTasksCompleted + 1,
       todayEarnings: state.currentUser.todayEarnings + earned,
       totalEarnings: state.currentUser.totalEarnings + earned,
     };
@@ -1161,10 +1178,6 @@ export const useAppStore = create<AppState>((set, get) => ({
     };
   }),
 
-  processIncomingReferral: (_referrerId) => {
-    // API call is handled in App.tsx; this is a no-op placeholder
-  },
-
   claimReferralMilestone: (id) => {
     const state = get();
     if (state.claimedReferralMilestoneIds.includes(id)) return;
@@ -1223,9 +1236,10 @@ export const useAppStore = create<AppState>((set, get) => ({
         ? { ...u, balanceMain: u.balanceMain - amount, dailyWithdrawn: u.dailyWithdrawn + amount }
         : u),
     }));
-    get().addTransaction({ userId: state.currentUser.id, type: 'withdrawal', amount, currency: network.symbol, network: network.network, address: address.trim(), status: 'pending', fee: network.withdrawalFee });
+    // Generate the ID upfront so the local transaction and the backend record always match
+    const withdrawalId = generateId();
+    set(s => ({ transactions: [{ userId: state.currentUser.id, type: 'withdrawal' as const, amount, currency: network.symbol, network: network.network, address: address.trim(), status: 'pending' as const, fee: network.withdrawalFee, id: withdrawalId, createdAt: new Date().toISOString() }, ...s.transactions] }));
     // Record in backend (fire-and-forget — app works offline too)
-    const withdrawalId = get().transactions[0]?.id ?? '';
     void fetch('/api/withdrawal/create', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1244,21 +1258,6 @@ export const useAppStore = create<AppState>((set, get) => ({
     return { success: true };
   },
 
-  spinWheelBet: (bet, win) => {
-    set(s => {
-      const newBalance = Math.max(0, s.currentUser.balanceMain - bet + win);
-      const updatedUser = {
-        ...s.currentUser,
-        balanceMain: newBalance,
-        totalEarnings: win > 0 ? s.currentUser.totalEarnings + win : s.currentUser.totalEarnings,
-      };
-      return {
-        currentUser: updatedUser,
-        users: s.users.map(u => u.id === s.currentUser.id ? { ...u, ...updatedUser } : u),
-      };
-    });
-  },
-
   toggleDemoMode: () => set(s => {
     const turningOn = !s.demoMode;
     return {
@@ -1268,6 +1267,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   }),
 
   placeGameBet: (bet, win) => {
+    // Sanity guard: NaN/Infinity would silently corrupt the persisted balance
+    if (!Number.isFinite(bet) || !Number.isFinite(win) || bet <= 0 || win < 0) return;
     set(s => {
       if (s.demoMode) {
         // En mode démo : ne toucher que demoBalance
@@ -1298,21 +1299,34 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   activatePromoEvent: (multiplier, hours, label) => {
-    set(s => ({
-      platformConfig: {
-        ...s.platformConfig,
-        promoEvent: {
-          active: true,
-          multiplier,
-          endsAt: new Date(Date.now() + hours * 3600000).toISOString(),
-          label: label || `×${multiplier} sur toutes les tâches`,
-        },
-      },
-    }));
+    const promoEvent = {
+      active: true,
+      multiplier,
+      endsAt: new Date(Date.now() + hours * 3600000).toISOString(),
+      label: label || `×${multiplier} sur toutes les tâches`,
+    };
+    set(s => ({ platformConfig: { ...s.platformConfig, promoEvent } }));
+    void pushConfigToBackend('promoEvent', promoEvent);
   },
 
   deactivatePromoEvent: () => {
     set(s => ({ platformConfig: { ...s.platformConfig, promoEvent: null } }));
+    void pushConfigToBackend('promoEvent', null);
+  },
+
+  syncConfigFromBackend: async () => {
+    try {
+      const res = await fetch('/api/config');
+      if (!res.ok) return;
+      const cfg = await res.json() as { promoEvent?: PlatformConfig['promoEvent']; streakMilestones?: PlatformConfig['streakMilestones'] };
+      set(s => ({
+        platformConfig: {
+          ...s.platformConfig,
+          ...(cfg.promoEvent !== undefined ? { promoEvent: cfg.promoEvent } : {}),
+          ...(Array.isArray(cfg.streakMilestones) && cfg.streakMilestones.length > 0 ? { streakMilestones: cfg.streakMilestones } : {}),
+        },
+      }));
+    } catch { /* offline — keep local defaults */ }
   },
 
   // View Actions

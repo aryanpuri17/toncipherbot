@@ -1,3 +1,4 @@
+import { adminFetch } from '../../utils/adminFetch';
 import React, { useState, useEffect } from 'react';
 import { useAppStore } from '../../store/appStore';
 import { ToggleSwitch } from '../ui/ToggleSwitch';
@@ -72,7 +73,7 @@ export const AdminTasks: React.FC = () => {
   const fetchUserTasks = async () => {
     setUserTasksLoading(true);
     try {
-      const res  = await fetch(`/api/admin/user-tasks?status=${utFilter}`);
+      const res  = await adminFetch(`/api/admin/user-tasks?status=${utFilter}`);
       const data = await res.json() as AdminUserTask[];
       setUserTasks(data);
     } catch { /* offline */ }
@@ -84,7 +85,7 @@ export const AdminTasks: React.FC = () => {
   const handleUtApprove = async (id: string) => {
     setUtActionLoading(id);
     try {
-      await fetch(`/api/admin/user-tasks/${id}/approve`, { method: 'POST' });
+      await adminFetch(`/api/admin/user-tasks/${id}/approve`, { method: 'POST' });
       await fetchUserTasks();
     } finally { setUtActionLoading(null); }
   };
@@ -92,7 +93,7 @@ export const AdminTasks: React.FC = () => {
   const handleUtReject = async (id: string) => {
     setUtActionLoading(id);
     try {
-      await fetch(`/api/admin/user-tasks/${id}/reject`, {
+      await adminFetch(`/api/admin/user-tasks/${id}/reject`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ note: utRejectNotes[id]?.trim() || '' }),
