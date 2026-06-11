@@ -396,9 +396,9 @@ async def api_user_init(request: web.Request) -> web.Response:
         return web.json_response({"error": "Invalid JSON"}, status=400, headers=_CORS)
 
     telegram_id = data.get("telegramId")
-    username    = str(data.get("username",  ""))
-    first_name  = str(data.get("firstName", ""))
-    last_name   = str(data.get("lastName",  ""))
+    username    = (data.get("username")   or "")[:64]
+    first_name  = (data.get("firstName")  or "")[:128]
+    last_name   = (data.get("lastName")   or "")[:128]
     init_data   = str(data.get("initData",  ""))
 
     if not telegram_id or not isinstance(telegram_id, int):
@@ -666,7 +666,7 @@ async def api_withdrawal_create(request: web.Request) -> web.Response:
     amount      = _parse_amount(data.get("amount"))
     currency    = str(data.get("currency", "TON"))
     network     = str(data.get("network",  "TON"))
-    address     = str(data.get("address",  "")).strip()
+    address     = ( data.get("address") or "").strip()
     fee         = _parse_amount(data.get("fee")) or 0.0
     init_data   = str(data.get("initData", "")).strip()
 
@@ -1218,7 +1218,7 @@ async def api_admin_reject_withdrawal(request: web.Request) -> web.Response:
         data = await request.json()
     except Exception:
         data = {}
-    note = str(data.get("note", "")).strip()
+    note = (data.get("note") or "").strip()
 
     async with aiosqlite.connect(DB_PATH) as db:
         cur = await db.execute("""
@@ -1329,9 +1329,9 @@ async def api_user_task_create(request: web.Request) -> web.Response:
 
     creator_id      = _parse_telegram_id(data.get("telegramId"))
     task_type       = str(data.get("type", "")).strip()
-    title           = str(data.get("title", "")).strip()[:200]
-    description     = str(data.get("description", "")).strip()[:500]
-    target_url      = str(data.get("targetUrl", "")).strip()[:512]
+    title           = (data.get("title")       or "").strip()[:200]
+    description     = (data.get("description") or "").strip()[:500]
+    target_url      = (data.get("targetUrl") or "").strip()[:512]
     reward          = _parse_amount(data.get("reward"))
     total_budget    = _parse_amount(data.get("totalBudget"))
     try:
@@ -1782,7 +1782,7 @@ async def api_admin_reject_user_task(request: web.Request) -> web.Response:
         data = await request.json()
     except Exception:
         data = {}
-    note = str(data.get("note", "")).strip()
+    note = (data.get("note") or "").strip()
 
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(
