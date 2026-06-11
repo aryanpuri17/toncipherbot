@@ -329,47 +329,6 @@ export default function App() {
     };
     window.addEventListener('hashchange', handleHashChange);
 
-    // On startup: check any pending withdrawals against backend and restore
-    // balance locally if admin rejected them since last session.
-    void (async () => {
-      const tid = useAppStore.getState().currentUser.telegramId;
-      if (tid) {
-        try {
-          const res = await fetch(`/api/user/withdrawals?telegram_id=${tid}`);
-          if (res.ok) {
-            const list = await res.json() as Array<{ id: string; amount: number; currency: string; status: string }>;
-            const { transactions } = useAppStore.getState();
-            let balanceRestored = 0;
-            const restoredIds: string[] = [];
-            for (const serverTx of list) {
-              if (serverTx.status !== 'rejected') continue;
-              const localTx = transactions.find(t => t.id === serverTx.id);
-              if (!localTx || localTx.status === 'cancelled' || localTx.status === 'failed') continue;
-              // Withdrawal rejected server-side but still live locally → restore balance
-              balanceRestored += serverTx.amount;
-              restoredIds.push(serverTx.id);
-            }
-            if (balanceRestored > 0) {
-              useAppStore.setState(s => {
-                const newBalance = +(s.currentUser.balanceMain + balanceRestored).toFixed(6);
-                try {
-                  const saved = JSON.parse(localStorage.getItem('tc_balance') || '{}') as Record<string, number>;
-                  localStorage.setItem('tc_balance', JSON.stringify({ ...saved, balanceMain: newBalance }));
-                } catch { /* noop */ }
-                return {
-                  currentUser: { ...s.currentUser, balanceMain: newBalance },
-                  // Mark restored withdrawals as cancelled locally
-                  transactions: s.transactions.map(t =>
-                    restoredIds.includes(t.id) ? { ...t, status: 'cancelled' as const } : t
-                  ),
-                };
-              });
-            }
-          }
-        } catch { /* offline */ }
-      }
-    })();
-
     void (async () => {
       const isAdminRoute = window.location.hash === '#admin';
       if (!isAdminRoute) setCurrentView('miniapp');
@@ -391,9 +350,9 @@ export default function App() {
 
       const initData = tg.initData ?? '';
 
-      // Sync user with backend — creates/updates user record and returns referral count
-      try {
-        const res = await fetch(`${API}/api/user/init`, {
+      // Run backend calls concurrently: user init + withdrawal restoration
+      const [userInitRes, withdrawalsRes] = await Promise.allSettled([
+        fetch(`${API}/api/user/init`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -403,13 +362,36 @@ export default function App() {
             lastName:   tgUser.last_name ?? '',
             initData,
           }),
-        });
-        if (res.ok) {
-          const apiData = await res.json() as { referralCount: number; referralBalance: number; flagged: boolean; banned?: boolean; withdrawalBlocked?: boolean };
-          syncUserFromApi(apiData);
+        }),
+        fetch(`${API}/api/user/withdrawals?telegram_id=${tgUser.id}`),
+      ]);
+
+      if (userInitRes.status === 'fulfilled' && userInitRes.value.ok) {
+        const apiData = await userInitRes.value.json() as { referralCount: number; referralBalance: number; flagged: boolean; banned?: boolean; withdrawalBlocked?: boolean };
+        syncUserFromApi(apiData);
+      }
+
+      // Restore balance for withdrawals rejected by admin since last session
+      if (withdrawalsRes.status === 'fulfilled' && withdrawalsRes.value.ok) {
+        const list = await withdrawalsRes.value.json() as Array<{ id: string; amount: number; status: string }>;
+        const { transactions } = useAppStore.getState();
+        let balanceRestored = 0;
+        const restoredIds: string[] = [];
+        for (const serverTx of list) {
+          if (serverTx.status !== 'rejected') continue;
+          const localTx = transactions.find(t => t.id === serverTx.id);
+          if (!localTx || localTx.status === 'cancelled' || localTx.status === 'failed') continue;
+          balanceRestored += serverTx.amount;
+          restoredIds.push(serverTx.id);
         }
-      } catch {
-        // Backend unavailable — app still works with local state
+        if (balanceRestored > 0) {
+          useAppStore.setState(s => ({
+            currentUser: { ...s.currentUser, balanceMain: +(s.currentUser.balanceMain + balanceRestored).toFixed(6) },
+            transactions: s.transactions.map(t =>
+              restoredIds.includes(t.id) ? { ...t, status: 'cancelled' as const } : t
+            ),
+          }));
+        }
       }
 
       // Process incoming referral from link (?startapp=r_TELEGRAMID)
