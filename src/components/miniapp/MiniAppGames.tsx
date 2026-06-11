@@ -119,6 +119,72 @@ const snd = {
 type OnResult = (won: boolean) => void;
 
 // ══════════════════════════════════════════════════════════════════
+// SHARED UI COMPONENTS
+// ══════════════════════════════════════════════════════════════════
+
+// Stable confetti particle positions (pre-computed, no random on render)
+const CONFETTI_SEEDS = Array.from({ length: 32 }, (_, i) => ({
+  left:     `${((i * 37 + 11) % 97)}%`,
+  color:    ['#fbbf24','#22c55e','#3b82f6','#a855f7','#ef4444','#06b6d4','#f97316','#10b981'][i % 8],
+  delay:    `${((i * 0.071) % 0.55).toFixed(2)}s`,
+  duration: `${(1.15 + (i * 0.087) % 0.9).toFixed(2)}s`,
+  isCircle: i % 3 === 0,
+  size:     i % 5 === 0 ? 11 : 7,
+  rotate:   `${(i * 47) % 360}deg`,
+}));
+
+const BigWinEffect: React.FC<{ show: boolean }> = ({ show }) => (
+  <>
+    <style>{`@keyframes confettiFall{0%{transform:translateY(0) rotate(0deg) scale(1);opacity:1}100%{transform:translateY(92vh) rotate(600deg) scale(0.6);opacity:0}}`}</style>
+    {show && (
+      <div style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 9999, overflow: 'hidden' }}>
+        {CONFETTI_SEEDS.map((p, i) => (
+          <div key={i} style={{
+            position: 'absolute', left: p.left, top: '-14px',
+            width: p.size, height: p.size, background: p.color,
+            borderRadius: p.isCircle ? '50%' : '2px',
+            transform: `rotate(${p.rotate})`,
+            animationName: 'confettiFall',
+            animationDuration: p.duration,
+            animationDelay: p.delay,
+            animationTimingFunction: 'cubic-bezier(0.25,0.46,0.45,0.94)',
+            animationFillMode: 'forwards',
+          }} />
+        ))}
+      </div>
+    )}
+  </>
+);
+
+const MuteButton: React.FC = () => {
+  const [m, setM] = React.useState(_soundMuted);
+  return (
+    <button onClick={() => { _soundMuted = !_soundMuted; setM(_soundMuted); }}
+      title={m ? 'Activer le son' : 'Couper le son'}
+      style={{
+        width: 32, height: 32, borderRadius: 8, flexShrink: 0, cursor: 'pointer',
+        background: 'rgba(255,255,255,0.04)', border: '1px solid #1e2847',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15,
+      }}>
+      {m ? '🔇' : '🔊'}
+    </button>
+  );
+};
+
+const GameBalanceChip: React.FC<{ bal: number; demo: boolean }> = ({ bal, demo }) => (
+  <div style={{
+    background: 'rgba(255,255,255,0.04)',
+    border: `1px solid ${demo ? 'rgba(245,158,11,0.35)' : '#1e2847'}`,
+    borderRadius: 12, padding: '6px 12px', textAlign: 'right', flexShrink: 0,
+  }}>
+    <p style={{ fontSize: 10, textTransform: 'uppercase', color: demo ? '#f59e0b' : '#64748b', letterSpacing: '0.05em' }}>
+      {demo ? '🎮 Démo' : 'Solde'}
+    </p>
+    <p style={{ fontSize: 14, fontWeight: 700, color: demo ? '#fbbf24' : '#f8fafc', marginTop: 1 }}>{bal.toFixed(3)} TON</p>
+  </div>
+);
+
+// ══════════════════════════════════════════════════════════════════
 // SHARED BET QUICK BUTTONS (MIN / ½ / 2× / MAX)
 // ══════════════════════════════════════════════════════════════════
 
@@ -256,12 +322,13 @@ const WheelSVG: React.FC<{ rotation: number }> = ({ rotation }) => {
 const WheelGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResult }> = ({ onBack, streak, onResult }) => {
   const { currentUser, placeGameBet, demoMode, demoBalance } = useAppStore();
   const bal = demoMode ? demoBalance : currentUser.balanceMain;
-  const [bet, setBet]       = useState(0.01);
-  const [spinning, setSpin] = useState(false);
-  const [rotation, setRot]  = useState(0);
-  const rotRef              = useRef(0);
-  const [result, setResult] = useState<{ seg: Seg; win: number } | null>(null);
-  const [hist, setHist]     = useState<number[]>([]);
+  const [bet, setBet]         = useState(0.01);
+  const [spinning, setSpin]   = useState(false);
+  const [rotation, setRot]    = useState(0);
+  const rotRef                = useRef(0);
+  const [result, setResult]   = useState<{ seg: Seg; win: number } | null>(null);
+  const [hist, setHist]       = useState<number[]>([]);
+  const [bigWin, setBigWin]   = useState(false);
 
   const effBet  = Math.min(bet, bal);
   const canSpin = !spinning && effBet >= 0.01 && bal >= 0.01;
@@ -288,7 +355,13 @@ const WheelGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
       setResult({ seg: SEGS[idx], win });
       setHist(h => [rule.mult, ...h.slice(0, 7)]);
       onResult(rule.mult > 0);
-      if (rule.mult >= 2) snd.win(); else if (rule.mult > 0) snd.cashout(); else snd.lose();
+      if (rule.mult >= 5) {
+        setBigWin(true);
+        setTimeout(() => setBigWin(false), 2600);
+        snd.win();
+      } else if (rule.mult >= 2) snd.win();
+      else if (rule.mult > 0) snd.cashout();
+      else snd.lose();
     }, 4300);
   };
 
@@ -297,6 +370,7 @@ const WheelGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
 
   return (
     <div className="space-y-5 pb-4">
+      <BigWinEffect show={bigWin} />
       <div className="flex items-center gap-3">
         <button onClick={onBack} className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center text-slate-400 hover:text-white transition-colors">
           <ArrowLeft className="w-4 h-4" />
@@ -305,10 +379,8 @@ const WheelGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
           <h2 className="text-base font-bold text-white">Roue de la Fortune</h2>
           <p className="text-[11px] text-slate-500">Faites tourner · Jackpot ×10 — jusqu'à ×10 la mise</p>
         </div>
-        <div className="glass-card px-3 py-1.5 text-right">
-          <p className="text-[10px] text-slate-500 uppercase">Solde</p>
-          <p className="text-sm font-bold text-white">{bal.toFixed(3)} TON</p>
-        </div>
+        <MuteButton />
+        <GameBalanceChip bal={bal} demo={demoMode} />
       </div>
 
       {hist.length > 0 && (
@@ -526,6 +598,7 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
   const [cashedOut, setCashedOut] = useState<number | null>(null);
   const [queuedBet, setQueuedBet] = useState<number | null>(null);
   const [toast, setToast]         = useState<{ id: number; text: string; win: boolean } | null>(null);
+  const [bigWin, setBigWin]       = useState(false);
 
   // refs moteur (évitent les fermetures périmées dans l'interval)
   const phaseRef      = useRef<CrashPhase>('betting');
@@ -559,6 +632,7 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
     onResultRef.current(true);
     setCashedOut(m);
     setToast({ id: Date.now(), text: `+${win.toFixed(4)} TON`, win: true });
+    if (m >= 3) { setBigWin(true); setTimeout(() => setBigWin(false), 2600); }
   };
 
   // ── Moteur de tours continus ──
@@ -780,6 +854,7 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
         @keyframes gemShine { 0%,100%{filter:brightness(1)} 50%{filter:brightness(1.5)} }
       `}</style>
 
+      <BigWinEffect show={bigWin} />
       {/* En-tête */}
       <div style={{ background: '#0d1021', borderBottom: '1px solid #1e2847' }} className="px-4 pt-4 pb-3 space-y-3">
         <div className="flex items-center gap-3">
@@ -797,10 +872,8 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
             </div>
             <p className="text-[11px]" style={{ color: '#64748b' }}>Misez avant le décollage · Encaissez avant le crash</p>
           </div>
-          <div style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid #1e2847' }} className="px-3 py-1.5 rounded-xl text-right">
-            <p className="text-[10px] uppercase" style={{ color: '#64748b' }}>Solde</p>
-            <p className="text-sm font-bold" style={{ color: '#f8fafc' }}>{bal.toFixed(3)} TON</p>
-          </div>
+          <MuteButton />
+          <GameBalanceChip bal={bal} demo={demoMode} />
         </div>
 
         {/* Historique des tours */}
@@ -957,14 +1030,18 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
           {phase === 'betting' ? (
             <div className="text-center">
               <p style={{ fontSize: 10, fontWeight: 800, color: '#64748b', letterSpacing: '0.2em', textTransform: 'uppercase' }}>Prochain décollage</p>
-              <p style={{ fontSize: 44, fontWeight: 900, color: '#f8fafc', fontVariantNumeric: 'tabular-nums', lineHeight: 1.1 }}>
+              <p style={{
+                fontSize: 44, fontWeight: 900, fontVariantNumeric: 'tabular-nums', lineHeight: 1.1,
+                color: countdown < 3 ? '#ef4444' : countdown < 5 ? '#f97316' : '#f8fafc',
+                animation: countdown < 3 ? 'crashBlink 0.7s ease-in-out infinite' : undefined,
+              }}>
                 {countdown.toFixed(1)}s
               </p>
               <div style={{ width: 130, height: 4, background: 'rgba(255,255,255,0.08)', borderRadius: 99, margin: '8px auto 0', overflow: 'hidden' }}>
                 <div style={{
                   width: `${(countdown / (BET_MS / 1000)) * 100}%`, height: '100%',
-                  background: 'linear-gradient(90deg,#4f6ff0,#818cf8)', borderRadius: 99,
-                  transition: 'width 0.05s linear',
+                  background: countdown < 3 ? 'linear-gradient(90deg,#ef4444,#f97316)' : 'linear-gradient(90deg,#4f6ff0,#818cf8)',
+                  borderRadius: 99, transition: 'width 0.05s linear',
                 }} />
               </div>
               {myBet !== null && (
@@ -1256,10 +1333,8 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
             <h2 className="text-base font-bold" style={{ color: '#f8fafc' }}>Mines 💣</h2>
             <p className="text-[11px]" style={{ color: '#64748b' }}>Évitez les mines · Encaissez au bon moment</p>
           </div>
-          <div style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid #1e2847' }} className="px-3 py-1.5 rounded-xl text-right">
-            <p className="text-[10px] uppercase" style={{ color: '#64748b' }}>Solde</p>
-            <p className="text-sm font-bold" style={{ color: '#f8fafc' }}>{bal.toFixed(3)} TON</p>
-          </div>
+          <MuteButton />
+          <GameBalanceChip bal={bal} demo={demoMode} />
         </div>
       </div>
 
@@ -1372,7 +1447,7 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
                 boxShadow: '0 4px 16px rgba(239,68,68,0.3)',
               } : { background: 'rgba(255,255,255,0.05)', cursor: 'not-allowed' }}
               className="w-full py-3.5 rounded-xl font-black text-sm text-white active:scale-[0.98] transition-all tracking-widest uppercase">
-              💣 Commencer · {effBet.toFixed(2)} TON
+              {bal < 0.01 ? (demoMode ? '🎮 Démo épuisé' : '💸 Solde insuffisant') : `💣 Commencer · ${effBet.toFixed(2)} TON`}
             </button>
           </div>
         )}
@@ -1517,6 +1592,7 @@ const RouletteGame: React.FC<{ onBack: () => void; streak: number; onResult: OnR
   const [hist, setHist]           = useState<number[]>([]);
   const [ballAngle, setBallAngle] = useState(110);
   const ballRef                   = useRef(110);
+  const [bigWin, setBigWin]       = useState(false);
 
   const effBet  = Math.min(bet, bal);
   const canSpin = phase === 'idle' && effBet >= 0.01 && bal >= 0.01;
@@ -1553,7 +1629,12 @@ const RouletteGame: React.FC<{ onBack: () => void; streak: number; onResult: OnR
       setHist(h => [n, ...h.slice(0, 11)]);
       setPhase('result');
       onResult(mult > 0);
-      if (mult > 0) snd.win(); else snd.lose();
+      if (mult >= 28) {
+        setBigWin(true);
+        setTimeout(() => setBigWin(false), 2600);
+        snd.win();
+      } else if (mult > 0) snd.win();
+      else snd.lose();
     }, 5100);
   };
 
@@ -1592,6 +1673,7 @@ const RouletteGame: React.FC<{ onBack: () => void; streak: number; onResult: OnR
 
   return (
     <div className="pb-4" style={{ background: '#060a18', minHeight: '100%' }}>
+      <BigWinEffect show={bigWin} />
       <div style={{ background: '#0d1021', borderBottom: '1px solid #1e2847' }} className="px-4 pt-4 pb-3">
         <div className="flex items-center gap-3">
           <button onClick={onBack} style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid #1e2847' }}
@@ -1602,10 +1684,8 @@ const RouletteGame: React.FC<{ onBack: () => void; streak: number; onResult: OnR
             <h2 className="text-base font-bold" style={{ color: '#f8fafc' }}>Roulette 🎰</h2>
             <p className="text-[11px]" style={{ color: '#64748b' }}>Roulette européenne · 37 cases</p>
           </div>
-          <div style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid #1e2847' }} className="px-3 py-1.5 rounded-xl text-right">
-            <p className="text-[10px] uppercase" style={{ color: '#64748b' }}>Solde</p>
-            <p className="text-sm font-bold" style={{ color: '#f8fafc' }}>{bal.toFixed(3)} TON</p>
-          </div>
+          <MuteButton />
+          <GameBalanceChip bal={bal} demo={demoMode} />
         </div>
 
         {/* History chips */}
@@ -1756,7 +1836,7 @@ const RouletteGame: React.FC<{ onBack: () => void; streak: number; onResult: OnR
           ) : (
             <button onClick={spin} disabled={!canSpin}
               style={canSpin ? { background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', boxShadow: '0 4px 16px rgba(124,58,237,0.35)', width: '100%', padding: '14px', borderRadius: 12, color: '#fff', fontWeight: 900, fontSize: 14, cursor: 'pointer', letterSpacing: '0.05em' } : { background: 'rgba(255,255,255,0.05)', width: '100%', padding: '14px', borderRadius: 12, color: '#475569', fontWeight: 700, fontSize: 14, cursor: 'not-allowed' }}>
-              {phase === 'spinning' ? '🎰 La roue tourne…' : bal < 0.01 ? 'Solde insuffisant' : `🎰 LANCER · ${effBet.toFixed(2)} TON`}
+              {phase === 'spinning' ? '🎰 La roue tourne…' : bal < 0.01 ? (demoMode ? '🎮 Démo épuisé' : '💸 Solde insuffisant') : `🎰 LANCER · ${effBet.toFixed(2)} TON`}
             </button>
           )}
         </div>
@@ -1819,6 +1899,7 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
   const [finalSlot, setFinalSlot] = useState<number | null>(null);
   const [lastWin, setLastWin]     = useState<{ mult: number; win: number } | null>(null);
   const [hist, setHist]           = useState<Array<{ slot: number; mult: number }>>([]);
+  const [bigWin, setBigWin]       = useState(false);
 
   const effBet = Math.min(bet, bal);
   const mults  = PLINKO_MULTS[risk][rows];
@@ -1856,7 +1937,12 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
         setBallPos(null);
         setDropping(false);
         onResult(mult >= 1);
-        if (mult >= 1) snd.win(); else snd.lose();
+        if (mult >= 10) {
+          setBigWin(true);
+          setTimeout(() => setBigWin(false), 2600);
+          snd.win();
+        } else if (mult >= 1) snd.win();
+        else snd.lose();
         return;
       }
       if (path[row]) col++;
@@ -1884,6 +1970,7 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
 
   return (
     <div className="pb-4" style={{ background: '#060a18', minHeight: '100%' }}>
+      <BigWinEffect show={bigWin} />
       <div style={{ background: '#0d1021', borderBottom: '1px solid #1e2847' }} className="px-4 pt-4 pb-3">
         <div className="flex items-center gap-3">
           <button onClick={onBack} style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid #1e2847' }}
@@ -1894,10 +1981,8 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
             <h2 className="text-base font-bold" style={{ color: '#f8fafc' }}>Plinko 🎯</h2>
             <p className="text-[11px]" style={{ color: '#64748b' }}>Lâchez la balle · Visez les multiplicateurs élevés</p>
           </div>
-          <div style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid #1e2847' }} className="px-3 py-1.5 rounded-xl text-right">
-            <p className="text-[10px] uppercase" style={{ color: '#64748b' }}>Solde</p>
-            <p className="text-sm font-bold" style={{ color: '#f8fafc' }}>{bal.toFixed(3)} TON</p>
-          </div>
+          <MuteButton />
+          <GameBalanceChip bal={bal} demo={demoMode} />
         </div>
       </div>
 
@@ -2025,14 +2110,14 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
           </div>
           <BetQuickButtons setBet={setBet} maxBal={bal} />
 
-          <button onClick={drop} disabled={dropping || effBet < 0.01 || currentUser.balanceMain < 0.01}
-            style={!dropping && effBet >= 0.01 && currentUser.balanceMain >= 0.01 ? {
+          <button onClick={drop} disabled={dropping || effBet < 0.01 || bal < 0.01}
+            style={!dropping && effBet >= 0.01 && bal >= 0.01 ? {
               background: 'linear-gradient(135deg,#f59e0b,#d97706)',
               boxShadow: '0 4px 16px rgba(245,158,11,0.35)',
               width: '100%', padding: '14px', borderRadius: 12,
               color: '#451a03', fontWeight: 900, fontSize: 14, cursor: 'pointer', letterSpacing: '0.05em',
             } : { background: 'rgba(255,255,255,0.05)', width: '100%', padding: '14px', borderRadius: 12, color: '#475569', fontWeight: 700, fontSize: 14, cursor: 'not-allowed' }}>
-            {dropping ? '🎯 En chute…' : bal < 0.01 ? 'Solde insuffisant' : `🎯 LÂCHER · ${effBet.toFixed(2)} TON`}
+            {dropping ? '🎯 En chute…' : bal < 0.01 ? (demoMode ? 'Démo épuisé' : 'Solde insuffisant') : `🎯 LÂCHER · ${effBet.toFixed(2)} TON`}
           </button>
         </div>
       </div>
@@ -2133,11 +2218,37 @@ export const MiniAppGames: React.FC = () => {
   const [activeGame, setActiveGame] = useState<ActiveGame>(null);
   const [streak, setStreak]         = useState(0);
   const [muted, setMuted]           = useState(false);
+  const [liveFeed, setLiveFeed]     = useState<FeedEntry[]>(FEED_DATA);
+  const feedIdxRef                  = useRef(0);
 
   const handleResult = (won: boolean) => setStreak(s => won ? s + 1 : 0);
   const toggleMute   = () => { _soundMuted = !_soundMuted; setMuted(_soundMuted); };
 
   const bal = demoMode ? demoBalance : currentUser.balanceMain;
+
+  // Live feed auto-rotation — new fake entry every 8–18 seconds
+  useEffect(() => {
+    const GAME_NAMES = ['Crash', 'Plinko', 'Roulette', 'Mines', 'Roue'];
+    const scheduleNext = () => {
+      const ms = 8000 + Math.floor(Math.random() * 10000);
+      return setTimeout(() => {
+        const name = ALL_FAKE_NAMES[feedIdxRef.current % ALL_FAKE_NAMES.length];
+        feedIdxRef.current++;
+        const game = GAME_NAMES[Math.floor(Math.random() * GAME_NAMES.length)];
+        const bet  = randomFakeBet();
+        const r    = Math.random();
+        const mult = r < 0.42 ? 0 : r < 0.65 ? 1.9 : r < 0.78 ? 2 : r < 0.89 ? 3 : r < 0.96 ? 5 : 10;
+        const win  = +(bet * mult).toFixed(4);
+        setLiveFeed(prev => [
+          { username: name, bet, win, mult, game, time: 'maintenant' },
+          ...prev.slice(0, 9),
+        ]);
+        timerRef.current = scheduleNext();
+      }, ms);
+    };
+    const timerRef = { current: scheduleNext() };
+    return () => clearTimeout(timerRef.current);
+  }, []);
 
   if (activeGame === 'wheel')    return <WheelGame    onBack={() => setActiveGame(null)} streak={streak} onResult={handleResult} />;
   if (activeGame === 'roulette') return <RouletteGame onBack={() => setActiveGame(null)} streak={streak} onResult={handleResult} />;
@@ -2226,9 +2337,9 @@ export const MiniAppGames: React.FC = () => {
           <h3 className="text-sm font-semibold" style={{ color: '#f8fafc' }}>Activité récente</h3>
         </div>
         <div className="space-y-2">
-          {FEED_DATA.map((f, i) => (
+          {liveFeed.map((f, i) => (
             <div key={i} className="flex items-center justify-between py-1.5" style={{
-              borderBottom: i < FEED_DATA.length - 1 ? '1px solid rgba(30,40,71,0.6)' : 'none',
+              borderBottom: i < liveFeed.length - 1 ? '1px solid rgba(30,40,71,0.6)' : 'none',
             }}>
               <div className="flex items-center gap-2.5">
                 <span style={{
