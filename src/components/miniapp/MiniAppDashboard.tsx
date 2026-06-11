@@ -45,7 +45,7 @@ export const MiniAppDashboard: React.FC = () => {
       setPromoLoading(false);
       setPromoResult(
         result.success
-          ? { success: true, message: `+${result.reward?.toFixed(2)} TON crédité sur votre compte!` }
+          ? { success: true, message: `+${(result.reward ?? 0).toFixed(2)} TON crédité sur votre compte!` }
           : { success: false, message: result.error ?? 'Erreur inconnue.' }
       );
       if (result.success) setPromoCode('');

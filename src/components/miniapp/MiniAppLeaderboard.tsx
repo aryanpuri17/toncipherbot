@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useAppStore } from '../../store/appStore';
 import { Trophy, Users } from 'lucide-react';
 
@@ -13,13 +13,21 @@ export const MiniAppLeaderboard: React.FC = () => {
   const { currentUser } = useAppStore();
   const [leaderboard, setLeaderboard] = useState<ApiUser[]>([]);
   const [loading, setLoading] = useState(true);
+  const mountedRef = useRef(true);
 
-  useEffect(() => {
+  const fetchLeaderboard = useCallback(() => {
     fetch('/api/leaderboard')
       .then(r => r.json())
-      .then((data: ApiUser[]) => { setLeaderboard(data); setLoading(false); })
-      .catch(() => setLoading(false));
+      .then((data: ApiUser[]) => { if (mountedRef.current) { setLeaderboard(data); setLoading(false); } })
+      .catch(() => { if (mountedRef.current) setLoading(false); });
   }, []);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    fetchLeaderboard();
+    const interval = setInterval(fetchLeaderboard, 60_000);
+    return () => { mountedRef.current = false; clearInterval(interval); };
+  }, [fetchLeaderboard]);
 
   const medals = ['🥇', '🥈', '🥉'];
   const podiumOrder = [leaderboard[1], leaderboard[0], leaderboard[2]];

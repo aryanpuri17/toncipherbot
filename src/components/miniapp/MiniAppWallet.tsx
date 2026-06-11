@@ -487,7 +487,13 @@ export const MiniAppWithdraw: React.FC = () => {
   };
 
   const parsedAmount = parseFloat(amount) || 0;
-  const netReceived = parsedAmount - (selected?.withdrawalFee ?? 0);
+  const calcFee = (amt: number) => {
+    if (!selected) return 0;
+    return selected.withdrawalFeeType === 'percentage'
+      ? amt * selected.withdrawalFee / 100
+      : selected.withdrawalFee;
+  };
+  const netReceived = parsedAmount - calcFee(parsedAmount);
 
   const handleSubmit = () => {
     setError('');
@@ -625,7 +631,11 @@ export const MiniAppWithdraw: React.FC = () => {
         <div className="glass-card-light p-4 space-y-2">
           <div className="flex justify-between text-xs">
             <span className="text-slate-400">Frais de réseau</span>
-            <span className="text-orange-400 font-medium">{selected.withdrawalFee} {selected.symbol}</span>
+            <span className="text-orange-400 font-medium">
+              {selected.withdrawalFeeType === 'percentage'
+                ? `${selected.withdrawalFee}% (${calcFee(parsedAmount).toFixed(4)} ${selected.symbol})`
+                : `${selected.withdrawalFee} ${selected.symbol}`}
+            </span>
           </div>
           <div className="flex justify-between text-xs">
             <span className="text-slate-400">Vous recevrez</span>

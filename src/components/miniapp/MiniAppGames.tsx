@@ -343,6 +343,18 @@ const WheelGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
   const [result, setResult]   = useState<{ seg: Seg; win: number } | null>(null);
   const [hist, setHist]       = useState<number[]>([]);
   const [bigWin, setBigWin]   = useState(false);
+  const mountedRef            = useRef(true);
+  const spinTimerRef          = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const bigWinTimerRef        = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      if (spinTimerRef.current) clearTimeout(spinTimerRef.current);
+      if (bigWinTimerRef.current) clearTimeout(bigWinTimerRef.current);
+    };
+  }, []);
 
   const effBet  = Math.min(bet, bal);
   const canSpin = !spinning && effBet >= 0.01 && bal >= 0.01;
@@ -363,7 +375,8 @@ const WheelGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
     setResult(null);
     const used = Math.min(effBet, bal);
     const win = +(used * rule.mult).toFixed(6);
-    setTimeout(() => {
+    spinTimerRef.current = setTimeout(() => {
+      if (!mountedRef.current) return;
       setSpin(false);
       placeGameBet(used, win);
       recordGameResult('Roue', used, win);
@@ -372,7 +385,7 @@ const WheelGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
       onResult(rule.mult > 0);
       if (rule.mult >= 5) {
         setBigWin(true);
-        setTimeout(() => setBigWin(false), 2600);
+        bigWinTimerRef.current = setTimeout(() => { if (mountedRef.current) setBigWin(false); }, 2600);
         snd.win();
       } else if (rule.mult >= 2) snd.win();
       else if (rule.mult > 0) snd.cashout();
@@ -600,7 +613,7 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
 
   // mise
   const [bet, setBet]           = useState(0.05);
-  const [autoCash, setAutoCash] = useState('');
+  const [autoCash, setAutoCash] = useState(() => localStorage.getItem('tc_crash_auto') ?? '');
 
   // état du tour (rendu)
   const [phase, setPhase]         = useState<CrashPhase>('betting');
@@ -615,6 +628,8 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
   const [queuedBet, setQueuedBet] = useState<number | null>(null);
   const [toast, setToast]         = useState<{ id: number; text: string; win: boolean } | null>(null);
   const [bigWin, setBigWin]       = useState(false);
+  const crashMountedRef           = useRef(true);
+  const crashBigWinTimer          = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // refs moteur (évitent les fermetures périmées dans l'interval)
   const phaseRef      = useRef<CrashPhase>('betting');
@@ -636,6 +651,10 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
   useEffect(() => { streakRef.current = streak; }, [streak]);
   useEffect(() => { autoRef.current = autoCash; }, [autoCash]);
   useEffect(() => { onResultRef.current = onResult; }, [onResult]);
+  useEffect(() => {
+    crashMountedRef.current = true;
+    return () => { crashMountedRef.current = false; if (crashBigWinTimer.current) clearTimeout(crashBigWinTimer.current); };
+  }, []);
 
   const doCashout = (m: number) => {
     if (phaseRef.current !== 'flying') return;
@@ -649,7 +668,11 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
     onResultRef.current(true);
     setCashedOut(m);
     setToast({ id: Date.now(), text: `+${win.toFixed(4)} TON`, win: true });
-    if (m >= 3) { setBigWin(true); setTimeout(() => setBigWin(false), 2600); }
+    if (m >= 3) {
+      setBigWin(true);
+      if (crashBigWinTimer.current) clearTimeout(crashBigWinTimer.current);
+      crashBigWinTimer.current = setTimeout(() => { if (crashMountedRef.current) setBigWin(false); }, 2600);
+    }
   };
 
   // ── Moteur de tours continus ──
@@ -750,8 +773,8 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
 
     return () => {
       clearInterval(id);
-      // rembourse les mises non résolues (fenêtre de mise / file d'attente)
-      if (phaseRef.current === 'betting' && myBetRef.current !== null) placeGameBet(0, myBetRef.current);
+      // Refund any unresolved bets on unmount (including mid-flight)
+      if (myBetRef.current !== null && cashedRef.current === null) placeGameBet(0, myBetRef.current);
       if (queuedRef.current !== null) placeGameBet(0, queuedRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1213,10 +1236,10 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
           <p style={{ fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>Encaissement auto (×)</p>
           <div style={{ background: '#080c1e', border: '1px solid #1e2847', borderRadius: 12 }} className="flex items-center px-3 py-2.5 gap-2">
             <input type="number" value={autoCash} placeholder="2.00" min={1.01} step={0.01}
-              onChange={e => setAutoCash(e.target.value)}
+              onChange={e => { setAutoCash(e.target.value); localStorage.setItem('tc_crash_auto', e.target.value); }}
               style={{ flex: 1, background: 'transparent', color: '#f8fafc', fontSize: 16, fontWeight: 600, outline: 'none', border: 'none' }} />
             {autoCash && (
-              <button onClick={() => setAutoCash('')} style={{ color: '#64748b', fontSize: 13 }}>✕</button>
+              <button onClick={() => { setAutoCash(''); localStorage.removeItem('tc_crash_auto'); }} style={{ color: '#64748b', fontSize: 13 }}>✕</button>
             )}
           </div>
         </div>
@@ -1275,13 +1298,24 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
   const activeBetRef              = useRef(0);
   const effMinesRef               = useRef<number>(mineCount);
   const [bigWin, setBigWin]       = useState(false);
+  const minesMountedRef           = useRef(true);
+  const minesBigWinTimer          = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    minesMountedRef.current = true;
+    return () => { minesMountedRef.current = false; if (minesBigWinTimer.current) clearTimeout(minesBigWinTimer.current); };
+  }, []);
 
   const effBet   = Math.min(bet, bal);
-  const curMult  = minesMult(mineCount, safeCount);
+  // Use effective mines for honest multiplier display — matches actual placement
+  const effMinesCalc = phase === 'waiting'
+    ? (demoMode ? mineCount : effectiveMines(mineCount, streak))
+    : (effMinesRef.current || mineCount);
+  const curMult  = minesMult(effMinesCalc, safeCount);
   const curWin   = +(activeBetRef.current * curMult).toFixed(6);
-  const nextMult = minesMult(mineCount, safeCount + 1);
-  const firstCaseMult = minesMult(mineCount, 1);
-  const maxPossibleMult = minesMult(mineCount, GRID_SIZE - mineCount);
+  const nextMult = minesMult(effMinesCalc, safeCount + 1);
+  const firstCaseMult = minesMult(effMinesCalc, 1);
+  const maxPossibleMult = minesMult(effMinesCalc, GRID_SIZE - effMinesCalc);
 
   const startGame = () => {
     if (effBet < 0.01 || bal < 0.01) return;
@@ -1330,14 +1364,14 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
       const ns = safeCount + 1;
       setSafeCount(ns);
       if (ns === GRID_SIZE - effMinesRef.current) {
-        const win = +(activeBetRef.current * minesMult(mineCount, ns)).toFixed(6);
+        const win = +(activeBetRef.current * minesMult(effMinesRef.current, ns)).toFixed(6);
         trimMinesForDisplay();
         placeGameBet(activeBetRef.current, win);
         recordGameResult('Mines', activeBetRef.current, win);
         snd.win();
         onResult(true);
-        const finalMult = minesMult(mineCount, ns);
-        if (finalMult >= 5) { setBigWin(true); setTimeout(() => setBigWin(false), 2600); }
+        const finalMult = minesMult(effMinesRef.current, ns);
+        if (finalMult >= 5) { setBigWin(true); if (minesBigWinTimer.current) clearTimeout(minesBigWinTimer.current); minesBigWinTimer.current = setTimeout(() => { if (minesMountedRef.current) setBigWin(false); }, 2600); }
         setPhase('won');
         const entry: MinesFeedEntry = { username: 'Vous', bet: activeBetRef.current, payout: win, profit: +(win - activeBetRef.current).toFixed(4), mines: mineCount };
         if (!demoMode) setFeed(f => [entry, ...f.slice(0, 9)]);
@@ -1361,7 +1395,7 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
     recordGameResult('Mines', activeBetRef.current, curWin);
     snd.win();
     onResult(true);
-    if (curMult >= 5) { setBigWin(true); setTimeout(() => setBigWin(false), 2600); }
+    if (curMult >= 5) { setBigWin(true); if (minesBigWinTimer.current) clearTimeout(minesBigWinTimer.current); minesBigWinTimer.current = setTimeout(() => { if (minesMountedRef.current) setBigWin(false); }, 2600); }
     setPhase('won');
     const entry: MinesFeedEntry = { username: 'Vous', bet: activeBetRef.current, payout: curWin, profit: +(curWin - activeBetRef.current).toFixed(4), mines: mineCount };
     if (!demoMode) setFeed(f => [entry, ...f.slice(0, 9)]);
@@ -1649,6 +1683,18 @@ const RouletteGame: React.FC<{ onBack: () => void; streak: number; onResult: OnR
   const [ballAngle, setBallAngle] = useState(110);
   const ballRef                   = useRef(110);
   const [bigWin, setBigWin]       = useState(false);
+  const mountedRef                = useRef(true);
+  const spinTimerRef              = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const bigWinTimerRef            = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      if (spinTimerRef.current) clearTimeout(spinTimerRef.current);
+      if (bigWinTimerRef.current) clearTimeout(bigWinTimerRef.current);
+    };
+  }, []);
 
   const effBet  = Math.min(bet, bal);
   const canSpin = phase === 'idle' && effBet >= 0.01 && bal >= 0.01;
@@ -1676,7 +1722,8 @@ const RouletteGame: React.FC<{ onBack: () => void; streak: number; onResult: OnR
     snd.spin();
     setResult(null);
     const used = effBet;
-    setTimeout(() => {
+    spinTimerRef.current = setTimeout(() => {
+      if (!mountedRef.current) return;
       const mult = roulettePayout(selectedBet, n);
       const win  = +(used * mult).toFixed(6);
       placeGameBet(used, win);
@@ -1688,7 +1735,7 @@ const RouletteGame: React.FC<{ onBack: () => void; streak: number; onResult: OnR
       onResult(mult > 0);
       if (mult >= 28) {
         setBigWin(true);
-        setTimeout(() => setBigWin(false), 2600);
+        bigWinTimerRef.current = setTimeout(() => { if (mountedRef.current) setBigWin(false); }, 2600);
         snd.win();
       } else if (mult > 0) snd.win();
       else snd.lose();
@@ -1742,7 +1789,7 @@ const RouletteGame: React.FC<{ onBack: () => void; streak: number; onResult: OnR
               <h2 className="text-base font-bold" style={{ color: '#f8fafc' }}>Roulette 🎰</h2>
               <StreakChip streak={streak} />
             </div>
-            <p className="text-[11px]" style={{ color: '#64748b' }}>Roulette européenne · 37 cases</p>
+            <p className="text-[11px]" style={{ color: '#64748b' }}>Roulette européenne · 37 cases · Numéro ×36</p>
           </div>
           <MuteButton />
           <GameBalanceChip bal={bal} demo={demoMode} />
@@ -1963,6 +2010,24 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
   const [lastWin, setLastWin]     = useState<{ mult: number; win: number } | null>(null);
   const [hist, setHist]           = useState<Array<{ slot: number; mult: number }>>([]);
   const [bigWin, setBigWin]       = useState(false);
+  const animTimerRef              = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const plinkoBigWinTimer         = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mountedRef                = useRef(true);
+  const pendingBetRef             = useRef<{ win: number } | null>(null);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      if (animTimerRef.current) clearTimeout(animTimerRef.current);
+      if (plinkoBigWinTimer.current) clearTimeout(plinkoBigWinTimer.current);
+      // Animation was interrupted — still credit the win so the bet isn't lost
+      if (pendingBetRef.current !== null) {
+        useAppStore.getState().placeGameBet(0, pendingBetRef.current.win);
+        pendingBetRef.current = null;
+      }
+    };
+  }, []);
 
   const effBet = Math.min(bet, bal);
   const mults  = PLINKO_MULTS[risk][rows];
@@ -1984,15 +2049,19 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
     setLastWin(null);
     const { slot, path } = rollPlinko(rows, risk, streak, demoMode);
     const used = effBet;
+    const mult = mults[slot];
+    const win  = +(used * mult).toFixed(6);
     placeGameBet(used, 0);
+    pendingBetRef.current = { win };
 
     let row = 0, col = 0;
     setBallPos({ row: -1, col: 0 });
 
+    const rowDelay = rows <= 8 ? 180 : rows <= 12 ? 130 : 90;
     const animStep = () => {
+      if (!mountedRef.current) return; // cleanup effect handles the win credit
       if (row >= rows) {
-        const mult = mults[slot];
-        const win  = +(used * mult).toFixed(6);
+        pendingBetRef.current = null; // normal completion — clear before crediting
         placeGameBet(0, win);
         recordGameResult('Plinko', used, win);
         setFinalSlot(slot);
@@ -2003,7 +2072,8 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
         onResult(mult >= 1);
         if (mult >= 10) {
           setBigWin(true);
-          setTimeout(() => setBigWin(false), 2600);
+          if (plinkoBigWinTimer.current) clearTimeout(plinkoBigWinTimer.current);
+          plinkoBigWinTimer.current = setTimeout(() => { if (mountedRef.current) setBigWin(false); }, 2600);
           snd.win();
         } else if (mult >= 1) snd.win();
         else snd.lose();
@@ -2013,9 +2083,9 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
       row++;
       snd.tick();
       setBallPos({ row, col });
-      setTimeout(animStep, rows <= 8 ? 180 : rows <= 12 ? 130 : 90);
+      animTimerRef.current = setTimeout(animStep, rowDelay);
     };
-    setTimeout(animStep, 120);
+    animTimerRef.current = setTimeout(animStep, 120);
   };
 
   const BOARD_W = 280;
@@ -2261,7 +2331,7 @@ const CATALOG = [
     bgColor: 'rgba(124,58,237,0.08)',
     btnGrad: 'linear-gradient(135deg,#7c3aed,#6d28d9)',
     btnText: '#fff',
-    stats: '~2.7% avantage · ×36 sur numéro plein',
+    stats: '×36 numéro plein · ×2.8 douzaine · ×1.9 couleur',
   },
   {
     id: 'mines' as ActiveGame,
@@ -2292,13 +2362,24 @@ const CATALOG = [
 export const MiniAppGames: React.FC = () => {
   const { currentUser, demoMode, demoBalance, toggleDemoMode, gameHistory } = useAppStore();
   const [activeGame, setActiveGame] = useState<ActiveGame>(null);
-  const [streak, setStreak]         = useState(0);
+  const [streak, setStreak]         = useState(() => {
+    // Streak expires after 30 minutes of inactivity
+    try {
+      const saved = localStorage.getItem('tc_game_streak');
+      if (saved) { const { count, ts } = JSON.parse(saved) as { count: number; ts: number }; if (Date.now() - ts < 30 * 60_000) return count; }
+    } catch {}
+    return 0;
+  });
   const [muted, setMuted]           = useState(_soundMuted);
   const [liveFeed, setLiveFeed]     = useState<FeedEntry[]>(FEED_DATA);
   const [, setTick]                 = useState(0);
   const feedIdxRef                  = useRef(0);
 
-  const handleResult = (won: boolean) => setStreak(s => won ? s + 1 : 0);
+  const handleResult = (won: boolean) => setStreak(s => {
+    const next = won ? s + 1 : 0;
+    try { localStorage.setItem('tc_game_streak', JSON.stringify({ count: next, ts: Date.now() })); } catch {}
+    return next;
+  });
   const toggleMute   = () => { _soundMuted = !_soundMuted; localStorage.setItem('tc_sound_muted', _soundMuted ? '1' : '0'); setMuted(_soundMuted); };
 
   const bal = demoMode ? demoBalance : currentUser.balanceMain;

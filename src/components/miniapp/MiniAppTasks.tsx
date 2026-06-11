@@ -204,7 +204,7 @@ export const MiniAppTasks: React.FC = () => {
 
   // ── Completion helpers ───────────────────────────────────────────────────────
 
-  const creditApiTask = async (taskId: string, reward: number) => {
+  const creditApiTask = async (taskId: string, reward: number): Promise<boolean> => {
     try {
       const telegramId = useAppStore.getState().currentUser.telegramId;
       const res  = await fetch(`/api/user-tasks/${taskId}/complete`, {
@@ -230,11 +230,14 @@ export const MiniAppTasks: React.FC = () => {
         });
         setCompletedApiTaskIds(prev => [...prev, taskId]);
         setApiTasks(prev => prev.filter(t => t.id !== taskId));
+        return true;
       } else {
         setPhase(taskId, 'not_subscribed');
+        return false;
       }
     } catch {
       setPhase(taskId, 'idle');
+      return false;
     }
   };
 
@@ -286,7 +289,8 @@ export const MiniAppTasks: React.FC = () => {
       if (timerRefs.current[autoKey]) { clearTimeout(timerRefs.current[autoKey]); delete timerRefs.current[autoKey]; }
       setPhase(card.id, 'completing');
       if (card.source === 'api') {
-        await creditApiTask(card.id, card.reward);
+        const ok = await creditApiTask(card.id, card.reward);
+        if (!ok) return; // phase already set to 'idle' or 'not_subscribed' inside creditApiTask
       } else {
         completeTask(card.id);
       }

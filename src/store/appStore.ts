@@ -881,6 +881,7 @@ interface AppState {
 
   updateFraudAlert: (id: string, data: Partial<FraudAlert>) => void;
   markNotificationRead: (id: string) => void;
+  markAllNotificationsRead: () => void;
   addNotification: (n: Omit<Notification, 'id' | 'createdAt'>) => void;
   updatePlatformConfig: (data: Partial<PlatformConfig>) => void;
   addPlatformRevenue: (amount: number) => void;
@@ -1240,6 +1241,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const withdrawalId = generateId();
     set(s => ({ transactions: [{ userId: state.currentUser.id, type: 'withdrawal' as const, amount, currency: network.symbol, network: network.network, address: address.trim(), status: 'pending' as const, fee: network.withdrawalFee, id: withdrawalId, createdAt: new Date().toISOString() }, ...s.transactions] }));
     // Record in backend (fire-and-forget — app works offline too)
+    const initData = (window as unknown as { Telegram?: { WebApp?: { initData?: string } } })?.Telegram?.WebApp?.initData ?? '';
     void fetch('/api/withdrawal/create', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1253,6 +1255,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         network: network.network,
         address: address.trim(),
         fee: network.withdrawalFee,
+        initData,
       }),
     }).catch(() => {});
     return { success: true };
@@ -1268,14 +1271,17 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   placeGameBet: (bet, win) => {
     // Sanity guard: NaN/Infinity would silently corrupt the persisted balance
-    if (!Number.isFinite(bet) || !Number.isFinite(win) || bet <= 0 || win < 0) return;
+    if (!Number.isFinite(bet) || !Number.isFinite(win) || bet < 0 || win < 0) return;
+    if (win > bet * 10_000) return; // implausible win — guard against overflow
     set(s => {
       if (s.demoMode) {
         // En mode démo : ne toucher que demoBalance
         const nb = +(Math.max(0, s.demoBalance - bet + win)).toFixed(6);
         return { demoBalance: nb < 0.05 ? 10.0 : nb }; // recharge auto si presque vide
       }
-      const newBalance = +(Math.max(0, s.currentUser.balanceMain - bet + win)).toFixed(6);
+      // Guard: can't bet more than current balance (prevents overdraft from stale closures)
+      const safeBet = Math.min(bet, s.currentUser.balanceMain);
+      const newBalance = +(Math.max(0, s.currentUser.balanceMain - safeBet + win)).toFixed(6);
       const updatedUser = { ...s.currentUser, balanceMain: newBalance };
       try {
         const saved = JSON.parse(localStorage.getItem('tc_balance') || '{}') as Record<string, number>;
@@ -1436,6 +1442,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   // Others
   updateFraudAlert: (id, data) => set((s) => ({ fraudAlerts: s.fraudAlerts.map(a => a.id === id ? { ...a, ...data } : a) })),
   markNotificationRead: (id) => set((s) => ({ notifications: s.notifications.map(n => n.id === id ? { ...n, isRead: true } : n) })),
+  markAllNotificationsRead: () => set((s) => ({ notifications: s.notifications.map(n => ({ ...n, isRead: true })) })),
   addNotification: (n) => set((s) => ({ notifications: [{ ...n, id: generateId(), createdAt: new Date().toISOString() }, ...s.notifications] })),
   updatePlatformConfig: (data) => set((s) => ({ platformConfig: { ...s.platformConfig, ...data } })),
   addPlatformRevenue: (amount) => set((s) => ({ platformStats: { ...s.platformStats, platformRevenue: s.platformStats.platformRevenue + amount } })),

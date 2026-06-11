@@ -94,6 +94,68 @@ def _check_admin_auth(request: web.Request) -> bool:
     return request.headers.get("X-Admin-Key", "") == ADMIN_SECRET
 
 
+def _init_data_user_id(init_data: str) -> int:
+    """Extract the Telegram user id embedded in initData (0 if absent/invalid)."""
+    try:
+        parsed = dict(parse_qsl(init_data, keep_blank_values=True))
+        user = json.loads(parsed.get("user", "{}"))
+        return int(user.get("id", 0))
+    except Exception:
+        return 0
+
+
+def _verify_user_request(init_data: str, telegram_id: int) -> bool:
+    """Authenticate a state-changing user request.
+
+    When BOT_TOKEN is configured, the request must carry valid Telegram
+    initData whose embedded user id matches the claimed telegram_id —
+    otherwise anyone could act on behalf of any user. Without a bot token
+    (local dev) everything passes.
+    """
+    if not BOT_TOKEN:
+        return True
+    if not _validate_init_data(init_data, BOT_TOKEN):
+        return False
+    return _init_data_user_id(init_data) == telegram_id
+
+
+def _extract_chat_ref(url: str) -> str | None:
+    """Turn a t.me link into a @username the Bot API can check, or None
+    for invite links (+hash / joinchat) that can't be verified by username."""
+    try:
+        from urllib.parse import urlparse
+        p = urlparse(url if "://" in url else "https://" + url)
+        if p.netloc.lower() not in ("t.me", "telegram.me", "www.t.me"):
+            return None
+        seg = [s for s in p.path.split("/") if s]
+        if not seg:
+            return None
+        first = seg[0]
+        if first.startswith("+") or first.lower() == "joinchat":
+            return None
+        return "@" + first
+    except Exception:
+        return None
+
+
+async def _is_chat_member(chat_ref: str, telegram_id: int) -> bool | None:
+    """True/False if membership could be checked, None if unverifiable
+    (bot missing from chat, network error…)."""
+    if not bot:
+        return None
+    try:
+        from aiogram.enums import ChatMemberStatus
+        member = await bot.get_chat_member(chat_ref, telegram_id)
+        return member.status in (
+            ChatMemberStatus.MEMBER,
+            ChatMemberStatus.ADMINISTRATOR,
+            ChatMemberStatus.CREATOR,
+        )
+    except Exception as e:
+        log.warning("Membership check failed for %d in %s: %s", telegram_id, chat_ref, e)
+        return None
+
+
 def _parse_amount(raw: object) -> float | None:
     """Parse a positive finite amount; returns None for anything else (NaN, inf, negatives, junk)."""
     try:
@@ -226,6 +288,21 @@ async def init_db() -> None:
                 updated_at TEXT NOT NULL DEFAULT (datetime('now'))
             )
         """)
+        # A given on-chain tx hash may only be credited once — blocks deposit replay
+        await db.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_deposit_txhash
+            ON transactions(tx_hash) WHERE type = 'deposit' AND tx_hash != ''
+        """)
+        # Performance indices — CREATE INDEX IF NOT EXISTS is idempotent
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_tx_telegram_id ON transactions(telegram_id)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_tx_type        ON transactions(type)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_tx_status      ON transactions(status)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_tx_created_at  ON transactions(created_at)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_ut_creator     ON user_tasks(creator_id)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_ut_status      ON user_tasks(status)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_utc_task       ON user_task_completions(task_id)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_fa_telegram    ON fraud_alerts(telegram_id)")
+
         # Backward-compat migrations — safe to run on existing DB
         for tbl, col, defn in [
             ("users", "referral_balance",   "REAL    NOT NULL DEFAULT 0"),
@@ -319,9 +396,9 @@ async def api_user_init(request: web.Request) -> web.Response:
         return web.json_response({"error": "Invalid JSON"}, status=400, headers=_CORS)
 
     telegram_id = data.get("telegramId")
-    username    = str(data.get("username",  ""))
-    first_name  = str(data.get("firstName", ""))
-    last_name   = str(data.get("lastName",  ""))
+    username    = (data.get("username")   or "")[:64]
+    first_name  = (data.get("firstName")  or "")[:128]
+    last_name   = (data.get("lastName")   or "")[:128]
     init_data   = str(data.get("initData",  ""))
 
     if not telegram_id or not isinstance(telegram_id, int):
@@ -532,6 +609,10 @@ async def api_leaderboard(request: web.Request) -> web.Response:
 # ── API — Record deposit (called by frontend deposit monitor) ──────────────────
 
 async def api_deposit_record(request: web.Request) -> web.Response:
+    ip = _client_ip(request)
+    if _is_rate_limited(ip):
+        return web.json_response({"error": "Rate limit exceeded"}, status=429, headers=_CORS)
+
     try:
         data = await request.json()
     except Exception:
@@ -543,9 +624,19 @@ async def api_deposit_record(request: web.Request) -> web.Response:
     currency    = str(data.get("currency", "TON"))
     network     = str(data.get("network",  "TON"))
     tx_hash     = str(data.get("txHash",   "")).strip()
+    init_data   = str(data.get("initData", "")).strip()
 
     if not telegram_id or amount is None:
         return web.json_response({"error": "Invalid data"}, status=400, headers=_CORS)
+
+    if BOT_TOKEN:
+        if not init_data or not _validate_init_data(init_data, BOT_TOKEN):
+            return web.json_response({"error": "Authentication required"}, status=401, headers=_CORS)
+        authed_id = _init_data_user_id(init_data)
+        if authed_id != telegram_id:
+            log.warning("Deposit fraud attempt: claimed=%d authed=%d hash=%s",
+                        telegram_id, authed_id, tx_hash[:16])
+            return web.json_response({"error": "Identity mismatch"}, status=403, headers=_CORS)
 
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("""
@@ -561,6 +652,10 @@ async def api_deposit_record(request: web.Request) -> web.Response:
 # ── API — Create withdrawal request (called by frontend on submit) ─────────────
 
 async def api_withdrawal_create(request: web.Request) -> web.Response:
+    ip = _client_ip(request)
+    if _is_rate_limited(ip):
+        return web.json_response({"error": "Rate limit exceeded"}, status=429, headers=_CORS)
+
     try:
         data = await request.json()
     except Exception:
@@ -571,11 +666,22 @@ async def api_withdrawal_create(request: web.Request) -> web.Response:
     amount      = _parse_amount(data.get("amount"))
     currency    = str(data.get("currency", "TON"))
     network     = str(data.get("network",  "TON"))
-    address     = str(data.get("address",  "")).strip()
+    address     = ( data.get("address") or "").strip()
     fee         = _parse_amount(data.get("fee")) or 0.0
+    init_data   = str(data.get("initData", "")).strip()
 
-    if not telegram_id or amount is None or len(address) < 10:
+    if not telegram_id or amount is None or len(address) < 20:
         return web.json_response({"error": "Invalid data"}, status=400, headers=_CORS)
+
+    # Authenticate: verify initData signature and confirm the caller is who they claim
+    if BOT_TOKEN:
+        if not init_data or not _validate_init_data(init_data, BOT_TOKEN):
+            return web.json_response({"error": "Authentication required"}, status=401, headers=_CORS)
+        authed_id = _init_data_user_id(init_data)
+        if authed_id != telegram_id:
+            log.warning("Withdrawal impersonation attempt: claimed=%d authed=%d addr=%s",
+                        telegram_id, authed_id, address[:12])
+            return web.json_response({"error": "Identity mismatch"}, status=403, headers=_CORS)
 
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(
@@ -671,6 +777,37 @@ async def api_check_bot_start(request: web.Request) -> web.Response:
             row = await cur.fetchone()
     started = bool(row and row[0]) if row else False
     return web.json_response({"started": started}, headers=_CORS)
+
+
+# ── API — User: check own withdrawal statuses (for balance restoration) ────────
+
+async def api_user_withdrawal_status(request: web.Request) -> web.Response:
+    """Return status of the caller's withdrawal transactions so the frontend can
+    detect rejections and restore the locally-deducted balance."""
+    try:
+        telegram_id = int(request.rel_url.query.get("telegram_id", 0))
+    except (ValueError, TypeError):
+        return web.json_response([], headers=_CORS)
+    if not telegram_id:
+        return web.json_response([], headers=_CORS)
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute("""
+            SELECT id, amount, currency, status, processed_at, admin_note
+            FROM transactions
+            WHERE telegram_id = ? AND type = 'withdrawal'
+            ORDER BY created_at DESC LIMIT 50
+        """, (telegram_id,)) as cur:
+            rows = await cur.fetchall()
+
+    return web.json_response([{
+        "id":          r[0],
+        "amount":      float(r[1]),
+        "currency":    r[2],
+        "status":      r[3],
+        "processedAt": r[4],
+        "adminNote":   r[5],
+    } for r in rows], headers=_CORS)
 
 
 # ── API — Admin: stats ─────────────────────────────────────────────────────────
@@ -818,10 +955,19 @@ async def api_admin_users(request: web.Request) -> web.Response:
 
 # ── API — Admin: ban/unban/unflag/block-withdrawals ────────────────────────────
 
+def _require_admin_telegram_id(request: web.Request) -> tuple[int, web.Response | None]:
+    """Extract and validate telegram_id from URL path for admin user endpoints."""
+    tid = _parse_telegram_id(request.match_info.get("telegram_id"))
+    if not tid:
+        return 0, web.json_response({"error": "Invalid telegram_id"}, status=400, headers=_CORS)
+    return tid, None
+
+
 async def api_admin_ban_user(request: web.Request) -> web.Response:
     if not _check_admin_auth(request):
         return web.json_response({"error": "Unauthorized"}, status=401, headers=_CORS)
-    telegram_id = _parse_telegram_id(request.match_info.get("telegram_id"))
+    telegram_id, err = _require_admin_telegram_id(request)
+    if err: return err
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("UPDATE users SET banned = 1, flagged = 1 WHERE telegram_id = ?", (telegram_id,))
         await db.commit()
@@ -831,7 +977,8 @@ async def api_admin_ban_user(request: web.Request) -> web.Response:
 async def api_admin_unban_user(request: web.Request) -> web.Response:
     if not _check_admin_auth(request):
         return web.json_response({"error": "Unauthorized"}, status=401, headers=_CORS)
-    telegram_id = _parse_telegram_id(request.match_info.get("telegram_id"))
+    telegram_id, err = _require_admin_telegram_id(request)
+    if err: return err
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("UPDATE users SET banned = 0, flagged = 0 WHERE telegram_id = ?", (telegram_id,))
         await db.commit()
@@ -841,7 +988,8 @@ async def api_admin_unban_user(request: web.Request) -> web.Response:
 async def api_admin_unflag_user(request: web.Request) -> web.Response:
     if not _check_admin_auth(request):
         return web.json_response({"error": "Unauthorized"}, status=401, headers=_CORS)
-    telegram_id = _parse_telegram_id(request.match_info.get("telegram_id"))
+    telegram_id, err = _require_admin_telegram_id(request)
+    if err: return err
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("UPDATE users SET flagged = 0 WHERE telegram_id = ? AND banned = 0", (telegram_id,))
         await db.commit()
@@ -851,7 +999,8 @@ async def api_admin_unflag_user(request: web.Request) -> web.Response:
 async def api_admin_block_withdrawals(request: web.Request) -> web.Response:
     if not _check_admin_auth(request):
         return web.json_response({"error": "Unauthorized"}, status=401, headers=_CORS)
-    telegram_id = _parse_telegram_id(request.match_info.get("telegram_id"))
+    telegram_id, err = _require_admin_telegram_id(request)
+    if err: return err
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("UPDATE users SET withdrawal_blocked = 1 WHERE telegram_id = ?", (telegram_id,))
         await db.commit()
@@ -861,7 +1010,8 @@ async def api_admin_block_withdrawals(request: web.Request) -> web.Response:
 async def api_admin_unblock_withdrawals(request: web.Request) -> web.Response:
     if not _check_admin_auth(request):
         return web.json_response({"error": "Unauthorized"}, status=401, headers=_CORS)
-    telegram_id = _parse_telegram_id(request.match_info.get("telegram_id"))
+    telegram_id, err = _require_admin_telegram_id(request)
+    if err: return err
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("UPDATE users SET withdrawal_blocked = 0 WHERE telegram_id = ?", (telegram_id,))
         await db.commit()
@@ -1048,13 +1198,14 @@ async def api_admin_approve_withdrawal(request: web.Request) -> web.Response:
         except Exception:
             pass
 
-    await _notify_channel(
-        WITHDRAWAL_CHANNEL,
-        f"✅ <b>Retrait approuvé</b>\n"
-        f"🆔 TX ID: <code>{tx_id}</code>\n"
-        f"💰 {tx_row[1]:.2f} {tx_row[2] if tx_row else ''}\n"
-        + (f'🔗 <a href="{tx_link}">Voir sur TonScan</a>' if tx_link else ""),
-    )
+    if tx_row:
+        await _notify_channel(
+            WITHDRAWAL_CHANNEL,
+            f"✅ <b>Retrait approuvé</b>\n"
+            f"🆔 TX ID: <code>{tx_id}</code>\n"
+            f"💰 {tx_row[1]:.2f} {tx_row[2]}\n"
+            + (f'🔗 <a href="{tx_link}">Voir sur TonScan</a>' if tx_link else ""),
+        )
 
     return web.json_response({"success": True}, headers=_CORS)
 
@@ -1068,7 +1219,7 @@ async def api_admin_reject_withdrawal(request: web.Request) -> web.Response:
         data = await request.json()
     except Exception:
         data = {}
-    note = str(data.get("note", "")).strip()
+    note = (data.get("note") or "").strip()
 
     async with aiosqlite.connect(DB_PATH) as db:
         cur = await db.execute("""
@@ -1090,19 +1241,21 @@ async def api_admin_reject_withdrawal(request: web.Request) -> web.Response:
                 f"❌ <b>Retrait refusé</b>\n\n"
                 f"💰 Montant : {tx_row[1]:.2f} {tx_row[2]}\n"
                 f"{'📝 Motif : ' + note if note else 'Aucun motif précisé.'}\n\n"
-                f"Votre solde a été recrédité.",
+                f"🔄 Votre solde de <b>{tx_row[1]:.2f} {tx_row[2]}</b> sera recrédité "
+                f"automatiquement à la prochaine ouverture de l'application.",
                 parse_mode="HTML",
             )
         except Exception:
             pass
 
-    await _notify_channel(
-        WITHDRAWAL_CHANNEL,
-        f"❌ <b>Retrait refusé</b>\n"
-        f"🆔 TX ID: <code>{tx_id}</code>\n"
-        f"💰 {tx_row[1]:.2f} {tx_row[2] if tx_row else ''}\n"
-        + (f"📝 Motif : {note}" if note else ""),
-    )
+    if tx_row:
+        await _notify_channel(
+            WITHDRAWAL_CHANNEL,
+            f"❌ <b>Retrait refusé</b>\n"
+            f"🆔 TX ID: <code>{tx_id}</code>\n"
+            f"💰 {tx_row[1]:.2f} {tx_row[2]}\n"
+            + (f"📝 Motif : {note}" if note else ""),
+        )
 
     return web.json_response({"success": True}, headers=_CORS)
 
@@ -1155,7 +1308,7 @@ async def api_admin_resolve_alert(request: web.Request) -> web.Response:
         if action == "ban":
             async with db.execute("SELECT telegram_id FROM fraud_alerts WHERE id = ?", (alert_id,)) as cur:
                 row = await cur.fetchone()
-            if row:
+            if row and row[0] > 0:
                 await db.execute(
                     "UPDATE users SET banned = 1, flagged = 1 WHERE telegram_id = ?", (row[0],)
                 )
@@ -1167,26 +1320,38 @@ async def api_admin_resolve_alert(request: web.Request) -> web.Response:
 # ── API — User-created tasks ───────────────────────────────────────────────────
 
 async def api_user_task_create(request: web.Request) -> web.Response:
+    ip = _client_ip(request)
+    if _is_rate_limited(ip):
+        return web.json_response({"error": "Rate limit exceeded"}, status=429, headers=_CORS)
+
     try:
         data = await request.json()
     except Exception:
         return web.json_response({"error": "Invalid JSON"}, status=400, headers=_CORS)
 
-    creator_id      = data.get("telegramId")
+    creator_id      = _parse_telegram_id(data.get("telegramId"))
     task_type       = str(data.get("type", "")).strip()
-    title           = str(data.get("title", "")).strip()
-    description     = str(data.get("description", "")).strip()
-    target_url      = str(data.get("targetUrl", "")).strip()   # stored EXACTLY as-is
-    reward          = float(data.get("reward", 0))
-    total_budget    = float(data.get("totalBudget", 0))
-    max_completions = int(data.get("maxCompletions", 0))
+    title           = (data.get("title")       or "").strip()[:200]
+    description     = (data.get("description") or "").strip()[:500]
+    target_url      = (data.get("targetUrl") or "").strip()[:512]
+    reward          = _parse_amount(data.get("reward"))
+    total_budget    = _parse_amount(data.get("totalBudget"))
+    try:
+        max_completions = int(data.get("maxCompletions", 0))
+    except (TypeError, ValueError):
+        max_completions = 0
 
     if not creator_id or not task_type or not title or not target_url:
         return web.json_response({"error": "Missing required fields"}, status=400, headers=_CORS)
     if task_type not in ("join_channel", "join_group", "start_bot"):
         return web.json_response({"error": "Invalid task type"}, status=400, headers=_CORS)
-    if max_completions < 1:
-        return web.json_response({"error": "Invalid max_completions"}, status=400, headers=_CORS)
+    if reward is None or total_budget is None:
+        return web.json_response({"error": "Invalid reward or budget"}, status=400, headers=_CORS)
+    if max_completions < 1 or max_completions > 100_000:
+        return web.json_response({"error": "Invalid max_completions (1–100 000)"}, status=400, headers=_CORS)
+    # Guard against budget/reward mismatch (allow ±1 unit rounding tolerance)
+    if abs(reward * max_completions - total_budget) > reward + 0.001:
+        return web.json_response({"error": "Budget mismatch with reward × completions"}, status=400, headers=_CORS)
 
     task_id = _short_id()
 
@@ -1289,6 +1454,10 @@ async def api_user_task_available(request: web.Request) -> web.Response:
 
 
 async def api_user_task_complete(request: web.Request) -> web.Response:
+    ip = _client_ip(request)
+    if _is_rate_limited(ip):
+        return web.json_response({"error": "Rate limit exceeded"}, status=429, headers=_CORS)
+
     task_id = request.match_info.get("id")
     try:
         data = await request.json()
@@ -1304,7 +1473,7 @@ async def api_user_task_complete(request: web.Request) -> web.Response:
 
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(
-            "SELECT status, completions, max_completions, reward, creator_id FROM user_tasks WHERE id = ?",
+            "SELECT status, reward, creator_id FROM user_tasks WHERE id = ?",
             (task_id,)
         ) as cur:
             task = await cur.fetchone()
@@ -1313,31 +1482,102 @@ async def api_user_task_complete(request: web.Request) -> web.Response:
             return web.json_response({"error": "Task not found"}, status=404, headers=_CORS)
         if task[0] != 'active':
             return web.json_response({"error": "Task not active"}, status=400, headers=_CORS)
-        if task[1] >= task[2]:
-            return web.json_response({"error": "Task depleted"}, status=400, headers=_CORS)
-        if task[4] == telegram_id:
+        if task[2] == telegram_id:
+            await _log_fraud_alert(
+                db, telegram_id, str(telegram_id),
+                "self_task_complete",
+                f"Creator attempted to complete own task {task_id}",
+                _risk_score(["self_referral_ip"]),
+            )
+            await db.commit()
             return web.json_response({"error": "Cannot complete your own task"}, status=400, headers=_CORS)
 
-        reward          = float(task[3])
-        new_completions = task[1] + 1
-        new_status      = 'depleted' if new_completions >= task[2] else 'active'
+        reward = float(task[1])
 
-        # INSERT OR IGNORE + rowcount makes the replay check atomic: two
-        # concurrent requests can both pass a SELECT check, but only one
-        # insert wins on the (task_id, telegram_id) primary key.
-        cur = await db.execute(
+        # Atomic dedup: only one completion record per (task_id, telegram_id)
+        ins = await db.execute(
             "INSERT OR IGNORE INTO user_task_completions (task_id, telegram_id) VALUES (?, ?)",
             (task_id, telegram_id)
         )
-        if cur.rowcount == 0:
+        if ins.rowcount == 0:
             return web.json_response({"error": "Already completed"}, status=400, headers=_CORS)
-        await db.execute(
-            "UPDATE user_tasks SET completions = ?, spent = spent + ?, status = ? WHERE id = ?",
-            (new_completions, reward, new_status, task_id)
+
+        # Atomic budget guard: increment only while completions < max_completions.
+        # If another concurrent request already filled the last slot, rowcount = 0.
+        upd = await db.execute(
+            """UPDATE user_tasks
+               SET completions = completions + 1,
+                   spent       = spent + ?,
+                   status      = CASE WHEN completions + 1 >= max_completions THEN 'depleted' ELSE 'active' END
+               WHERE id = ? AND status = 'active' AND completions < max_completions""",
+            (reward, task_id)
         )
+        if upd.rowcount == 0:
+            # Last slot was raced away — roll back the completion record
+            await db.execute(
+                "DELETE FROM user_task_completions WHERE task_id = ? AND telegram_id = ?",
+                (task_id, telegram_id)
+            )
+            await db.commit()
+            return web.json_response({"error": "Task depleted"}, status=400, headers=_CORS)
+
         await db.commit()
 
+    # Verify membership server-side (after recording the completion so we
+    # don't lose the atomicity, but before returning reward to the client).
+    # For join_channel / join_group: check via Bot API.
+    # For start_bot: checked via bot_started flag in users table.
+    task_status_row = await _verify_task_completion(task_id, telegram_id)
+    if task_status_row is False:
+        # Membership check definitively failed: roll back completion record
+        async with aiosqlite.connect(DB_PATH) as db2:
+            await db2.execute(
+                "DELETE FROM user_task_completions WHERE task_id = ? AND telegram_id = ?",
+                (task_id, telegram_id)
+            )
+            await db2.execute(
+                "UPDATE user_tasks SET completions = completions - 1, spent = spent - ?,"
+                " status = CASE WHEN status = 'depleted' AND completions - 1 < max_completions THEN 'active' ELSE status END"
+                " WHERE id = ?",
+                (reward, task_id)
+            )
+            await db2.commit()
+        return web.json_response({"error": "Membership not verified. Please join and try again."}, status=403, headers=_CORS)
+
     return web.json_response({"success": True, "reward": reward}, headers=_CORS)
+
+
+async def _verify_task_completion(task_id: str, telegram_id: int) -> bool | None:
+    """Return True if verified, False if definitely NOT a member, None if unverifiable."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT type, target_url FROM user_tasks WHERE id = ?", (task_id,)
+        ) as cur:
+            row = await cur.fetchone()
+    if not row:
+        return None
+
+    task_type, target_url = row[0], row[1]
+
+    if task_type == "start_bot":
+        async with aiosqlite.connect(DB_PATH) as db:
+            async with db.execute(
+                "SELECT bot_started FROM users WHERE telegram_id = ?", (telegram_id,)
+            ) as cur:
+                urow = await cur.fetchone()
+        if urow is None:
+            return None
+        return bool(urow[0])
+
+    if task_type in ("join_channel", "join_group"):
+        chat_ref = _extract_chat_ref(target_url)
+        if chat_ref is None:
+            # Invite link — can't verify by username; give benefit of doubt
+            return None
+        result = await _is_chat_member(chat_ref, telegram_id)
+        return result  # True / False / None
+
+    return None
 
 
 async def api_user_task_pause(request: web.Request) -> web.Response:
@@ -1423,11 +1663,19 @@ async def api_user_task_fund(request: web.Request) -> web.Response:
         return web.json_response({"error": "Invalid telegramId"}, status=400, headers=_CORS)
     if not telegram_id:
         return web.json_response({"error": "Missing telegramId"}, status=400, headers=_CORS)
-    extra_executions = int(data.get("extraExecutions", 0))
-    extra_budget     = float(data.get("extraBudget", 0))
+    try:
+        extra_executions = int(data.get("extraExecutions", 0))
+    except (TypeError, ValueError):
+        extra_executions = 0
+    try:
+        extra_budget = float(data.get("extraBudget", 0))
+    except (TypeError, ValueError):
+        extra_budget = 0.0
 
     if extra_executions < 1:
         return web.json_response({"error": "Invalid extra executions"}, status=400, headers=_CORS)
+    if extra_budget <= 0:
+        return web.json_response({"error": "Invalid extra budget"}, status=400, headers=_CORS)
 
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(
@@ -1439,6 +1687,8 @@ async def api_user_task_fund(request: web.Request) -> web.Response:
             return web.json_response({"error": "Task not found"}, status=404, headers=_CORS)
         if task[0] != telegram_id:
             return web.json_response({"error": "Unauthorized"}, status=403, headers=_CORS)
+        if task[1] not in ('active', 'depleted'):
+            return web.json_response({"error": "Task cannot be funded in its current state"}, status=400, headers=_CORS)
 
         await db.execute("""
             UPDATE user_tasks
@@ -1542,7 +1792,7 @@ async def api_admin_reject_user_task(request: web.Request) -> web.Response:
         data = await request.json()
     except Exception:
         data = {}
-    note = str(data.get("note", "")).strip()
+    note = (data.get("note") or "").strip()
 
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(
@@ -1636,6 +1886,7 @@ async def start_web() -> None:
     # User API
     app.router.add_post("/api/user/init",                  api_user_init)
     app.router.add_post("/api/user/referral",              api_user_referral)
+    app.router.add_get( "/api/user/withdrawals",           api_user_withdrawal_status)
     app.router.add_get( "/api/check-membership",           api_check_membership)
     app.router.add_get( "/api/check-bot-start",            api_check_bot_start)
     app.router.add_get( "/api/leaderboard",                api_leaderboard)
@@ -1678,6 +1929,12 @@ async def start_web() -> None:
     app.router.add_get( "/api/admin/user-tasks",                      api_admin_user_tasks)
     app.router.add_post("/api/admin/user-tasks/{id}/approve",         api_admin_approve_user_task)
     app.router.add_post("/api/admin/user-tasks/{id}/reject",          api_admin_reject_user_task)
+
+    # CORS preflight — must be before SPA fallback
+    async def handle_options(request: web.Request) -> web.Response:
+        return web.Response(status=204, headers=_CORS)
+
+    app.router.add_route("OPTIONS", "/{path:.*}", handle_options)
 
     # SPA fallback — must be last
     app.router.add_get("/{path:.*}",                       serve_app)

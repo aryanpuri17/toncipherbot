@@ -132,8 +132,33 @@ const MiniAppPageContent: React.FC = () => {
   }
 };
 
+const AdminMobileNav: React.FC = () => {
+  const { adminPage, setAdminPage } = useAppStore();
+  const tabs = [
+    { id: 'overview',     icon: '📊', label: 'Accueil' },
+    { id: 'users',        icon: '👥', label: 'Users' },
+    { id: 'withdrawals',  icon: '💰', label: 'Finance' },
+    { id: 'antifraud',    icon: '🛡️', label: 'Sécurité' },
+    { id: 'config',       icon: '⚙️', label: 'Config' },
+  ];
+  return (
+    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-[#0d0d1a]/95 backdrop-blur-xl border-t border-white/5 flex lg:hidden">
+      {tabs.map(t => (
+        <button
+          key={t.id}
+          onClick={() => setAdminPage(t.id)}
+          className={`flex-1 py-2 flex flex-col items-center gap-0.5 transition-colors ${adminPage === t.id ? 'text-blue-400' : 'text-slate-500'}`}
+        >
+          <span className="text-base leading-none">{t.icon}</span>
+          <span className="text-[9px] font-medium">{t.label}</span>
+        </button>
+      ))}
+    </nav>
+  );
+};
+
 const AdminPanel: React.FC = () => {
-  const { adminSidebarOpen, notifications, toggleAdminSidebar } = useAppStore();
+  const { adminSidebarOpen, notifications, toggleAdminSidebar, setAdminPage } = useAppStore();
   const unreadCount = notifications.filter(n => !n.isRead).length;
 
   return (
@@ -166,7 +191,11 @@ const AdminPanel: React.FC = () => {
             </div>
 
             <div className="flex items-center gap-3 ml-auto">
-              <button className="p-2 rounded-lg hover:bg-white/5 text-slate-400 relative">
+              <button
+                onClick={() => setAdminPage('alerts')}
+                className="p-2 rounded-lg hover:bg-white/5 text-slate-400 relative"
+                title="Alertes"
+              >
                 <Bell className="w-5 h-5" />
                 {unreadCount > 0 && (
                   <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center">
@@ -187,10 +216,13 @@ const AdminPanel: React.FC = () => {
           </div>
         </header>
 
-        <main className="p-4 lg:p-6">
+        <main className="p-4 lg:p-6 pb-20 lg:pb-6">
           <AdminPageContent />
         </main>
       </div>
+
+      {/* Mobile bottom navigation — replaces sidebar on small screens */}
+      <AdminMobileNav />
     </div>
   );
 };
@@ -291,6 +323,12 @@ export default function App() {
     // reaches users already in the app (not just on next open)
     const configPoll = setInterval(() => { void useAppStore.getState().syncConfigFromBackend(); }, 5 * 60_000);
 
+    // Sync hash-based routing with store on browser back/forward
+    const handleHashChange = () => {
+      setCurrentView(window.location.hash === '#admin' ? 'admin' : 'miniapp');
+    };
+    window.addEventListener('hashchange', handleHashChange);
+
     void (async () => {
       const isAdminRoute = window.location.hash === '#admin';
       if (!isAdminRoute) setCurrentView('miniapp');
@@ -312,9 +350,9 @@ export default function App() {
 
       const initData = tg.initData ?? '';
 
-      // Sync user with backend — creates/updates user record and returns referral count
-      try {
-        const res = await fetch(`${API}/api/user/init`, {
+      // Run backend calls concurrently: user init + withdrawal restoration
+      const [userInitRes, withdrawalsRes] = await Promise.allSettled([
+        fetch(`${API}/api/user/init`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -324,13 +362,36 @@ export default function App() {
             lastName:   tgUser.last_name ?? '',
             initData,
           }),
-        });
-        if (res.ok) {
-          const apiData = await res.json() as { referralCount: number; referralBalance: number; flagged: boolean; banned?: boolean; withdrawalBlocked?: boolean };
-          syncUserFromApi(apiData);
+        }),
+        fetch(`${API}/api/user/withdrawals?telegram_id=${tgUser.id}`),
+      ]);
+
+      if (userInitRes.status === 'fulfilled' && userInitRes.value.ok) {
+        const apiData = await userInitRes.value.json() as { referralCount: number; referralBalance: number; flagged: boolean; banned?: boolean; withdrawalBlocked?: boolean };
+        syncUserFromApi(apiData);
+      }
+
+      // Restore balance for withdrawals rejected by admin since last session
+      if (withdrawalsRes.status === 'fulfilled' && withdrawalsRes.value.ok) {
+        const list = await withdrawalsRes.value.json() as Array<{ id: string; amount: number; status: string }>;
+        const { transactions } = useAppStore.getState();
+        let balanceRestored = 0;
+        const restoredIds: string[] = [];
+        for (const serverTx of list) {
+          if (serverTx.status !== 'rejected') continue;
+          const localTx = transactions.find(t => t.id === serverTx.id);
+          if (!localTx || localTx.status === 'cancelled' || localTx.status === 'failed') continue;
+          balanceRestored += serverTx.amount;
+          restoredIds.push(serverTx.id);
         }
-      } catch {
-        // Backend unavailable — app still works with local state
+        if (balanceRestored > 0) {
+          useAppStore.setState(s => ({
+            currentUser: { ...s.currentUser, balanceMain: +(s.currentUser.balanceMain + balanceRestored).toFixed(6) },
+            transactions: s.transactions.map(t =>
+              restoredIds.includes(t.id) ? { ...t, status: 'cancelled' as const } : t
+            ),
+          }));
+        }
       }
 
       // Process incoming referral from link (?startapp=r_TELEGRAMID)
@@ -356,7 +417,10 @@ export default function App() {
       }
     })();
 
-    return () => clearInterval(configPoll);
+    return () => {
+      clearInterval(configPoll);
+      window.removeEventListener('hashchange', handleHashChange);
+    };
   }, []);
 
   return currentView === 'admin' ? (
