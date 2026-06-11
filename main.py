@@ -293,6 +293,16 @@ async def init_db() -> None:
             CREATE UNIQUE INDEX IF NOT EXISTS idx_deposit_txhash
             ON transactions(tx_hash) WHERE type = 'deposit' AND tx_hash != ''
         """)
+        # Performance indices — CREATE INDEX IF NOT EXISTS is idempotent
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_tx_telegram_id ON transactions(telegram_id)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_tx_type        ON transactions(type)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_tx_status      ON transactions(status)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_tx_created_at  ON transactions(created_at)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_ut_creator     ON user_tasks(creator_id)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_ut_status      ON user_tasks(status)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_utc_task       ON user_task_completions(task_id)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_fa_telegram    ON fraud_alerts(telegram_id)")
+
         # Backward-compat migrations — safe to run on existing DB
         for tbl, col, defn in [
             ("users", "referral_balance",   "REAL    NOT NULL DEFAULT 0"),
@@ -945,10 +955,19 @@ async def api_admin_users(request: web.Request) -> web.Response:
 
 # ── API — Admin: ban/unban/unflag/block-withdrawals ────────────────────────────
 
+def _require_admin_telegram_id(request: web.Request) -> tuple[int, web.Response | None]:
+    """Extract and validate telegram_id from URL path for admin user endpoints."""
+    tid = _parse_telegram_id(request.match_info.get("telegram_id"))
+    if not tid:
+        return 0, web.json_response({"error": "Invalid telegram_id"}, status=400, headers=_CORS)
+    return tid, None
+
+
 async def api_admin_ban_user(request: web.Request) -> web.Response:
     if not _check_admin_auth(request):
         return web.json_response({"error": "Unauthorized"}, status=401, headers=_CORS)
-    telegram_id = _parse_telegram_id(request.match_info.get("telegram_id"))
+    telegram_id, err = _require_admin_telegram_id(request)
+    if err: return err
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("UPDATE users SET banned = 1, flagged = 1 WHERE telegram_id = ?", (telegram_id,))
         await db.commit()
@@ -958,7 +977,8 @@ async def api_admin_ban_user(request: web.Request) -> web.Response:
 async def api_admin_unban_user(request: web.Request) -> web.Response:
     if not _check_admin_auth(request):
         return web.json_response({"error": "Unauthorized"}, status=401, headers=_CORS)
-    telegram_id = _parse_telegram_id(request.match_info.get("telegram_id"))
+    telegram_id, err = _require_admin_telegram_id(request)
+    if err: return err
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("UPDATE users SET banned = 0, flagged = 0 WHERE telegram_id = ?", (telegram_id,))
         await db.commit()
@@ -968,7 +988,8 @@ async def api_admin_unban_user(request: web.Request) -> web.Response:
 async def api_admin_unflag_user(request: web.Request) -> web.Response:
     if not _check_admin_auth(request):
         return web.json_response({"error": "Unauthorized"}, status=401, headers=_CORS)
-    telegram_id = _parse_telegram_id(request.match_info.get("telegram_id"))
+    telegram_id, err = _require_admin_telegram_id(request)
+    if err: return err
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("UPDATE users SET flagged = 0 WHERE telegram_id = ? AND banned = 0", (telegram_id,))
         await db.commit()
@@ -978,7 +999,8 @@ async def api_admin_unflag_user(request: web.Request) -> web.Response:
 async def api_admin_block_withdrawals(request: web.Request) -> web.Response:
     if not _check_admin_auth(request):
         return web.json_response({"error": "Unauthorized"}, status=401, headers=_CORS)
-    telegram_id = _parse_telegram_id(request.match_info.get("telegram_id"))
+    telegram_id, err = _require_admin_telegram_id(request)
+    if err: return err
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("UPDATE users SET withdrawal_blocked = 1 WHERE telegram_id = ?", (telegram_id,))
         await db.commit()
@@ -988,7 +1010,8 @@ async def api_admin_block_withdrawals(request: web.Request) -> web.Response:
 async def api_admin_unblock_withdrawals(request: web.Request) -> web.Response:
     if not _check_admin_auth(request):
         return web.json_response({"error": "Unauthorized"}, status=401, headers=_CORS)
-    telegram_id = _parse_telegram_id(request.match_info.get("telegram_id"))
+    telegram_id, err = _require_admin_telegram_id(request)
+    if err: return err
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("UPDATE users SET withdrawal_blocked = 0 WHERE telegram_id = ?", (telegram_id,))
         await db.commit()
@@ -1654,6 +1677,8 @@ async def api_user_task_fund(request: web.Request) -> web.Response:
             return web.json_response({"error": "Task not found"}, status=404, headers=_CORS)
         if task[0] != telegram_id:
             return web.json_response({"error": "Unauthorized"}, status=403, headers=_CORS)
+        if task[1] not in ('active', 'depleted'):
+            return web.json_response({"error": "Task cannot be funded in its current state"}, status=400, headers=_CORS)
 
         await db.execute("""
             UPDATE user_tasks
