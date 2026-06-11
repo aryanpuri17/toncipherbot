@@ -14,6 +14,7 @@ export interface User {
   todayEarnings: number;
   tasksCompleted: number;
   referralCount: number;
+  referralDailyCount: number;
   referralCode: string;
   referredBy?: string;
   riskScore: number;
@@ -419,6 +420,7 @@ export interface TaskSubmission {
   userId: string;
   username: string;
   proofText: string;
+  proofImageBase64?: string;
   status: 'pending' | 'approved' | 'rejected';
   adminNote?: string;
   createdAt: string;
@@ -481,7 +483,7 @@ const mockUsers: User[] = [
   {
     id: '1', telegramId: 0, username: 'vous', firstName: 'Vous', lastName: '',
     balanceMain: _savedBalance.balanceMain ?? 1.0, totalEarnings: _savedBalance.totalEarnings ?? 0, todayEarnings: _savedBalance.todayEarnings ?? 0, tasksCompleted: _savedBalance.tasksCompleted ?? 0, taskCredits: _savedBalance.taskCredits ?? 0,
-    referralCount: 0, referralCode: 'START00',
+    referralCount: 0, referralDailyCount: 0, referralCode: 'START00',
     riskScore: 0, status: 'active', createdAt: new Date().toISOString(), lastActive: new Date().toISOString(),
     withdrawalBlocked: false, verificationStatus: 'none',
     dailyWithdrawn: 0, dailyTasksCompleted: 0,
@@ -763,6 +765,7 @@ interface AppState {
   confirmDeposit: (txId: string, txHash: string) => void;
   creditDeposit: (userId: string, amount: number, currency: string, txHash: string, network: string) => void;
   resetDailyTasks: () => void;
+  resetDailyRefTask: () => void;
   completeTask: (taskId: string) => void;
   creditReferralBonus: (earned: number) => void;
   submitWithdrawal: (networkId: string, amount: number, address: string) => { success: boolean; error?: string };
@@ -861,7 +864,7 @@ interface AppState {
   addLog: (log: Omit<LogEntry, 'id' | 'createdAt'>) => void;
 
   redeemPromoCode: (code: string) => { success: boolean; error?: string; reward?: number };
-  submitTaskProof: (taskId: string, proofText: string) => { success: boolean; error?: string };
+  submitTaskProof: (taskId: string, proofText: string, imageBase64?: string) => { success: boolean; error?: string };
   reviewTaskSubmission: (submissionId: string, status: 'approved' | 'rejected', adminNote?: string) => void;
   addPromoCode: (code: Omit<PromoCode, 'id' | 'createdAt' | 'currentUses'>) => void;
   updatePromoCode: (id: string, data: Partial<PromoCode>) => void;
@@ -982,6 +985,19 @@ export const useAppStore = create<AppState>((set, get) => ({
     currentUser: { ...s.currentUser, dailyTasksCompleted: 0, dailyWithdrawn: 0 },
   })),
 
+  resetDailyRefTask: () => set(s => {
+    // Remove task '5' (Challenge Parrainage) from completedTaskIds so it can be reclaimed today
+    const newCompleted = s.completedTaskIds.filter(id => id !== '5');
+    localStorage.setItem('tc_completed_tasks', JSON.stringify(newCompleted));
+    // New baseline = current lifetime count — today's count starts from 0
+    localStorage.setItem('tc_ref_daily_baseline', String(s.currentUser.referralCount));
+    return {
+      completedTaskIds: newCompleted,
+      currentUser: { ...s.currentUser, referralDailyCount: 0 },
+      users: s.users.map(u => u.id === s.currentUser.id ? { ...u, referralDailyCount: 0 } : u),
+    };
+  }),
+
   completeTask: (taskId) => {
     const state = get();
     const task = state.tasks.find(t => t.id === taskId);
@@ -1051,12 +1067,16 @@ export const useAppStore = create<AppState>((set, get) => ({
     const isRefBoostActive = s.referralBoostExpiresAt && new Date(s.referralBoostExpiresAt) > new Date();
     const refMult = isRefBoostActive ? 2 : 1;
     const delta = Math.max(0, data.referralBalance - s.lastSyncedReferralBalance) * refMult;
+    // Daily referral count = total count minus the baseline recorded at the last 1am reset
+    const refDailyBaseline = parseInt(localStorage.getItem('tc_ref_daily_baseline') ?? '0', 10);
+    const referralDailyCount = Math.max(0, data.referralCount - refDailyBaseline);
     const updatedUser = {
       ...s.currentUser,
-      referralCount:     data.referralCount,
-      balanceMain:       s.currentUser.balanceMain + delta,
-      totalEarnings:     s.currentUser.totalEarnings + delta,
-      todayEarnings:     s.currentUser.todayEarnings + delta,
+      referralCount:      data.referralCount,
+      referralDailyCount,
+      balanceMain:        s.currentUser.balanceMain + delta,
+      totalEarnings:      s.currentUser.totalEarnings + delta,
+      todayEarnings:      s.currentUser.todayEarnings + delta,
       ...(data.banned             !== undefined && { status: data.banned ? 'banned' as const : s.currentUser.status }),
       ...(data.withdrawalBlocked  !== undefined && { withdrawalBlocked: data.withdrawalBlocked }),
     };
@@ -1326,11 +1346,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     return { success: true, reward: earned };
   },
 
-  submitTaskProof: (taskId, proofText) => {
+  submitTaskProof: (taskId, proofText, imageBase64) => {
     const state = get();
     const task = state.tasks.find(t => t.id === taskId);
     if (!task) return { success: false, error: 'Tâche introuvable.' };
-    if (!proofText.trim()) return { success: false, error: 'La preuve ne peut pas être vide.' };
+    if (!proofText.trim() && !imageBase64) return { success: false, error: 'Ajoutez une capture d\'écran ou une description.' };
     const existing = state.taskSubmissions.find(s => s.taskId === taskId && s.userId === state.currentUser.id);
     if (existing?.status === 'pending') return { success: false, error: 'Une soumission est déjà en attente de validation.' };
     if (existing?.status === 'approved') return { success: false, error: 'Votre preuve a déjà été validée.' };
@@ -1341,6 +1361,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         userId: state.currentUser.id,
         username: state.currentUser.username,
         proofText: proofText.trim(),
+        proofImageBase64: imageBase64,
         status: 'pending' as const,
         createdAt: new Date().toISOString(),
       }, ...s.taskSubmissions],

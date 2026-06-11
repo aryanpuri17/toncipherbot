@@ -84,6 +84,7 @@ export const MiniAppTasks: React.FC = () => {
 
   const [proofOpen,       setProofOpen]       = useState<string | null>(null);
   const [proofText,       setProofText]       = useState('');
+  const [proofImage,      setProofImage]      = useState<string | null>(null);
   const [proofSubmitting, setProofSubmitting] = useState(false);
   const [proofResult,     setProofResult]     = useState<{ taskId: string; success: boolean; message: string } | null>(null);
 
@@ -314,10 +315,33 @@ export const MiniAppTasks: React.FC = () => {
 
   // ── Promo proof ──────────────────────────────────────────────────────────────
 
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !file.type.startsWith('image/')) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const maxW = 1200;
+        const scale = Math.min(1, maxW / img.width);
+        canvas.width  = Math.round(img.width  * scale);
+        canvas.height = Math.round(img.height * scale);
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        setProofImage(canvas.toDataURL('image/jpeg', 0.75));
+      };
+      img.src = ev.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+    e.target.value = ''; // allow re-selecting same file
+  };
+
   const handleSubmitProof = (taskId: string) => {
-    if (proofSubmitting || !proofText.trim()) return;
+    if (proofSubmitting || (!proofText.trim() && !proofImage)) return;
     setProofSubmitting(true);
-    const result = submitTaskProof(taskId, proofText);
+    const result = submitTaskProof(taskId, proofText, proofImage ?? undefined);
     setTimeout(() => {
       setProofSubmitting(false);
       setProofResult({
@@ -325,7 +349,7 @@ export const MiniAppTasks: React.FC = () => {
         success: result.success,
         message: result.success ? 'Soumission envoyée ! En attente de validation.' : (result.error ?? 'Erreur.'),
       });
-      if (result.success) { setProofOpen(null); setProofText(''); }
+      if (result.success) { setProofOpen(null); setProofText(''); setProofImage(null); }
       setTimeout(() => setProofResult(null), 5000);
     }, 700);
   };
@@ -572,7 +596,7 @@ export const MiniAppTasks: React.FC = () => {
             // ── AUTO-REFERRAL task (e.g. Challenge Parrainage) ──────────────
             if (isAutoReferral) {
               const required   = task.requiredCount ?? 3;
-              const count      = currentUser.referralCount;
+              const count      = currentUser.referralDailyCount;
               const isComplete = completedTaskIds.includes(task.id);
               const isEligible = count >= required;
               const pct        = Math.min((count / required) * 100, 100);
@@ -596,10 +620,10 @@ export const MiniAppTasks: React.FC = () => {
                     <span className="text-sm font-bold text-emerald-400 flex-shrink-0">+{task.reward.toFixed(2)} TON</span>
                   </div>
 
-                  {/* Referral progress */}
+                  {/* Referral progress — counts only today's new referrals */}
                   <div>
                     <div className="flex justify-between text-xs mb-1.5">
-                      <span className="text-slate-500">Filleuls</span>
+                      <span className="text-slate-500">Filleuls aujourd'hui</span>
                       <span className={isEligible ? 'text-emerald-400 font-semibold' : 'text-slate-400'}>
                         {count} / {required}
                       </span>
@@ -705,23 +729,51 @@ export const MiniAppTasks: React.FC = () => {
                 )}
 
                 {isOpen && (
-                  <div className="space-y-2 border-t border-white/5 pt-3">
+                  <div className="space-y-3 border-t border-white/5 pt-3">
                     <div className="flex items-center justify-between">
                       <p className="text-xs font-semibold text-white">Votre preuve</p>
-                      <button onClick={() => { setProofOpen(null); setProofText(''); }} className="text-slate-500 hover:text-white">
+                      <button onClick={() => { setProofOpen(null); setProofText(''); setProofImage(null); }} className="text-slate-500 hover:text-white">
                         <X className="w-4 h-4" />
                       </button>
                     </div>
+
+                    {/* Screenshot upload */}
+                    {proofImage ? (
+                      <div className="relative rounded-xl overflow-hidden">
+                        <img src={proofImage} alt="Capture d'écran" className="w-full max-h-48 object-contain rounded-xl bg-white/5" />
+                        <button
+                          onClick={() => setProofImage(null)}
+                          className="absolute top-2 right-2 bg-black/60 hover:bg-black/80 text-white rounded-full p-1 transition-colors"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ) : (
+                      <label className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl border-2 border-dashed border-white/15 hover:border-purple-500/40 cursor-pointer transition-colors">
+                        <span className="text-2xl">📸</span>
+                        <p className="text-xs font-semibold text-slate-300">Ajouter une capture d'écran</p>
+                        <p className="text-[10px] text-slate-500">Appuyez pour choisir ou prendre une photo</p>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={handleImageSelect}
+                        />
+                      </label>
+                    )}
+
+                    {/* Optional text description */}
                     <textarea
                       value={proofText}
                       onChange={e => setProofText(e.target.value)}
-                      placeholder="Collez le lien de votre capture d'écran ou décrivez votre preuve (ex: t.me/...)…"
-                      rows={3}
-                      className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white text-xs resize-none focus:outline-none focus:border-purple-500/50 placeholder:text-slate-600"
+                      placeholder="Description optionnelle ou lien…"
+                      rows={2}
+                      className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white text-xs resize-none focus:outline-none focus:border-purple-500/50 placeholder:text-slate-600"
                     />
+
                     <button
                       onClick={() => handleSubmitProof(task.id)}
-                      disabled={!proofText.trim() || proofSubmitting}
+                      disabled={(!proofText.trim() && !proofImage) || proofSubmitting}
                       className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl btn-primary text-xs font-semibold text-white disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       {proofSubmitting

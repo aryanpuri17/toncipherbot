@@ -262,14 +262,22 @@ const MiniApp: React.FC = () => {
 const API = '';  // same origin — calls go to toncipherbot.onrender.com
 
 export default function App() {
-  const { currentView, setCurrentView, initFromTelegram, syncUserFromApi, resetDailyTasks } = useAppStore();
+  const { currentView, setCurrentView, initFromTelegram, syncUserFromApi, resetDailyTasks, resetDailyRefTask } = useAppStore();
 
   useEffect(() => {
-    // Daily reset — resets daily tasks and withdrawal counter at midnight
+    // Midnight reset — resets daily tasks and withdrawal counter
     const today = new Date().toISOString().slice(0, 10);
     if (localStorage.getItem('tc_daily_reset') !== today) {
       localStorage.setItem('tc_daily_reset', today);
       resetDailyTasks();
+    }
+
+    // 1am reset — resets daily referral task (Challenge Parrainage)
+    const now = new Date();
+    const today1am = `${today}-1am`;
+    if (now.getHours() >= 1 && localStorage.getItem('tc_ref_daily_reset_1am') !== today1am) {
+      localStorage.setItem('tc_ref_daily_reset_1am', today1am);
+      resetDailyRefTask();
     }
 
     void (async () => {
