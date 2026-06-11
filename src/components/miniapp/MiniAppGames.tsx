@@ -380,7 +380,7 @@ const WheelGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
     }, 4300);
   };
 
-  const displayBet = demoMode ? Math.max(0.01, effBet) : Math.max(0.01, effBet);
+  const displayBet = Math.max(0.01, effBet);
   const pf = (m: number) => (displayBet * m).toFixed(m < 1 ? 4 : 3);
 
   return (
@@ -2091,7 +2091,7 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
                   <text x={sx + slotW / 2} y={BOARD_H + 8} textAnchor="middle" fontSize={Math.min(9, 70 / slots)}
                     fontWeight="800" fill={isActive ? '#fff' : col}
                     style={{ userSelect: 'none', pointerEvents: 'none' }}>
-                    {m >= 100 ? `${m}x` : `${m}×`}
+                    {m}×
                   </text>
                 </g>
               );
@@ -2320,7 +2320,7 @@ export const MiniAppGames: React.FC = () => {
         const game = GAME_NAMES[Math.floor(Math.random() * GAME_NAMES.length)];
         const bet  = randomFakeBet();
         const r    = Math.random();
-        const mult = r < 0.42 ? 0 : r < 0.65 ? 2 : r < 0.78 ? 2 : r < 0.89 ? 3 : r < 0.96 ? 5 : 10;
+        const mult = r < 0.42 ? 0 : r < 0.65 ? 1.5 : r < 0.78 ? 2 : r < 0.89 ? 3 : r < 0.96 ? 5 : 10;
         const win  = +(bet * mult).toFixed(4);
         setLiveFeed(prev => [
           { username: name, bet, win, mult, game, createdAt: Date.now() },

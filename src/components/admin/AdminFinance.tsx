@@ -140,12 +140,21 @@ export const AdminWithdrawals: React.FC = () => {
   const [expanded, setExpanded]       = useState<string | null>(null);
   const [copied, setCopied]           = useState<string | null>(null);
 
+  const [actionError, setActionError] = useState('');
+
   const fetchWithdrawals = useCallback(async () => {
     setLoading(true);
     try {
       const res = await adminFetch(`/api/admin/withdrawals?status=${filter}`);
-      if (res.ok) setWithdrawals(await res.json() as ApiWithdrawal[]);
-    } catch { /* backend unavailable */ }
+      if (res.ok) {
+        setWithdrawals(await res.json() as ApiWithdrawal[]);
+        setActionError('');
+      } else {
+        setActionError(res.status === 401 ? 'Clé API admin invalide (voir Anti-Fraude → Clé API Admin).' : `Erreur serveur (${res.status}).`);
+      }
+    } catch {
+      setActionError('Backend injoignable — vérifiez que le serveur tourne.');
+    }
     setLoading(false);
   }, [filter]);
 
@@ -154,24 +163,30 @@ export const AdminWithdrawals: React.FC = () => {
   const doApprove = async (id: string) => {
     setActioning(id);
     try {
-      await adminFetch(`/api/admin/withdrawals/${id}/approve`, {
+      const res = await adminFetch(`/api/admin/withdrawals/${id}/approve`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ txHash: txHashInput[id] ?? '' }),
       });
+      if (!res.ok && res.status !== 409) setActionError(`Échec de l'approbation (${res.status}). Réessayez.`);
       await fetchWithdrawals();
-    } catch { /* ignore */ }
+    } catch {
+      setActionError('Approbation non envoyée — backend injoignable.');
+    }
     setActioning(null);
   };
 
   const doReject = async (id: string) => {
     setActioning(id);
     try {
-      await adminFetch(`/api/admin/withdrawals/${id}/reject`, {
+      const res = await adminFetch(`/api/admin/withdrawals/${id}/reject`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ note: noteInput[id] ?? '' }),
       });
+      if (!res.ok && res.status !== 409) setActionError(`Échec du refus (${res.status}). Réessayez.`);
       await fetchWithdrawals();
-    } catch { /* ignore */ }
+    } catch {
+      setActionError('Refus non envoyé — backend injoignable.');
+    }
     setActioning(null);
   };
 
@@ -202,6 +217,13 @@ export const AdminWithdrawals: React.FC = () => {
           <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
         </button>
       </div>
+
+      {actionError && (
+        <div className="glass-card p-3 border-red-500/30 bg-red-500/10 text-sm text-red-400 flex items-center justify-between">
+          <span>⚠ {actionError}</span>
+          <button onClick={() => void fetchWithdrawals()} className="text-xs font-semibold underline hover:text-red-300">Réessayer</button>
+        </div>
+      )}
 
       <div className="flex gap-2 flex-wrap">
         {([

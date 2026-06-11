@@ -214,7 +214,8 @@ export const MiniAppTasks: React.FC = () => {
       });
       const data = await res.json() as { success: boolean; reward?: number };
       if (data.success) {
-        const earned = data.reward ?? reward;
+        const earned = typeof data.reward === 'number' && Number.isFinite(data.reward) && data.reward > 0
+          ? data.reward : reward;
         const state  = useAppStore.getState();
         state.updateUser(state.currentUser.id, {
           balanceMain:    state.currentUser.balanceMain    + earned,
@@ -299,9 +300,13 @@ export const MiniAppTasks: React.FC = () => {
         if (data.started) await succeed();
         else setPhase(card.id, 'not_subscribed');
       } else {
-        const chatId = card.targetUrl
-          ? '@' + card.targetUrl.replace('https://t.me/', '').split('/')[0]
-          : '';
+        let chatId = '';
+        if (card.targetUrl) {
+          try {
+            const handle = new URL(card.targetUrl).pathname.split('/').filter(Boolean)[0] ?? '';
+            chatId = handle ? '@' + handle : '';
+          } catch { /* malformed URL — verification will fail with not_subscribed */ }
+        }
         const res  = await fetch(`/api/check-membership?telegram_id=${telegramId}&chat_id=${encodeURIComponent(chatId)}`);
         const data = await res.json() as { member: boolean };
         if (data.member) await succeed();
@@ -622,7 +627,7 @@ export const MiniAppTasks: React.FC = () => {
                       </div>
                       <p className="text-xs text-slate-400 leading-relaxed">{task.description}</p>
                     </div>
-                    <span className="text-sm font-bold text-emerald-400 flex-shrink-0">+{task.reward.toFixed(2)} TON</span>
+                    <span className="text-sm font-bold text-emerald-400 flex-shrink-0">+{task.reward.toFixed(4)} TON</span>
                   </div>
 
                   {/* Referral progress — counts only today's new referrals */}
@@ -693,7 +698,7 @@ export const MiniAppTasks: React.FC = () => {
                     </div>
                     <p className="text-xs text-slate-400 leading-relaxed">{task.description}</p>
                   </div>
-                  <span className="text-sm font-bold text-emerald-400 flex-shrink-0">+{task.reward.toFixed(2)} TON</span>
+                  <span className="text-sm font-bold text-emerald-400 flex-shrink-0">+{task.reward.toFixed(4)} TON</span>
                 </div>
 
                 {isApproved && (

@@ -91,7 +91,7 @@ export const MiniAppMyTasks: React.FC = () => {
         localStorage.setItem('tc_task_refunded', JSON.stringify(newRefunded));
       }
     } catch {
-      // offline
+      setApiError('Impossible de charger vos campagnes — vérifiez votre connexion.');
     } finally {
       setLoading(false);
     }

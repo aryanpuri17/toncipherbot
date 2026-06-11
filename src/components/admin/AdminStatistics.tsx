@@ -60,8 +60,11 @@ export const AdminStatistics: React.FC = () => {
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
-        <h2 className="text-2xl font-bold text-white">Statistiques</h2>
-        <p className="text-slate-400 text-sm mt-1">Analyses détaillées de la plateforme</p>
+        <div className="flex items-center gap-2">
+          <h2 className="text-2xl font-bold text-white">Statistiques</h2>
+          <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30">DÉMO</span>
+        </div>
+        <p className="text-slate-400 text-sm mt-1">Analyses détaillées — données de démonstration ; les vrais chiffres sont dans Vue d'ensemble</p>
       </div>
 
       {/* Main Stats */}

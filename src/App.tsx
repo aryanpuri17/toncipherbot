@@ -280,8 +280,13 @@ export default function App() {
       resetDailyRefTask();
     }
 
-    // Login streak — runs every time the app is opened (idempotent for the same day)
-    checkLoginStreak();
+    // Promo event + streak milestones live on the backend (admin config is
+    // per-device otherwise). Fetch them before crediting the login streak so
+    // freshly edited milestones apply, then check the streak either way.
+    void (async () => {
+      await useAppStore.getState().syncConfigFromBackend();
+      checkLoginStreak();
+    })();
 
     void (async () => {
       const isAdminRoute = window.location.hash === '#admin';

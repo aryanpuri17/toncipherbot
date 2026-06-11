@@ -35,6 +35,7 @@ export const AdminUsers: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [selected, setSelected]     = useState<ApiUser | null>(null);
   const [actioning, setActioning]   = useState<number | null>(null);
+  const [fetchError, setFetchError] = useState('');
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
@@ -43,8 +44,15 @@ export const AdminUsers: React.FC = () => {
       if (search) params.set('search', search);
       if (statusFilter !== 'all') params.set('status', statusFilter);
       const res = await adminFetch(`/api/admin/users?${params.toString()}`);
-      if (res.ok) setUsers(await res.json() as ApiUser[]);
-    } catch { /* backend unavailable */ }
+      if (res.ok) {
+        setUsers(await res.json() as ApiUser[]);
+        setFetchError('');
+      } else {
+        setFetchError(res.status === 401 ? 'Clé API admin invalide (voir Anti-Fraude → Clé API Admin).' : `Erreur serveur (${res.status}).`);
+      }
+    } catch {
+      setFetchError('Backend injoignable — vérifiez que le serveur tourne.');
+    }
     setLoading(false);
   }, [search, statusFilter]);
 
@@ -90,6 +98,13 @@ export const AdminUsers: React.FC = () => {
           <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
         </button>
       </div>
+
+      {fetchError && (
+        <div className="glass-card p-3 border-red-500/30 bg-red-500/10 text-sm text-red-400 flex items-center justify-between">
+          <span>⚠ {fetchError}</span>
+          <button onClick={() => void fetchUsers()} className="text-xs font-semibold underline hover:text-red-300">Réessayer</button>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-3">

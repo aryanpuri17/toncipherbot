@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useAppStore } from '../../store/appStore';
+import { adminFetch } from '../../utils/adminFetch';
 import { ToggleSwitch } from '../ui/ToggleSwitch';
 import { Key, Hash, Wallet, Bell, Server, Terminal, Shield, Users, Gift, CreditCard, Plus, MessageSquare, Edit2, Trash2, Zap, Flame } from 'lucide-react';
 
@@ -12,7 +13,15 @@ export const AdminConfig: React.FC = () => {
   const [milestones, setMilestones] = useState(
     () => [...(platformConfig.streakMilestones ?? [])]
   );
-  const saveMilestones = () => updatePlatformConfig({ streakMilestones: milestones });
+  const saveMilestones = () => {
+    updatePlatformConfig({ streakMilestones: milestones });
+    // Persist server-side so every user's app picks them up
+    void adminFetch('/api/admin/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: 'streakMilestones', value: milestones }),
+    }).catch(() => {});
+  };
 
   // Promo event form state
   const [eventMult,  setEventMult]  = useState(2);
