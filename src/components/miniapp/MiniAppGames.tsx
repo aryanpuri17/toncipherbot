@@ -1329,6 +1329,7 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
       setSafeCount(ns);
       if (ns === GRID_SIZE - effMinesRef.current) {
         const win = +(activeBetRef.current * minesMult(mineCount, ns)).toFixed(6);
+        trimMinesForDisplay();
         placeGameBet(activeBetRef.current, win);
         recordGameResult('Mines', activeBetRef.current, win);
         snd.win();
@@ -1343,8 +1344,17 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
     }
   };
 
+  // On win, only ever display the number of mines the player selected —
+  // extra hidden mines must never appear on the final board.
+  const trimMinesForDisplay = () => {
+    const arr = [...minePos];
+    arr.sort(() => Math.random() - 0.5);
+    setMinePos(new Set(arr.slice(0, mineCount)));
+  };
+
   const cashout = () => {
     if (phase !== 'playing' || safeCount === 0) return;
+    trimMinesForDisplay();
     placeGameBet(activeBetRef.current, curWin);
     recordGameResult('Mines', activeBetRef.current, curWin);
     snd.win();
