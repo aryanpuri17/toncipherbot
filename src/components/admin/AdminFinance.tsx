@@ -7,18 +7,47 @@ import {
   RefreshCw, Copy, ExternalLink,
 } from 'lucide-react';
 
-export const AdminDeposits: React.FC = () => {
-  const { transactions, users } = useAppStore();
-  const deposits = transactions.filter(t => t.type === 'deposit');
-  const [filter, setFilter] = useState('all');
+type ApiDeposit = { id: string; userId?: string; telegramId?: number; amount: number; currency: string; network?: string; status: string; createdAt: string; txHash?: string };
 
-  const filtered = deposits.filter(d => filter === 'all' || d.status === filter);
+export const AdminDeposits: React.FC = () => {
+  const { transactions, users, addTransaction, creditDeposit } = useAppStore();
+  const storeDeposits = transactions.filter(t => t.type === 'deposit');
+  const [apiDeposits, setApiDeposits]     = useState<ApiDeposit[]>([]);
+  const [loading, setLoading]             = useState(false);
+  const [filter, setFilter]               = useState('all');
+  const [lastRefresh, setLastRefresh]     = useState<Date | null>(null);
+
+  const fetchApiDeposits = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res  = await fetch('/api/transactions?type=deposit&limit=50');
+      if (res.ok) {
+        const data = await res.json() as ApiDeposit[];
+        setApiDeposits(Array.isArray(data) ? data : []);
+        setLastRefresh(new Date());
+      }
+    } catch { /* backend unavailable */ }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { void fetchApiDeposits(); }, [fetchApiDeposits]);
+
+  // Merge: API deposits take priority; fall back to store
+  const deposits = apiDeposits.length > 0 ? apiDeposits : storeDeposits;
+  const filtered = deposits.filter((d: ApiDeposit | typeof storeDeposits[0]) => filter === 'all' || d.status === filter);
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div>
-        <h2 className="text-2xl font-bold text-white">Dépôts</h2>
-        <p className="text-slate-400 text-sm mt-1">Gestion des dépôts crypto</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold text-white">Dépôts</h2>
+          <p className="text-slate-400 text-sm mt-1">Gestion des dépôts crypto{lastRefresh ? ` · actualisé ${lastRefresh.toLocaleTimeString('fr-FR')}` : ''}</p>
+        </div>
+        <button onClick={() => void fetchApiDeposits()} disabled={loading}
+          className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-slate-400 hover:text-white text-xs font-medium transition-colors disabled:opacity-50">
+          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+          Actualiser
+        </button>
       </div>
 
       {/* Quick Stats */}

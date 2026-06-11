@@ -302,7 +302,13 @@ export const MiniAppTasks: React.FC = () => {
         else setPhase(card.id, 'not_subscribed');
       }
     } catch {
-      await succeed();
+      // Network error: be generous for platform tasks (API check unreachable),
+      // but for API tasks keep the verify button visible so user can retry
+      if (card.source === 'platform') {
+        await succeed();
+      } else {
+        setPhase(card.id, 'ready');
+      }
     }
   };
 
