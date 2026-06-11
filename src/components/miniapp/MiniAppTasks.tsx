@@ -566,11 +566,79 @@ export const MiniAppTasks: React.FC = () => {
             <div className="flex-1 h-px bg-white/8" />
           </div>
 
-          <p className="text-[10px] text-slate-500 px-1">
-            Complétez la condition et soumettez votre preuve pour être récompensé.
-          </p>
-
           {promoTasks.map(task => {
+            const isAutoReferral = task.verificationMethod === 'auto_referral';
+
+            // ── AUTO-REFERRAL task (e.g. Challenge Parrainage) ──────────────
+            if (isAutoReferral) {
+              const required   = task.requiredCount ?? 3;
+              const count      = currentUser.referralCount;
+              const isComplete = completedTaskIds.includes(task.id);
+              const isEligible = count >= required;
+              const pct        = Math.min((count / required) * 100, 100);
+
+              return (
+                <div
+                  key={task.id}
+                  className={`glass-card p-4 space-y-3 border ${isComplete ? 'border-emerald-500/25' : 'border-purple-500/20'}`}
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center flex-shrink-0 text-base">
+                      {task.icon ?? '🏆'}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                        <h3 className="text-sm font-semibold text-white">{task.title}</h3>
+                        <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-purple-500/20 text-purple-400">PROMO</span>
+                      </div>
+                      <p className="text-xs text-slate-400 leading-relaxed">{task.description}</p>
+                    </div>
+                    <span className="text-sm font-bold text-emerald-400 flex-shrink-0">+{task.reward.toFixed(2)} TON</span>
+                  </div>
+
+                  {/* Referral progress */}
+                  <div>
+                    <div className="flex justify-between text-xs mb-1.5">
+                      <span className="text-slate-500">Filleuls</span>
+                      <span className={isEligible ? 'text-emerald-400 font-semibold' : 'text-slate-400'}>
+                        {count} / {required}
+                      </span>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all ${isEligible ? 'bg-gradient-to-r from-emerald-500 to-teal-400' : 'bg-gradient-to-r from-purple-500 to-pink-500'}`}
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  {isComplete ? (
+                    <div className="flex items-center gap-2 p-2.5 rounded-lg bg-emerald-500/5 border border-emerald-500/20">
+                      <CheckCircle className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                      <p className="text-xs font-semibold text-emerald-400">Validée — récompense créditée</p>
+                    </div>
+                  ) : isEligible ? (
+                    <button
+                      onClick={() => completeTask(task.id)}
+                      className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl btn-primary text-xs font-semibold text-white"
+                    >
+                      <CheckCircle className="w-3.5 h-3.5" />
+                      Récupérer ma récompense
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => setMiniAppPage('referral')}
+                      className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-purple-500/15 border border-purple-500/30 text-purple-400 text-xs font-semibold hover:bg-purple-500/25 transition-all"
+                    >
+                      <Users className="w-3.5 h-3.5" />
+                      Inviter des amis ({required - count} restant{required - count > 1 ? 's' : ''})
+                    </button>
+                  )}
+                </div>
+              );
+            }
+
+            // ── MANUAL task (e.g. Partage Communauté) ───────────────────────
             const userSubmission = taskSubmissions.find(
               s => s.taskId === task.id && s.userId === currentUser.id
             );
@@ -598,20 +666,6 @@ export const MiniAppTasks: React.FC = () => {
                   </div>
                   <span className="text-sm font-bold text-emerald-400 flex-shrink-0">+{task.reward.toFixed(2)} TON</span>
                 </div>
-
-                {task.maxCompletions && (
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1 h-1 rounded-full bg-white/10 overflow-hidden">
-                      <div
-                        className="h-full rounded-full bg-gradient-to-r from-purple-500 to-pink-500"
-                        style={{ width: `${Math.min((task.totalCompletions / task.maxCompletions) * 100, 100)}%` }}
-                      />
-                    </div>
-                    <span className="text-[10px] text-slate-500 flex-shrink-0">
-                      {task.totalCompletions}/{task.maxCompletions} places
-                    </span>
-                  </div>
-                )}
 
                 {isApproved && (
                   <div className="flex items-center gap-2 p-2.5 rounded-lg bg-emerald-500/5 border border-emerald-500/20">
@@ -661,7 +715,7 @@ export const MiniAppTasks: React.FC = () => {
                     <textarea
                       value={proofText}
                       onChange={e => setProofText(e.target.value)}
-                      placeholder="Décrivez votre preuve ou collez un lien…"
+                      placeholder="Collez le lien de votre capture d'écran ou décrivez votre preuve (ex: t.me/...)…"
                       rows={3}
                       className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white text-xs resize-none focus:outline-none focus:border-purple-500/50 placeholder:text-slate-600"
                     />
