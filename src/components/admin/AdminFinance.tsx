@@ -162,13 +162,17 @@ export const AdminWithdrawals: React.FC = () => {
 
   const doApprove = async (id: string) => {
     setActioning(id);
+    setActionError('');
     try {
       const res = await adminFetch(`/api/admin/withdrawals/${id}/approve`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ txHash: txHashInput[id] ?? '' }),
       });
-      if (!res.ok && res.status !== 409) setActionError(`Échec de l'approbation (${res.status}). Réessayez.`);
-      await fetchWithdrawals();
+      if (!res.ok && res.status !== 409) {
+        setActionError(`Échec de l'approbation (${res.status}). Réessayez.`);
+      } else {
+        await fetchWithdrawals();
+      }
     } catch {
       setActionError('Approbation non envoyée — backend injoignable.');
     }
@@ -177,13 +181,17 @@ export const AdminWithdrawals: React.FC = () => {
 
   const doReject = async (id: string) => {
     setActioning(id);
+    setActionError('');
     try {
       const res = await adminFetch(`/api/admin/withdrawals/${id}/reject`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ note: noteInput[id] ?? '' }),
       });
-      if (!res.ok && res.status !== 409) setActionError(`Échec du refus (${res.status}). Réessayez.`);
-      await fetchWithdrawals();
+      if (!res.ok && res.status !== 409) {
+        setActionError(`Échec du refus (${res.status}). Réessayez.`);
+      } else {
+        await fetchWithdrawals();
+      }
     } catch {
       setActionError('Refus non envoyé — backend injoignable.');
     }
