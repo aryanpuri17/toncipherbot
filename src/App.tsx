@@ -287,6 +287,9 @@ export default function App() {
       await useAppStore.getState().syncConfigFromBackend();
       checkLoginStreak();
     })();
+    // Refresh config periodically so a promo event started by the admin
+    // reaches users already in the app (not just on next open)
+    const configPoll = setInterval(() => { void useAppStore.getState().syncConfigFromBackend(); }, 5 * 60_000);
 
     void (async () => {
       const isAdminRoute = window.location.hash === '#admin';
@@ -352,6 +355,8 @@ export default function App() {
         }
       }
     })();
+
+    return () => clearInterval(configPoll);
   }, []);
 
   return currentView === 'admin' ? (
