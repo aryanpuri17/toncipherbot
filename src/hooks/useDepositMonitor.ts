@@ -24,6 +24,11 @@ function depositCodeFor(user: { telegramId: number; id: string }): string {
   return user.telegramId !== 0 ? String(user.telegramId) : user.id.slice(-6).toUpperCase();
 }
 
+function getInitData(): string {
+  try { return (window as unknown as { Telegram?: { WebApp?: { initData?: string } } })?.Telegram?.WebApp?.initData ?? ''; }
+  catch { return ''; }
+}
+
 export function useDepositMonitor(): void {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -82,7 +87,7 @@ export function useDepositMonitor(): void {
               void fetch('/api/deposit/record', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id: match.id, telegramId: matchUser.telegramId, amount: tonAmt, currency: 'TON', network: 'TON', txHash }),
+                body: JSON.stringify({ id: match.id, telegramId: matchUser.telegramId, amount: tonAmt, currency: 'TON', network: 'TON', txHash, initData: getInitData() }),
               }).catch(() => {});
             }
             break;
@@ -99,7 +104,7 @@ export function useDepositMonitor(): void {
                 void fetch('/api/deposit/record', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ telegramId: user.telegramId, amount: tonAmt, currency: 'TON', network: 'TON', txHash }),
+                  body: JSON.stringify({ telegramId: user.telegramId, amount: tonAmt, currency: 'TON', network: 'TON', txHash, initData: getInitData() }),
                 }).catch(() => {});
               }
               break;
@@ -131,7 +136,7 @@ export function useDepositMonitor(): void {
               void fetch('/api/deposit/record', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id: match.id, telegramId: matchUser.telegramId, amount: usdtAmt, currency: 'USDT', network: 'TON', txHash }),
+                body: JSON.stringify({ id: match.id, telegramId: matchUser.telegramId, amount: usdtAmt, currency: 'USDT', network: 'TON', txHash, initData: getInitData() }),
               }).catch(() => {});
             }
             break;
@@ -148,7 +153,7 @@ export function useDepositMonitor(): void {
                 void fetch('/api/deposit/record', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ telegramId: user.telegramId, amount: usdtAmt, currency: 'USDT', network: 'TON', txHash }),
+                  body: JSON.stringify({ telegramId: user.telegramId, amount: usdtAmt, currency: 'USDT', network: 'TON', txHash, initData: getInitData() }),
                 }).catch(() => {});
               }
               break;

@@ -599,6 +599,10 @@ async def api_leaderboard(request: web.Request) -> web.Response:
 # ── API — Record deposit (called by frontend deposit monitor) ──────────────────
 
 async def api_deposit_record(request: web.Request) -> web.Response:
+    ip = _client_ip(request)
+    if _is_rate_limited(ip):
+        return web.json_response({"error": "Rate limit exceeded"}, status=429, headers=_CORS)
+
     try:
         data = await request.json()
     except Exception:
@@ -610,9 +614,19 @@ async def api_deposit_record(request: web.Request) -> web.Response:
     currency    = str(data.get("currency", "TON"))
     network     = str(data.get("network",  "TON"))
     tx_hash     = str(data.get("txHash",   "")).strip()
+    init_data   = str(data.get("initData", "")).strip()
 
     if not telegram_id or amount is None:
         return web.json_response({"error": "Invalid data"}, status=400, headers=_CORS)
+
+    if BOT_TOKEN:
+        if not init_data or not _validate_init_data(init_data, BOT_TOKEN):
+            return web.json_response({"error": "Authentication required"}, status=401, headers=_CORS)
+        authed_id = _init_data_user_id(init_data)
+        if authed_id != telegram_id:
+            log.warning("Deposit fraud attempt: claimed=%d authed=%d hash=%s",
+                        telegram_id, authed_id, tx_hash[:16])
+            return web.json_response({"error": "Identity mismatch"}, status=403, headers=_CORS)
 
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("""
@@ -628,6 +642,10 @@ async def api_deposit_record(request: web.Request) -> web.Response:
 # ── API — Create withdrawal request (called by frontend on submit) ─────────────
 
 async def api_withdrawal_create(request: web.Request) -> web.Response:
+    ip = _client_ip(request)
+    if _is_rate_limited(ip):
+        return web.json_response({"error": "Rate limit exceeded"}, status=429, headers=_CORS)
+
     try:
         data = await request.json()
     except Exception:
@@ -1277,6 +1295,10 @@ async def api_admin_resolve_alert(request: web.Request) -> web.Response:
 # ── API — User-created tasks ───────────────────────────────────────────────────
 
 async def api_user_task_create(request: web.Request) -> web.Response:
+    ip = _client_ip(request)
+    if _is_rate_limited(ip):
+        return web.json_response({"error": "Rate limit exceeded"}, status=429, headers=_CORS)
+
     try:
         data = await request.json()
     except Exception:
@@ -1407,6 +1429,10 @@ async def api_user_task_available(request: web.Request) -> web.Response:
 
 
 async def api_user_task_complete(request: web.Request) -> web.Response:
+    ip = _client_ip(request)
+    if _is_rate_limited(ip):
+        return web.json_response({"error": "Rate limit exceeded"}, status=429, headers=_CORS)
+
     task_id = request.match_info.get("id")
     try:
         data = await request.json()
@@ -1422,7 +1448,7 @@ async def api_user_task_complete(request: web.Request) -> web.Response:
 
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(
-            "SELECT status, completions, max_completions, reward, creator_id FROM user_tasks WHERE id = ?",
+            "SELECT status, reward, creator_id FROM user_tasks WHERE id = ?",
             (task_id,)
         ) as cur:
             task = await cur.fetchone()
@@ -1431,10 +1457,7 @@ async def api_user_task_complete(request: web.Request) -> web.Response:
             return web.json_response({"error": "Task not found"}, status=404, headers=_CORS)
         if task[0] != 'active':
             return web.json_response({"error": "Task not active"}, status=400, headers=_CORS)
-        if task[1] >= task[2]:
-            return web.json_response({"error": "Task depleted"}, status=400, headers=_CORS)
-        if task[4] == telegram_id:
-            # Log fraud attempt when creator tries to complete own task
+        if task[2] == telegram_id:
             await _log_fraud_alert(
                 db, telegram_id, str(telegram_id),
                 "self_task_complete",
@@ -1444,23 +1467,35 @@ async def api_user_task_complete(request: web.Request) -> web.Response:
             await db.commit()
             return web.json_response({"error": "Cannot complete your own task"}, status=400, headers=_CORS)
 
-        reward          = float(task[3])
-        new_completions = task[1] + 1
-        new_status      = 'depleted' if new_completions >= task[2] else 'active'
+        reward = float(task[1])
 
-        # INSERT OR IGNORE + rowcount makes the replay check atomic: two
-        # concurrent requests can both pass a SELECT check, but only one
-        # insert wins on the (task_id, telegram_id) primary key.
+        # Atomic dedup: only one completion record per (task_id, telegram_id)
         ins = await db.execute(
             "INSERT OR IGNORE INTO user_task_completions (task_id, telegram_id) VALUES (?, ?)",
             (task_id, telegram_id)
         )
         if ins.rowcount == 0:
             return web.json_response({"error": "Already completed"}, status=400, headers=_CORS)
-        await db.execute(
-            "UPDATE user_tasks SET completions = ?, spent = spent + ?, status = ? WHERE id = ?",
-            (new_completions, reward, new_status, task_id)
+
+        # Atomic budget guard: increment only while completions < max_completions.
+        # If another concurrent request already filled the last slot, rowcount = 0.
+        upd = await db.execute(
+            """UPDATE user_tasks
+               SET completions = completions + 1,
+                   spent       = spent + ?,
+                   status      = CASE WHEN completions + 1 >= max_completions THEN 'depleted' ELSE 'active' END
+               WHERE id = ? AND status = 'active' AND completions < max_completions""",
+            (reward, task_id)
         )
+        if upd.rowcount == 0:
+            # Last slot was raced away — roll back the completion record
+            await db.execute(
+                "DELETE FROM user_task_completions WHERE task_id = ? AND telegram_id = ?",
+                (task_id, telegram_id)
+            )
+            await db.commit()
+            return web.json_response({"error": "Task depleted"}, status=400, headers=_CORS)
+
         await db.commit()
 
     # Verify membership server-side (after recording the completion so we
@@ -1859,6 +1894,12 @@ async def start_web() -> None:
     app.router.add_get( "/api/admin/user-tasks",                      api_admin_user_tasks)
     app.router.add_post("/api/admin/user-tasks/{id}/approve",         api_admin_approve_user_task)
     app.router.add_post("/api/admin/user-tasks/{id}/reject",          api_admin_reject_user_task)
+
+    # CORS preflight — must be before SPA fallback
+    async def handle_options(request: web.Request) -> web.Response:
+        return web.Response(status=204, headers=_CORS)
+
+    app.router.add_route("OPTIONS", "/{path:.*}", handle_options)
 
     # SPA fallback — must be last
     app.router.add_get("/{path:.*}",                       serve_app)
