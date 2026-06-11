@@ -15,6 +15,7 @@ export interface User {
   tasksCompleted: number;
   referralCount: number;
   referralDailyCount: number;
+  loginStreak: number;
   referralCode: string;
   referredBy?: string;
   riskScore: number;
@@ -457,7 +458,7 @@ export interface LogEntry {
 
 // ===================== MOCK DATA =====================
 
-const _savedBalance: { balanceMain?: number; totalEarnings?: number; todayEarnings?: number; tasksCompleted?: number; taskCredits?: number } = (() => {
+const _savedBalance: { balanceMain?: number; totalEarnings?: number; todayEarnings?: number; tasksCompleted?: number; taskCredits?: number; loginStreak?: number } = (() => {
   try { return JSON.parse(localStorage.getItem('tc_balance') || '{}'); }
   catch { return {}; }
 })();
@@ -483,7 +484,7 @@ const mockUsers: User[] = [
   {
     id: '1', telegramId: 0, username: 'vous', firstName: 'Vous', lastName: '',
     balanceMain: _savedBalance.balanceMain ?? 1.0, totalEarnings: _savedBalance.totalEarnings ?? 0, todayEarnings: _savedBalance.todayEarnings ?? 0, tasksCompleted: _savedBalance.tasksCompleted ?? 0, taskCredits: _savedBalance.taskCredits ?? 0,
-    referralCount: 0, referralDailyCount: 0, referralCode: 'START00',
+    referralCount: 0, referralDailyCount: 0, loginStreak: _savedBalance.loginStreak ?? 0, referralCode: 'START00',
     riskScore: 0, status: 'active', createdAt: new Date().toISOString(), lastActive: new Date().toISOString(),
     withdrawalBlocked: false, verificationStatus: 'none',
     dailyWithdrawn: 0, dailyTasksCompleted: 0,
@@ -766,6 +767,7 @@ interface AppState {
   creditDeposit: (userId: string, amount: number, currency: string, txHash: string, network: string) => void;
   resetDailyTasks: () => void;
   resetDailyRefTask: () => void;
+  checkLoginStreak: () => void;
   completeTask: (taskId: string) => void;
   creditReferralBonus: (earned: number) => void;
   submitWithdrawal: (networkId: string, amount: number, address: string) => { success: boolean; error?: string };
@@ -997,6 +999,49 @@ export const useAppStore = create<AppState>((set, get) => ({
       users: s.users.map(u => u.id === s.currentUser.id ? { ...u, referralDailyCount: 0 } : u),
     };
   }),
+
+  checkLoginStreak: () => {
+    const state = get();
+    const today = new Date().toISOString().slice(0, 10);
+    const lastDate = localStorage.getItem('tc_streak_date');
+    if (lastDate === today) return; // already processed today
+
+    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+    const MILESTONES: Record<number, number> = { 3: 0.05, 7: 0.15, 14: 0.30, 30: 1.00 };
+
+    const newStreak = lastDate === yesterday ? (state.currentUser.loginStreak ?? 0) + 1 : 1;
+    // No base reward on day 1 — reward starts day 2 to encourage return
+    const base = newStreak > 1 ? state.platformConfig.streakBonusPerDay : 0;
+    const milestoneBonus = MILESTONES[newStreak] ?? 0;
+    const totalReward = +(base + milestoneBonus).toFixed(6);
+
+    localStorage.setItem('tc_streak_date', today);
+
+    set(s => {
+      const upd = {
+        loginStreak:   newStreak,
+        balanceMain:   s.currentUser.balanceMain   + totalReward,
+        totalEarnings: s.currentUser.totalEarnings + totalReward,
+        todayEarnings: s.currentUser.todayEarnings + totalReward,
+      };
+      return {
+        currentUser: { ...s.currentUser, ...upd },
+        users: s.users.map(u => u.id === s.currentUser.id ? { ...u, ...upd } : u),
+      };
+    });
+
+    if (totalReward > 0) {
+      const isMilestone = milestoneBonus > 0;
+      get().addNotification({
+        type: 'reward',
+        title: isMilestone
+          ? `🏆 Palier Jour ${newStreak} atteint !`
+          : `🔥 Streak Jour ${newStreak}`,
+        message: `+${totalReward.toFixed(isMilestone ? 2 : 3)} TON${isMilestone ? ` — bonus palier inclus !` : ' pour votre connexion quotidienne.'}`,
+        isRead: false,
+      });
+    }
+  },
 
   completeTask: (taskId) => {
     const state = get();
@@ -1447,6 +1492,7 @@ useAppStore.subscribe((state) => {
       todayEarnings:  u.todayEarnings,
       tasksCompleted: u.tasksCompleted,
       taskCredits:    u.taskCredits,
+      loginStreak:    u.loginStreak,
     }));
     localStorage.setItem('tc_completed_tasks', JSON.stringify(state.completedTaskIds));
     localStorage.setItem('tc_boosters', JSON.stringify(state.activeBoosters));

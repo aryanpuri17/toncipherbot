@@ -2,9 +2,24 @@ import React, { useState } from 'react';
 import { useAppStore } from '../../store/appStore';
 import { ArrowUpRight, ArrowDownLeft, ListTodo, ChevronRight, TrendingUp, Flame, Gift, Loader2, Users } from 'lucide-react';
 
+const STREAK_MILESTONES = [
+  { day: 3,  bonus: 0.05 },
+  { day: 7,  bonus: 0.15 },
+  { day: 14, bonus: 0.30 },
+  { day: 30, bonus: 1.00 },
+];
+
 export const MiniAppDashboard: React.FC = () => {
   const { currentUser: u, setMiniAppPage, tasks, completedTaskIds, redeemPromoCode, platformConfig } = useAppStore();
   const activeTasks = tasks.filter(t => t.isActive && !completedTaskIds.includes(t.id) && !t.isPromoTask);
+
+  // Streak calculation
+  const streak = u.loginStreak ?? 0;
+  const nextMilestone = STREAK_MILESTONES.find(m => m.day > streak);
+  const prevMilestoneDay = [...STREAK_MILESTONES].reverse().find(m => m.day <= streak)?.day ?? 0;
+  const streakPct = nextMilestone
+    ? Math.round(((streak - prevMilestoneDay) / (nextMilestone.day - prevMilestoneDay)) * 100)
+    : 100;
 
   const [promoCode, setPromoCode] = useState('');
   const [promoLoading, setPromoLoading] = useState(false);
@@ -59,6 +74,59 @@ export const MiniAppDashboard: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Login Streak */}
+      {streak === 0 ? (
+        <div className="glass-card-light p-3.5 flex items-center gap-3 border border-white/5">
+          <span className="text-xl flex-shrink-0">🔥</span>
+          <p className="text-xs text-slate-400">Revenez chaque jour pour cumuler un streak et débloquer des bonus !</p>
+        </div>
+      ) : streak === 1 ? (
+        <div className="glass-card-light p-3.5 flex items-center gap-3 border border-orange-500/15">
+          <div className="w-10 h-10 rounded-xl bg-orange-500/20 flex items-center justify-center flex-shrink-0 text-lg">🔥</div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-bold text-white">Streak démarré !</p>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Revenez demain → +{platformConfig.streakBonusPerDay.toFixed(2)} TON · Palier Jour 3 → +0.05 TON bonus
+            </p>
+          </div>
+        </div>
+      ) : (
+        <div className="glass-card-light p-4 border border-orange-500/20">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="relative flex-shrink-0">
+              <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-orange-500/30 to-amber-500/20 flex items-center justify-center text-lg">🔥</div>
+              <span className="absolute -top-1.5 -right-1.5 min-w-[20px] h-5 px-1 rounded-full bg-orange-500 text-white text-[9px] font-bold flex items-center justify-center">
+                {streak}
+              </span>
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-bold text-white">{streak} jour{streak > 1 ? 's' : ''} de suite</p>
+                <span className="text-xs font-semibold text-orange-400">+{platformConfig.streakBonusPerDay.toFixed(2)} TON/jour</span>
+              </div>
+              <p className="text-[10px] text-slate-500 mt-0.5">
+                {nextMilestone
+                  ? `Palier Jour ${nextMilestone.day} → +${nextMilestone.bonus.toFixed(2)} TON bonus`
+                  : '🏆 Tous les paliers débloqués !'}
+              </p>
+            </div>
+          </div>
+          {/* Progress bar */}
+          <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-orange-500 to-amber-400 transition-all duration-500"
+              style={{ width: `${streakPct}%` }}
+            />
+          </div>
+          {nextMilestone && (
+            <div className="flex justify-between mt-1">
+              <span className="text-[9px] text-slate-600">Jour {prevMilestoneDay || 1}</span>
+              <span className="text-[9px] text-slate-600">Jour {nextMilestone.day}</span>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Referral invite banner */}
       <button
