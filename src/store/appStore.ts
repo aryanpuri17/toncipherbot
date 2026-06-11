@@ -1240,6 +1240,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const withdrawalId = generateId();
     set(s => ({ transactions: [{ userId: state.currentUser.id, type: 'withdrawal' as const, amount, currency: network.symbol, network: network.network, address: address.trim(), status: 'pending' as const, fee: network.withdrawalFee, id: withdrawalId, createdAt: new Date().toISOString() }, ...s.transactions] }));
     // Record in backend (fire-and-forget — app works offline too)
+    const initData = (window as unknown as { Telegram?: { WebApp?: { initData?: string } } })?.Telegram?.WebApp?.initData ?? '';
     void fetch('/api/withdrawal/create', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1253,6 +1254,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         network: network.network,
         address: address.trim(),
         fee: network.withdrawalFee,
+        initData,
       }),
     }).catch(() => {});
     return { success: true };

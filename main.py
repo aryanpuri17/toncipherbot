@@ -640,9 +640,20 @@ async def api_withdrawal_create(request: web.Request) -> web.Response:
     network     = str(data.get("network",  "TON"))
     address     = str(data.get("address",  "")).strip()
     fee         = _parse_amount(data.get("fee")) or 0.0
+    init_data   = str(data.get("initData", "")).strip()
 
     if not telegram_id or amount is None or len(address) < 10:
         return web.json_response({"error": "Invalid data"}, status=400, headers=_CORS)
+
+    # Authenticate: verify initData signature and confirm the caller is who they claim
+    if BOT_TOKEN:
+        if not init_data or not _validate_init_data(init_data, BOT_TOKEN):
+            return web.json_response({"error": "Authentication required"}, status=401, headers=_CORS)
+        authed_id = _init_data_user_id(init_data)
+        if authed_id != telegram_id:
+            log.warning("Withdrawal impersonation attempt: claimed=%d authed=%d addr=%s",
+                        telegram_id, authed_id, address[:12])
+            return web.json_response({"error": "Identity mismatch"}, status=403, headers=_CORS)
 
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(
