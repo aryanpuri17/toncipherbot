@@ -5,13 +5,19 @@ import { Settings, ChevronRight, Store, Shield } from 'lucide-react';
 export const MiniAppProfile: React.FC = () => {
   const { currentUser: u, setMiniAppPage, setCurrentView, adminUsers } = useAppStore();
 
+  const uName = u.username?.toLowerCase() ?? '';
   const isAdmin = u.telegramId === 0 ||
     adminUsers.some(a =>
       a.isActive && (
         (a.telegramId !== 0 && a.telegramId === u.telegramId) ||
-        (a.username !== '' && a.username === u.username)
+        (a.username !== '' && a.username.toLowerCase() === uName)
       )
     );
+
+  // Debug — remove after admin account is confirmed working
+  if (typeof window !== 'undefined') {
+    console.log('[TonCipher] Profile | telegramId:', u.telegramId, '| username:', u.username, '| isAdmin:', isAdmin);
+  }
 
   const [imgError, setImgError] = useState(false);
 
@@ -78,6 +84,13 @@ export const MiniAppProfile: React.FC = () => {
             <ChevronRight className="w-4 h-4 text-slate-500" />
           </button>
         )}
+      </div>
+
+      {/* Temp debug — shows your exact Telegram ID/username so admin access can be verified */}
+      <div className="glass-card p-3 text-center opacity-60">
+        <p className="text-[10px] text-slate-500 font-mono">
+          ID: {u.telegramId} · @{u.username}
+        </p>
       </div>
     </div>
   );

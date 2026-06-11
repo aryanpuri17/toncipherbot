@@ -472,20 +472,19 @@ const WheelGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
         </h3>
         <div className="space-y-1.5">
           {([
-            { label: '×10', note: '🏆 Jackpot',       val: pf(10),  color: 'text-purple-400', bg: 'bg-purple-500/10' },
-            { label: '×5',  note: 'Très rare',         val: pf(5),   color: 'text-teal-400',   bg: 'bg-teal-500/10' },
-            { label: '×3',  note: 'Rare',              val: pf(3),   color: 'text-blue-400',   bg: 'bg-blue-500/10' },
-            { label: '×2',  note: '',                  val: pf(2),   color: 'text-emerald-400',bg: 'bg-emerald-500/10' },
-            { label: '×1',  note: 'Remboursé',         val: pf(1),   color: 'text-amber-400',  bg: 'bg-amber-500/10' },
-            { label: '×0.4',note: 'Retour partiel',    val: pf(0.4), color: 'text-orange-400', bg: 'bg-orange-500/10' },
-            { label: 'PERDU',note: '',                 val: null,    color: 'text-red-400',    bg: 'bg-red-500/10' },
+            { label: '×10', val: pf(10),  color: 'text-purple-400', bg: 'bg-purple-500/10' },
+            { label: '×5',  val: pf(5),   color: 'text-teal-400',   bg: 'bg-teal-500/10'  },
+            { label: '×3',  val: pf(3),   color: 'text-blue-400',   bg: 'bg-blue-500/10'  },
+            { label: '×2',  val: pf(2),   color: 'text-emerald-400',bg: 'bg-emerald-500/10'},
+            { label: '×1',  val: pf(1),   color: 'text-amber-400',  bg: 'bg-amber-500/10' },
+            { label: '×0.4',val: pf(0.4), color: 'text-orange-400', bg: 'bg-orange-500/10'},
+            { label: 'PERDU',val: null,   color: 'text-red-400',    bg: 'bg-red-500/10'   },
           ] as const).map(row => (
             <div key={row.label} className={`flex items-center justify-between px-3 py-1.5 rounded-lg ${row.bg}`}>
-              <div className="flex items-center gap-2">
-                <span className={`text-sm font-bold ${row.color}`}>{row.label}</span>
-                {row.note ? <span className="text-[10px] text-slate-600">{row.note}</span> : null}
-              </div>
-              <span className="text-sm text-white font-mono">{row.val != null ? `+${row.val} TON` : '—'}</span>
+              <span className={`text-sm font-bold ${row.color}`}>{row.label}</span>
+              <span className="text-sm text-white font-mono">
+                {row.val != null ? `+${row.val} TON` : '—'}
+              </span>
             </div>
           ))}
         </div>
