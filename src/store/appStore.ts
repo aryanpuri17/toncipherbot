@@ -338,6 +338,7 @@ export interface PlatformConfig {
   streakMultiplier: number;
   maxStreakBonus: number;
   streakResetHours: number;
+  streakMilestones: { day: number; bonus: number }[];
   
   // Anti-Fraud
   antifraudEnabled: boolean;
@@ -388,6 +389,9 @@ export interface PlatformConfig {
   globalDailyWithdrawalLimit: number;
   globalDailyDepositLimit: number;
   maxPendingWithdrawals: number;
+
+  // Promo Event
+  promoEvent: { active: boolean; multiplier: number; endsAt: string; label: string } | null;
 }
 
 export interface AdminUser {
@@ -657,6 +661,12 @@ const mockPlatformConfig: PlatformConfig = {
   streakMultiplier: 1.1,
   maxStreakBonus: 5.00,
   streakResetHours: 48,
+  streakMilestones: [
+    { day: 3,  bonus: 0.05 },
+    { day: 7,  bonus: 0.15 },
+    { day: 14, bonus: 0.30 },
+    { day: 30, bonus: 1.00 },
+  ],
   antifraudEnabled: true,
   vpnDetectionEnabled: true,
   deviceFingerprintEnabled: true,
@@ -693,6 +703,7 @@ const mockPlatformConfig: PlatformConfig = {
   globalDailyWithdrawalLimit: 50000,
   globalDailyDepositLimit: 100000,
   maxPendingWithdrawals: 100,
+  promoEvent: null,
 };
 
 const mockStats: PlatformStats = {
@@ -789,6 +800,8 @@ interface AppState {
   processIncomingReferral: (referrerId: string) => void;
   spinWheelBet: (bet: number, win: number) => void;
   placeGameBet: (bet: number, win: number) => void;
+  activatePromoEvent: (multiplier: number, hours: number, label: string) => void;
+  deactivatePromoEvent: () => void;
 
   // Actions - View
   setCurrentView: (view: 'miniapp' | 'admin') => void;
@@ -1017,7 +1030,9 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (lastDate === today) return; // already processed today
 
     const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
-    const MILESTONES: Record<number, number> = { 3: 0.05, 7: 0.15, 14: 0.30, 30: 1.00 };
+    const MILESTONES: Record<number, number> = Object.fromEntries(
+      (state.platformConfig.streakMilestones ?? []).map(m => [m.day, m.bonus])
+    );
 
     const newStreak = lastDate === yesterday ? (state.currentUser.loginStreak ?? 0) + 1 : 1;
     // No base reward on day 1 — reward starts day 2 to encourage return
@@ -1062,7 +1077,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     const now = new Date();
     const liveBoosts = state.activeBoosters.filter(b => new Date(b.expiresAt) > now);
     const boosterMult = liveBoosts.length > 0 ? Math.max(...liveBoosts.map(b => b.multiplier)) : 1;
-    const multiplier = promoMult * boosterMult;
+    const eventPromo = state.platformConfig.promoEvent;
+    const isEventActive = eventPromo?.active && new Date(eventPromo.endsAt) > now;
+    const eventMult = isEventActive ? eventPromo!.multiplier : 1;
+    const multiplier = promoMult * boosterMult * eventMult;
     const earned = task.reward * multiplier;
     const updatedUser = {
       balanceMain: state.currentUser.balanceMain + earned,
@@ -1087,7 +1105,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     }));
     const rewardCurrency = task.rewardType === 'main' ? 'TON' : task.rewardType.toUpperCase();
     get().addTransaction({ userId: state.currentUser.id, type: 'reward', amount: earned, currency: rewardCurrency, status: 'completed', completedAt: new Date().toISOString() });
-    get().addNotification({ userId: state.currentUser.id, type: 'reward', title: 'Tâche complétée!', message: `+${earned.toFixed(2)} TON${isPromoActive ? ` (×${multiplier} promo!)` : ''} pour "${task.title}"`, isRead: false });
+    const multLabel = multiplier > 1 ? ` (×${multiplier.toFixed(1)} boost!)` : '';
+    get().addNotification({ userId: state.currentUser.id, type: 'reward', title: 'Tâche complétée!', message: `+${earned.toFixed(2)} TON${multLabel} pour "${task.title}"`, isRead: false });
   },
 
   creditReferralBonus: (earned) => {
@@ -1276,6 +1295,24 @@ export const useAppStore = create<AppState>((set, get) => ({
       try { localStorage.setItem('tc_game_history', JSON.stringify(updated)); } catch { /* noop */ }
       return { gameHistory: updated };
     });
+  },
+
+  activatePromoEvent: (multiplier, hours, label) => {
+    set(s => ({
+      platformConfig: {
+        ...s.platformConfig,
+        promoEvent: {
+          active: true,
+          multiplier,
+          endsAt: new Date(Date.now() + hours * 3600000).toISOString(),
+          label: label || `×${multiplier} sur toutes les tâches`,
+        },
+      },
+    }));
+  },
+
+  deactivatePromoEvent: () => {
+    set(s => ({ platformConfig: { ...s.platformConfig, promoEvent: null } }));
   },
 
   // View Actions

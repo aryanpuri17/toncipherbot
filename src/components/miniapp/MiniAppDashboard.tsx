@@ -1,16 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAppStore } from '../../store/appStore';
-import { ArrowUpRight, ArrowDownLeft, ListTodo, ChevronRight, TrendingUp, Flame, Gift, Loader2, Users } from 'lucide-react';
-
-const STREAK_MILESTONES = [
-  { day: 3,  bonus: 0.05 },
-  { day: 7,  bonus: 0.15 },
-  { day: 14, bonus: 0.30 },
-  { day: 30, bonus: 1.00 },
-];
+import { ArrowUpRight, ArrowDownLeft, ListTodo, ChevronRight, TrendingUp, Flame, Gift, Loader2, Users, Zap } from 'lucide-react';
 
 export const MiniAppDashboard: React.FC = () => {
   const { currentUser: u, setMiniAppPage, tasks, completedTaskIds, redeemPromoCode, platformConfig } = useAppStore();
+  const STREAK_MILESTONES = platformConfig.streakMilestones ?? [];
   const activeTasks = tasks.filter(t => t.isActive && !completedTaskIds.includes(t.id) && !t.isPromoTask);
 
   // Streak calculation
@@ -24,6 +18,24 @@ export const MiniAppDashboard: React.FC = () => {
   const [promoCode, setPromoCode] = useState('');
   const [promoLoading, setPromoLoading] = useState(false);
   const [promoResult, setPromoResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  // Promo event countdown
+  const event = platformConfig.promoEvent;
+  const isEventActive = event?.active && new Date(event.endsAt) > new Date();
+  const [eventTimeLeft, setEventTimeLeft] = useState('');
+  useEffect(() => {
+    if (!isEventActive) return;
+    const update = () => {
+      const diff = Math.max(0, new Date(event!.endsAt).getTime() - Date.now());
+      const h = Math.floor(diff / 3600000);
+      const m = Math.floor((diff % 3600000) / 60000);
+      const s = Math.floor((diff % 60000) / 1000);
+      setEventTimeLeft(h > 0 ? `${h}h ${m}m` : `${m}m ${s}s`);
+    };
+    update();
+    const id = setInterval(update, 1000);
+    return () => clearInterval(id);
+  }, [isEventActive, event?.endsAt]);
 
   const handleRedeemPromo = () => {
     if (!promoCode.trim() || promoLoading) return;
@@ -43,6 +55,29 @@ export const MiniAppDashboard: React.FC = () => {
 
   return (
     <div className="space-y-5 animate-slide-up">
+      {/* Promo Event Banner */}
+      {isEventActive && (
+        <div className="relative overflow-hidden rounded-2xl p-4 bg-gradient-to-r from-amber-500/20 via-orange-500/15 to-amber-500/20 border border-amber-500/40">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_50%,rgba(251,191,36,0.12),transparent)]" />
+          <div className="relative flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-500/25 flex items-center justify-center shrink-0 text-lg">⚡</div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <p className="text-sm font-bold text-amber-300">ÉVÉNEMENT EN COURS</p>
+                <span className="px-2 py-0.5 rounded-full bg-amber-500/30 text-amber-300 text-[10px] font-bold border border-amber-500/40">
+                  ×{event!.multiplier} BONUS
+                </span>
+              </div>
+              <p className="text-xs text-amber-200/80 mt-0.5 truncate">{event!.label}</p>
+            </div>
+            <div className="shrink-0 text-right">
+              <p className="text-[10px] text-amber-400/60 uppercase tracking-wider">Fin dans</p>
+              <p className="text-sm font-bold text-amber-300 font-mono">{eventTimeLeft}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>

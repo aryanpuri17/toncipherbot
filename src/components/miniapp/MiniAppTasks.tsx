@@ -73,8 +73,12 @@ function taskAvatarColor(name: string): string {
 export const MiniAppTasks: React.FC = () => {
   const {
     tasks, completedTaskIds, completeTask, creditReferralBonus,
-    setMiniAppPage, currentUser, taskSubmissions, submitTaskProof,
+    setMiniAppPage, currentUser, taskSubmissions, submitTaskProof, platformConfig,
   } = useAppStore();
+
+  const eventPromo = platformConfig.promoEvent;
+  const isEventActive = eventPromo?.active && new Date(eventPromo.endsAt) > new Date();
+  const eventMult = isEventActive ? eventPromo!.multiplier : 1;
 
   const [taskStates, setTaskStates] = useState<Record<string, { phase: TaskPhase }>>({});
   const timerRefs                   = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
@@ -164,6 +168,7 @@ export const MiniAppTasks: React.FC = () => {
 
   const platformCards: CardTask[] = allActive.map(t => {
     const promoActive = t.promotion && new Date(t.promotion.endsAt) > new Date();
+    const taskMult = promoActive ? t.promotion!.multiplier : (eventMult > 1 ? eventMult : undefined);
     return {
       id:               t.id,
       source:           'platform',
@@ -172,7 +177,7 @@ export const MiniAppTasks: React.FC = () => {
       description:      t.description,
       targetUrl:        t.targetUrl,
       reward:           t.reward,
-      promoMultiplier:  promoActive ? t.promotion!.multiplier : undefined,
+      promoMultiplier:  taskMult,
       totalCompletions: t.totalCompletions,
       maxCompletions:   t.maxCompletions,
       icon:             t.icon,
