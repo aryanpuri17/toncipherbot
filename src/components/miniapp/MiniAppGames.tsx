@@ -332,7 +332,7 @@ const WheelSVG: React.FC<{ rotation: number }> = ({ rotation }) => {
 };
 
 const WheelGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResult }> = ({ onBack, streak, onResult }) => {
-  const { currentUser, placeGameBet, demoMode, demoBalance } = useAppStore();
+  const { currentUser, placeGameBet, recordGameResult, demoMode, demoBalance } = useAppStore();
   const bal = demoMode ? demoBalance : currentUser.balanceMain;
   const [bet, setBet]         = useState(0.01);
   const [spinning, setSpin]   = useState(false);
@@ -364,6 +364,7 @@ const WheelGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
     setTimeout(() => {
       setSpin(false);
       placeGameBet(used, win);
+      recordGameResult('Roue', used, win);
       setResult({ seg: SEGS[idx], win });
       setHist(h => [rule.mult, ...h.slice(0, 7)]);
       onResult(rule.mult > 0);
@@ -593,7 +594,7 @@ function niceStep(range: number): number {
 }
 
 const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResult }> = ({ onBack, streak, onResult }) => {
-  const { currentUser, placeGameBet, demoMode, demoBalance } = useAppStore();
+  const { currentUser, placeGameBet, recordGameResult, demoMode, demoBalance } = useAppStore();
   const bal = demoMode ? demoBalance : currentUser.balanceMain;
 
   // mise
@@ -642,6 +643,7 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
     myCashRef.current = { t: tRef.current, m };
     const win = +(myBetRef.current * m).toFixed(6);
     placeGameBet(0, win);
+    recordGameResult('Crash', myBetRef.current, win);
     snd.cashout();
     onResultRef.current(true);
     setCashedOut(m);
@@ -729,6 +731,7 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
           setMult(cp);
           snd.crash();
           if (myBetRef.current !== null && cashedRef.current === null) {
+            recordGameResult('Crash', myBetRef.current, 0);
             onResultRef.current(false);
             setToast({ id: Date.now(), text: `−${myBetRef.current.toFixed(2)} TON`, win: false });
           }
@@ -1255,7 +1258,7 @@ const MINES_FEED_INIT: MinesFeedEntry[] = [
 ];
 
 const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResult }> = ({ onBack, streak, onResult }) => {
-  const { currentUser, placeGameBet, demoMode, demoBalance } = useAppStore();
+  const { currentUser, placeGameBet, recordGameResult, demoMode, demoBalance } = useAppStore();
   const bal = demoMode ? demoBalance : currentUser.balanceMain;
   const [bet, setBet]             = useState(0.01);
   const [mineCount, setMineCount] = useState<number>(3);
@@ -1302,6 +1305,7 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
     if (minePos.has(idx)) {
       setPhase('lost');
       placeGameBet(activeBetRef.current, 0);
+      recordGameResult('Mines', activeBetRef.current, 0);
       snd.boom();
       onResult(false);
       const entry: MinesFeedEntry = { username: 'Vous', bet: activeBetRef.current, payout: 0, profit: -activeBetRef.current, mines: mineCount };
@@ -1314,6 +1318,7 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
       if (ns === GRID_SIZE - effMinesRef.current) {
         const win = +(activeBetRef.current * minesMult(mineCount, ns)).toFixed(6);
         placeGameBet(activeBetRef.current, win);
+        recordGameResult('Mines', activeBetRef.current, win);
         snd.win();
         onResult(true);
         const finalMult = minesMult(mineCount, ns);
@@ -1344,6 +1349,7 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
   const cashout = () => {
     if (phase !== 'playing' || safeCount === 0) return;
     placeGameBet(activeBetRef.current, curWin);
+    recordGameResult('Mines', activeBetRef.current, curWin);
     snd.win();
     onResult(true);
     if (curMult >= 5) { setBigWin(true); setTimeout(() => setBigWin(false), 2600); }
@@ -1621,7 +1627,7 @@ function roulettePayout(bet: RouletteBetType, result: number): number {
 }
 
 const RouletteGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResult }> = ({ onBack, streak, onResult }) => {
-  const { currentUser, placeGameBet, demoMode, demoBalance } = useAppStore();
+  const { currentUser, placeGameBet, recordGameResult, demoMode, demoBalance } = useAppStore();
   const bal = demoMode ? demoBalance : currentUser.balanceMain;
   const [bet, setBet]             = useState(0.01);
   const [selectedBet, setSelected]= useState<RouletteBetType>('red');
@@ -1665,6 +1671,7 @@ const RouletteGame: React.FC<{ onBack: () => void; streak: number; onResult: OnR
       const mult = roulettePayout(selectedBet, n);
       const win  = +(used * mult).toFixed(6);
       placeGameBet(used, win);
+      recordGameResult('Roulette', used, win);
       setResult(n);
       setPayout(mult);
       setHist(h => [n, ...h.slice(0, 11)]);
@@ -1933,7 +1940,7 @@ function rollPlinko(rows: PlinkoRows, risk: PlinkoRisk, streak: number, demo = f
 }
 
 const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResult }> = ({ onBack, streak, onResult }) => {
-  const { currentUser, placeGameBet, demoMode, demoBalance } = useAppStore();
+  const { currentUser, placeGameBet, recordGameResult, demoMode, demoBalance } = useAppStore();
   const bal = demoMode ? demoBalance : currentUser.balanceMain;
   const [bet, setBet]     = useState(0.01);
   const [rows, setRows]   = useState<PlinkoRows>(12);
@@ -1975,6 +1982,7 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
         const mult = mults[slot];
         const win  = +(used * mult).toFixed(6);
         placeGameBet(0, win);
+        recordGameResult('Plinko', used, win);
         setFinalSlot(slot);
         setLastWin({ mult, win });
         setHist(h => [{ slot, mult }, ...h.slice(0, 7)]);
@@ -2270,7 +2278,7 @@ const CATALOG = [
 ] as const;
 
 export const MiniAppGames: React.FC = () => {
-  const { currentUser, demoMode, demoBalance, toggleDemoMode } = useAppStore();
+  const { currentUser, demoMode, demoBalance, toggleDemoMode, gameHistory } = useAppStore();
   const [activeGame, setActiveGame] = useState<ActiveGame>(null);
   const [streak, setStreak]         = useState(0);
   const [muted, setMuted]           = useState(_soundMuted);
@@ -2404,6 +2412,67 @@ export const MiniAppGames: React.FC = () => {
           </div>
         ))}
       </div>
+
+      {/* Mes résultats */}
+      {gameHistory.length > 0 && (() => {
+        const total   = gameHistory.length;
+        const wins    = gameHistory.filter(r => r.win > r.bet).length;
+        const winRate = Math.round((wins / total) * 100);
+        const profit  = +gameHistory.reduce((s, r) => s + r.win - r.bet, 0).toFixed(4);
+        const last10  = gameHistory.slice(0, 10);
+        return (
+          <div style={{ background: '#0d1021', border: '1px solid #1e2847', borderRadius: 16 }} className="p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold" style={{ color: '#f8fafc' }}>Mes résultats</h3>
+              <span style={{ fontSize: 11, color: '#64748b' }}>{total} partie{total !== 1 ? 's' : ''}</span>
+            </div>
+            {/* Stats row */}
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 10 }} className="py-2.5">
+                <p style={{ fontSize: 15, fontWeight: 700, color: winRate >= 50 ? '#22c55e' : '#f87171' }}>{winRate}%</p>
+                <p style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>Taux de victoire</p>
+              </div>
+              <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 10 }} className="py-2.5">
+                <p style={{ fontSize: 15, fontWeight: 700, color: profit >= 0 ? '#22c55e' : '#f87171' }}>{profit >= 0 ? '+' : ''}{profit.toFixed(2)}</p>
+                <p style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>Profit (TON)</p>
+              </div>
+              <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 10 }} className="py-2.5">
+                <p style={{ fontSize: 15, fontWeight: 700, color: '#94a3b8' }}>{wins}/{total}</p>
+                <p style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>Victoires</p>
+              </div>
+            </div>
+            {/* Last 10 entries */}
+            <div className="space-y-1.5">
+              {last10.map((r, i) => {
+                const net  = +(r.win - r.bet).toFixed(4);
+                const won  = r.win > r.bet;
+                const push = r.win === r.bet;
+                return (
+                  <div key={i} className="flex items-center justify-between py-1" style={{ borderBottom: i < last10.length - 1 ? '1px solid rgba(30,40,71,0.5)' : 'none' }}>
+                    <div className="flex items-center gap-2">
+                      <span style={{
+                        width: 24, height: 24, borderRadius: '50%', flexShrink: 0,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10,
+                        background: won ? 'rgba(34,197,94,0.18)' : push ? 'rgba(245,158,11,0.15)' : 'rgba(239,68,68,0.15)',
+                        color: won ? '#22c55e' : push ? '#f59e0b' : '#f87171',
+                      }}>
+                        {won ? '↑' : push ? '=' : '↓'}
+                      </span>
+                      <div>
+                        <p style={{ fontSize: 12, color: '#f8fafc', lineHeight: 1 }}>{r.game}</p>
+                        <p style={{ fontSize: 10, color: '#64748b' }}>Mise {r.bet.toFixed(2)} TON</p>
+                      </div>
+                    </div>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: won ? '#22c55e' : push ? '#f59e0b' : '#64748b' }}>
+                      {won ? `+${net.toFixed(4)}` : push ? '±0' : `−${r.bet.toFixed(4)}`} TON
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Live activity feed */}
       <style>{`@keyframes feedIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}} @keyframes liveDot{0%,100%{opacity:1}50%{opacity:0.2}}`}</style>

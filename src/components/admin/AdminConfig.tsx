@@ -1,12 +1,25 @@
 import React, { useState } from 'react';
 import { useAppStore } from '../../store/appStore';
 import { ToggleSwitch } from '../ui/ToggleSwitch';
-import { Key, Hash, Wallet, Bell, Server, Terminal, Shield, Users, Gift, CreditCard, Plus, MessageSquare, Edit2, Trash2 } from 'lucide-react';
+import { Key, Hash, Wallet, Bell, Server, Terminal, Shield, Users, Gift, CreditCard, Plus, MessageSquare, Edit2, Trash2, Zap, Flame } from 'lucide-react';
 
 export const AdminConfig: React.FC = () => {
-  const { platformConfig, updatePlatformConfig } = useAppStore();
+  const { platformConfig, updatePlatformConfig, activatePromoEvent, deactivatePromoEvent } = useAppStore();
   const [activeTab, setActiveTab] = useState('bot');
   const [saved, setSaved] = useState(false);
+
+  // Streak milestones local edit state
+  const [milestones, setMilestones] = useState(
+    () => [...(platformConfig.streakMilestones ?? [])]
+  );
+  const saveMilestones = () => updatePlatformConfig({ streakMilestones: milestones });
+
+  // Promo event form state
+  const [eventMult,  setEventMult]  = useState(2);
+  const [eventHours, setEventHours] = useState(24);
+  const [eventLabel, setEventLabel] = useState('');
+  const currentEvent = platformConfig.promoEvent;
+  const isEventLive  = currentEvent?.active && new Date(currentEvent.endsAt) > new Date();
 
   const handleSave = () => {
     setSaved(true);
@@ -24,6 +37,7 @@ export const AdminConfig: React.FC = () => {
     { id: 'deposits',      label: 'Dépôts',       icon: <Wallet className="w-4 h-4" /> },
     { id: 'system',        label: 'Système',      icon: <Server className="w-4 h-4" /> },
     { id: 'notifications', label: 'Notifications',icon: <Bell className="w-4 h-4" /> },
+    { id: 'streaks',       label: 'Streaks & Événements', icon: <Flame className="w-4 h-4" /> },
   ];
 
   return (
@@ -349,6 +363,160 @@ export const AdminConfig: React.FC = () => {
               <label className="block text-xs text-slate-400 mb-1.5">Chat ID pour notifications</label>
               <input type="text" value={platformConfig.adminChatId} onChange={e => updatePlatformConfig({ adminChatId: e.target.value })} className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white" />
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Streaks & Événements */}
+      {activeTab === 'streaks' && (
+        <div className="space-y-6">
+          {/* Streak per day */}
+          <div className="glass-card p-5">
+            <h3 className="text-sm font-semibold text-white mb-4">Bonus de streak quotidien</h3>
+            <div className="max-w-xs">
+              <label className="block text-xs text-slate-400 mb-1.5">Bonus par jour de connexion (TON)</label>
+              <input
+                type="number" step="0.01" min="0"
+                value={platformConfig.streakBonusPerDay}
+                onChange={e => updatePlatformConfig({ streakBonusPerDay: parseFloat(e.target.value) || 0 })}
+                className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white"
+              />
+              <p className="text-[10px] text-slate-500 mt-1">Ce bonus est crédité à partir du jour 2 de streak.</p>
+            </div>
+          </div>
+
+          {/* Streak milestones */}
+          <div className="glass-card p-5">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-sm font-semibold text-white">Paliers de streak</h3>
+                <p className="text-xs text-slate-400 mt-0.5">Bonus unique crédité lorsqu'un palier est atteint</p>
+              </div>
+              <button
+                onClick={() => setMilestones(m => [...m, { day: (m[m.length - 1]?.day ?? 0) + 7, bonus: 0.10 }])}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-500/15 border border-blue-500/25 text-blue-400 text-xs font-semibold hover:bg-blue-500/25 transition-all"
+              >
+                <Plus className="w-3.5 h-3.5" /> Ajouter
+              </button>
+            </div>
+            <div className="space-y-2">
+              {milestones.map((m, i) => (
+                <div key={i} className="flex items-center gap-3 p-3 bg-white/[0.03] rounded-xl border border-white/5">
+                  <div className="text-lg flex-shrink-0">🔥</div>
+                  <div className="flex-1 grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] text-slate-500 uppercase tracking-wider">Jour</label>
+                      <input
+                        type="number" min="1"
+                        value={m.day}
+                        onChange={e => setMilestones(prev => prev.map((x, j) => j === i ? { ...x, day: parseInt(e.target.value) || 1 } : x))}
+                        className="w-full mt-0.5 px-2 py-1.5 bg-white/5 border border-white/10 rounded-lg text-sm text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-slate-500 uppercase tracking-wider">Bonus TON</label>
+                      <input
+                        type="number" step="0.01" min="0"
+                        value={m.bonus}
+                        onChange={e => setMilestones(prev => prev.map((x, j) => j === i ? { ...x, bonus: parseFloat(e.target.value) || 0 } : x))}
+                        className="w-full mt-0.5 px-2 py-1.5 bg-white/5 border border-white/10 rounded-lg text-sm text-white"
+                      />
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setMilestones(prev => prev.filter((_, j) => j !== i))}
+                    className="p-1.5 rounded-lg hover:bg-red-500/10 text-slate-500 hover:text-red-400 transition-colors flex-shrink-0"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+              {milestones.length === 0 && (
+                <p className="text-center text-xs text-slate-500 py-4">Aucun palier configuré</p>
+              )}
+            </div>
+            <button
+              onClick={saveMilestones}
+              className="mt-4 w-full py-2.5 rounded-xl bg-blue-500/15 border border-blue-500/25 text-blue-400 text-sm font-semibold hover:bg-blue-500/25 transition-all"
+            >
+              ✓ Sauvegarder les paliers
+            </button>
+          </div>
+
+          {/* Promo Event */}
+          <div className="glass-card p-5">
+            <div className="flex items-center gap-2 mb-4">
+              <Zap className="w-4 h-4 text-amber-400" />
+              <h3 className="text-sm font-semibold text-white">Événement promo global</h3>
+            </div>
+
+            {isEventLive ? (
+              <div className="space-y-4">
+                <div className="flex items-center gap-3 p-4 rounded-xl bg-amber-500/10 border border-amber-500/30">
+                  <div className="w-10 h-10 rounded-xl bg-amber-500/20 flex items-center justify-center text-lg flex-shrink-0">⚡</div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-amber-300">Événement actif — ×{currentEvent!.multiplier}</p>
+                    <p className="text-xs text-amber-200/70 truncate">{currentEvent!.label}</p>
+                    <p className="text-xs text-amber-400/60 mt-0.5">
+                      Fin : {new Date(currentEvent!.endsAt).toLocaleString('fr-FR')}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={deactivatePromoEvent}
+                  className="w-full py-2.5 rounded-xl bg-red-500/10 border border-red-500/25 text-red-400 text-sm font-semibold hover:bg-red-500/20 transition-all"
+                >
+                  🛑 Désactiver l'événement
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <p className="text-xs text-slate-400">Activez un multiplicateur global qui s'applique à toutes les tâches et s'affiche comme bannière sur l'accueil.</p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs text-slate-400 mb-1.5">Multiplicateur</label>
+                    <select
+                      value={eventMult}
+                      onChange={e => setEventMult(parseFloat(e.target.value))}
+                      className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white"
+                    >
+                      {[1.5, 2, 3, 5].map(v => (
+                        <option key={v} value={v} className="bg-slate-900">×{v}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-400 mb-1.5">Durée</label>
+                    <select
+                      value={eventHours}
+                      onChange={e => setEventHours(parseInt(e.target.value))}
+                      className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white"
+                    >
+                      {[1, 6, 12, 24, 48, 72].map(h => (
+                        <option key={h} value={h} className="bg-slate-900">{h < 24 ? `${h}h` : `${h / 24}j`}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1.5">Nom de l'événement (optionnel)</label>
+                  <input
+                    type="text"
+                    value={eventLabel}
+                    onChange={e => setEventLabel(e.target.value)}
+                    placeholder={`×${eventMult} sur toutes les tâches`}
+                    className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white placeholder:text-slate-600"
+                  />
+                </div>
+                <button
+                  onClick={() => activatePromoEvent(eventMult, eventHours, eventLabel.trim() || `×${eventMult} sur toutes les tâches`)}
+                  className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-500/35 text-amber-400 text-sm font-bold hover:from-amber-500/30 hover:to-orange-500/30 transition-all flex items-center justify-center gap-2"
+                >
+                  <Zap className="w-4 h-4" />
+                  Lancer l'événement ×{eventMult} · {eventHours < 24 ? `${eventHours}h` : `${eventHours / 24}j`}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

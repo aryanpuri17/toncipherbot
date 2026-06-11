@@ -14,6 +14,8 @@ export interface User {
   todayEarnings: number;
   tasksCompleted: number;
   referralCount: number;
+  referralDailyCount: number;
+  loginStreak: number;
   referralCode: string;
   referredBy?: string;
   riskScore: number;
@@ -27,6 +29,13 @@ export interface User {
   verificationStatus: 'none' | 'pending' | 'verified';
   dailyWithdrawn: number;
   dailyTasksCompleted: number;
+}
+
+export interface GameResult {
+  game: string;
+  bet: number;
+  win: number;
+  ts: number;
 }
 
 export interface Task {
@@ -48,7 +57,7 @@ export interface Task {
   createdAt: string;
   campaignId?: string;
   createdByUserId?: string;
-  verificationMethod: 'auto' | 'manual' | 'api';
+  verificationMethod: 'auto' | 'manual' | 'api' | 'auto_referral';
   priority: number;
   requiredLevel?: number;
   icon?: string;
@@ -329,6 +338,7 @@ export interface PlatformConfig {
   streakMultiplier: number;
   maxStreakBonus: number;
   streakResetHours: number;
+  streakMilestones: { day: number; bonus: number }[];
   
   // Anti-Fraud
   antifraudEnabled: boolean;
@@ -379,6 +389,9 @@ export interface PlatformConfig {
   globalDailyWithdrawalLimit: number;
   globalDailyDepositLimit: number;
   maxPendingWithdrawals: number;
+
+  // Promo Event
+  promoEvent: { active: boolean; multiplier: number; endsAt: string; label: string } | null;
 }
 
 export interface AdminUser {
@@ -419,6 +432,7 @@ export interface TaskSubmission {
   userId: string;
   username: string;
   proofText: string;
+  proofImageBase64?: string;
   status: 'pending' | 'approved' | 'rejected';
   adminNote?: string;
   createdAt: string;
@@ -455,7 +469,7 @@ export interface LogEntry {
 
 // ===================== MOCK DATA =====================
 
-const _savedBalance: { balanceMain?: number; totalEarnings?: number; todayEarnings?: number; tasksCompleted?: number; taskCredits?: number } = (() => {
+const _savedBalance: { balanceMain?: number; totalEarnings?: number; todayEarnings?: number; tasksCompleted?: number; taskCredits?: number; loginStreak?: number } = (() => {
   try { return JSON.parse(localStorage.getItem('tc_balance') || '{}'); }
   catch { return {}; }
 })();
@@ -481,7 +495,7 @@ const mockUsers: User[] = [
   {
     id: '1', telegramId: 0, username: 'vous', firstName: 'Vous', lastName: '',
     balanceMain: _savedBalance.balanceMain ?? 1.0, totalEarnings: _savedBalance.totalEarnings ?? 0, todayEarnings: _savedBalance.todayEarnings ?? 0, tasksCompleted: _savedBalance.tasksCompleted ?? 0, taskCredits: _savedBalance.taskCredits ?? 0,
-    referralCount: 0, referralCode: 'START00',
+    referralCount: 0, referralDailyCount: 0, loginStreak: _savedBalance.loginStreak ?? 0, referralCode: 'START00',
     riskScore: 0, status: 'active', createdAt: new Date().toISOString(), lastActive: new Date().toISOString(),
     withdrawalBlocked: false, verificationStatus: 'none',
     dailyWithdrawn: 0, dailyTasksCompleted: 0,
@@ -493,8 +507,8 @@ const mockTasks: Task[] = [
   { id: '2', type: 'join_channel', title: 'Rejoindre TonCipher Officiel', description: 'Abonnez-vous à notre canal officiel pour rester informé', reward: 0.0425, rewardType: 'main', targetUrl: 'https://t.me/TonCipher_Official', isActive: true, totalCompletions: 0, maxCompletions: 1000, createdAt: new Date(Date.now() - 5 * 86400000).toISOString(), verificationMethod: 'auto', priority: 8, icon: '📢', createdByUserId: 'platform' },
   { id: '3', type: 'join_channel', title: 'Rejoindre TonCipher Paiements', description: 'Rejoignez notre canal de suivi des paiements', reward: 0.0425, rewardType: 'main', targetUrl: 'https://t.me/TonCipher_Pays', isActive: true, totalCompletions: 0, maxCompletions: 500, createdAt: new Date(Date.now() - 3 * 86400000).toISOString(), verificationMethod: 'auto', priority: 7, icon: '💸', createdByUserId: 'platform' },
   { id: '4', type: 'start_bot', title: 'Démarrer @TonCipher_bot', description: 'Lancez le bot TonCipher et cliquez sur Start', reward: 0.0212, rewardType: 'main', targetUrl: 'https://t.me/TonCipher_bot', isActive: true, totalCompletions: 0, maxCompletions: 200, createdAt: new Date(Date.now() - 1 * 86400000).toISOString(), verificationMethod: 'auto', priority: 5, icon: '🤖', createdByUserId: 'platform' },
-  { id: '5', type: 'special', title: '🏆 Challenge Parrainage', description: 'Invitez 3 amis à rejoindre TonCipher. Envoyez une capture d\'écran de votre section Parrainage avec 3+ filleuls visibles.', reward: 1.50, rewardType: 'main', isActive: true, totalCompletions: 12, maxCompletions: 50, createdAt: new Date(Date.now() - 2 * 86400000).toISOString(), verificationMethod: 'manual', priority: 10, isPromoTask: true, icon: '🏆', createdByUserId: 'platform' },
-  { id: '6', type: 'special', title: '📢 Partage Communauté', description: 'Partagez TonCipher dans un groupe Telegram de 100+ membres. Envoyez la capture d\'écran de votre message publié avec le lien visible.', reward: 0.80, rewardType: 'main', isActive: true, totalCompletions: 5, maxCompletions: 100, createdAt: new Date(Date.now() - 1 * 86400000).toISOString(), verificationMethod: 'manual', priority: 9, isPromoTask: true, icon: '📢', createdByUserId: 'platform' },
+  { id: '5', type: 'special', title: '🏆 Challenge Parrainage', description: 'Invitez 3 amis à rejoindre TonCipher. La vérification est automatique dès que vous avez 3 filleuls.', reward: 1.50, rewardType: 'main', isActive: true, totalCompletions: 0, createdAt: new Date(Date.now() - 2 * 86400000).toISOString(), verificationMethod: 'auto_referral', requiredCount: 3, priority: 10, isPromoTask: true, icon: '🏆', createdByUserId: 'platform' },
+  { id: '6', type: 'special', title: '📢 Partage Communauté', description: 'Partagez TonCipher dans un groupe Telegram de 100+ membres. Soumettez un lien ou une description de votre preuve — l\'équipe validera sous 24h.', reward: 0.80, rewardType: 'main', isActive: true, totalCompletions: 0, createdAt: new Date(Date.now() - 1 * 86400000).toISOString(), verificationMethod: 'manual', priority: 9, isPromoTask: true, icon: '📢', createdByUserId: 'platform' },
 ];
 
 const mockPromoCodes: PromoCode[] = [
@@ -647,6 +661,12 @@ const mockPlatformConfig: PlatformConfig = {
   streakMultiplier: 1.1,
   maxStreakBonus: 5.00,
   streakResetHours: 48,
+  streakMilestones: [
+    { day: 3,  bonus: 0.05 },
+    { day: 7,  bonus: 0.15 },
+    { day: 14, bonus: 0.30 },
+    { day: 30, bonus: 1.00 },
+  ],
   antifraudEnabled: true,
   vpnDetectionEnabled: true,
   deviceFingerprintEnabled: true,
@@ -683,6 +703,7 @@ const mockPlatformConfig: PlatformConfig = {
   globalDailyWithdrawalLimit: 50000,
   globalDailyDepositLimit: 100000,
   maxPendingWithdrawals: 100,
+  promoEvent: null,
 };
 
 const mockStats: PlatformStats = {
@@ -757,12 +778,16 @@ interface AppState {
   // Demo / Jeu
   demoMode: boolean;
   demoBalance: number;
+  gameHistory: GameResult[];
   toggleDemoMode: () => void;
+  recordGameResult: (game: string, bet: number, win: number) => void;
 
   // Actions - Mini App
   confirmDeposit: (txId: string, txHash: string) => void;
   creditDeposit: (userId: string, amount: number, currency: string, txHash: string, network: string) => void;
   resetDailyTasks: () => void;
+  resetDailyRefTask: () => void;
+  checkLoginStreak: () => void;
   completeTask: (taskId: string) => void;
   creditReferralBonus: (earned: number) => void;
   submitWithdrawal: (networkId: string, amount: number, address: string) => { success: boolean; error?: string };
@@ -775,6 +800,8 @@ interface AppState {
   processIncomingReferral: (referrerId: string) => void;
   spinWheelBet: (bet: number, win: number) => void;
   placeGameBet: (bet: number, win: number) => void;
+  activatePromoEvent: (multiplier: number, hours: number, label: string) => void;
+  deactivatePromoEvent: () => void;
 
   // Actions - View
   setCurrentView: (view: 'miniapp' | 'admin') => void;
@@ -861,7 +888,7 @@ interface AppState {
   addLog: (log: Omit<LogEntry, 'id' | 'createdAt'>) => void;
 
   redeemPromoCode: (code: string) => { success: boolean; error?: string; reward?: number };
-  submitTaskProof: (taskId: string, proofText: string) => { success: boolean; error?: string };
+  submitTaskProof: (taskId: string, proofText: string, imageBase64?: string) => { success: boolean; error?: string };
   reviewTaskSubmission: (submissionId: string, status: 'approved' | 'rejected', adminNote?: string) => void;
   addPromoCode: (code: Omit<PromoCode, 'id' | 'createdAt' | 'currentUses'>) => void;
   updatePromoCode: (id: string, data: Partial<PromoCode>) => void;
@@ -915,6 +942,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   referralBoostExpiresAt: _savedRefBoost,
   demoMode: false,
   demoBalance: 10.0,
+  gameHistory: (() => { try { return JSON.parse(localStorage.getItem('tc_game_history') || '[]'); } catch { return []; } })(),
 
   // Mini App Actions
   confirmDeposit: (txId, txHash) => {
@@ -982,6 +1010,64 @@ export const useAppStore = create<AppState>((set, get) => ({
     currentUser: { ...s.currentUser, dailyTasksCompleted: 0, dailyWithdrawn: 0 },
   })),
 
+  resetDailyRefTask: () => set(s => {
+    // Remove task '5' (Challenge Parrainage) from completedTaskIds so it can be reclaimed today
+    const newCompleted = s.completedTaskIds.filter(id => id !== '5');
+    localStorage.setItem('tc_completed_tasks', JSON.stringify(newCompleted));
+    // New baseline = current lifetime count — today's count starts from 0
+    localStorage.setItem('tc_ref_daily_baseline', String(s.currentUser.referralCount));
+    return {
+      completedTaskIds: newCompleted,
+      currentUser: { ...s.currentUser, referralDailyCount: 0 },
+      users: s.users.map(u => u.id === s.currentUser.id ? { ...u, referralDailyCount: 0 } : u),
+    };
+  }),
+
+  checkLoginStreak: () => {
+    const state = get();
+    const today = new Date().toISOString().slice(0, 10);
+    const lastDate = localStorage.getItem('tc_streak_date');
+    if (lastDate === today) return; // already processed today
+
+    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+    const MILESTONES: Record<number, number> = Object.fromEntries(
+      (state.platformConfig.streakMilestones ?? []).map(m => [m.day, m.bonus])
+    );
+
+    const newStreak = lastDate === yesterday ? (state.currentUser.loginStreak ?? 0) + 1 : 1;
+    // No base reward on day 1 — reward starts day 2 to encourage return
+    const base = newStreak > 1 ? state.platformConfig.streakBonusPerDay : 0;
+    const milestoneBonus = MILESTONES[newStreak] ?? 0;
+    const totalReward = +(base + milestoneBonus).toFixed(6);
+
+    localStorage.setItem('tc_streak_date', today);
+
+    set(s => {
+      const upd = {
+        loginStreak:   newStreak,
+        balanceMain:   s.currentUser.balanceMain   + totalReward,
+        totalEarnings: s.currentUser.totalEarnings + totalReward,
+        todayEarnings: s.currentUser.todayEarnings + totalReward,
+      };
+      return {
+        currentUser: { ...s.currentUser, ...upd },
+        users: s.users.map(u => u.id === s.currentUser.id ? { ...u, ...upd } : u),
+      };
+    });
+
+    if (totalReward > 0) {
+      const isMilestone = milestoneBonus > 0;
+      get().addNotification({
+        type: 'reward',
+        title: isMilestone
+          ? `🏆 Palier Jour ${newStreak} atteint !`
+          : `🔥 Streak Jour ${newStreak}`,
+        message: `+${totalReward.toFixed(isMilestone ? 2 : 3)} TON${isMilestone ? ` — bonus palier inclus !` : ' pour votre connexion quotidienne.'}`,
+        isRead: false,
+      });
+    }
+  },
+
   completeTask: (taskId) => {
     const state = get();
     const task = state.tasks.find(t => t.id === taskId);
@@ -991,7 +1077,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     const now = new Date();
     const liveBoosts = state.activeBoosters.filter(b => new Date(b.expiresAt) > now);
     const boosterMult = liveBoosts.length > 0 ? Math.max(...liveBoosts.map(b => b.multiplier)) : 1;
-    const multiplier = promoMult * boosterMult;
+    const eventPromo = state.platformConfig.promoEvent;
+    const isEventActive = eventPromo?.active && new Date(eventPromo.endsAt) > now;
+    const eventMult = isEventActive ? eventPromo!.multiplier : 1;
+    const multiplier = promoMult * boosterMult * eventMult;
     const earned = task.reward * multiplier;
     const updatedUser = {
       balanceMain: state.currentUser.balanceMain + earned,
@@ -1016,7 +1105,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     }));
     const rewardCurrency = task.rewardType === 'main' ? 'TON' : task.rewardType.toUpperCase();
     get().addTransaction({ userId: state.currentUser.id, type: 'reward', amount: earned, currency: rewardCurrency, status: 'completed', completedAt: new Date().toISOString() });
-    get().addNotification({ userId: state.currentUser.id, type: 'reward', title: 'Tâche complétée!', message: `+${earned.toFixed(2)} TON${isPromoActive ? ` (×${multiplier} promo!)` : ''} pour "${task.title}"`, isRead: false });
+    const multLabel = multiplier > 1 ? ` (×${multiplier.toFixed(1)} boost!)` : '';
+    get().addNotification({ userId: state.currentUser.id, type: 'reward', title: 'Tâche complétée!', message: `+${earned.toFixed(2)} TON${multLabel} pour "${task.title}"`, isRead: false });
   },
 
   creditReferralBonus: (earned) => {
@@ -1051,12 +1141,16 @@ export const useAppStore = create<AppState>((set, get) => ({
     const isRefBoostActive = s.referralBoostExpiresAt && new Date(s.referralBoostExpiresAt) > new Date();
     const refMult = isRefBoostActive ? 2 : 1;
     const delta = Math.max(0, data.referralBalance - s.lastSyncedReferralBalance) * refMult;
+    // Daily referral count = total count minus the baseline recorded at the last 1am reset
+    const refDailyBaseline = parseInt(localStorage.getItem('tc_ref_daily_baseline') ?? '0', 10);
+    const referralDailyCount = Math.max(0, data.referralCount - refDailyBaseline);
     const updatedUser = {
       ...s.currentUser,
-      referralCount:     data.referralCount,
-      balanceMain:       s.currentUser.balanceMain + delta,
-      totalEarnings:     s.currentUser.totalEarnings + delta,
-      todayEarnings:     s.currentUser.todayEarnings + delta,
+      referralCount:      data.referralCount,
+      referralDailyCount,
+      balanceMain:        s.currentUser.balanceMain + delta,
+      totalEarnings:      s.currentUser.totalEarnings + delta,
+      todayEarnings:      s.currentUser.todayEarnings + delta,
       ...(data.banned             !== undefined && { status: data.banned ? 'banned' as const : s.currentUser.status }),
       ...(data.withdrawalBlocked  !== undefined && { withdrawalBlocked: data.withdrawalBlocked }),
     };
@@ -1193,6 +1287,34 @@ export const useAppStore = create<AppState>((set, get) => ({
     });
   },
 
+  recordGameResult: (game, bet, win) => {
+    set(s => {
+      if (s.demoMode) return {};
+      const entry: GameResult = { game, bet, win, ts: Date.now() };
+      const updated = [entry, ...s.gameHistory].slice(0, 50);
+      try { localStorage.setItem('tc_game_history', JSON.stringify(updated)); } catch { /* noop */ }
+      return { gameHistory: updated };
+    });
+  },
+
+  activatePromoEvent: (multiplier, hours, label) => {
+    set(s => ({
+      platformConfig: {
+        ...s.platformConfig,
+        promoEvent: {
+          active: true,
+          multiplier,
+          endsAt: new Date(Date.now() + hours * 3600000).toISOString(),
+          label: label || `×${multiplier} sur toutes les tâches`,
+        },
+      },
+    }));
+  },
+
+  deactivatePromoEvent: () => {
+    set(s => ({ platformConfig: { ...s.platformConfig, promoEvent: null } }));
+  },
+
   // View Actions
   setCurrentView: (view) => set({ currentView: view }),
   setMiniAppPage: (page) => set({ miniAppPage: page }),
@@ -1326,11 +1448,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     return { success: true, reward: earned };
   },
 
-  submitTaskProof: (taskId, proofText) => {
+  submitTaskProof: (taskId, proofText, imageBase64) => {
     const state = get();
     const task = state.tasks.find(t => t.id === taskId);
     if (!task) return { success: false, error: 'Tâche introuvable.' };
-    if (!proofText.trim()) return { success: false, error: 'La preuve ne peut pas être vide.' };
+    if (!proofText.trim() && !imageBase64) return { success: false, error: 'Ajoutez une capture d\'écran ou une description.' };
     const existing = state.taskSubmissions.find(s => s.taskId === taskId && s.userId === state.currentUser.id);
     if (existing?.status === 'pending') return { success: false, error: 'Une soumission est déjà en attente de validation.' };
     if (existing?.status === 'approved') return { success: false, error: 'Votre preuve a déjà été validée.' };
@@ -1341,6 +1463,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         userId: state.currentUser.id,
         username: state.currentUser.username,
         proofText: proofText.trim(),
+        proofImageBase64: imageBase64,
         status: 'pending' as const,
         createdAt: new Date().toISOString(),
       }, ...s.taskSubmissions],
@@ -1426,6 +1549,7 @@ useAppStore.subscribe((state) => {
       todayEarnings:  u.todayEarnings,
       tasksCompleted: u.tasksCompleted,
       taskCredits:    u.taskCredits,
+      loginStreak:    u.loginStreak,
     }));
     localStorage.setItem('tc_completed_tasks', JSON.stringify(state.completedTaskIds));
     localStorage.setItem('tc_boosters', JSON.stringify(state.activeBoosters));

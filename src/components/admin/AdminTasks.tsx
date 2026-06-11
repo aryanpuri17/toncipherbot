@@ -407,10 +407,24 @@ export const AdminTasks: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Proof text */}
-                  <div className="p-3 rounded-lg bg-white/[0.03] border border-white/8">
-                    <p className="text-[10px] text-slate-500 mb-1 uppercase tracking-wider">Preuve soumise</p>
-                    <p className="text-xs text-slate-300 leading-relaxed break-all">{sub.proofText}</p>
+                  {/* Proof — image and/or text */}
+                  <div className="p-3 rounded-lg bg-white/[0.03] border border-white/8 space-y-2">
+                    <p className="text-[10px] text-slate-500 uppercase tracking-wider">Preuve soumise</p>
+                    {sub.proofImageBase64 && (
+                      <a href={sub.proofImageBase64} target="_blank" rel="noreferrer">
+                        <img
+                          src={sub.proofImageBase64}
+                          alt="Capture d'écran"
+                          className="max-h-56 rounded-lg object-contain w-full bg-black/20 cursor-pointer hover:opacity-90 transition-opacity"
+                        />
+                      </a>
+                    )}
+                    {sub.proofText && (
+                      <p className="text-xs text-slate-300 leading-relaxed break-all">{sub.proofText}</p>
+                    )}
+                    {!sub.proofImageBase64 && !sub.proofText && (
+                      <p className="text-xs text-slate-500 italic">Aucune preuve fournie</p>
+                    )}
                   </div>
 
                   {sub.adminNote && (
