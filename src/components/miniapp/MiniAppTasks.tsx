@@ -303,11 +303,11 @@ export const MiniAppTasks: React.FC = () => {
       }
     } catch {
       // Network error: be generous for platform tasks (API check unreachable),
-      // but never credit API tasks without server confirmation
+      // but for API tasks keep the verify button visible so user can retry
       if (card.source === 'platform') {
         await succeed();
       } else {
-        setPhase(card.id, 'idle');
+        setPhase(card.id, 'ready');
       }
     }
   };
