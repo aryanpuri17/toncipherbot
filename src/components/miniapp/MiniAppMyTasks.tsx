@@ -121,7 +121,7 @@ export const MiniAppMyTasks: React.FC = () => {
       const r = await callApi(`/api/user-tasks/${task.id}/delete`, { telegramId: currentUser.telegramId });
       if (r.success) {
         const refund = r.refund ?? 0;
-        if (refund > 0) updateUser(currentUser.id, { balanceMain: currentUser.balanceMain + refund });
+        if (refund > 0) updateUser(currentUser.id, { balanceMain: useAppStore.getState().currentUser.balanceMain + refund });
         // Remove from localStorage pending if present
         const pending = JSON.parse(localStorage.getItem('tc_task_pending') ?? '[]') as { id: string; amount: number }[];
         localStorage.setItem('tc_task_pending', JSON.stringify(pending.filter(p => p.id !== task.id)));
@@ -149,7 +149,7 @@ export const MiniAppMyTasks: React.FC = () => {
         extraBudget:     additionalCost,
       });
       if (r.success) {
-        updateUser(currentUser.id, { balanceMain: currentUser.balanceMain - additionalCost });
+        updateUser(currentUser.id, { balanceMain: useAppStore.getState().currentUser.balanceMain - additionalCost });
         addPlatformRevenue(additionalCost * feeRate);
         // Update localStorage pending
         const pending = JSON.parse(localStorage.getItem('tc_task_pending') ?? '[]') as { id: string; amount: number }[];
