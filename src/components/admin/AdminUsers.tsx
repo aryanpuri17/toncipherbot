@@ -39,15 +39,17 @@ export const AdminUsers: React.FC = () => {
   const [confirm, setConfirm]       = useState<{ id: number; action: string } | null>(null);
   const [actionFeedback, setActionFeedback] = useState<{ id: number; msg: string; ok: boolean } | null>(null);
 
-  const fetchUsers = useCallback(async () => {
+  const fetchUsers = useCallback(async (): Promise<ApiUser[]> => {
     setLoading(true);
+    let fresh: ApiUser[] = [];
     try {
       const params = new URLSearchParams();
       if (search) params.set('search', search);
       if (statusFilter !== 'all') params.set('status', statusFilter);
       const res = await adminFetch(`/api/admin/users?${params.toString()}`);
       if (res.ok) {
-        setUsers(await res.json() as ApiUser[]);
+        fresh = await res.json() as ApiUser[];
+        setUsers(fresh);
         setFetchError('');
       } else {
         setFetchError(res.status === 401 ? 'Clé API admin invalide — configurez-la dans l\'onglet Sécurité.' : `Erreur serveur (${res.status}).`);
@@ -56,6 +58,7 @@ export const AdminUsers: React.FC = () => {
       setFetchError('Backend injoignable — vérifiez que le serveur tourne.');
     }
     setLoading(false);
+    return fresh;
   }, [search, statusFilter]);
 
   useEffect(() => { void fetchUsers(); }, [fetchUsers]);
@@ -67,10 +70,10 @@ export const AdminUsers: React.FC = () => {
       const res = await adminFetch(`/api/admin/users/${telegramId}/${action}`, { method: 'POST' });
       if (res.ok) {
         setActionFeedback({ id: telegramId, msg: 'Action effectuée avec succès', ok: true });
-        await fetchUsers();
+        const freshUsers = await fetchUsers();
         setSelected(prev => {
           if (!prev || prev.telegram_id !== telegramId) return prev;
-          return users.find(u => u.telegram_id === telegramId) ?? null;
+          return freshUsers.find(u => u.telegram_id === telegramId) ?? null;
         });
       } else {
         setActionFeedback({ id: telegramId, msg: `Erreur ${res.status}`, ok: false });

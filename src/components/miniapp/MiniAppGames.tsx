@@ -628,6 +628,8 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
   const [queuedBet, setQueuedBet] = useState<number | null>(null);
   const [toast, setToast]         = useState<{ id: number; text: string; win: boolean } | null>(null);
   const [bigWin, setBigWin]       = useState(false);
+  const crashMountedRef           = useRef(true);
+  const crashBigWinTimer          = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // refs moteur (évitent les fermetures périmées dans l'interval)
   const phaseRef      = useRef<CrashPhase>('betting');
@@ -649,6 +651,10 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
   useEffect(() => { streakRef.current = streak; }, [streak]);
   useEffect(() => { autoRef.current = autoCash; }, [autoCash]);
   useEffect(() => { onResultRef.current = onResult; }, [onResult]);
+  useEffect(() => {
+    crashMountedRef.current = true;
+    return () => { crashMountedRef.current = false; if (crashBigWinTimer.current) clearTimeout(crashBigWinTimer.current); };
+  }, []);
 
   const doCashout = (m: number) => {
     if (phaseRef.current !== 'flying') return;
@@ -662,7 +668,11 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
     onResultRef.current(true);
     setCashedOut(m);
     setToast({ id: Date.now(), text: `+${win.toFixed(4)} TON`, win: true });
-    if (m >= 3) { setBigWin(true); setTimeout(() => setBigWin(false), 2600); }
+    if (m >= 3) {
+      setBigWin(true);
+      if (crashBigWinTimer.current) clearTimeout(crashBigWinTimer.current);
+      crashBigWinTimer.current = setTimeout(() => { if (crashMountedRef.current) setBigWin(false); }, 2600);
+    }
   };
 
   // ── Moteur de tours continus ──
@@ -1361,7 +1371,7 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
         snd.win();
         onResult(true);
         const finalMult = minesMult(effMinesRef.current, ns);
-        if (finalMult >= 5) { setBigWin(true); minesBigWinTimer.current = setTimeout(() => { if (minesMountedRef.current) setBigWin(false); }, 2600); }
+        if (finalMult >= 5) { setBigWin(true); if (minesBigWinTimer.current) clearTimeout(minesBigWinTimer.current); minesBigWinTimer.current = setTimeout(() => { if (minesMountedRef.current) setBigWin(false); }, 2600); }
         setPhase('won');
         const entry: MinesFeedEntry = { username: 'Vous', bet: activeBetRef.current, payout: win, profit: +(win - activeBetRef.current).toFixed(4), mines: mineCount };
         if (!demoMode) setFeed(f => [entry, ...f.slice(0, 9)]);
@@ -1385,7 +1395,7 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
     recordGameResult('Mines', activeBetRef.current, curWin);
     snd.win();
     onResult(true);
-    if (curMult >= 5) { setBigWin(true); minesBigWinTimer.current = setTimeout(() => { if (minesMountedRef.current) setBigWin(false); }, 2600); }
+    if (curMult >= 5) { setBigWin(true); if (minesBigWinTimer.current) clearTimeout(minesBigWinTimer.current); minesBigWinTimer.current = setTimeout(() => { if (minesMountedRef.current) setBigWin(false); }, 2600); }
     setPhase('won');
     const entry: MinesFeedEntry = { username: 'Vous', bet: activeBetRef.current, payout: curWin, profit: +(curWin - activeBetRef.current).toFixed(4), mines: mineCount };
     if (!demoMode) setFeed(f => [entry, ...f.slice(0, 9)]);
@@ -2001,6 +2011,7 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
   const [hist, setHist]           = useState<Array<{ slot: number; mult: number }>>([]);
   const [bigWin, setBigWin]       = useState(false);
   const animTimerRef              = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const plinkoBigWinTimer         = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mountedRef                = useRef(true);
 
   useEffect(() => {
@@ -2008,6 +2019,7 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
     return () => {
       mountedRef.current = false;
       if (animTimerRef.current) clearTimeout(animTimerRef.current);
+      if (plinkoBigWinTimer.current) clearTimeout(plinkoBigWinTimer.current);
     };
   }, []);
 
@@ -2052,7 +2064,8 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
         onResult(mult >= 1);
         if (mult >= 10) {
           setBigWin(true);
-          animTimerRef.current = setTimeout(() => setBigWin(false), 2600);
+          if (plinkoBigWinTimer.current) clearTimeout(plinkoBigWinTimer.current);
+          plinkoBigWinTimer.current = setTimeout(() => { if (mountedRef.current) setBigWin(false); }, 2600);
           snd.win();
         } else if (mult >= 1) snd.win();
         else snd.lose();
