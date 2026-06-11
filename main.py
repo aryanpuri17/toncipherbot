@@ -892,6 +892,48 @@ async def api_admin_withdrawals(request: web.Request) -> web.Response:
     } for r in rows], headers=_CORS)
 
 
+# ── API — Transactions list (admin: deposits/withdrawals feed) ─────────────────
+
+async def api_transactions(request: web.Request) -> web.Response:
+    if not _check_admin_auth(request):
+        return web.json_response({"error": "Unauthorized"}, status=401, headers=_CORS)
+
+    type_filter = request.rel_url.query.get("type", "all")
+    try:
+        limit = min(200, max(1, int(request.rel_url.query.get("limit", "50"))))
+    except ValueError:
+        limit = 50
+
+    query = """
+        SELECT t.id, t.telegram_id, t.amount, t.currency, t.network,
+               t.status, t.tx_hash, t.created_at, u.username
+        FROM transactions t
+        LEFT JOIN users u ON t.telegram_id = u.telegram_id
+    """
+    params: list = []
+    if type_filter != "all":
+        query += " WHERE t.type = ?"
+        params.append(type_filter)
+    query += " ORDER BY t.created_at DESC LIMIT ?"
+    params.append(limit)
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(query, params) as cur:
+            rows = await cur.fetchall()
+
+    return web.json_response([{
+        "id":         r[0],
+        "telegramId": r[1],
+        "userId":     r[8] or str(r[1]),
+        "amount":     float(r[2]),
+        "currency":   r[3],
+        "network":    r[4],
+        "status":     r[5],
+        "txHash":     r[6],
+        "createdAt":  r[7],
+    } for r in rows], headers=_CORS)
+
+
 async def api_admin_approve_withdrawal(request: web.Request) -> web.Response:
     if not _check_admin_auth(request):
         return web.json_response({"error": "Unauthorized"}, status=401, headers=_CORS)
@@ -1521,6 +1563,7 @@ async def start_web() -> None:
 
     # Transaction API (called by frontend)
     app.router.add_post("/api/deposit/record",             api_deposit_record)
+    app.router.add_get( "/api/transactions",               api_transactions)
     app.router.add_post("/api/withdrawal/create",          api_withdrawal_create)
 
     # Admin — users

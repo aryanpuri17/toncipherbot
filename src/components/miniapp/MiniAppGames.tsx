@@ -1362,6 +1362,12 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
 
   return (
     <div className="pb-4" style={{ background: '#060a18', minHeight: '100%' }}>
+      <style>{`
+        @keyframes mineReveal { 0%{transform:scale(0.6);opacity:0} 60%{transform:scale(1.12)} 100%{transform:scale(1);opacity:1} }
+        @keyframes gemShine { 0%,100%{filter:brightness(1)} 50%{filter:brightness(1.55)} }
+        @keyframes mineGridShake { 0%,100%{transform:translate(0,0)} 15%{transform:translate(-5px,3px)} 30%{transform:translate(5px,-3px)} 45%{transform:translate(-4px,-2px)} 60%{transform:translate(4px,2px)} 80%{transform:translate(-2px,1px)} }
+        @keyframes boomFlash { 0%{box-shadow:0 0 0 rgba(239,68,68,0)} 30%{box-shadow:0 0 28px rgba(239,68,68,0.85)} 100%{box-shadow:0 0 10px rgba(239,68,68,0.4)} }
+      `}</style>
       <BigWinEffect show={bigWin} />
       {/* Header */}
       <div style={{ background: '#0d1021', borderBottom: '1px solid #1e2847' }} className="px-4 pt-4 pb-3">
@@ -1402,7 +1408,11 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
         )}
 
         {/* Grid */}
-        <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${GRID_COLS}, 1fr)` }}>
+        <div className="grid gap-2"
+          style={{
+            gridTemplateColumns: `repeat(${GRID_COLS}, 1fr)`,
+            animation: phase === 'lost' ? 'mineGridShake 0.45s ease' : undefined,
+          }}>
           {Array.from({ length: GRID_SIZE }, (_, idx) => {
             const isMine = minePos.has(idx);
             const isRev  = revealed.has(idx);
@@ -1414,10 +1424,10 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
                 disabled={phase !== 'playing' || isRev}
                 style={{
                   aspectRatio: '1',
-                  background: showBoom ? 'rgba(239,68,68,0.3)' :
-                               showGem  ? 'rgba(34,197,94,0.25)' :
+                  background: showBoom ? 'radial-gradient(circle at 50% 40%, rgba(239,68,68,0.45), rgba(127,29,29,0.35))' :
+                               showGem  ? 'radial-gradient(circle at 50% 40%, rgba(34,197,94,0.35), rgba(20,83,45,0.3))' :
                                showGhost ? 'rgba(239,68,68,0.08)' :
-                               phase === 'playing' ? '#1a2240' : '#111830',
+                               phase === 'playing' ? 'linear-gradient(160deg,#1e2a52,#161d3a)' : '#111830',
                   border: showBoom ? '2px solid rgba(239,68,68,0.6)' :
                           showGem  ? '2px solid rgba(34,197,94,0.45)' :
                           showGhost ? '1px solid rgba(239,68,68,0.2)' :
@@ -1426,12 +1436,14 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
                   fontSize: 18,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   transition: 'background 0.18s, border-color 0.18s, transform 0.12s',
-                  animation: (showGem || showBoom) ? 'mineReveal 0.25s ease-out' : undefined,
+                  animation: showBoom ? 'mineReveal 0.25s ease-out, boomFlash 0.6s ease-out forwards' :
+                             showGem  ? 'mineReveal 0.25s ease-out, gemShine 2.2s ease-in-out 0.3s infinite' : undefined,
+                  boxShadow: showGem ? '0 0 12px rgba(34,197,94,0.25)' : undefined,
                   cursor: phase === 'playing' && !isRev ? 'pointer' : 'default',
                   opacity: showGhost ? 0.5 : 1,
                 }}
                 onMouseEnter={e => { if (phase === 'playing' && !isRev) (e.currentTarget as HTMLButtonElement).style.background = '#243059'; }}
-                onMouseLeave={e => { if (phase === 'playing' && !isRev) (e.currentTarget as HTMLButtonElement).style.background = '#1a2240'; }}
+                onMouseLeave={e => { if (phase === 'playing' && !isRev) (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(160deg,#1e2a52,#161d3a)'; }}
               >
                 {showBoom ? '💣' : showGem ? '💎' : showGhost ? '💣' : null}
               </button>
