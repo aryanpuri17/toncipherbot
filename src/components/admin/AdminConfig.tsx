@@ -193,9 +193,9 @@ export const AdminConfig: React.FC = () => {
                 <span className="text-[10px] text-blue-400">Dérivé du nom du bot automatiquement</span>
               </div>
               <div className="px-3 py-2 bg-white/[0.03] border border-white/5 rounded-lg text-xs text-slate-300 font-mono break-all">
-                https://t.me/<span className="text-blue-400">{platformConfig.botUsername}</span>?start=CODE_PARRAIN
+                https://t.me/<span className="text-blue-400">{platformConfig.botUsername}</span>/<span className="text-emerald-400">{(platformConfig as {appShortName?: string}).appShortName ?? 'app'}</span>?startapp=r_<span className="text-amber-400">TELEGRAMID</span>
               </div>
-              <p className="text-[10px] text-slate-500">Changez le "Bot Username" dans l'onglet Bot pour mettre à jour ce lien.</p>
+              <p className="text-[10px] text-slate-500">Format Mini App — ouvre directement l'app. Configurez le short name via BotFather → /newapp.</p>
             </div>
           </div>
         </div>

@@ -94,6 +94,68 @@ def _check_admin_auth(request: web.Request) -> bool:
     return request.headers.get("X-Admin-Key", "") == ADMIN_SECRET
 
 
+def _init_data_user_id(init_data: str) -> int:
+    """Extract the Telegram user id embedded in initData (0 if absent/invalid)."""
+    try:
+        parsed = dict(parse_qsl(init_data, keep_blank_values=True))
+        user = json.loads(parsed.get("user", "{}"))
+        return int(user.get("id", 0))
+    except Exception:
+        return 0
+
+
+def _verify_user_request(init_data: str, telegram_id: int) -> bool:
+    """Authenticate a state-changing user request.
+
+    When BOT_TOKEN is configured, the request must carry valid Telegram
+    initData whose embedded user id matches the claimed telegram_id —
+    otherwise anyone could act on behalf of any user. Without a bot token
+    (local dev) everything passes.
+    """
+    if not BOT_TOKEN:
+        return True
+    if not _validate_init_data(init_data, BOT_TOKEN):
+        return False
+    return _init_data_user_id(init_data) == telegram_id
+
+
+def _extract_chat_ref(url: str) -> str | None:
+    """Turn a t.me link into a @username the Bot API can check, or None
+    for invite links (+hash / joinchat) that can't be verified by username."""
+    try:
+        from urllib.parse import urlparse
+        p = urlparse(url if "://" in url else "https://" + url)
+        if p.netloc.lower() not in ("t.me", "telegram.me", "www.t.me"):
+            return None
+        seg = [s for s in p.path.split("/") if s]
+        if not seg:
+            return None
+        first = seg[0]
+        if first.startswith("+") or first.lower() == "joinchat":
+            return None
+        return "@" + first
+    except Exception:
+        return None
+
+
+async def _is_chat_member(chat_ref: str, telegram_id: int) -> bool | None:
+    """True/False if membership could be checked, None if unverifiable
+    (bot missing from chat, network error…)."""
+    if not bot:
+        return None
+    try:
+        from aiogram.enums import ChatMemberStatus
+        member = await bot.get_chat_member(chat_ref, telegram_id)
+        return member.status in (
+            ChatMemberStatus.MEMBER,
+            ChatMemberStatus.ADMINISTRATOR,
+            ChatMemberStatus.CREATOR,
+        )
+    except Exception as e:
+        log.warning("Membership check failed for %d in %s: %s", telegram_id, chat_ref, e)
+        return None
+
+
 def _parse_amount(raw: object) -> float | None:
     """Parse a positive finite amount; returns None for anything else (NaN, inf, negatives, junk)."""
     try:
@@ -225,6 +287,11 @@ async def init_db() -> None:
                 value      TEXT NOT NULL,
                 updated_at TEXT NOT NULL DEFAULT (datetime('now'))
             )
+        """)
+        # A given on-chain tx hash may only be credited once — blocks deposit replay
+        await db.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_deposit_txhash
+            ON transactions(tx_hash) WHERE type = 'deposit' AND tx_hash != ''
         """)
         # Backward-compat migrations — safe to run on existing DB
         for tbl, col, defn in [
@@ -673,6 +740,37 @@ async def api_check_bot_start(request: web.Request) -> web.Response:
     return web.json_response({"started": started}, headers=_CORS)
 
 
+# ── API — User: check own withdrawal statuses (for balance restoration) ────────
+
+async def api_user_withdrawal_status(request: web.Request) -> web.Response:
+    """Return status of the caller's withdrawal transactions so the frontend can
+    detect rejections and restore the locally-deducted balance."""
+    try:
+        telegram_id = int(request.rel_url.query.get("telegram_id", 0))
+    except (ValueError, TypeError):
+        return web.json_response([], headers=_CORS)
+    if not telegram_id:
+        return web.json_response([], headers=_CORS)
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute("""
+            SELECT id, amount, currency, status, processed_at, admin_note
+            FROM transactions
+            WHERE telegram_id = ? AND type = 'withdrawal'
+            ORDER BY created_at DESC LIMIT 50
+        """, (telegram_id,)) as cur:
+            rows = await cur.fetchall()
+
+    return web.json_response([{
+        "id":          r[0],
+        "amount":      float(r[1]),
+        "currency":    r[2],
+        "status":      r[3],
+        "processedAt": r[4],
+        "adminNote":   r[5],
+    } for r in rows], headers=_CORS)
+
+
 # ── API — Admin: stats ─────────────────────────────────────────────────────────
 
 async def api_admin_stats(request: web.Request) -> web.Response:
@@ -1090,7 +1188,8 @@ async def api_admin_reject_withdrawal(request: web.Request) -> web.Response:
                 f"❌ <b>Retrait refusé</b>\n\n"
                 f"💰 Montant : {tx_row[1]:.2f} {tx_row[2]}\n"
                 f"{'📝 Motif : ' + note if note else 'Aucun motif précisé.'}\n\n"
-                f"Votre solde a été recrédité.",
+                f"🔄 Votre solde de <b>{tx_row[1]:.2f} {tx_row[2]}</b> sera recrédité "
+                f"automatiquement à la prochaine ouverture de l'application.",
                 parse_mode="HTML",
             )
         except Exception:
@@ -1172,21 +1271,29 @@ async def api_user_task_create(request: web.Request) -> web.Response:
     except Exception:
         return web.json_response({"error": "Invalid JSON"}, status=400, headers=_CORS)
 
-    creator_id      = data.get("telegramId")
+    creator_id      = _parse_telegram_id(data.get("telegramId"))
     task_type       = str(data.get("type", "")).strip()
-    title           = str(data.get("title", "")).strip()
-    description     = str(data.get("description", "")).strip()
-    target_url      = str(data.get("targetUrl", "")).strip()   # stored EXACTLY as-is
-    reward          = float(data.get("reward", 0))
-    total_budget    = float(data.get("totalBudget", 0))
-    max_completions = int(data.get("maxCompletions", 0))
+    title           = str(data.get("title", "")).strip()[:200]
+    description     = str(data.get("description", "")).strip()[:500]
+    target_url      = str(data.get("targetUrl", "")).strip()[:512]
+    reward          = _parse_amount(data.get("reward"))
+    total_budget    = _parse_amount(data.get("totalBudget"))
+    try:
+        max_completions = int(data.get("maxCompletions", 0))
+    except (TypeError, ValueError):
+        max_completions = 0
 
     if not creator_id or not task_type or not title or not target_url:
         return web.json_response({"error": "Missing required fields"}, status=400, headers=_CORS)
     if task_type not in ("join_channel", "join_group", "start_bot"):
         return web.json_response({"error": "Invalid task type"}, status=400, headers=_CORS)
-    if max_completions < 1:
-        return web.json_response({"error": "Invalid max_completions"}, status=400, headers=_CORS)
+    if reward is None or total_budget is None:
+        return web.json_response({"error": "Invalid reward or budget"}, status=400, headers=_CORS)
+    if max_completions < 1 or max_completions > 100_000:
+        return web.json_response({"error": "Invalid max_completions (1–100 000)"}, status=400, headers=_CORS)
+    # Guard against budget/reward mismatch (allow ±1 unit rounding tolerance)
+    if abs(reward * max_completions - total_budget) > reward + 0.001:
+        return web.json_response({"error": "Budget mismatch with reward × completions"}, status=400, headers=_CORS)
 
     task_id = _short_id()
 
@@ -1316,6 +1423,14 @@ async def api_user_task_complete(request: web.Request) -> web.Response:
         if task[1] >= task[2]:
             return web.json_response({"error": "Task depleted"}, status=400, headers=_CORS)
         if task[4] == telegram_id:
+            # Log fraud attempt when creator tries to complete own task
+            await _log_fraud_alert(
+                db, telegram_id, str(telegram_id),
+                "self_task_complete",
+                f"Creator attempted to complete own task {task_id}",
+                _risk_score(["self_referral_ip"]),
+            )
+            await db.commit()
             return web.json_response({"error": "Cannot complete your own task"}, status=400, headers=_CORS)
 
         reward          = float(task[3])
@@ -1325,11 +1440,11 @@ async def api_user_task_complete(request: web.Request) -> web.Response:
         # INSERT OR IGNORE + rowcount makes the replay check atomic: two
         # concurrent requests can both pass a SELECT check, but only one
         # insert wins on the (task_id, telegram_id) primary key.
-        cur = await db.execute(
+        ins = await db.execute(
             "INSERT OR IGNORE INTO user_task_completions (task_id, telegram_id) VALUES (?, ?)",
             (task_id, telegram_id)
         )
-        if cur.rowcount == 0:
+        if ins.rowcount == 0:
             return web.json_response({"error": "Already completed"}, status=400, headers=_CORS)
         await db.execute(
             "UPDATE user_tasks SET completions = ?, spent = spent + ?, status = ? WHERE id = ?",
@@ -1337,7 +1452,61 @@ async def api_user_task_complete(request: web.Request) -> web.Response:
         )
         await db.commit()
 
+    # Verify membership server-side (after recording the completion so we
+    # don't lose the atomicity, but before returning reward to the client).
+    # For join_channel / join_group: check via Bot API.
+    # For start_bot: checked via bot_started flag in users table.
+    task_status_row = await _verify_task_completion(task_id, telegram_id)
+    if task_status_row is False:
+        # Membership check definitively failed: roll back completion record
+        async with aiosqlite.connect(DB_PATH) as db2:
+            await db2.execute(
+                "DELETE FROM user_task_completions WHERE task_id = ? AND telegram_id = ?",
+                (task_id, telegram_id)
+            )
+            await db2.execute(
+                "UPDATE user_tasks SET completions = completions - 1, spent = spent - ?,"
+                " status = CASE WHEN status = 'depleted' AND completions - 1 < max_completions THEN 'active' ELSE status END"
+                " WHERE id = ?",
+                (reward, task_id)
+            )
+            await db2.commit()
+        return web.json_response({"error": "Membership not verified. Please join and try again."}, status=403, headers=_CORS)
+
     return web.json_response({"success": True, "reward": reward}, headers=_CORS)
+
+
+async def _verify_task_completion(task_id: str, telegram_id: int) -> bool | None:
+    """Return True if verified, False if definitely NOT a member, None if unverifiable."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT type, target_url FROM user_tasks WHERE id = ?", (task_id,)
+        ) as cur:
+            row = await cur.fetchone()
+    if not row:
+        return None
+
+    task_type, target_url = row[0], row[1]
+
+    if task_type == "start_bot":
+        async with aiosqlite.connect(DB_PATH) as db:
+            async with db.execute(
+                "SELECT bot_started FROM users WHERE telegram_id = ?", (telegram_id,)
+            ) as cur:
+                urow = await cur.fetchone()
+        if urow is None:
+            return None
+        return bool(urow[0])
+
+    if task_type in ("join_channel", "join_group"):
+        chat_ref = _extract_chat_ref(target_url)
+        if chat_ref is None:
+            # Invite link — can't verify by username; give benefit of doubt
+            return None
+        result = await _is_chat_member(chat_ref, telegram_id)
+        return result  # True / False / None
+
+    return None
 
 
 async def api_user_task_pause(request: web.Request) -> web.Response:
@@ -1636,6 +1805,7 @@ async def start_web() -> None:
     # User API
     app.router.add_post("/api/user/init",                  api_user_init)
     app.router.add_post("/api/user/referral",              api_user_referral)
+    app.router.add_get( "/api/user/withdrawals",           api_user_withdrawal_status)
     app.router.add_get( "/api/check-membership",           api_check_membership)
     app.router.add_get( "/api/check-bot-start",            api_check_bot_start)
     app.router.add_get( "/api/leaderboard",                api_leaderboard)

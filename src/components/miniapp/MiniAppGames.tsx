@@ -600,7 +600,7 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
 
   // mise
   const [bet, setBet]           = useState(0.05);
-  const [autoCash, setAutoCash] = useState('');
+  const [autoCash, setAutoCash] = useState(() => localStorage.getItem('tc_crash_auto') ?? '');
 
   // état du tour (rendu)
   const [phase, setPhase]         = useState<CrashPhase>('betting');
@@ -1213,10 +1213,10 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
           <p style={{ fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>Encaissement auto (×)</p>
           <div style={{ background: '#080c1e', border: '1px solid #1e2847', borderRadius: 12 }} className="flex items-center px-3 py-2.5 gap-2">
             <input type="number" value={autoCash} placeholder="2.00" min={1.01} step={0.01}
-              onChange={e => setAutoCash(e.target.value)}
+              onChange={e => { setAutoCash(e.target.value); localStorage.setItem('tc_crash_auto', e.target.value); }}
               style={{ flex: 1, background: 'transparent', color: '#f8fafc', fontSize: 16, fontWeight: 600, outline: 'none', border: 'none' }} />
             {autoCash && (
-              <button onClick={() => setAutoCash('')} style={{ color: '#64748b', fontSize: 13 }}>✕</button>
+              <button onClick={() => { setAutoCash(''); localStorage.removeItem('tc_crash_auto'); }} style={{ color: '#64748b', fontSize: 13 }}>✕</button>
             )}
           </div>
         </div>
@@ -1742,7 +1742,7 @@ const RouletteGame: React.FC<{ onBack: () => void; streak: number; onResult: OnR
               <h2 className="text-base font-bold" style={{ color: '#f8fafc' }}>Roulette 🎰</h2>
               <StreakChip streak={streak} />
             </div>
-            <p className="text-[11px]" style={{ color: '#64748b' }}>Roulette européenne · 37 cases</p>
+            <p className="text-[11px]" style={{ color: '#64748b' }}>Roulette européenne · 37 cases · Numéro ×36</p>
           </div>
           <MuteButton />
           <GameBalanceChip bal={bal} demo={demoMode} />
@@ -1963,6 +1963,16 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
   const [lastWin, setLastWin]     = useState<{ mult: number; win: number } | null>(null);
   const [hist, setHist]           = useState<Array<{ slot: number; mult: number }>>([]);
   const [bigWin, setBigWin]       = useState(false);
+  const animTimerRef              = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mountedRef                = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      if (animTimerRef.current) clearTimeout(animTimerRef.current);
+    };
+  }, []);
 
   const effBet = Math.min(bet, bal);
   const mults  = PLINKO_MULTS[risk][rows];
@@ -1989,7 +1999,9 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
     let row = 0, col = 0;
     setBallPos({ row: -1, col: 0 });
 
+    const rowDelay = rows <= 8 ? 180 : rows <= 12 ? 130 : 90;
     const animStep = () => {
+      if (!mountedRef.current) return; // component unmounted — stop, bet already deducted
       if (row >= rows) {
         const mult = mults[slot];
         const win  = +(used * mult).toFixed(6);
@@ -2003,7 +2015,7 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
         onResult(mult >= 1);
         if (mult >= 10) {
           setBigWin(true);
-          setTimeout(() => setBigWin(false), 2600);
+          animTimerRef.current = setTimeout(() => setBigWin(false), 2600);
           snd.win();
         } else if (mult >= 1) snd.win();
         else snd.lose();
@@ -2013,9 +2025,9 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
       row++;
       snd.tick();
       setBallPos({ row, col });
-      setTimeout(animStep, rows <= 8 ? 180 : rows <= 12 ? 130 : 90);
+      animTimerRef.current = setTimeout(animStep, rowDelay);
     };
-    setTimeout(animStep, 120);
+    animTimerRef.current = setTimeout(animStep, 120);
   };
 
   const BOARD_W = 280;
@@ -2261,7 +2273,7 @@ const CATALOG = [
     bgColor: 'rgba(124,58,237,0.08)',
     btnGrad: 'linear-gradient(135deg,#7c3aed,#6d28d9)',
     btnText: '#fff',
-    stats: '~2.7% avantage · ×36 sur numéro plein',
+    stats: '×36 numéro plein · ×2.8 douzaine · ×1.9 couleur',
   },
   {
     id: 'mines' as ActiveGame,

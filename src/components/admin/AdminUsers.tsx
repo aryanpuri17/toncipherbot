@@ -36,6 +36,8 @@ export const AdminUsers: React.FC = () => {
   const [selected, setSelected]     = useState<ApiUser | null>(null);
   const [actioning, setActioning]   = useState<number | null>(null);
   const [fetchError, setFetchError] = useState('');
+  const [confirm, setConfirm]       = useState<{ id: number; action: string } | null>(null);
+  const [actionFeedback, setActionFeedback] = useState<{ id: number; msg: string; ok: boolean } | null>(null);
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
@@ -48,7 +50,7 @@ export const AdminUsers: React.FC = () => {
         setUsers(await res.json() as ApiUser[]);
         setFetchError('');
       } else {
-        setFetchError(res.status === 401 ? 'Clé API admin invalide (voir Anti-Fraude → Clé API Admin).' : `Erreur serveur (${res.status}).`);
+        setFetchError(res.status === 401 ? 'Clé API admin invalide — allez dans Sécurité → Anti-Fraude pour la configurer.' : `Erreur serveur (${res.status}).`);
       }
     } catch {
       setFetchError('Backend injoignable — vérifiez que le serveur tourne.');
@@ -59,16 +61,25 @@ export const AdminUsers: React.FC = () => {
   useEffect(() => { void fetchUsers(); }, [fetchUsers]);
 
   const doAction = async (telegramId: number, action: 'ban' | 'unban' | 'unflag' | 'block-withdrawals' | 'unblock-withdrawals') => {
+    setConfirm(null);
     setActioning(telegramId);
     try {
-      await adminFetch(`/api/admin/users/${telegramId}/${action}`, { method: 'POST' });
-      await fetchUsers();
-      setSelected(prev => {
-        if (!prev || prev.telegram_id !== telegramId) return prev;
-        return users.find(u => u.telegram_id === telegramId) ?? null;
-      });
-    } catch { /* ignore */ }
+      const res = await adminFetch(`/api/admin/users/${telegramId}/${action}`, { method: 'POST' });
+      if (res.ok) {
+        setActionFeedback({ id: telegramId, msg: 'Action effectuée avec succès', ok: true });
+        await fetchUsers();
+        setSelected(prev => {
+          if (!prev || prev.telegram_id !== telegramId) return prev;
+          return users.find(u => u.telegram_id === telegramId) ?? null;
+        });
+      } else {
+        setActionFeedback({ id: telegramId, msg: `Erreur ${res.status}`, ok: false });
+      }
+    } catch {
+      setActionFeedback({ id: telegramId, msg: 'Backend injoignable', ok: false });
+    }
     setActioning(null);
+    setTimeout(() => setActionFeedback(null), 3000);
   };
 
   const statusLabel = { banned: 'Banni', blocked: 'Retraits bloqués', flagged: 'Signalé', active: 'Actif' } as const;
@@ -159,7 +170,7 @@ export const AdminUsers: React.FC = () => {
                   const isActioning = actioning === user.telegram_id;
                   return (
                     <tr key={user.telegram_id}
-                      className={`border-b border-white/[0.03] cursor-pointer hover:bg-white/[0.02] transition-colors ${selected?.telegram_id === user.telegram_id ? 'bg-blue-500/5' : ''}`}
+                      className={`border-b border-white/[0.03] cursor-pointer hover:bg-white/[0.02] transition-colors relative ${selected?.telegram_id === user.telegram_id ? 'bg-blue-500/5' : ''}`}
                       onClick={() => setSelected(user)}>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
@@ -200,7 +211,7 @@ export const AdminUsers: React.FC = () => {
                           </button>
                           {!user.banned
                             ? <button className="p-1.5 rounded-lg hover:bg-red-500/10 text-slate-400 hover:text-red-400 disabled:opacity-40"
-                                onClick={e => { e.stopPropagation(); void doAction(user.telegram_id, 'ban'); }}
+                                onClick={e => { e.stopPropagation(); setConfirm({ id: user.telegram_id, action: 'ban' }); }}
                                 disabled={isActioning} title="Bannir">
                                 <UserX className="w-3.5 h-3.5" />
                               </button>
@@ -209,6 +220,19 @@ export const AdminUsers: React.FC = () => {
                                 disabled={isActioning} title="Débannir">
                                 <UserCheck className="w-3.5 h-3.5" />
                               </button>}
+                          {/* Inline ban confirmation */}
+                          {confirm?.id === user.telegram_id && confirm.action === 'ban' && (
+                            <div className="absolute right-2 top-8 z-20 bg-[#1a1f35] border border-red-500/30 rounded-lg p-2 shadow-xl flex items-center gap-2">
+                              <span className="text-[10px] text-red-400">Bannir ?</span>
+                              <button onClick={e => { e.stopPropagation(); void doAction(user.telegram_id, 'ban'); }} className="px-2 py-0.5 rounded bg-red-500/20 text-red-400 text-[10px] font-bold hover:bg-red-500/30">Oui</button>
+                              <button onClick={e => { e.stopPropagation(); setConfirm(null); }} className="px-2 py-0.5 rounded bg-white/5 text-slate-400 text-[10px]">Non</button>
+                            </div>
+                          )}
+                          {actionFeedback?.id === user.telegram_id && (
+                            <span className={`absolute right-2 top-8 z-20 text-[10px] px-2 py-1 rounded ${actionFeedback.ok ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>
+                              {actionFeedback.msg}
+                            </span>
+                          )}
                         </div>
                       </td>
                     </tr>

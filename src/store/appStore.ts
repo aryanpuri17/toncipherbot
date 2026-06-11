@@ -1268,14 +1268,17 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   placeGameBet: (bet, win) => {
     // Sanity guard: NaN/Infinity would silently corrupt the persisted balance
-    if (!Number.isFinite(bet) || !Number.isFinite(win) || bet <= 0 || win < 0) return;
+    if (!Number.isFinite(bet) || !Number.isFinite(win) || bet < 0 || win < 0) return;
+    if (win > bet * 10_000) return; // implausible win — guard against overflow
     set(s => {
       if (s.demoMode) {
         // En mode démo : ne toucher que demoBalance
         const nb = +(Math.max(0, s.demoBalance - bet + win)).toFixed(6);
         return { demoBalance: nb < 0.05 ? 10.0 : nb }; // recharge auto si presque vide
       }
-      const newBalance = +(Math.max(0, s.currentUser.balanceMain - bet + win)).toFixed(6);
+      // Guard: can't bet more than current balance (prevents overdraft from stale closures)
+      const safeBet = Math.min(bet, s.currentUser.balanceMain);
+      const newBalance = +(Math.max(0, s.currentUser.balanceMain - safeBet + win)).toFixed(6);
       const updatedUser = { ...s.currentUser, balanceMain: newBalance };
       try {
         const saved = JSON.parse(localStorage.getItem('tc_balance') || '{}') as Record<string, number>;
