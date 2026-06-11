@@ -14,8 +14,10 @@ function _ac(): AudioContext | null {
   const Ctor = (window as any).AudioContext || (window as any).webkitAudioContext;
   if (!Ctor) return null;
   if (!_AC.ctx || _AC.ctx.state === 'closed') { try { _AC.ctx = new Ctor(); } catch { return null; } }
-  if (_AC.ctx.state === 'suspended') _AC.ctx.resume().catch(() => {});
-  return _AC.ctx;
+  const ctx = _AC.ctx;
+  if (!ctx) return null;
+  if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+  return ctx;
 }
 
 const snd = {

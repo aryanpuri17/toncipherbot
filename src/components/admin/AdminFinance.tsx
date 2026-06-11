@@ -8,10 +8,10 @@ import {
   RefreshCw, Copy, ExternalLink,
 } from 'lucide-react';
 
-type ApiDeposit = { id: string; userId?: string; telegramId?: number; amount: number; currency: string; network?: string; status: string; createdAt: string; txHash?: string };
+type ApiDeposit = { id: string; userId?: string; telegramId?: number; amount: number; currency: string; network?: string; status: string; createdAt: string; txHash?: string; confirmations?: number; requiredConfirmations?: number };
 
 export const AdminDeposits: React.FC = () => {
-  const { transactions, users, addTransaction, creditDeposit } = useAppStore();
+  const { transactions, users } = useAppStore();
   const storeDeposits = transactions.filter(t => t.type === 'deposit');
   const [apiDeposits, setApiDeposits]     = useState<ApiDeposit[]>([]);
   const [loading, setLoading]             = useState(false);
