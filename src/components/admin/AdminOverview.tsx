@@ -1,3 +1,4 @@
+import { adminFetch } from '../../utils/adminFetch';
 import React, { useEffect, useState } from 'react';
 import { useAppStore } from '../../store/appStore';
 import { StatCard } from '../ui/StatCard';
@@ -40,11 +41,11 @@ export const AdminOverview: React.FC = () => {
   const [recentAlerts, setRecentAlerts] = useState<ApiAlert[]>([]);
 
   useEffect(() => {
-    void fetch('/api/admin/stats')
+    void adminFetch('/api/admin/stats')
       .then(r => r.ok ? r.json() : null)
       .then((d: ApiStats | null) => { if (d) setApiStats(d); })
       .catch(() => {});
-    void fetch('/api/admin/fraud-alerts')
+    void adminFetch('/api/admin/fraud-alerts')
       .then(r => r.ok ? r.json() : [])
       .then((d: ApiAlert[]) => setRecentAlerts(d.filter(a => !a.resolved).slice(0, 3)))
       .catch(() => {});

@@ -1,3 +1,4 @@
+import { adminFetch } from '../../utils/adminFetch';
 import React, { useState, useEffect, useCallback } from 'react';
 import { Search, Filter, UserCheck, UserX, Eye, Shield, ChevronDown, RefreshCw, AlertTriangle, ArrowDownLeft, ArrowUpRight, Lock, Unlock, Clock } from 'lucide-react';
 
@@ -41,7 +42,7 @@ export const AdminUsers: React.FC = () => {
       const params = new URLSearchParams();
       if (search) params.set('search', search);
       if (statusFilter !== 'all') params.set('status', statusFilter);
-      const res = await fetch(`/api/admin/users?${params.toString()}`);
+      const res = await adminFetch(`/api/admin/users?${params.toString()}`);
       if (res.ok) setUsers(await res.json() as ApiUser[]);
     } catch { /* backend unavailable */ }
     setLoading(false);
@@ -52,7 +53,7 @@ export const AdminUsers: React.FC = () => {
   const doAction = async (telegramId: number, action: 'ban' | 'unban' | 'unflag' | 'block-withdrawals' | 'unblock-withdrawals') => {
     setActioning(telegramId);
     try {
-      await fetch(`/api/admin/users/${telegramId}/${action}`, { method: 'POST' });
+      await adminFetch(`/api/admin/users/${telegramId}/${action}`, { method: 'POST' });
       await fetchUsers();
       setSelected(prev => {
         if (!prev || prev.telegram_id !== telegramId) return prev;

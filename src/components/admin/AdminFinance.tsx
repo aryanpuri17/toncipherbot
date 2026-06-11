@@ -1,3 +1,4 @@
+import { adminFetch } from '../../utils/adminFetch';
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAppStore } from '../../store/appStore';
 import { StatusBadge } from '../ui/StatusBadge';
@@ -20,7 +21,7 @@ export const AdminDeposits: React.FC = () => {
   const fetchApiDeposits = useCallback(async () => {
     setLoading(true);
     try {
-      const res  = await fetch('/api/transactions?type=deposit&limit=50');
+      const res  = await adminFetch('/api/transactions?type=deposit&limit=50');
       if (res.ok) {
         const data = await res.json() as ApiDeposit[];
         setApiDeposits(Array.isArray(data) ? data : []);
@@ -142,7 +143,7 @@ export const AdminWithdrawals: React.FC = () => {
   const fetchWithdrawals = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/admin/withdrawals?status=${filter}`);
+      const res = await adminFetch(`/api/admin/withdrawals?status=${filter}`);
       if (res.ok) setWithdrawals(await res.json() as ApiWithdrawal[]);
     } catch { /* backend unavailable */ }
     setLoading(false);
@@ -153,7 +154,7 @@ export const AdminWithdrawals: React.FC = () => {
   const doApprove = async (id: string) => {
     setActioning(id);
     try {
-      await fetch(`/api/admin/withdrawals/${id}/approve`, {
+      await adminFetch(`/api/admin/withdrawals/${id}/approve`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ txHash: txHashInput[id] ?? '' }),
       });
@@ -165,7 +166,7 @@ export const AdminWithdrawals: React.FC = () => {
   const doReject = async (id: string) => {
     setActioning(id);
     try {
-      await fetch(`/api/admin/withdrawals/${id}/reject`, {
+      await adminFetch(`/api/admin/withdrawals/${id}/reject`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ note: noteInput[id] ?? '' }),
       });
