@@ -94,18 +94,32 @@ export const MiniAppDashboard: React.FC = () => {
       </div>
 
       {/* Balance Card */}
-      <div className="card-sheen animated-gradient relative overflow-hidden rounded-2xl p-5 bg-gradient-to-br from-blue-600/90 via-purple-600/80 to-pink-500/70 glow-blue">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_50%,rgba(255,255,255,0.1),transparent)]" />
+      <div className="card-sheen animated-gradient balance-card-ton relative overflow-hidden rounded-3xl p-5">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_50%,rgba(255,255,255,0.07),transparent)]" />
+        {/* Orbe haut-droite */}
+        <div className="absolute -top-8 -right-8 w-32 h-32 rounded-full bg-[#0098EA]/30 blur-2xl pointer-events-none" />
+        {/* Orbe bas-gauche */}
+        <div className="absolute -bottom-6 -left-6 w-24 h-24 rounded-full bg-[#0098EA]/20 blur-xl pointer-events-none" />
+        {/* Watermark */}
+        <div className="absolute right-4 top-1/2 -translate-y-1/2 text-[80px] leading-none opacity-[0.06] select-none pointer-events-none font-bold text-white">💎</div>
         <div className="relative">
-          <p className="text-blue-100 text-sm mb-1">Solde total</p>
-          <p className="text-3xl font-bold text-white mb-1">
+          <p className="text-[#7DD4FC] text-xs font-medium uppercase tracking-widest mb-2">Solde total</p>
+          <p className="text-4xl font-bold text-white tracking-tight mb-0.5">
             <CountUp value={u.balanceMain} decimals={2} animateOnMount suffix=" TON" />
           </p>
-          <div className="flex items-center gap-1 text-emerald-300 text-xs">
-            <TrendingUp className="w-3 h-3" />
-            <span>+{u.todayEarnings.toFixed(2)} TON aujourd'hui</span>
-          </div>
-          <div className="flex gap-3 mt-4">
+          {u.todayEarnings > 0 ? (
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/20 border border-emerald-500/30 mb-4">
+              <TrendingUp className="w-3 h-3 text-emerald-400" />
+              <span className="text-emerald-300 text-xs font-semibold">
+                +<CountUp value={u.todayEarnings} decimals={2} duration={0.8} /> TON aujourd'hui
+              </span>
+            </div>
+          ) : (
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/5 border border-white/10 mb-4">
+              <span className="text-slate-400 text-xs">Aucun gain aujourd'hui encore</span>
+            </div>
+          )}
+          <div className="flex gap-3">
             <button
               onClick={() => { haptic.impact('light'); setMiniAppPage('deposit'); }}
               className="tap-scale flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-white/15 hover:bg-white/25 transition-colors text-white text-sm font-medium backdrop-blur-sm"
@@ -199,17 +213,31 @@ export const MiniAppDashboard: React.FC = () => {
 
       {/* Quick Stats */}
       <div className="grid grid-cols-2 gap-3">
-        <div className="glass-card p-4 text-center">
-          <p className="text-2xl font-bold text-white">
-            <CountUp value={u.tasksCompleted} decimals={0} animateOnMount />
-          </p>
-          <p className="text-xs text-slate-400">Tâches complétées</p>
+        <div className="stat-card glass-card p-4 relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-br from-blue-500/8 to-transparent pointer-events-none rounded-2xl" />
+          <div className="relative">
+            <div className="w-8 h-8 rounded-lg bg-blue-500/15 flex items-center justify-center mb-2">
+              <ListTodo className="w-4 h-4 text-blue-400" />
+            </div>
+            <p className="text-2xl font-bold text-white leading-none">
+              <CountUp value={u.tasksCompleted} decimals={0} animateOnMount />
+            </p>
+            <p className="text-[11px] text-slate-400 mt-1">Tâches complétées</p>
+            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-500/60 to-transparent rounded-b-2xl" />
+          </div>
         </div>
-        <div className="glass-card p-4 text-center">
-          <p className="text-xl font-bold text-emerald-400">
-            <CountUp value={u.totalEarnings} decimals={2} animateOnMount suffix=" TON" />
-          </p>
-          <p className="text-xs text-slate-400">Total gagné</p>
+        <div className="stat-card glass-card p-4 relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/8 to-transparent pointer-events-none rounded-2xl" />
+          <div className="relative">
+            <div className="w-8 h-8 rounded-lg bg-emerald-500/15 flex items-center justify-center mb-2">
+              <TrendingUp className="w-4 h-4 text-emerald-400" />
+            </div>
+            <p className="text-xl font-bold text-emerald-400 leading-none">
+              <CountUp value={u.totalEarnings} decimals={2} animateOnMount suffix=" TON" />
+            </p>
+            <p className="text-[11px] text-slate-400 mt-1">Total gagné</p>
+            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-emerald-500/60 to-transparent rounded-b-2xl" />
+          </div>
         </div>
       </div>
 

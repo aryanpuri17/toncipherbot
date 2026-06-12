@@ -348,3 +348,22 @@ body {
 .game-bg-mines    { background-image: radial-gradient(circle,rgba(139,92,246,.4) 1px,transparent 1px); background-size: 18px 18px; }
 .game-bg-roulette { background-image: radial-gradient(ellipse at 20% 50%,rgba(16,185,129,.3) 0%,transparent 60%), radial-gradient(circle at 80% 20%,rgba(52,211,153,.2) 0%,transparent 40%); }
 .game-bg-plinko   { background-image: radial-gradient(ellipse at 50% 0%,rgba(251,191,36,.25) 0%,transparent 55%); }
+
+/* ── BALANCE CARD TON ────────────────────────────────────────────────── */
+.balance-card-ton {
+  background: linear-gradient(135deg, #0B1F3A 0%, #0D2847 40%, #0B3060 70%, #083060 100%);
+  border: 1px solid rgba(0,152,234,0.25);
+  box-shadow: 0 0 0 1px rgba(0,152,234,0.1), 0 8px 32px rgba(0,0,0,0.4), 0 0 60px rgba(0,152,234,0.12);
+}
+.balance-card-ton.animated-gradient::before {
+  background: linear-gradient(105deg, transparent 40%, rgba(0,152,234,0.08) 50%, transparent 60%);
+}
+
+/* ── STAT CARDS ──────────────────────────────────────────────────────── */
+.stat-card {
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.stat-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+}
