@@ -282,10 +282,11 @@ const MiniAppHeader: React.FC = () => {
 
 const MiniApp: React.FC = () => {
   useDepositMonitor(); // polls TonAPI every 30s to auto-confirm pending deposits
+  const miniAppPage = useAppStore(s => s.miniAppPage);
   return (
     <div className="mini-app-bg min-h-screen max-w-lg mx-auto relative">
       <MiniAppHeader />
-      <div className="px-4 pt-4 pb-24">
+      <div key={miniAppPage} className="px-4 pt-4 pb-24 page-enter">
         <MiniAppPageContent />
       </div>
       <MiniAppNav />

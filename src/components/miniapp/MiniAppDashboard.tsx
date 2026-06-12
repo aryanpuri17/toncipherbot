@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useAppStore } from '../../store/appStore';
 import { ArrowUpRight, ArrowDownLeft, ListTodo, ChevronRight, TrendingUp, Flame, Gift, Loader2, Users } from 'lucide-react';
+import { CountUp } from '../ui/CountUp';
+import { haptic } from '../../lib/haptics';
 
 export const MiniAppDashboard: React.FC = () => {
   const { currentUser: u, setMiniAppPage, tasks, completedTaskIds, redeemPromoCode, platformConfig } = useAppStore();
@@ -43,12 +45,14 @@ export const MiniAppDashboard: React.FC = () => {
     const result = redeemPromoCode(promoCode.trim());
     setTimeout(() => {
       setPromoLoading(false);
+      const ok = result.success;
+      if (ok) haptic.success(); else haptic.error();
       setPromoResult(
-        result.success
+        ok
           ? { success: true, message: `+${(result.reward ?? 0).toFixed(2)} TON crédité sur votre compte!` }
           : { success: false, message: result.error ?? 'Erreur inconnue.' }
       );
-      if (result.success) setPromoCode('');
+      if (ok) setPromoCode('');
       setTimeout(() => setPromoResult(null), 4000);
     }, 700);
   };
@@ -90,20 +94,28 @@ export const MiniAppDashboard: React.FC = () => {
       </div>
 
       {/* Balance Card */}
-      <div className="relative overflow-hidden rounded-2xl p-5 bg-gradient-to-br from-blue-600/90 via-purple-600/80 to-pink-500/70 glow-blue">
+      <div className="card-sheen animated-gradient relative overflow-hidden rounded-2xl p-5 bg-gradient-to-br from-blue-600/90 via-purple-600/80 to-pink-500/70 glow-blue">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_50%,rgba(255,255,255,0.1),transparent)]" />
         <div className="relative">
           <p className="text-blue-100 text-sm mb-1">Solde total</p>
-          <p className="text-3xl font-bold text-white mb-1">{u.balanceMain.toFixed(2)} TON</p>
+          <p className="text-3xl font-bold text-white mb-1">
+            <CountUp value={u.balanceMain} decimals={2} animateOnMount suffix=" TON" />
+          </p>
           <div className="flex items-center gap-1 text-emerald-300 text-xs">
             <TrendingUp className="w-3 h-3" />
             <span>+{u.todayEarnings.toFixed(2)} TON aujourd'hui</span>
           </div>
           <div className="flex gap-3 mt-4">
-            <button onClick={() => setMiniAppPage('deposit')} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-white/15 hover:bg-white/25 transition-colors text-white text-sm font-medium backdrop-blur-sm">
+            <button
+              onClick={() => { haptic.impact('light'); setMiniAppPage('deposit'); }}
+              className="tap-scale flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-white/15 hover:bg-white/25 transition-colors text-white text-sm font-medium backdrop-blur-sm"
+            >
               <ArrowDownLeft className="w-4 h-4" /> Déposer
             </button>
-            <button onClick={() => setMiniAppPage('withdraw')} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-white/15 hover:bg-white/25 transition-colors text-white text-sm font-medium backdrop-blur-sm">
+            <button
+              onClick={() => { haptic.impact('light'); setMiniAppPage('withdraw'); }}
+              className="tap-scale flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-white/15 hover:bg-white/25 transition-colors text-white text-sm font-medium backdrop-blur-sm"
+            >
               <ArrowUpRight className="w-4 h-4" /> Retirer
             </button>
           </div>
@@ -166,7 +178,7 @@ export const MiniAppDashboard: React.FC = () => {
       {/* Referral invite banner */}
       <button
         onClick={() => setMiniAppPage('referral')}
-        className="w-full flex items-center gap-3 p-3.5 rounded-2xl bg-gradient-to-r from-purple-600/20 via-blue-600/15 to-purple-600/20 border border-purple-500/25 hover:border-purple-500/40 transition-all"
+        className="tap-scale w-full flex items-center gap-3 p-3.5 rounded-2xl bg-gradient-to-r from-purple-600/20 via-blue-600/15 to-purple-600/20 border border-purple-500/25 hover:border-purple-500/40 transition-all"
       >
         <div className="w-10 h-10 rounded-xl bg-purple-500/25 flex items-center justify-center shrink-0">
           <Users className="w-5 h-5 text-purple-300" />
@@ -188,11 +200,15 @@ export const MiniAppDashboard: React.FC = () => {
       {/* Quick Stats */}
       <div className="grid grid-cols-2 gap-3">
         <div className="glass-card p-4 text-center">
-          <p className="text-2xl font-bold text-white">{u.tasksCompleted}</p>
+          <p className="text-2xl font-bold text-white">
+            <CountUp value={u.tasksCompleted} decimals={0} animateOnMount />
+          </p>
           <p className="text-xs text-slate-400">Tâches complétées</p>
         </div>
         <div className="glass-card p-4 text-center">
-          <p className="text-xl font-bold text-emerald-400">{u.totalEarnings.toFixed(2)} TON</p>
+          <p className="text-xl font-bold text-emerald-400">
+            <CountUp value={u.totalEarnings} decimals={2} animateOnMount suffix=" TON" />
+          </p>
           <p className="text-xs text-slate-400">Total gagné</p>
         </div>
       </div>
@@ -215,13 +231,13 @@ export const MiniAppDashboard: React.FC = () => {
           <button
             onClick={handleRedeemPromo}
             disabled={!promoCode.trim() || promoLoading}
-            className="px-4 py-2.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-400 text-xs font-semibold hover:bg-amber-500/25 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5"
+            className="tap-scale px-4 py-2.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-400 text-xs font-semibold hover:bg-amber-500/25 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5"
           >
             {promoLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Activer'}
           </button>
         </div>
         {promoResult && (
-          <p className={`text-xs font-medium ${promoResult.success ? 'text-emerald-400' : 'text-red-400'}`}>
+          <p className={`animate-pop-in text-xs font-medium ${promoResult.success ? 'text-emerald-400' : 'text-red-400'}`}>
             {promoResult.success ? '✓' : '✗'} {promoResult.message}
           </p>
         )}
