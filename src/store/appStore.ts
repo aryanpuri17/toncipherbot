@@ -469,7 +469,13 @@ export interface LogEntry {
 
 // ===================== MOCK DATA =====================
 
-const _savedBalance: { balanceMain?: number; totalEarnings?: number; todayEarnings?: number; tasksCompleted?: number; taskCredits?: number; loginStreak?: number; lastSyncedReferralBalance?: number } = (() => {
+const _savedBalance: {
+  v?: number;
+  balanceMain?: number; totalEarnings?: number; todayEarnings?: number;
+  tasksCompleted?: number; taskCredits?: number; loginStreak?: number;
+  lastSyncedReferralBalance?: number;
+  completedTaskIds?: string[];
+} = (() => {
   try { return JSON.parse(localStorage.getItem('tc_balance') || '{}'); }
   catch { return {}; }
 })();
@@ -481,8 +487,15 @@ export const hadSavedBalance: boolean = (() => {
   catch { return false; }
 })();
 const _savedCompleted: string[] = (() => {
-  try { return JSON.parse(localStorage.getItem('tc_completed_tasks') || '[]'); }
-  catch { return []; }
+  try {
+    const local = JSON.parse(localStorage.getItem('tc_completed_tasks') || '[]') as string[];
+    // Fall back to the copy embedded in tc_balance if tc_completed_tasks was cleared
+    if (local.length === 0 && Array.isArray(_savedBalance.completedTaskIds) && _savedBalance.completedTaskIds.length > 0) {
+      return _savedBalance.completedTaskIds;
+    }
+    return local;
+  }
+  catch { return _savedBalance.completedTaskIds ?? []; }
 })();
 const _savedBoosters: { multiplier: number; expiresAt: string }[] = (() => {
   try {
@@ -1603,7 +1616,10 @@ function _getTgInitData(): string {
 useAppStore.subscribe((state) => {
   try {
     const u = state.currentUser;
+    // v:1 — schema version for future migrations. completedTaskIds is a
+    // redundant copy: if tc_completed_tasks is cleared, it restores from here.
     localStorage.setItem('tc_balance', JSON.stringify({
+      v:              1,
       balanceMain:    u.balanceMain,
       totalEarnings:  u.totalEarnings,
       todayEarnings:  u.todayEarnings,
@@ -1611,6 +1627,7 @@ useAppStore.subscribe((state) => {
       taskCredits:    u.taskCredits,
       loginStreak:    u.loginStreak,
       lastSyncedReferralBalance: state.lastSyncedReferralBalance,
+      completedTaskIds: state.completedTaskIds.slice(-300),
     }));
     localStorage.setItem('tc_completed_tasks', JSON.stringify(state.completedTaskIds));
     localStorage.setItem('tc_boosters', JSON.stringify(state.activeBoosters));
@@ -1643,3 +1660,36 @@ useAppStore.subscribe((state) => {
     }
   } catch {}
 });
+
+// Flush any pending balance push when the page/WebView is closed.
+// Uses sendBeacon when available (survives page teardown better than fetch).
+try {
+  window.addEventListener('beforeunload', () => {
+    if (!_balancePushTimer) return;
+    clearTimeout(_balancePushTimer);
+    _balancePushTimer = null;
+    const state = useAppStore.getState();
+    const u = state.currentUser;
+    if (u.telegramId === 0) return;
+    const payload = JSON.stringify({
+      telegramId:     u.telegramId,
+      balance:        +u.balanceMain.toFixed(6),
+      totalEarnings:  +u.totalEarnings.toFixed(6),
+      tasksCompleted: u.tasksCompleted,
+      completedTasks: state.completedTaskIds.slice(-300),
+      initData:       _getTgInitData(),
+    });
+    _lastPushedBalance = JSON.stringify({
+      telegramId: u.telegramId,
+      balance: +u.balanceMain.toFixed(6),
+      totalEarnings: +u.totalEarnings.toFixed(6),
+      tasksCompleted: u.tasksCompleted,
+      completedTasks: state.completedTaskIds.slice(-300),
+    });
+    if (navigator.sendBeacon) {
+      navigator.sendBeacon('/api/user/balance', new Blob([payload], { type: 'application/json' }));
+    } else {
+      void fetch('/api/user/balance', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: payload, keepalive: true }).catch(() => {});
+    }
+  });
+} catch { /* SSR / non-browser env */ }
