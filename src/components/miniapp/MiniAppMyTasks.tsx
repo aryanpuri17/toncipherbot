@@ -2,13 +2,13 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useAppStore } from '../../store/appStore';
 import {
   Hash, Users, Bot, TrendingUp, Pause, Play, Trash2, PlusCircle,
-  AlertCircle, CheckCircle, X, Loader2, Clock, RefreshCw,
+  AlertCircle, X, Loader2, Clock, RefreshCw,
 } from 'lucide-react';
 
-const typeConfig: Record<string, { icon: React.ReactNode; color: string; label: string }> = {
-  join_channel: { icon: <Hash className="w-4 h-4" />,  color: 'bg-blue-500/20 text-blue-400',   label: 'Canal' },
-  join_group:   { icon: <Users className="w-4 h-4" />, color: 'bg-purple-500/20 text-purple-400', label: 'Groupe' },
-  start_bot:    { icon: <Bot className="w-4 h-4" />,   color: 'bg-cyan-500/20 text-cyan-400',    label: 'Bot' },
+const typeConfig: Record<string, { icon: React.ReactNode; bg: string; text: string; label: string }> = {
+  join_channel: { icon: <Hash className="w-4 h-4" />,  bg: 'bg-blue-500/20',   text: 'text-blue-400',   label: 'Canal'  },
+  join_group:   { icon: <Users className="w-4 h-4" />, bg: 'bg-purple-500/20', text: 'text-purple-400', label: 'Groupe' },
+  start_bot:    { icon: <Bot className="w-4 h-4" />,   bg: 'bg-cyan-500/20',   text: 'text-cyan-400',   label: 'Bot'    },
 };
 
 interface ApiUserTask {
@@ -28,17 +28,19 @@ interface ApiUserTask {
   approvedAt: string | null;
 }
 
+const statusMap: Record<string, { label: string; dot: string; cls: string }> = {
+  pending_approval: { label: 'En attente',  dot: 'bg-amber-400',   cls: 'text-amber-400 bg-amber-500/10 border-amber-500/25'      },
+  active:           { label: 'Active',      dot: 'bg-emerald-400', cls: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/25' },
+  paused:           { label: 'En pause',    dot: 'bg-amber-400',   cls: 'text-amber-400 bg-amber-500/10 border-amber-500/25'      },
+  rejected:         { label: 'Refusée',     dot: 'bg-red-400',     cls: 'text-red-400 bg-red-500/10 border-red-500/25'            },
+  depleted:         { label: 'Terminée',    dot: 'bg-slate-500',   cls: 'text-slate-400 bg-white/5 border-white/10'               },
+};
+
 const StatusBadge: React.FC<{ status: ApiUserTask['status'] }> = ({ status }) => {
-  const map: Record<string, { label: string; cls: string }> = {
-    pending_approval: { label: 'En attente',  cls: 'text-amber-400 bg-amber-500/10 border-amber-500/20' },
-    active:           { label: '● Active',    cls: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' },
-    paused:           { label: '⏸ En pause',  cls: 'text-amber-400 bg-amber-500/10 border-amber-500/20' },
-    rejected:         { label: '✕ Refusée',   cls: 'text-red-400 bg-red-500/10 border-red-500/20' },
-    depleted:         { label: '✓ Terminée',  cls: 'text-slate-400 bg-white/5 border-white/10' },
-  };
-  const cfg = map[status] ?? map.pending_approval;
+  const cfg = statusMap[status] ?? statusMap.pending_approval;
   return (
-    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-lg border ${cfg.cls}`}>
+    <span className={`inline-flex items-center gap-1.5 text-[10px] font-semibold px-2 py-0.5 rounded-full border ${cfg.cls}`}>
+      <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
       {cfg.label}
     </span>
   );
@@ -167,7 +169,7 @@ export const MiniAppMyTasks: React.FC = () => {
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center py-20 gap-3">
-        <Loader2 className="w-8 h-8 text-slate-500 animate-spin" />
+        <Loader2 className="w-8 h-8 animate-spin" style={{ color: '#0098EA' }} />
         <p className="text-sm text-slate-500">Chargement de vos campagnes…</p>
       </div>
     );
@@ -178,13 +180,23 @@ export const MiniAppMyTasks: React.FC = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <button onClick={() => setMiniAppPage('tasks')} className="p-2 rounded-lg hover:bg-white/5 text-slate-400">←</button>
+          <button
+            onClick={() => setMiniAppPage('tasks')}
+            className="p-2 rounded-lg hover:bg-white/5 text-slate-400 transition-colors"
+          >←</button>
           <div>
             <h1 className="text-xl font-bold text-white">Mes campagnes</h1>
-            <p className="text-sm text-slate-400">{tasks.length} tâche{tasks.length !== 1 ? 's' : ''} créée{tasks.length !== 1 ? 's' : ''}</p>
+            {tasks.length > 0 && (
+              <p className="text-xs font-medium" style={{ color: '#0098EA' }}>
+                {tasks.length} campagne{tasks.length !== 1 ? 's' : ''}
+              </p>
+            )}
           </div>
         </div>
-        <button onClick={() => void fetchTasks()} className="p-2 rounded-lg hover:bg-white/5 text-slate-500">
+        <button
+          onClick={() => void fetchTasks()}
+          className="p-2 rounded-lg hover:bg-white/5 text-slate-500 hover:text-slate-300 transition-colors"
+        >
           <RefreshCw className="w-4 h-4" />
         </button>
       </div>
@@ -198,9 +210,13 @@ export const MiniAppMyTasks: React.FC = () => {
 
       {tasks.length === 0 ? (
         <div className="flex flex-col items-center gap-3 py-16">
-          <TrendingUp className="w-10 h-10 text-slate-600" />
-          <p className="text-sm font-medium text-slate-400">Aucune campagne créée</p>
-          <p className="text-xs text-slate-600 text-center px-6">Créez votre première tâche pour attirer des utilisateurs vers votre canal ou bot.</p>
+          <div className="w-16 h-16 rounded-2xl bg-slate-800/60 flex items-center justify-center">
+            <TrendingUp className="w-7 h-7 text-slate-600" />
+          </div>
+          <p className="text-sm font-semibold text-slate-400">Aucune campagne créée</p>
+          <p className="text-xs text-slate-600 text-center px-6">
+            Créez une tâche pour promouvoir votre canal ou bot Telegram.
+          </p>
           <button
             onClick={() => setMiniAppPage('createTask')}
             className="mt-2 px-5 py-2.5 rounded-xl btn-primary text-sm font-semibold text-white"
@@ -228,19 +244,21 @@ export const MiniAppMyTasks: React.FC = () => {
               >
                 {/* Header row */}
                 <div className="flex items-start gap-3">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${cfg.color}`}>
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${cfg.bg} ${cfg.text}`}>
                     {cfg.icon}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                    <div className="flex items-center gap-2 flex-wrap mb-1">
                       <h3 className="text-sm font-semibold text-white truncate">{task.title}</h3>
-                      <span className="px-1.5 py-0.5 rounded text-[9px] font-medium bg-white/5 text-slate-400 shrink-0">{cfg.label}</span>
+                      <span className={`px-1.5 py-0.5 rounded-md text-[9px] font-semibold ${cfg.bg} ${cfg.text} shrink-0`}>
+                        {cfg.label}
+                      </span>
                     </div>
                     <StatusBadge status={task.status} />
                     {task.status === 'pending_approval' && (
-                      <div className="flex items-center gap-1.5 mt-1">
+                      <div className="flex items-center gap-1.5 mt-1.5">
                         <Clock className="w-3 h-3 text-amber-400" />
-                        <p className="text-[10px] text-amber-400/80">En attente de validation par l'admin</p>
+                        <p className="text-[10px] text-amber-400/80">En attente de validation</p>
                       </div>
                     )}
                     {task.status === 'rejected' && task.adminNote && (
@@ -254,13 +272,15 @@ export const MiniAppMyTasks: React.FC = () => {
 
                 {/* Progress bar */}
                 <div>
-                  <div className="flex justify-between text-[10px] text-slate-500 mb-1">
-                    <span>{task.completions.toLocaleString()} complétions</span>
-                    <span>{task.maxCompletions.toLocaleString()} total</span>
+                  <div className="flex justify-between text-[10px] mb-1.5">
+                    <span className="text-slate-400 font-medium">{task.completions.toLocaleString()} complétions</span>
+                    <span className="text-slate-500">{task.maxCompletions.toLocaleString()} max</span>
                   </div>
-                  <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
+                  <div className="h-2 rounded-full bg-white/[0.06] overflow-hidden">
                     <div
-                      className={`h-full rounded-full transition-all ${isFull ? 'bg-emerald-500' : 'bg-gradient-to-r from-blue-500 to-purple-500'}`}
+                      className={`h-full rounded-full transition-all duration-500 ${
+                        isFull ? 'bg-emerald-500' : 'bg-gradient-to-r from-blue-500 to-cyan-400'
+                      }`}
                       style={{ width: `${progress * 100}%` }}
                     />
                   </div>
@@ -268,21 +288,19 @@ export const MiniAppMyTasks: React.FC = () => {
 
                 {/* Stats */}
                 <div className="grid grid-cols-3 gap-2">
-                  <div className="glass-card-light rounded-lg p-2 text-center">
-                    <p className="text-xs font-bold text-white">{task.completions}</p>
-                    <p className="text-[9px] text-slate-500">Complétions</p>
-                  </div>
-                  <div className="glass-card-light rounded-lg p-2 text-center">
-                    <p className="text-xs font-bold text-orange-400">{task.spent.toFixed(3)}</p>
-                    <p className="text-[9px] text-slate-500">TON dépensé</p>
-                  </div>
-                  <div className="glass-card-light rounded-lg p-2 text-center">
-                    <p className="text-xs font-bold text-slate-300">{remaining.toLocaleString()}</p>
-                    <p className="text-[9px] text-slate-500">Restantes</p>
-                  </div>
+                  {[
+                    { value: task.completions.toLocaleString(), label: 'Complétions', color: 'text-white' },
+                    { value: task.spent.toFixed(3),             label: 'TON dépensé', color: 'text-orange-400' },
+                    { value: remaining.toLocaleString(),         label: 'Restantes',   color: isFull ? 'text-emerald-400' : 'text-slate-300' },
+                  ].map(stat => (
+                    <div key={stat.label} className="glass-card-light rounded-xl p-2 text-center">
+                      <p className={`text-xs font-bold ${stat.color}`}>{stat.value}</p>
+                      <p className="text-[9px] text-slate-500 mt-0.5">{stat.label}</p>
+                    </div>
+                  ))}
                 </div>
 
-                <div className="flex justify-between items-center text-xs">
+                <div className="flex justify-between items-center text-xs px-0.5">
                   <span className="text-slate-500">Budget total</span>
                   <span className="text-amber-400 font-semibold">{task.totalBudget.toFixed(3)} TON</span>
                 </div>
@@ -405,9 +423,12 @@ export const MiniAppMyTasks: React.FC = () => {
 
       <button
         onClick={() => setMiniAppPage('createTask')}
-        className="w-full flex items-center justify-center gap-2 py-3 rounded-xl glass-card-light border border-white/10 text-sm font-medium text-slate-400 hover:text-white hover:bg-white/5 transition-all"
+        className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border text-sm font-semibold transition-all"
+        style={{ borderColor: 'rgba(0,152,234,0.25)', color: '#0098EA', background: 'rgba(0,152,234,0.06)' }}
+        onMouseEnter={e => (e.currentTarget.style.background = 'rgba(0,152,234,0.12)')}
+        onMouseLeave={e => (e.currentTarget.style.background = 'rgba(0,152,234,0.06)')}
       >
-        <CheckCircle className="w-4 h-4" /> Créer une nouvelle tâche
+        <PlusCircle className="w-4 h-4" /> Créer une nouvelle tâche
       </button>
     </div>
   );
