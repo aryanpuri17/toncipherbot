@@ -58,8 +58,8 @@ export const MiniAppWallet: React.FC = () => {
                 <p className={`text-sm font-semibold ${tx.type === 'withdrawal' || tx.type === 'purchase' ? 'text-orange-400' : 'text-emerald-400'}`}>
                   {tx.type === 'withdrawal' || tx.type === 'purchase' ? '-' : '+'}{tx.amount.toFixed(2)} {tx.currency}
                 </p>
-                <p className={`text-[10px] font-medium ${tx.status === 'completed' ? 'text-emerald-400' : tx.status === 'pending' ? 'text-amber-400' : 'text-blue-400'}`}>
-                  {tx.status === 'completed' ? '✓ Complété' : tx.status === 'pending' ? '⏳ En attente' : '🔄 Confirmation'}
+                <p className={`text-[10px] font-medium ${tx.status === 'completed' ? 'text-emerald-400' : tx.status === 'pending' ? 'text-amber-400' : tx.status === 'cancelled' || tx.status === 'failed' ? 'text-red-400' : 'text-blue-400'}`}>
+                  {tx.status === 'completed' ? '✓ Complété' : tx.status === 'pending' ? '⏳ En attente' : tx.status === 'cancelled' ? '✕ Refusé' : tx.status === 'failed' ? '✕ Échoué' : '🔄 Confirmation'}
                 </p>
               </div>
             </div>
@@ -750,10 +750,12 @@ export const MiniAppHistory: React.FC = () => {
                 <p className="text-xs text-slate-500">{new Date(tx.createdAt).toLocaleString('fr-FR')}</p>
               </div>
               <div className="text-right flex-shrink-0">
-                <p className={`text-base font-bold ${isDebit(tx.type) ? 'text-orange-400' : 'text-emerald-400'}`}>
+                <p className={`text-base font-bold ${tx.status === 'cancelled' || tx.status === 'failed' ? 'text-slate-500 line-through' : isDebit(tx.type) ? 'text-orange-400' : 'text-emerald-400'}`}>
                   {isDebit(tx.type) ? '−' : '+'}{tx.amount.toFixed(2)}
                 </p>
-                <p className="text-[10px] text-slate-500">{tx.currency}</p>
+                <p className={`text-[10px] font-medium ${tx.status === 'completed' ? 'text-emerald-400' : tx.status === 'pending' ? 'text-amber-400' : tx.status === 'cancelled' || tx.status === 'failed' ? 'text-red-400' : 'text-slate-500'}`}>
+                  {tx.status === 'completed' ? '✓ Complété' : tx.status === 'pending' ? '⏳ En attente' : tx.status === 'cancelled' ? '✕ Refusé' : tx.status === 'failed' ? '✕ Échoué' : tx.currency}
+                </p>
               </div>
             </div>
             {tx.txHash && (

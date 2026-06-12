@@ -30,6 +30,33 @@ export const AdminConfig: React.FC = () => {
   const currentEvent = platformConfig.promoEvent;
   const isEventLive  = currentEvent?.active && new Date(currentEvent.endsAt) > new Date();
 
+  // Withdrawal notification channel — persisted server-side (the bot posts
+  // withdrawal requests / approvals / rejections there)
+  const [wdChannel,      setWdChannel]      = useState('');
+  const [wdChannelSaved, setWdChannelSaved] = useState<'idle' | 'saving' | 'ok' | 'error'>('idle');
+  React.useEffect(() => {
+    fetch('/api/config')
+      .then(r => r.json())
+      .then((cfg: { withdrawalChannel?: string }) => {
+        if (typeof cfg.withdrawalChannel === 'string') setWdChannel(cfg.withdrawalChannel);
+      })
+      .catch(() => {});
+  }, []);
+  const saveWdChannel = async () => {
+    setWdChannelSaved('saving');
+    try {
+      const res = await adminFetch('/api/admin/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: 'withdrawalChannel', value: wdChannel.trim() }),
+      });
+      setWdChannelSaved(res.ok ? 'ok' : 'error');
+    } catch {
+      setWdChannelSaved('error');
+    }
+    setTimeout(() => setWdChannelSaved('idle'), 2500);
+  };
+
   const handleSave = () => {
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);
@@ -126,6 +153,31 @@ export const AdminConfig: React.FC = () => {
                 <label className="block text-xs text-slate-400 mb-1.5">Canal d'annonces</label>
                 <input type="text" value={platformConfig.announcementChannel} onChange={e => updatePlatformConfig({ announcementChannel: e.target.value })} className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white" />
               </div>
+            </div>
+          </div>
+
+          <div className="glass-card p-5">
+            <h3 className="text-sm font-semibold text-white mb-1">Canal des retraits</h3>
+            <p className="text-xs text-slate-500 mb-4">
+              Le bot y publie chaque demande, approbation et refus de retrait.
+              Format : <span className="font-mono">@MonCanal</span> ou <span className="font-mono">-100xxxxxxxxxx</span>.
+              Le bot doit être <b>administrateur</b> du canal pour pouvoir publier.
+            </p>
+            <div className="flex gap-3">
+              <input
+                type="text"
+                value={wdChannel}
+                onChange={e => setWdChannel(e.target.value)}
+                placeholder="@TonCipher_Pays ou -100xxxxxxxxxx"
+                className="flex-1 px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white font-mono"
+              />
+              <button
+                onClick={() => void saveWdChannel()}
+                disabled={wdChannelSaved === 'saving'}
+                className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${wdChannelSaved === 'ok' ? 'bg-emerald-500/20 text-emerald-400' : wdChannelSaved === 'error' ? 'bg-red-500/20 text-red-400' : 'bg-blue-500/20 text-blue-400 hover:bg-blue-500/30'} disabled:opacity-50`}
+              >
+                {wdChannelSaved === 'saving' ? '…' : wdChannelSaved === 'ok' ? '✓ Enregistré' : wdChannelSaved === 'error' ? 'Erreur — clé admin ?' : 'Enregistrer'}
+              </button>
             </div>
           </div>
         </div>
