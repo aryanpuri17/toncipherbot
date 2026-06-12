@@ -3,6 +3,7 @@ import { useAppStore } from '../../store/appStore';
 import { ArrowLeft, RotateCcw, Trophy, Zap } from 'lucide-react';
 import { haptic } from '../../lib/haptics';
 import { CountUp } from '../ui/CountUp';
+import { ConfettiEffect } from '../ui/ConfettiEffect';
 
 // ══════════════════════════════════════════════════════════════════
 // AUDIO ENGINE (Web Audio API — aucun fichier externe)
@@ -2317,64 +2318,64 @@ type ActiveGame = 'wheel' | 'crash' | 'mines' | 'roulette' | 'plinko' | null;
 
 const CATALOG = [
   {
+    id: 'wheel' as ActiveGame,
+    title: 'Roue de la Fortune',
+    desc: 'Tourne et gagne jusqu\'à ×10',
+    stats: '×10 max · classique',
+    emoji: '🎡',
+    badge: 'POPULAIRE',
+    accentFrom: '#f59e0b', accentTo: '#fbbf24',
+    glow: 'rgba(245,158,11,0.4)',
+    badgeColor: '#f59e0b',
+    pattern: 'wheel',
+  },
+  {
     id: 'crash' as ActiveGame,
     title: 'Crash',
-    desc: 'Tours en direct · Encaissez avant le crash',
-    emoji: '✈️',
-    accent: '#4f6ff0',
-    borderColor: 'rgba(79,111,240,0.25)',
-    bgColor: 'rgba(79,111,240,0.08)',
-    btnGrad: 'linear-gradient(135deg,#4f6ff0,#6366f1)',
-    btnText: '#fff',
-    stats: 'Multijoueur · jusqu\'à ×100',
+    desc: 'Encaisse avant le crash — ou tout perdre',
+    stats: 'jusqu\'à ×100 · multijoueur',
+    emoji: '🚀',
+    badge: 'HOT',
+    accentFrom: '#ef4444', accentTo: '#f97316',
+    glow: 'rgba(239,68,68,0.4)',
+    badgeColor: '#ef4444',
+    pattern: 'crash',
+  },
+  {
+    id: 'mines' as ActiveGame,
+    title: 'Mines',
+    desc: 'Évite les mines, multiplie tes gains',
+    stats: 'multipliers élevés · stratégie',
+    emoji: '💎',
+    badge: 'STRATÉGIE',
+    accentFrom: '#8b5cf6', accentTo: '#a78bfa',
+    glow: 'rgba(139,92,246,0.4)',
+    badgeColor: '#8b5cf6',
+    pattern: 'mines',
+  },
+  {
+    id: 'roulette' as ActiveGame,
+    title: 'Jackpot',
+    desc: '3 symboles alignés = jackpot TON',
+    stats: '×36 numéro plein · ×2.8 douzaine',
+    emoji: '🎰',
+    badge: 'JACKPOT',
+    accentFrom: '#10b981', accentTo: '#34d399',
+    glow: 'rgba(16,185,129,0.4)',
+    badgeColor: '#10b981',
+    pattern: 'roulette',
   },
   {
     id: 'plinko' as ActiveGame,
     title: 'Plinko',
     desc: 'Lâchez la balle · Visez les gros multiplicateurs',
-    emoji: '🎯',
-    accent: '#f59e0b',
-    borderColor: 'rgba(245,158,11,0.25)',
-    bgColor: 'rgba(245,158,11,0.08)',
-    btnGrad: 'linear-gradient(135deg,#f59e0b,#d97706)',
-    btnText: '#451a03',
     stats: '3 niveaux de risque · ×999 max',
-  },
-  {
-    id: 'roulette' as ActiveGame,
-    title: 'Roulette',
-    desc: 'Roulette européenne · Rouge, noir, numéros',
-    emoji: '🎰',
-    accent: '#7c3aed',
-    borderColor: 'rgba(124,58,237,0.25)',
-    bgColor: 'rgba(124,58,237,0.08)',
-    btnGrad: 'linear-gradient(135deg,#7c3aed,#6d28d9)',
-    btnText: '#fff',
-    stats: '×36 numéro plein · ×2.8 douzaine · ×1.9 couleur',
-  },
-  {
-    id: 'mines' as ActiveGame,
-    title: 'Mines',
-    desc: 'Évitez les mines · Encaissez au bon moment',
-    emoji: '💣',
-    accent: '#ef4444',
-    borderColor: 'rgba(239,68,68,0.25)',
-    bgColor: 'rgba(239,68,68,0.08)',
-    btnGrad: 'linear-gradient(135deg,#ef4444,#dc2626)',
-    btnText: '#fff',
-    stats: '~3% avantage · multipliers élevés',
-  },
-  {
-    id: 'wheel' as ActiveGame,
-    title: 'Roue de la Fortune',
-    desc: 'Faites tourner la roue · Gagnez jusqu\'à ×10',
-    emoji: '🎡',
-    accent: '#f59e0b',
-    borderColor: 'rgba(245,158,11,0.2)',
-    bgColor: 'rgba(245,158,11,0.05)',
-    btnGrad: 'linear-gradient(135deg,#d97706,#b45309)',
-    btnText: '#fff',
-    stats: '~10% avantage · classique',
+    emoji: '🎯',
+    badge: 'NOUVEAU',
+    accentFrom: '#fbbf24', accentTo: '#fde68a',
+    glow: 'rgba(251,191,36,0.4)',
+    badgeColor: '#fbbf24',
+    pattern: 'plinko',
   },
 ] as const;
 
@@ -2390,15 +2391,19 @@ export const MiniAppGames: React.FC = () => {
     return 0;
   });
   const [muted, setMuted]           = useState(_soundMuted);
+  const [showConfetti, setShowConfetti] = useState(false);
   const [liveFeed, setLiveFeed]     = useState<FeedEntry[]>(FEED_DATA);
   const [, setTick]                 = useState(0);
   const feedIdxRef                  = useRef(0);
 
-  const handleResult = (won: boolean) => setStreak(s => {
-    const next = won ? s + 1 : 0;
-    try { localStorage.setItem('tc_game_streak', JSON.stringify({ count: next, ts: Date.now() })); } catch {}
-    return next;
-  });
+  const handleResult = (won: boolean) => {
+    if (won) setShowConfetti(true);
+    setStreak(s => {
+      const next = won ? s + 1 : 0;
+      try { localStorage.setItem('tc_game_streak', JSON.stringify({ count: next, ts: Date.now() })); } catch {}
+      return next;
+    });
+  };
   const toggleMute   = () => { _soundMuted = !_soundMuted; localStorage.setItem('tc_sound_muted', _soundMuted ? '1' : '0'); setMuted(_soundMuted); };
 
   const bal = demoMode ? demoBalance : currentUser.balanceMain;
@@ -2441,6 +2446,7 @@ export const MiniAppGames: React.FC = () => {
 
   return (
     <div className="space-y-5 animate-slide-up pb-4">
+      {showConfetti && <ConfettiEffect onComplete={() => setShowConfetti(false)} />}
       <div className="flex items-center justify-between">
         <div>
           <div className="flex items-center gap-2">
@@ -2490,42 +2496,73 @@ export const MiniAppGames: React.FC = () => {
         </button>
       </div>
 
-      {/* Game catalog */}
-      <div className="space-y-3">
-        {CATALOG.map((game, i) => (
-          <div key={i} style={{ background: '#0d1021', border: `1px solid ${game.borderColor}`, borderRadius: 16, overflow: 'hidden' }}>
-            <div style={{ background: game.bgColor, padding: '16px' }} className="flex items-center gap-4">
-              <div style={{
-                width: 56, height: 56, borderRadius: 14, flexShrink: 0,
-                background: `rgba(0,0,0,0.3)`, border: `1px solid ${game.borderColor}`,
-                display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26,
-              }}>
-                {game.emoji}
-              </div>
-              <div className="flex-1 min-w-0">
-                <h3 style={{ fontSize: 15, fontWeight: 800, color: '#f8fafc', marginBottom: 2 }}>{game.title}</h3>
-                <p style={{ fontSize: 12, color: '#94a3b8', lineHeight: 1.4 }}>{game.desc}</p>
-                <p style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>{game.stats}</p>
-              </div>
-              <button onClick={() => { haptic.impact('light'); setActiveGame(game.id); }}
-                style={{
-                  flexShrink: 0, padding: '10px 18px',
-                  fontWeight: 800, fontSize: 13, borderRadius: 12,
-                  background: game.btnGrad, color: game.btnText,
-                  boxShadow: `0 4px 14px ${game.accent}40`,
-                  cursor: 'pointer', transition: 'opacity 0.15s, transform 0.1s',
-                }}
-                onMouseEnter={e => (e.currentTarget as HTMLButtonElement).style.opacity = '0.9'}
-                onMouseLeave={e => (e.currentTarget as HTMLButtonElement).style.opacity = '1'}
-                onMouseDown={e => (e.currentTarget as HTMLButtonElement).style.transform = 'scale(0.96)'}
-                onMouseUp={e => (e.currentTarget as HTMLButtonElement).style.transform = 'scale(1)'}
+      {/* Game catalog — 2×2 grid for first 4, full-width for 5th */}
+      <div className="grid grid-cols-2 gap-3">
+        {CATALOG.slice(0, 4).map((game) => (
+          <button
+            key={game.id}
+            data-game={game.id}
+            onClick={() => { haptic.impact('light'); setActiveGame(game.id); }}
+            className="game-card-hub relative overflow-hidden rounded-2xl text-left"
+            style={{
+              background: `linear-gradient(135deg,${game.accentFrom}22,${game.accentTo}11)`,
+              border: `1px solid ${game.accentFrom}44`,
+            }}
+          >
+            {/* Badge */}
+            <span className="absolute top-2 right-2 text-[9px] font-bold px-1.5 py-0.5 rounded-full"
+              style={{ background: `${game.badgeColor}33`, color: game.badgeColor, border: `1px solid ${game.badgeColor}55` }}>
+              {game.badge}
+            </span>
+            {/* BG pattern */}
+            <div className={`game-bg-${game.pattern} absolute inset-0 opacity-10 pointer-events-none`} aria-hidden="true" />
+            {/* Content */}
+            <div className="relative z-10 p-3.5">
+              <div
+                className="game-icon-wrap w-11 h-11 rounded-xl flex items-center justify-center mb-2.5"
+                style={{ background: `linear-gradient(135deg,${game.accentFrom}33,${game.accentTo}22)`, boxShadow: `0 4px 12px ${game.glow}` }}
               >
-                Jouer
-              </button>
+                <span className="text-2xl">{game.emoji}</span>
+              </div>
+              <p className="text-white font-bold text-sm leading-tight">{game.title}</p>
+              <p className="text-slate-400 text-[11px] mt-0.5 leading-tight">{game.desc}</p>
+              <div className="mt-2.5 h-0.5 rounded-full w-2/3" style={{ background: `linear-gradient(90deg,${game.accentFrom},transparent)` }} />
             </div>
-          </div>
+          </button>
         ))}
       </div>
+      {/* Plinko — full width */}
+      {CATALOG.slice(4).map((game) => (
+        <button
+          key={game.id}
+          data-game={game.id}
+          onClick={() => { haptic.impact('light'); setActiveGame(game.id); }}
+          className="game-card-hub relative overflow-hidden rounded-2xl text-left w-full"
+          style={{
+            background: `linear-gradient(135deg,${game.accentFrom}22,${game.accentTo}11)`,
+            border: `1px solid ${game.accentFrom}44`,
+          }}
+        >
+          <span className="absolute top-3 right-3 text-[9px] font-bold px-1.5 py-0.5 rounded-full"
+            style={{ background: `${game.badgeColor}33`, color: game.badgeColor, border: `1px solid ${game.badgeColor}55` }}>
+            {game.badge}
+          </span>
+          <div className={`game-bg-${game.pattern} absolute inset-0 opacity-10 pointer-events-none`} aria-hidden="true" />
+          <div className="relative z-10 p-4 flex items-center gap-4">
+            <div
+              className="game-icon-wrap w-12 h-12 rounded-xl flex items-center justify-center shrink-0"
+              style={{ background: `linear-gradient(135deg,${game.accentFrom}33,${game.accentTo}22)`, boxShadow: `0 4px 12px ${game.glow}` }}
+            >
+              <span className="text-2xl">{game.emoji}</span>
+            </div>
+            <div>
+              <p className="text-white font-bold text-sm">{game.title}</p>
+              <p className="text-slate-400 text-xs mt-0.5">{game.desc}</p>
+              <p className="text-slate-600 text-[10px] mt-0.5">{game.stats}</p>
+            </div>
+          </div>
+        </button>
+      ))}
 
       {/* Mes résultats */}
       {gameHistory.length > 0 && (() => {
