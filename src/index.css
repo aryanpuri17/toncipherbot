@@ -367,3 +367,13 @@ body {
   transform: translateY(-1px);
   box-shadow: 0 4px 20px rgba(0,0,0,0.3);
 }
+
+/* ── TASKS ───────────────────────────────────────────────────────────── */
+.glass-card.border-emerald-500\/20 {
+  transition: background 0.4s ease, border-color 0.4s ease;
+}
+.glass-card:not(.border-emerald-500\/20):hover .text-emerald-400,
+.glass-card:not(.border-emerald-500\/20):hover .text-amber-400 {
+  filter: brightness(1.15);
+  transition: filter 0.2s ease;
+}

@@ -70,12 +70,12 @@ const typeConfig: Record<string, { icon: React.ReactNode; color: string; label: 
   special:      { icon: <Star className="w-4 h-4" />,     color: 'bg-pink-500/20 text-pink-400',     label: 'Spécial' },
 };
 
-const SECTIONS: { type: string; label: string; icon: string; creatable: boolean; groupBefore?: string }[] = [
-  { type: 'daily',        label: 'Tâches quotidiennes', icon: '📅', creatable: false },
-  { type: 'special',      label: 'Tâches spéciales',    icon: '⭐', creatable: false },
-  { type: 'join_channel', label: 'Canaux',               icon: '📢', creatable: true,  groupBefore: 'Communautés Telegram' },
-  { type: 'join_group',   label: 'Groupes',              icon: '👥', creatable: true  },
-  { type: 'start_bot',    label: 'Bots & Mini Apps',     icon: '🤖', creatable: true,  groupBefore: 'Applications' },
+const SECTIONS: { type: string; label: string; icon: string; creatable: boolean; groupBefore?: string; color: string }[] = [
+  { type: 'daily',        label: 'Tâches quotidiennes', icon: '📅', creatable: false, color: 'text-amber-400'   },
+  { type: 'special',      label: 'Tâches spéciales',    icon: '⭐', creatable: false, color: 'text-pink-400'    },
+  { type: 'join_channel', label: 'Canaux',               icon: '📢', creatable: true,  color: 'text-blue-400',   groupBefore: 'Communautés Telegram' },
+  { type: 'join_group',   label: 'Groupes',              icon: '👥', creatable: true,  color: 'text-purple-400' },
+  { type: 'start_bot',    label: 'Bots & Mini Apps',     icon: '🤖', creatable: true,  color: 'text-cyan-400',   groupBefore: 'Applications' },
 ];
 
 type TaskPhase = 'idle' | 'too_early' | 'ready' | 'verifying' | 'not_subscribed' | 'completing' | 'done';
@@ -419,7 +419,7 @@ export const MiniAppTasks: React.FC = () => {
     return (
       <div
         key={card.id}
-        className={`glass-card p-4 transition-all space-y-3 ${isDone ? 'opacity-50' : ''} ${card.promoMultiplier ? 'border border-amber-500/30' : ''}`}
+        className={`glass-card p-4 transition-all space-y-3 ${isDone ? 'border border-emerald-500/20 bg-emerald-500/[0.03]' : card.promoMultiplier ? 'border border-amber-500/30' : ''}`}
       >
         <div className="flex items-start gap-3">
           {/* Avatar */}
@@ -567,12 +567,22 @@ export const MiniAppTasks: React.FC = () => {
             {totalAvailable} tâche{totalAvailable !== 1 ? 's' : ''} disponible{totalAvailable !== 1 ? 's' : ''}
           </p>
         </div>
-        <button
-          onClick={() => setMiniAppPage('myTasks')}
-          className="px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-xs font-medium text-slate-400 hover:text-white transition-colors"
-        >
-          Mes campagnes
-        </button>
+        <div className="flex items-center gap-2">
+          {currentUser.todayEarnings > 0 && (
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="text-xs font-bold text-emerald-400">
+                +{currentUser.todayEarnings.toFixed(2)} TON
+              </span>
+            </div>
+          )}
+          <button
+            onClick={() => setMiniAppPage('myTasks')}
+            className="px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-xs font-medium text-slate-400 hover:text-white transition-colors"
+          >
+            Mes campagnes
+          </button>
+        </div>
       </div>
 
       {/* Sections */}
@@ -591,8 +601,9 @@ export const MiniAppTasks: React.FC = () => {
             )}
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-bold text-white flex items-center gap-2">
-                <span>{section.icon}</span>
+                <span className={section.color}>{section.icon}</span>
                 {section.label}
+                <span className="text-[10px] font-normal text-slate-500 ml-1">{cards.length}</span>
               </h2>
               {section.creatable && (
                 <button
@@ -606,15 +617,25 @@ export const MiniAppTasks: React.FC = () => {
             </div>
 
             {cards.length === 0 ? (
-              <div className="glass-card p-5 flex flex-col items-center gap-2 text-center">
-                <AlertCircle className="w-6 h-6 text-slate-600" />
-                <p className="text-xs text-slate-500">Aucune tâche</p>
-                <button
-                  onClick={() => setMiniAppPage('createTask')}
-                  className="text-xs text-blue-400 hover:underline"
-                >
-                  Créer une tâche →
-                </button>
+              <div className="p-4 rounded-2xl border border-dashed border-white/8 flex items-center gap-3">
+                <span className={`text-xl ${section.color}`}>{section.icon}</span>
+                <div>
+                  <p className="text-xs font-medium text-slate-400">
+                    {section.type === 'daily'
+                      ? 'Tâches quotidiennes épuisées'
+                      : section.type === 'special'
+                      ? 'Aucune tâche spéciale active'
+                      : 'Aucune tâche dans cette catégorie'}
+                  </p>
+                  {section.creatable && (
+                    <button
+                      onClick={() => setMiniAppPage('createTask')}
+                      className="text-[11px] text-blue-400 hover:underline mt-0.5"
+                    >
+                      Créer une tâche →
+                    </button>
+                  )}
+                </div>
               </div>
             ) : (
               <div className="space-y-3">
