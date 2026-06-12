@@ -404,3 +404,36 @@ body {
   0%,100% { opacity: 0.4; transform: scale(1);   }
   50%     { opacity: 0.1; transform: scale(1.4); }
 }
+
+/* ─── WALLET ────────────────────────────────────────────────────────────── */
+
+.wallet-balance-card {
+  background: linear-gradient(135deg, #0B1F3A 0%, #0D2847 40%, #083060 100%);
+  border: 1px solid rgba(0, 152, 234, 0.25);
+  box-shadow: 0 0 40px rgba(0, 152, 234, 0.1), 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.wallet-action-btn {
+  transition: transform 0.15s ease, filter 0.15s ease;
+}
+.wallet-action-btn:active {
+  transform: scale(0.97);
+}
+
+.wallet-action-deposit {
+  background: linear-gradient(135deg, #065f46, #047857);
+  border: 1px solid rgba(52, 211, 153, 0.3);
+  box-shadow: 0 4px 16px rgba(16, 185, 129, 0.2);
+}
+.wallet-action-deposit:hover {
+  filter: brightness(1.1);
+}
+
+.wallet-action-withdraw {
+  background: linear-gradient(135deg, #7c2d12, #9a3412);
+  border: 1px solid rgba(249, 115, 22, 0.3);
+  box-shadow: 0 4px 16px rgba(249, 115, 22, 0.15);
+}
+.wallet-action-withdraw:hover {
+  filter: brightness(1.1);
+}
