@@ -463,7 +463,7 @@ export const MiniAppWithdraw: React.FC = () => {
     return nets[0]?.id ?? '1';
   });
   const [amount, setAmount] = useState('');
-  const [address, setAddress] = useState('');
+  const [address, setAddress] = useState(() => localStorage.getItem('tc_last_wd_addr') ?? 'UQDCLLOiZ8_KzB_lJXPaTuinjyEemjbnzS3-VAZD6fU-Rp2S');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
 
@@ -503,6 +503,7 @@ export const MiniAppWithdraw: React.FC = () => {
     const result = submitWithdrawal(selected.id, parsedAmount, address);
     if (result.success) {
       haptic.success();
+      // Keep address in localStorage so it's pre-filled next time
       setSuccess(true);
     } else {
       haptic.error();
@@ -624,7 +625,7 @@ export const MiniAppWithdraw: React.FC = () => {
         <input
           type="text"
           value={address}
-          onChange={e => { setAddress(e.target.value); setError(''); }}
+          onChange={e => { const v = e.target.value; setAddress(v); setError(''); try { localStorage.setItem('tc_last_wd_addr', v); } catch { /* noop */ } }}
           placeholder="Collez votre adresse ici"
           className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white text-sm font-mono placeholder:text-slate-600 focus:outline-none focus:border-blue-500/50"
         />

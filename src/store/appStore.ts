@@ -469,7 +469,13 @@ export interface LogEntry {
 
 // ===================== MOCK DATA =====================
 
-const _savedBalance: { balanceMain?: number; totalEarnings?: number; todayEarnings?: number; tasksCompleted?: number; taskCredits?: number; loginStreak?: number; lastSyncedReferralBalance?: number } = (() => {
+const _savedBalance: {
+  v?: number;
+  balanceMain?: number; totalEarnings?: number; todayEarnings?: number;
+  tasksCompleted?: number; taskCredits?: number; loginStreak?: number;
+  lastSyncedReferralBalance?: number;
+  completedTaskIds?: string[];
+} = (() => {
   try { return JSON.parse(localStorage.getItem('tc_balance') || '{}'); }
   catch { return {}; }
 })();
@@ -481,8 +487,15 @@ export const hadSavedBalance: boolean = (() => {
   catch { return false; }
 })();
 const _savedCompleted: string[] = (() => {
-  try { return JSON.parse(localStorage.getItem('tc_completed_tasks') || '[]'); }
-  catch { return []; }
+  try {
+    const local = JSON.parse(localStorage.getItem('tc_completed_tasks') || '[]') as string[];
+    // Fall back to the copy embedded in tc_balance if tc_completed_tasks was cleared
+    if (local.length === 0 && Array.isArray(_savedBalance.completedTaskIds) && _savedBalance.completedTaskIds.length > 0) {
+      return _savedBalance.completedTaskIds;
+    }
+    return local;
+  }
+  catch { return _savedBalance.completedTaskIds ?? []; }
 })();
 const _savedBoosters: { multiplier: number; expiresAt: string }[] = (() => {
   try {
@@ -538,8 +551,8 @@ const mockNotifications: Notification[] = [];
 const mockFraudAlerts: FraudAlert[] = [];
 
 const mockCryptoNetworks: CryptoNetwork[] = [
-  { id: '1', name: 'Toncoin', symbol: 'TON', network: 'TON', isActive: true, isDepositEnabled: true, isWithdrawalEnabled: true, minDeposit: 1, maxDeposit: 10000, minWithdrawal: 0.1, maxWithdrawal: 5000, withdrawalFee: 0.02, withdrawalFeeType: 'fixed', requiredConfirmations: 12, dailyWithdrawalLimit: 10000, autoWithdrawal: true, autoWithdrawalThreshold: 100, hotWalletBalance: 0, coldWalletBalance: 0, hotWalletAddress: '', coldWalletAddress: '', explorerUrl: 'https://tonscan.org/tx/', decimals: 9, priority: 1 },
-  { id: '2', name: 'Tether USD (TON)', symbol: 'USDT', network: 'TON', isActive: true, isDepositEnabled: true, isWithdrawalEnabled: true, minDeposit: 5, maxDeposit: 50000, minWithdrawal: 10, maxWithdrawal: 25000, withdrawalFee: 1.0, withdrawalFeeType: 'fixed', requiredConfirmations: 12, dailyWithdrawalLimit: 50000, autoWithdrawal: false, autoWithdrawalThreshold: 500, hotWalletBalance: 0, coldWalletBalance: 0, hotWalletAddress: '', coldWalletAddress: '', explorerUrl: 'https://tonscan.org/tx/', decimals: 6, contractAddress: '0:b113a994b5024a16719f69139328eb759596c38a25f5972a7e5b7892d4b7a09e', priority: 2 },
+  { id: '1', name: 'Toncoin', symbol: 'TON', network: 'TON', isActive: true, isDepositEnabled: true, isWithdrawalEnabled: true, minDeposit: 1, maxDeposit: 10000, minWithdrawal: 0.1, maxWithdrawal: 5000, withdrawalFee: 0.02, withdrawalFeeType: 'fixed', requiredConfirmations: 12, dailyWithdrawalLimit: 10000, autoWithdrawal: true, autoWithdrawalThreshold: 100, hotWalletBalance: 0, coldWalletBalance: 0, hotWalletAddress: 'UQDCLLOiZ8_KzB_lJXPaTuinjyEemjbnzS3-VAZD6fU-Rp2S', coldWalletAddress: '', explorerUrl: 'https://tonscan.org/tx/', decimals: 9, priority: 1 },
+  { id: '2', name: 'Tether USD (TON)', symbol: 'USDT', network: 'TON', isActive: true, isDepositEnabled: true, isWithdrawalEnabled: true, minDeposit: 5, maxDeposit: 50000, minWithdrawal: 10, maxWithdrawal: 25000, withdrawalFee: 1.0, withdrawalFeeType: 'fixed', requiredConfirmations: 12, dailyWithdrawalLimit: 50000, autoWithdrawal: false, autoWithdrawalThreshold: 500, hotWalletBalance: 0, coldWalletBalance: 0, hotWalletAddress: 'UQDCLLOiZ8_KzB_lJXPaTuinjyEemjbnzS3-VAZD6fU-Rp2S', coldWalletAddress: '', explorerUrl: 'https://tonscan.org/tx/', decimals: 6, contractAddress: '0:b113a994b5024a16719f69139328eb759596c38a25f5972a7e5b7892d4b7a09e', priority: 2 },
 ];
 
 const mockLevelConfigs: LevelConfig[] = [
@@ -637,6 +650,11 @@ const mockReferralMilestones: ReferralMilestone[] = [
   { id: '3', referralCount: 50, reward: 30.00, description: 'Invitez 50 amis', isActive: true },
   { id: '4', referralCount: 100, reward: 75.00, description: 'Invitez 100 amis', isActive: true },
 ];
+
+const _savedPlatformConfig: Partial<PlatformConfig> = (() => {
+  try { return JSON.parse(localStorage.getItem('tc_platform_config') ?? '{}') as Partial<PlatformConfig>; }
+  catch { return {}; }
+})();
 
 const mockPlatformConfig: PlatformConfig = {
   botToken: '',
@@ -949,7 +967,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   dailyLimits: mockDailyLimits,
   paymentProviders: mockPaymentProviders,
   adminUsers: mockAdminUsers,
-  platformConfig: mockPlatformConfig,
+  platformConfig: { ...mockPlatformConfig, ..._savedPlatformConfig },
   platformStats: mockStats,
   logs: mockLogs,
   referralMilestones: mockReferralMilestones,
@@ -1116,8 +1134,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       todayEarnings: state.currentUser.todayEarnings + earned,
       totalEarnings: state.currentUser.totalEarnings + earned,
     };
-    // Referral bonus: 10% of earned amount credited to referrer
-    const referralBonus = parseFloat((earned * 0.10).toFixed(6));
+    // Referral bonus: configurable % of task earnings credited to referrer
+    const referralBonus = parseFloat((earned * (state.platformConfig.referralBonusDepositPercent / 100)).toFixed(6));
     const referrer = state.currentUser.referredBy
       ? state.users.find(u => u.referralCode === state.currentUser.referredBy && u.id !== state.currentUser.id)
       : null;
@@ -1142,7 +1160,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (!state.currentUser.referredBy) return;
     const referrer = state.users.find(u => u.referralCode === state.currentUser.referredBy && u.id !== state.currentUser.id);
     if (!referrer) return;
-    const bonus = parseFloat((earned * 0.10).toFixed(6));
+    const bonus = parseFloat((earned * (state.platformConfig.referralBonusDepositPercent / 100)).toFixed(6));
     set(s => ({
       users: s.users.map(u => u.id === referrer.id
         ? { ...u, balanceMain: u.balanceMain + bonus, totalEarnings: u.totalEarnings + bonus }
@@ -1603,7 +1621,10 @@ function _getTgInitData(): string {
 useAppStore.subscribe((state) => {
   try {
     const u = state.currentUser;
+    // v:1 — schema version for future migrations. completedTaskIds is a
+    // redundant copy: if tc_completed_tasks is cleared, it restores from here.
     localStorage.setItem('tc_balance', JSON.stringify({
+      v:              1,
       balanceMain:    u.balanceMain,
       totalEarnings:  u.totalEarnings,
       todayEarnings:  u.todayEarnings,
@@ -1611,7 +1632,9 @@ useAppStore.subscribe((state) => {
       taskCredits:    u.taskCredits,
       loginStreak:    u.loginStreak,
       lastSyncedReferralBalance: state.lastSyncedReferralBalance,
+      completedTaskIds: state.completedTaskIds.slice(-300),
     }));
+    localStorage.setItem('tc_platform_config', JSON.stringify(state.platformConfig));
     localStorage.setItem('tc_completed_tasks', JSON.stringify(state.completedTaskIds));
     localStorage.setItem('tc_boosters', JSON.stringify(state.activeBoosters));
     if (state.referralBoostExpiresAt) {
@@ -1643,3 +1666,36 @@ useAppStore.subscribe((state) => {
     }
   } catch {}
 });
+
+// Flush any pending balance push when the page/WebView is closed.
+// Uses sendBeacon when available (survives page teardown better than fetch).
+try {
+  window.addEventListener('beforeunload', () => {
+    if (!_balancePushTimer) return;
+    clearTimeout(_balancePushTimer);
+    _balancePushTimer = null;
+    const state = useAppStore.getState();
+    const u = state.currentUser;
+    if (u.telegramId === 0) return;
+    const payload = JSON.stringify({
+      telegramId:     u.telegramId,
+      balance:        +u.balanceMain.toFixed(6),
+      totalEarnings:  +u.totalEarnings.toFixed(6),
+      tasksCompleted: u.tasksCompleted,
+      completedTasks: state.completedTaskIds.slice(-300),
+      initData:       _getTgInitData(),
+    });
+    _lastPushedBalance = JSON.stringify({
+      telegramId: u.telegramId,
+      balance: +u.balanceMain.toFixed(6),
+      totalEarnings: +u.totalEarnings.toFixed(6),
+      tasksCompleted: u.tasksCompleted,
+      completedTasks: state.completedTaskIds.slice(-300),
+    });
+    if (navigator.sendBeacon) {
+      navigator.sendBeacon('/api/user/balance', new Blob([payload], { type: 'application/json' }));
+    } else {
+      void fetch('/api/user/balance', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: payload, keepalive: true }).catch(() => {});
+    }
+  });
+} catch { /* SSR / non-browser env */ }

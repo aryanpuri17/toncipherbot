@@ -26,7 +26,7 @@ function readProcessed(): Set<string> {
 }
 
 function writeProcessed(ids: Set<string>): void {
-  try { localStorage.setItem(PROCESSED_KEY, JSON.stringify(Array.from(ids).slice(-200))); }
+  try { localStorage.setItem(PROCESSED_KEY, JSON.stringify(Array.from(ids).slice(-500))); }
   catch { /* noop */ }
 }
 
