@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useAppStore } from '../../store/appStore';
 import { useTonConnectUI, useTonWallet } from '@tonconnect/ui-react';
 import { ArrowDownLeft, ArrowUpRight, TrendingUp, Copy, CheckCircle, ChevronRight, AlertCircle, Wallet, Unlink } from 'lucide-react';
+import { haptic } from '../../lib/haptics';
 
 export const MiniAppWallet: React.FC = () => {
   const { currentUser: u, transactions, setMiniAppPage } = useAppStore();
@@ -58,8 +59,8 @@ export const MiniAppWallet: React.FC = () => {
                 <p className={`text-sm font-semibold ${tx.type === 'withdrawal' || tx.type === 'purchase' ? 'text-orange-400' : 'text-emerald-400'}`}>
                   {tx.type === 'withdrawal' || tx.type === 'purchase' ? '-' : '+'}{tx.amount.toFixed(2)} {tx.currency}
                 </p>
-                <p className={`text-[10px] font-medium ${tx.status === 'completed' ? 'text-emerald-400' : tx.status === 'pending' ? 'text-amber-400' : 'text-blue-400'}`}>
-                  {tx.status === 'completed' ? '✓ Complété' : tx.status === 'pending' ? '⏳ En attente' : '🔄 Confirmation'}
+                <p key={tx.status} className={`animate-pop-in text-[10px] font-medium ${tx.status === 'completed' ? 'text-emerald-400' : tx.status === 'pending' ? 'text-amber-400' : tx.status === 'cancelled' || tx.status === 'failed' ? 'text-red-400' : 'text-blue-400'}`}>
+                  {tx.status === 'completed' ? '✓ Complété' : tx.status === 'pending' ? '⏳ En attente' : tx.status === 'cancelled' ? '✕ Refusé' : tx.status === 'failed' ? '✕ Échoué' : '🔄 Confirmation'}
                 </p>
               </div>
             </div>
@@ -121,6 +122,7 @@ export const MiniAppDeposit: React.FC = () => {
   const handleCopy = () => {
     if (!hasAddress) return;
     navigator.clipboard.writeText(address).catch(() => {});
+    haptic.impact('light');
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -500,8 +502,10 @@ export const MiniAppWithdraw: React.FC = () => {
     if (!selected) return;
     const result = submitWithdrawal(selected.id, parsedAmount, address);
     if (result.success) {
+      haptic.success();
       setSuccess(true);
     } else {
+      haptic.error();
       setError(result.error ?? 'Erreur inconnue');
     }
   };
@@ -750,10 +754,12 @@ export const MiniAppHistory: React.FC = () => {
                 <p className="text-xs text-slate-500">{new Date(tx.createdAt).toLocaleString('fr-FR')}</p>
               </div>
               <div className="text-right flex-shrink-0">
-                <p className={`text-base font-bold ${isDebit(tx.type) ? 'text-orange-400' : 'text-emerald-400'}`}>
+                <p className={`text-base font-bold ${tx.status === 'cancelled' || tx.status === 'failed' ? 'text-slate-500 line-through' : isDebit(tx.type) ? 'text-orange-400' : 'text-emerald-400'}`}>
                   {isDebit(tx.type) ? '−' : '+'}{tx.amount.toFixed(2)}
                 </p>
-                <p className="text-[10px] text-slate-500">{tx.currency}</p>
+                <p className={`text-[10px] font-medium ${tx.status === 'completed' ? 'text-emerald-400' : tx.status === 'pending' ? 'text-amber-400' : tx.status === 'cancelled' || tx.status === 'failed' ? 'text-red-400' : 'text-slate-500'}`}>
+                  {tx.status === 'completed' ? '✓ Complété' : tx.status === 'pending' ? '⏳ En attente' : tx.status === 'cancelled' ? '✕ Refusé' : tx.status === 'failed' ? '✕ Échoué' : tx.currency}
+                </p>
               </div>
             </div>
             {tx.txHash && (

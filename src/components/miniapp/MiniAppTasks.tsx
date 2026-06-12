@@ -4,6 +4,33 @@ import {
   Hash, Users, Bot, Calendar, Star, CheckCircle, ExternalLink, Plus,
   AlertCircle, Flame, Loader2, ShieldCheck, Clock, FileText, Send, X, RotateCcw,
 } from 'lucide-react';
+import { haptic } from '../../lib/haptics';
+
+const TaskDoneCheck: React.FC = () => (
+  <div className="relative w-9 h-9 flex items-center justify-center flex-shrink-0">
+    {/* Ring pulse */}
+    <svg className="absolute inset-0 w-full h-full" viewBox="0 0 36 36">
+      <circle
+        cx="18" cy="18" r="16" fill="none" stroke="rgba(52,211,153,0.5)" strokeWidth="2"
+        style={{ animation: 'ringPulse 0.6s ease-out forwards' }}
+      />
+    </svg>
+    {/* Circle + check */}
+    <svg className="w-9 h-9" viewBox="0 0 36 36">
+      <circle
+        cx="18" cy="18" r="15" fill="none" stroke="#34d399" strokeWidth="2"
+        strokeDasharray="95" strokeDashoffset="95"
+        style={{ animation: 'checkDraw 0.35s ease-out forwards' }}
+      />
+      <polyline
+        points="11,18 16,23 25,13" fill="none" stroke="#34d399" strokeWidth="2.5"
+        strokeLinecap="round" strokeLinejoin="round"
+        strokeDasharray="22" strokeDashoffset="22"
+        style={{ animation: 'checkDraw 0.3s 0.4s ease-out forwards' }}
+      />
+    </svg>
+  </div>
+);
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -260,10 +287,12 @@ export const MiniAppTasks: React.FC = () => {
     if (card.source === 'platform' && completedTaskIds.includes(card.id)) return;
     if (card.source === 'api'      && completedApiTaskIds.includes(card.id)) return;
 
+    haptic.impact('light');
+
     if (card.isInstant) {
       setPhase(card.id, 'completing');
       completeTask(card.id);
-      timerRefs.current[card.id] = setTimeout(() => setPhase(card.id, 'done'), 1200);
+      timerRefs.current[card.id] = setTimeout(() => { setPhase(card.id, 'done'); haptic.success(); }, 1200);
       return;
     }
 
@@ -280,6 +309,7 @@ export const MiniAppTasks: React.FC = () => {
   };
 
   const handleVerify = async (card: CardTask) => {
+    haptic.impact('light');
     setPhase(card.id, 'verifying');
     const telegramId = useAppStore.getState().currentUser.telegramId;
 
@@ -290,11 +320,11 @@ export const MiniAppTasks: React.FC = () => {
       setPhase(card.id, 'completing');
       if (card.source === 'api') {
         const ok = await creditApiTask(card.id, card.reward);
-        if (!ok) return; // phase already set to 'idle' or 'not_subscribed' inside creditApiTask
+        if (!ok) return;
       } else {
         completeTask(card.id);
       }
-      timerRefs.current[card.id] = setTimeout(() => setPhase(card.id, 'done'), 1500);
+      timerRefs.current[card.id] = setTimeout(() => { setPhase(card.id, 'done'); haptic.success(); }, 1500);
     };
 
     try {
@@ -302,7 +332,7 @@ export const MiniAppTasks: React.FC = () => {
         const res  = await fetch(`/api/check-bot-start?telegram_id=${telegramId}`);
         const data = await res.json() as { started: boolean };
         if (data.started) await succeed();
-        else setPhase(card.id, 'not_subscribed');
+        else { setPhase(card.id, 'not_subscribed'); haptic.error(); }
       } else {
         let chatId = '';
         if (card.targetUrl) {
@@ -314,11 +344,9 @@ export const MiniAppTasks: React.FC = () => {
         const res  = await fetch(`/api/check-membership?telegram_id=${telegramId}&chat_id=${encodeURIComponent(chatId)}`);
         const data = await res.json() as { member: boolean };
         if (data.member) await succeed();
-        else setPhase(card.id, 'not_subscribed');
+        else { setPhase(card.id, 'not_subscribed'); haptic.error(); }
       }
     } catch {
-      // Network error: be generous for platform tasks (API check unreachable),
-      // but for API tasks keep the verify button visible so user can retry
       if (card.source === 'platform') {
         await succeed();
       } else {
@@ -434,7 +462,9 @@ export const MiniAppTasks: React.FC = () => {
 
           {/* Top-right action */}
           <div className="flex-shrink-0">
-            {isDone ? (
+            {phase === 'done' ? (
+              <TaskDoneCheck />
+            ) : isCompleted ? (
               <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400">
                 <CheckCircle className="w-5 h-5" />
               </div>
@@ -453,7 +483,7 @@ export const MiniAppTasks: React.FC = () => {
             ) : phase === 'ready' || phase === 'not_subscribed' ? null : (
               <button
                 onClick={() => handleStart(card)}
-                className="px-4 py-2 rounded-xl btn-primary text-xs font-semibold text-white flex items-center gap-1.5"
+                className="tap-scale px-4 py-2 rounded-xl btn-primary text-xs font-semibold text-white flex items-center gap-1.5"
               >
                 {actionLabel} <ExternalLink className="w-3 h-3" />
               </button>
@@ -512,7 +542,7 @@ export const MiniAppTasks: React.FC = () => {
             )}
             <button
               onClick={() => void handleVerify(card)}
-              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-blue-500/15 border border-blue-500/30 text-blue-400 text-xs font-semibold hover:bg-blue-500/25 transition-all"
+              className="tap-scale w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-blue-500/15 border border-blue-500/30 text-blue-400 text-xs font-semibold hover:bg-blue-500/25 transition-all"
             >
               <ShieldCheck className="w-3.5 h-3.5" /> Vérifier
             </button>

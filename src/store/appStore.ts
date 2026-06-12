@@ -469,9 +469,16 @@ export interface LogEntry {
 
 // ===================== MOCK DATA =====================
 
-const _savedBalance: { balanceMain?: number; totalEarnings?: number; todayEarnings?: number; tasksCompleted?: number; taskCredits?: number; loginStreak?: number } = (() => {
+const _savedBalance: { balanceMain?: number; totalEarnings?: number; todayEarnings?: number; tasksCompleted?: number; taskCredits?: number; loginStreak?: number; lastSyncedReferralBalance?: number } = (() => {
   try { return JSON.parse(localStorage.getItem('tc_balance') || '{}'); }
   catch { return {}; }
+})();
+// True when this device already has persisted app data. When false (fresh
+// WebView / cleared storage / new device), the server-side balance backup
+// returned by /api/user/init is adopted instead of the local mock defaults.
+export const hadSavedBalance: boolean = (() => {
+  try { return localStorage.getItem('tc_balance') !== null; }
+  catch { return false; }
 })();
 const _savedCompleted: string[] = (() => {
   try { return JSON.parse(localStorage.getItem('tc_completed_tasks') || '[]'); }
@@ -797,6 +804,7 @@ interface AppState {
   deleteReferralMilestone: (id: string) => void;
   initFromTelegram: (user: { id: number; first_name: string; last_name?: string; username?: string; photo_url?: string }) => void;
   syncUserFromApi: (data: { referralCount: number; referralBalance: number; flagged: boolean; banned?: boolean; withdrawalBlocked?: boolean }) => void;
+  adoptServerBalance: (data: { balance: number; totalEarnings: number; tasksCompleted: number; referralBalance: number; completedTaskIds: string[] }) => void;
   placeGameBet: (bet: number, win: number) => void;
   activatePromoEvent: (multiplier: number, hours: number, label: string) => void;
   deactivatePromoEvent: () => void;
@@ -950,7 +958,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   claimedReferralMilestoneIds: [],
   usedPromoCodeIds: [],
-  lastSyncedReferralBalance: 0,
+  // Persisted across sessions — without this the full referral balance would
+  // be re-credited as a "delta" on every app open (balance growing on its own).
+  lastSyncedReferralBalance: _savedBalance.lastSyncedReferralBalance ?? 0,
   activeBoosters: _savedBoosters,
   referralBoostExpiresAt: _savedRefBoost,
   demoMode: false,
@@ -1152,6 +1162,26 @@ export const useAppStore = create<AppState>((set, get) => ({
     return {
       currentUser: { ...s.currentUser, ...tgData },
       users: s.users.map(u => u.id === s.currentUser.id ? { ...u, ...tgData } : u),
+    };
+  }),
+
+  // Restore state from the server-side backup (fresh device / cleared storage).
+  // lastSyncedReferralBalance is set to the server's referralBalance so that
+  // syncUserFromApi computes a zero delta — the adopted balance already
+  // includes all past referral credits.
+  adoptServerBalance: (data) => set(s => {
+    const upd = {
+      balanceMain:    data.balance,
+      totalEarnings:  data.totalEarnings,
+      tasksCompleted: data.tasksCompleted,
+    };
+    return {
+      currentUser: { ...s.currentUser, ...upd },
+      users: s.users.map(u => u.id === s.currentUser.id ? { ...u, ...upd } : u),
+      lastSyncedReferralBalance: data.referralBalance,
+      // Restoring completed tasks together with the balance prevents
+      // re-farming one-time/daily tasks by clearing localStorage.
+      completedTaskIds: Array.from(new Set([...s.completedTaskIds, ...data.completedTaskIds])),
     };
   }),
 
@@ -1561,6 +1591,15 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 }));
 
+// Debounced server-side backup of the balance — survives localStorage loss.
+let _balancePushTimer: ReturnType<typeof setTimeout> | null = null;
+let _lastPushedBalance = '';
+
+function _getTgInitData(): string {
+  try { return (window as unknown as { Telegram?: { WebApp?: { initData?: string } } })?.Telegram?.WebApp?.initData ?? ''; }
+  catch { return ''; }
+}
+
 useAppStore.subscribe((state) => {
   try {
     const u = state.currentUser;
@@ -1571,6 +1610,7 @@ useAppStore.subscribe((state) => {
       tasksCompleted: u.tasksCompleted,
       taskCredits:    u.taskCredits,
       loginStreak:    u.loginStreak,
+      lastSyncedReferralBalance: state.lastSyncedReferralBalance,
     }));
     localStorage.setItem('tc_completed_tasks', JSON.stringify(state.completedTaskIds));
     localStorage.setItem('tc_boosters', JSON.stringify(state.activeBoosters));
@@ -1578,6 +1618,28 @@ useAppStore.subscribe((state) => {
       localStorage.setItem('tc_ref_boost', state.referralBoostExpiresAt);
     } else {
       localStorage.removeItem('tc_ref_boost');
+    }
+
+    // Push balance to the backend (debounced 3s, only when it actually changed)
+    if (u.telegramId !== 0) {
+      const snapshot = JSON.stringify({
+        telegramId:     u.telegramId,
+        balance:        +u.balanceMain.toFixed(6),
+        totalEarnings:  +u.totalEarnings.toFixed(6),
+        tasksCompleted: u.tasksCompleted,
+        completedTasks: state.completedTaskIds.slice(-300),
+      });
+      if (snapshot !== _lastPushedBalance) {
+        if (_balancePushTimer) clearTimeout(_balancePushTimer);
+        _balancePushTimer = setTimeout(() => {
+          _lastPushedBalance = snapshot;
+          void fetch('/api/user/balance', {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ ...JSON.parse(snapshot), initData: _getTgInitData() }),
+          }).catch(() => {});
+        }, 3000);
+      }
     }
   } catch {}
 });

@@ -311,6 +311,14 @@ async def init_db() -> None:
             ("users", "banned",             "INTEGER NOT NULL DEFAULT 0"),
             ("users", "withdrawal_blocked", "INTEGER NOT NULL DEFAULT 0"),
             ("users", "bot_started",        "INTEGER NOT NULL DEFAULT 0"),
+            # Server-side mini-app balance backup — restores user state when
+            # the Telegram WebView clears localStorage or on a new device.
+            ("users", "app_balance",        "REAL"),
+            ("users", "app_total_earnings", "REAL"),
+            ("users", "app_tasks_completed", "INTEGER"),
+            # JSON list of completed platform-task ids. Restored together with
+            # the balance so clearing localStorage can't re-farm one-time tasks.
+            ("users", "app_completed_tasks", "TEXT"),
         ]:
             try:
                 await db.execute(f"ALTER TABLE {tbl} ADD COLUMN {col} {defn}")
@@ -458,10 +466,21 @@ async def api_user_init(request: web.Request) -> web.Response:
         await db.commit()
 
         async with db.execute(
-            "SELECT referral_count, referral_balance, flagged, banned, withdrawal_blocked FROM users WHERE telegram_id = ?",
+            "SELECT referral_count, referral_balance, flagged, banned, withdrawal_blocked,"
+            "       app_balance, app_total_earnings, app_tasks_completed, app_completed_tasks"
+            " FROM users WHERE telegram_id = ?",
             (telegram_id,),
         ) as cur:
             row = await cur.fetchone()
+
+    completed_tasks: list = []
+    if row and row[8]:
+        try:
+            parsed_tasks = json.loads(row[8])
+            if isinstance(parsed_tasks, list):
+                completed_tasks = parsed_tasks
+        except (ValueError, TypeError):
+            pass
 
     return web.json_response({
         "referralCount":      row[0] if row else 0,
@@ -469,6 +488,10 @@ async def api_user_init(request: web.Request) -> web.Response:
         "flagged":            bool(row[2]) if row else False,
         "banned":             bool(row[3]) if row else False,
         "withdrawalBlocked":  bool(row[4]) if row else False,
+        "appBalance":         row[5] if row else None,
+        "appTotalEarnings":   row[6] if row else None,
+        "appTasksCompleted":  row[7] if row else None,
+        "appCompletedTasks":  completed_tasks,
     }, headers=_CORS)
 
 
@@ -720,7 +743,7 @@ async def api_withdrawal_create(request: web.Request) -> web.Response:
         f"🆔 TX ID: <code>{tx_id}</code>"
     )
     await _notify_admin(withdrawal_msg + "\n👉 Ouvre l'admin pour approuver ou refuser.")
-    await _notify_channel(WITHDRAWAL_CHANNEL, withdrawal_msg + "\n⏳ En attente d'approbation.")
+    await _notify_channel(await _configured_withdrawal_channel(), withdrawal_msg + "\n⏳ En attente d'approbation.")
 
     log.info("Withdrawal request: id=%s telegram_id=%d amount=%.2f %s → %s",
              tx_id, telegram_id, amount, currency, address[:12])
@@ -793,7 +816,8 @@ async def api_user_withdrawal_status(request: web.Request) -> web.Response:
 
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute("""
-            SELECT id, amount, currency, status, processed_at, admin_note
+            SELECT id, amount, currency, status, processed_at, admin_note,
+                   created_at, tx_hash, address, network
             FROM transactions
             WHERE telegram_id = ? AND type = 'withdrawal'
             ORDER BY created_at DESC LIMIT 50
@@ -807,7 +831,102 @@ async def api_user_withdrawal_status(request: web.Request) -> web.Response:
         "status":      r[3],
         "processedAt": r[4],
         "adminNote":   r[5],
+        "createdAt":   r[6],
+        "txHash":      r[7],
+        "address":     r[8],
+        "network":     r[9],
     } for r in rows], headers=_CORS)
+
+
+# ── API — User: own transaction history (deposits + withdrawals) ───────────────
+
+async def api_user_transactions(request: web.Request) -> web.Response:
+    """Return the caller's deposits and withdrawals so the wallet history
+    survives app reloads (the frontend transaction list is in-memory)."""
+    try:
+        telegram_id = int(request.rel_url.query.get("telegram_id", 0))
+    except (ValueError, TypeError):
+        return web.json_response([], headers=_CORS)
+    if not telegram_id:
+        return web.json_response([], headers=_CORS)
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute("""
+            SELECT id, type, amount, currency, network, status,
+                   tx_hash, address, created_at, processed_at, admin_note
+            FROM transactions
+            WHERE telegram_id = ? AND type IN ('deposit', 'withdrawal')
+            ORDER BY created_at DESC LIMIT 100
+        """, (telegram_id,)) as cur:
+            rows = await cur.fetchall()
+
+    return web.json_response([{
+        "id":          r[0],
+        "type":        r[1],
+        "amount":      float(r[2]),
+        "currency":    r[3],
+        "network":     r[4],
+        "status":      r[5],
+        "txHash":      r[6],
+        "address":     r[7],
+        "createdAt":   r[8],
+        "processedAt": r[9],
+        "adminNote":   r[10],
+    } for r in rows], headers=_CORS)
+
+
+# ── API — User: server-side balance backup ─────────────────────────────────────
+
+async def api_user_balance_set(request: web.Request) -> web.Response:
+    """Persist the user's mini-app balance server-side so it survives
+    localStorage loss (Telegram WebView cleanup, new device, reinstall)."""
+    ip = _client_ip(request)
+    if _is_rate_limited(ip):
+        return web.json_response({"error": "Rate limit exceeded"}, status=429, headers=_CORS)
+
+    try:
+        data = await request.json()
+    except Exception:
+        return web.json_response({"error": "Invalid JSON"}, status=400, headers=_CORS)
+
+    telegram_id = _parse_telegram_id(data.get("telegramId"))
+    init_data   = str(data.get("initData", ""))
+    if not telegram_id:
+        return web.json_response({"error": "Invalid telegramId"}, status=400, headers=_CORS)
+    if not _verify_user_request(init_data, telegram_id):
+        return web.json_response({"error": "Authentication required"}, status=401, headers=_CORS)
+
+    def _nonneg(key: str) -> float | None:
+        try:
+            value = float(data.get(key, 0))
+        except (TypeError, ValueError):
+            return None
+        return value if math.isfinite(value) and 0 <= value <= 1e9 else None
+
+    balance = _nonneg("balance")
+    total   = _nonneg("totalEarnings")
+    if balance is None:
+        return web.json_response({"error": "Invalid balance"}, status=400, headers=_CORS)
+    try:
+        tasks_done = max(0, min(10_000_000, int(data.get("tasksCompleted", 0))))
+    except (TypeError, ValueError):
+        tasks_done = 0
+
+    raw_completed = data.get("completedTasks", [])
+    completed_tasks = [str(t)[:64] for t in raw_completed[:300]] if isinstance(raw_completed, list) else []
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            """UPDATE users
+               SET app_balance = ?, app_total_earnings = ?, app_tasks_completed = ?,
+                   app_completed_tasks = ?
+               WHERE telegram_id = ?""",
+            (balance, total if total is not None else 0.0, tasks_done,
+             json.dumps(completed_tasks), telegram_id),
+        )
+        await db.commit()
+
+    return web.json_response({"success": True}, headers=_CORS)
 
 
 # ── API — Admin: stats ─────────────────────────────────────────────────────────
@@ -1120,7 +1239,25 @@ async def api_transactions(request: web.Request) -> web.Response:
 # The mini app is client-side; without this, config changed in the admin panel
 # would only exist in the admin's own browser. Users fetch it on app start.
 
-_CONFIG_KEYS = {"promoEvent", "streakMilestones"}
+_CONFIG_KEYS = {"promoEvent", "streakMilestones", "withdrawalChannel"}
+
+
+async def _configured_withdrawal_channel() -> str:
+    """Withdrawal channel from admin config (DB), falling back to the env var.
+    Lets the admin fix a missing/wrong WITHDRAWAL_CHANNEL without redeploying."""
+    try:
+        async with aiosqlite.connect(DB_PATH) as db:
+            async with db.execute(
+                "SELECT value FROM platform_config WHERE key = 'withdrawalChannel'"
+            ) as cur:
+                row = await cur.fetchone()
+        if row:
+            val = json.loads(row[0])
+            if isinstance(val, str) and val.strip():
+                return val.strip()
+    except Exception:
+        pass
+    return WITHDRAWAL_CHANNEL
 
 
 async def api_config_get(request: web.Request) -> web.Response:
@@ -1200,7 +1337,7 @@ async def api_admin_approve_withdrawal(request: web.Request) -> web.Response:
 
     if tx_row:
         await _notify_channel(
-            WITHDRAWAL_CHANNEL,
+            await _configured_withdrawal_channel(),
             f"✅ <b>Retrait approuvé</b>\n"
             f"🆔 TX ID: <code>{tx_id}</code>\n"
             f"💰 {tx_row[1]:.2f} {tx_row[2]}\n"
@@ -1232,6 +1369,13 @@ async def api_admin_reject_withdrawal(request: web.Request) -> web.Response:
             return web.json_response({"error": "Already processed or not found"}, status=409, headers=_CORS)
         async with db.execute("SELECT telegram_id, amount, currency FROM transactions WHERE id = ?", (tx_id,)) as cur2:
             tx_row = await cur2.fetchone()
+        if tx_row:
+            # Keep the server-side balance backup consistent: the amount was
+            # debited locally at request time and pushed here, so credit it back.
+            await db.execute(
+                "UPDATE users SET app_balance = app_balance + ? WHERE telegram_id = ? AND app_balance IS NOT NULL",
+                (tx_row[1], tx_row[0]),
+            )
         await db.commit()
 
     if bot and tx_row:
@@ -1250,7 +1394,7 @@ async def api_admin_reject_withdrawal(request: web.Request) -> web.Response:
 
     if tx_row:
         await _notify_channel(
-            WITHDRAWAL_CHANNEL,
+            await _configured_withdrawal_channel(),
             f"❌ <b>Retrait refusé</b>\n"
             f"🆔 TX ID: <code>{tx_id}</code>\n"
             f"💰 {tx_row[1]:.2f} {tx_row[2]}\n"
@@ -1886,7 +2030,9 @@ async def start_web() -> None:
     # User API
     app.router.add_post("/api/user/init",                  api_user_init)
     app.router.add_post("/api/user/referral",              api_user_referral)
+    app.router.add_post("/api/user/balance",               api_user_balance_set)
     app.router.add_get( "/api/user/withdrawals",           api_user_withdrawal_status)
+    app.router.add_get( "/api/user/transactions",          api_user_transactions)
     app.router.add_get( "/api/check-membership",           api_check_membership)
     app.router.add_get( "/api/check-bot-start",            api_check_bot_start)
     app.router.add_get( "/api/leaderboard",                api_leaderboard)

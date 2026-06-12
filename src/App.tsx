@@ -30,6 +30,8 @@ import { MiniAppGames } from './components/miniapp/MiniAppGames';
 import { Bell, Menu, ChevronRight, Globe, Info, Wallet, Shield } from 'lucide-react';
 import { useTonConnectUI, useTonWallet } from '@tonconnect/ui-react';
 import { useDepositMonitor } from './hooks/useDepositMonitor';
+import { hadSavedBalance } from './store/appStore';
+import { processServerTransactions, syncServerTransactions, type ServerTx } from './lib/withdrawalSync';
 
 const MiniAppSettings: React.FC = () => {
   const { setMiniAppPage, platformConfig } = useAppStore();
@@ -280,10 +282,11 @@ const MiniAppHeader: React.FC = () => {
 
 const MiniApp: React.FC = () => {
   useDepositMonitor(); // polls TonAPI every 30s to auto-confirm pending deposits
+  const miniAppPage = useAppStore(s => s.miniAppPage);
   return (
     <div className="mini-app-bg min-h-screen max-w-lg mx-auto relative">
       <MiniAppHeader />
-      <div className="px-4 pt-4 pb-24">
+      <div key={miniAppPage} className="px-4 pt-4 pb-24 page-enter">
         <MiniAppPageContent />
       </div>
       <MiniAppNav />
@@ -323,6 +326,13 @@ export default function App() {
     // reaches users already in the app (not just on next open)
     const configPoll = setInterval(() => { void useAppStore.getState().syncConfigFromBackend(); }, 5 * 60_000);
 
+    // Poll transaction statuses so an admin approval/rejection reaches the
+    // user while the app is open — also re-check when the app regains focus.
+    const pollWithdrawals = () => { void syncServerTransactions(useAppStore.getState().currentUser.telegramId); };
+    const withdrawalPoll = setInterval(pollWithdrawals, 60_000);
+    const onVisibleWd = () => { if (document.visibilityState === 'visible') pollWithdrawals(); };
+    document.addEventListener('visibilitychange', onVisibleWd);
+
     // Sync hash-based routing with store on browser back/forward
     const handleHashChange = () => {
       setCurrentView(window.location.hash === '#admin' ? 'admin' : 'miniapp');
@@ -350,8 +360,8 @@ export default function App() {
 
       const initData = tg.initData ?? '';
 
-      // Run backend calls concurrently: user init + withdrawal restoration
-      const [userInitRes, withdrawalsRes] = await Promise.allSettled([
+      // Run backend calls concurrently: user init + transaction reconciliation
+      const [userInitRes, serverTxRes] = await Promise.allSettled([
         fetch(`${API}/api/user/init`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -363,35 +373,41 @@ export default function App() {
             initData,
           }),
         }),
-        fetch(`${API}/api/user/withdrawals?telegram_id=${tgUser.id}`),
+        fetch(`${API}/api/user/transactions?telegram_id=${tgUser.id}`),
       ]);
 
+      // Fresh device / cleared WebView storage: restore from the server-side
+      // balance backup instead of starting from the local defaults.
+      let adoptedServerBalance = false;
       if (userInitRes.status === 'fulfilled' && userInitRes.value.ok) {
-        const apiData = await userInitRes.value.json() as { referralCount: number; referralBalance: number; flagged: boolean; banned?: boolean; withdrawalBlocked?: boolean };
+        const apiData = await userInitRes.value.json() as {
+          referralCount: number; referralBalance: number; flagged: boolean;
+          banned?: boolean; withdrawalBlocked?: boolean;
+          appBalance?: number | null; appTotalEarnings?: number | null;
+          appTasksCompleted?: number | null; appCompletedTasks?: string[];
+        };
+        if (!hadSavedBalance && typeof apiData.appBalance === 'number') {
+          useAppStore.getState().adoptServerBalance({
+            balance:          apiData.appBalance,
+            totalEarnings:    apiData.appTotalEarnings ?? 0,
+            tasksCompleted:   apiData.appTasksCompleted ?? 0,
+            referralBalance:  apiData.referralBalance,
+            completedTaskIds: Array.isArray(apiData.appCompletedTasks) ? apiData.appCompletedTasks : [],
+          });
+          adoptedServerBalance = true;
+        }
         syncUserFromApi(apiData);
       }
 
-      // Restore balance for withdrawals rejected by admin since last session
-      if (withdrawalsRes.status === 'fulfilled' && withdrawalsRes.value.ok) {
-        const list = await withdrawalsRes.value.json() as Array<{ id: string; amount: number; status: string }>;
-        const { transactions } = useAppStore.getState();
-        let balanceRestored = 0;
-        const restoredIds: string[] = [];
-        for (const serverTx of list) {
-          if (serverTx.status !== 'rejected') continue;
-          const localTx = transactions.find(t => t.id === serverTx.id);
-          if (!localTx || localTx.status === 'cancelled' || localTx.status === 'failed') continue;
-          balanceRestored += serverTx.amount;
-          restoredIds.push(serverTx.id);
-        }
-        if (balanceRestored > 0) {
-          useAppStore.setState(s => ({
-            currentUser: { ...s.currentUser, balanceMain: +(s.currentUser.balanceMain + balanceRestored).toFixed(6) },
-            transactions: s.transactions.map(t =>
-              restoredIds.includes(t.id) ? { ...t, status: 'cancelled' as const } : t
-            ),
-          }));
-        }
+      // Reconcile deposit/withdrawal history: approved → completed, rejected →
+      // cancelled + balance restored, missing entries re-inserted. When the
+      // server balance was just adopted it already reflects past outcomes,
+      // so suppress side effects.
+      if (serverTxRes.status === 'fulfilled' && serverTxRes.value.ok) {
+        try {
+          const list = await serverTxRes.value.json() as ServerTx[];
+          processServerTransactions(list, adoptedServerBalance);
+        } catch { /* malformed response — next poll will retry */ }
       }
 
       // Process incoming referral from link (?startapp=r_TELEGRAMID)
@@ -419,6 +435,8 @@ export default function App() {
 
     return () => {
       clearInterval(configPoll);
+      clearInterval(withdrawalPoll);
+      document.removeEventListener('visibilitychange', onVisibleWd);
       window.removeEventListener('hashchange', handleHashChange);
     };
   }, []);
