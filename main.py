@@ -316,6 +316,9 @@ async def init_db() -> None:
             ("users", "app_balance",        "REAL"),
             ("users", "app_total_earnings", "REAL"),
             ("users", "app_tasks_completed", "INTEGER"),
+            # JSON list of completed platform-task ids. Restored together with
+            # the balance so clearing localStorage can't re-farm one-time tasks.
+            ("users", "app_completed_tasks", "TEXT"),
         ]:
             try:
                 await db.execute(f"ALTER TABLE {tbl} ADD COLUMN {col} {defn}")
@@ -464,11 +467,20 @@ async def api_user_init(request: web.Request) -> web.Response:
 
         async with db.execute(
             "SELECT referral_count, referral_balance, flagged, banned, withdrawal_blocked,"
-            "       app_balance, app_total_earnings, app_tasks_completed"
+            "       app_balance, app_total_earnings, app_tasks_completed, app_completed_tasks"
             " FROM users WHERE telegram_id = ?",
             (telegram_id,),
         ) as cur:
             row = await cur.fetchone()
+
+    completed_tasks: list = []
+    if row and row[8]:
+        try:
+            parsed_tasks = json.loads(row[8])
+            if isinstance(parsed_tasks, list):
+                completed_tasks = parsed_tasks
+        except (ValueError, TypeError):
+            pass
 
     return web.json_response({
         "referralCount":      row[0] if row else 0,
@@ -479,6 +491,7 @@ async def api_user_init(request: web.Request) -> web.Response:
         "appBalance":         row[5] if row else None,
         "appTotalEarnings":   row[6] if row else None,
         "appTasksCompleted":  row[7] if row else None,
+        "appCompletedTasks":  completed_tasks,
     }, headers=_CORS)
 
 
@@ -825,6 +838,43 @@ async def api_user_withdrawal_status(request: web.Request) -> web.Response:
     } for r in rows], headers=_CORS)
 
 
+# ── API — User: own transaction history (deposits + withdrawals) ───────────────
+
+async def api_user_transactions(request: web.Request) -> web.Response:
+    """Return the caller's deposits and withdrawals so the wallet history
+    survives app reloads (the frontend transaction list is in-memory)."""
+    try:
+        telegram_id = int(request.rel_url.query.get("telegram_id", 0))
+    except (ValueError, TypeError):
+        return web.json_response([], headers=_CORS)
+    if not telegram_id:
+        return web.json_response([], headers=_CORS)
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute("""
+            SELECT id, type, amount, currency, network, status,
+                   tx_hash, address, created_at, processed_at, admin_note
+            FROM transactions
+            WHERE telegram_id = ? AND type IN ('deposit', 'withdrawal')
+            ORDER BY created_at DESC LIMIT 100
+        """, (telegram_id,)) as cur:
+            rows = await cur.fetchall()
+
+    return web.json_response([{
+        "id":          r[0],
+        "type":        r[1],
+        "amount":      float(r[2]),
+        "currency":    r[3],
+        "network":     r[4],
+        "status":      r[5],
+        "txHash":      r[6],
+        "address":     r[7],
+        "createdAt":   r[8],
+        "processedAt": r[9],
+        "adminNote":   r[10],
+    } for r in rows], headers=_CORS)
+
+
 # ── API — User: server-side balance backup ─────────────────────────────────────
 
 async def api_user_balance_set(request: web.Request) -> web.Response:
@@ -862,12 +912,17 @@ async def api_user_balance_set(request: web.Request) -> web.Response:
     except (TypeError, ValueError):
         tasks_done = 0
 
+    raw_completed = data.get("completedTasks", [])
+    completed_tasks = [str(t)[:64] for t in raw_completed[:300]] if isinstance(raw_completed, list) else []
+
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute(
             """UPDATE users
-               SET app_balance = ?, app_total_earnings = ?, app_tasks_completed = ?
+               SET app_balance = ?, app_total_earnings = ?, app_tasks_completed = ?,
+                   app_completed_tasks = ?
                WHERE telegram_id = ?""",
-            (balance, total if total is not None else 0.0, tasks_done, telegram_id),
+            (balance, total if total is not None else 0.0, tasks_done,
+             json.dumps(completed_tasks), telegram_id),
         )
         await db.commit()
 
@@ -1977,6 +2032,7 @@ async def start_web() -> None:
     app.router.add_post("/api/user/referral",              api_user_referral)
     app.router.add_post("/api/user/balance",               api_user_balance_set)
     app.router.add_get( "/api/user/withdrawals",           api_user_withdrawal_status)
+    app.router.add_get( "/api/user/transactions",          api_user_transactions)
     app.router.add_get( "/api/check-membership",           api_check_membership)
     app.router.add_get( "/api/check-bot-start",            api_check_bot_start)
     app.router.add_get( "/api/leaderboard",                api_leaderboard)

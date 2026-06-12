@@ -31,7 +31,7 @@ import { Bell, Menu, ChevronRight, Globe, Info, Wallet, Shield } from 'lucide-re
 import { useTonConnectUI, useTonWallet } from '@tonconnect/ui-react';
 import { useDepositMonitor } from './hooks/useDepositMonitor';
 import { hadSavedBalance } from './store/appStore';
-import { processWithdrawals, syncWithdrawals, type ServerWithdrawal } from './lib/withdrawalSync';
+import { processServerTransactions, syncServerTransactions, type ServerTx } from './lib/withdrawalSync';
 
 const MiniAppSettings: React.FC = () => {
   const { setMiniAppPage, platformConfig } = useAppStore();
@@ -325,9 +325,9 @@ export default function App() {
     // reaches users already in the app (not just on next open)
     const configPoll = setInterval(() => { void useAppStore.getState().syncConfigFromBackend(); }, 5 * 60_000);
 
-    // Poll withdrawal statuses so an admin approval/rejection reaches the
+    // Poll transaction statuses so an admin approval/rejection reaches the
     // user while the app is open — also re-check when the app regains focus.
-    const pollWithdrawals = () => { void syncWithdrawals(useAppStore.getState().currentUser.telegramId); };
+    const pollWithdrawals = () => { void syncServerTransactions(useAppStore.getState().currentUser.telegramId); };
     const withdrawalPoll = setInterval(pollWithdrawals, 60_000);
     const onVisibleWd = () => { if (document.visibilityState === 'visible') pollWithdrawals(); };
     document.addEventListener('visibilitychange', onVisibleWd);
@@ -359,8 +359,8 @@ export default function App() {
 
       const initData = tg.initData ?? '';
 
-      // Run backend calls concurrently: user init + withdrawal reconciliation
-      const [userInitRes, withdrawalsRes] = await Promise.allSettled([
+      // Run backend calls concurrently: user init + transaction reconciliation
+      const [userInitRes, serverTxRes] = await Promise.allSettled([
         fetch(`${API}/api/user/init`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -372,7 +372,7 @@ export default function App() {
             initData,
           }),
         }),
-        fetch(`${API}/api/user/withdrawals?telegram_id=${tgUser.id}`),
+        fetch(`${API}/api/user/transactions?telegram_id=${tgUser.id}`),
       ]);
 
       // Fresh device / cleared WebView storage: restore from the server-side
@@ -382,27 +382,30 @@ export default function App() {
         const apiData = await userInitRes.value.json() as {
           referralCount: number; referralBalance: number; flagged: boolean;
           banned?: boolean; withdrawalBlocked?: boolean;
-          appBalance?: number | null; appTotalEarnings?: number | null; appTasksCompleted?: number | null;
+          appBalance?: number | null; appTotalEarnings?: number | null;
+          appTasksCompleted?: number | null; appCompletedTasks?: string[];
         };
         if (!hadSavedBalance && typeof apiData.appBalance === 'number') {
           useAppStore.getState().adoptServerBalance({
-            balance:         apiData.appBalance,
-            totalEarnings:   apiData.appTotalEarnings ?? 0,
-            tasksCompleted:  apiData.appTasksCompleted ?? 0,
-            referralBalance: apiData.referralBalance,
+            balance:          apiData.appBalance,
+            totalEarnings:    apiData.appTotalEarnings ?? 0,
+            tasksCompleted:   apiData.appTasksCompleted ?? 0,
+            referralBalance:  apiData.referralBalance,
+            completedTaskIds: Array.isArray(apiData.appCompletedTasks) ? apiData.appCompletedTasks : [],
           });
           adoptedServerBalance = true;
         }
         syncUserFromApi(apiData);
       }
 
-      // Reconcile withdrawal statuses: approved → completed, rejected →
-      // cancelled + balance restored. When the server balance was just
-      // adopted it already reflects past outcomes, so suppress side effects.
-      if (withdrawalsRes.status === 'fulfilled' && withdrawalsRes.value.ok) {
+      // Reconcile deposit/withdrawal history: approved → completed, rejected →
+      // cancelled + balance restored, missing entries re-inserted. When the
+      // server balance was just adopted it already reflects past outcomes,
+      // so suppress side effects.
+      if (serverTxRes.status === 'fulfilled' && serverTxRes.value.ok) {
         try {
-          const list = await withdrawalsRes.value.json() as ServerWithdrawal[];
-          processWithdrawals(list, adoptedServerBalance);
+          const list = await serverTxRes.value.json() as ServerTx[];
+          processServerTransactions(list, adoptedServerBalance);
         } catch { /* malformed response — next poll will retry */ }
       }
 

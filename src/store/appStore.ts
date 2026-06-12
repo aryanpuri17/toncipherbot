@@ -804,7 +804,7 @@ interface AppState {
   deleteReferralMilestone: (id: string) => void;
   initFromTelegram: (user: { id: number; first_name: string; last_name?: string; username?: string; photo_url?: string }) => void;
   syncUserFromApi: (data: { referralCount: number; referralBalance: number; flagged: boolean; banned?: boolean; withdrawalBlocked?: boolean }) => void;
-  adoptServerBalance: (data: { balance: number; totalEarnings: number; tasksCompleted: number; referralBalance: number }) => void;
+  adoptServerBalance: (data: { balance: number; totalEarnings: number; tasksCompleted: number; referralBalance: number; completedTaskIds: string[] }) => void;
   placeGameBet: (bet: number, win: number) => void;
   activatePromoEvent: (multiplier: number, hours: number, label: string) => void;
   deactivatePromoEvent: () => void;
@@ -1179,6 +1179,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       currentUser: { ...s.currentUser, ...upd },
       users: s.users.map(u => u.id === s.currentUser.id ? { ...u, ...upd } : u),
       lastSyncedReferralBalance: data.referralBalance,
+      // Restoring completed tasks together with the balance prevents
+      // re-farming one-time/daily tasks by clearing localStorage.
+      completedTaskIds: Array.from(new Set([...s.completedTaskIds, ...data.completedTaskIds])),
     };
   }),
 
@@ -1624,6 +1627,7 @@ useAppStore.subscribe((state) => {
         balance:        +u.balanceMain.toFixed(6),
         totalEarnings:  +u.totalEarnings.toFixed(6),
         tasksCompleted: u.tasksCompleted,
+        completedTasks: state.completedTaskIds.slice(-300),
       });
       if (snapshot !== _lastPushedBalance) {
         if (_balancePushTimer) clearTimeout(_balancePushTimer);

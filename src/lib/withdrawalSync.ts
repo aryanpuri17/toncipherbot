@@ -1,8 +1,9 @@
 import { useAppStore } from '../store/appStore';
 import type { Transaction } from '../store/appStore';
 
-export interface ServerWithdrawal {
+export interface ServerTx {
   id: string;
+  type?: string;           // 'deposit' | 'withdrawal' (absent on the legacy withdrawals endpoint)
   amount: number;
   currency: string;
   status: string;          // pending | completed | rejected
@@ -37,35 +38,38 @@ const SERVER_TO_LOCAL: Record<string, Transaction['status']> = {
 
 /**
  * Reconcile the local transaction list (and balance) with the server's
- * withdrawal records.
+ * records.
  *
  * - Approved withdrawals flip from "pending" to "completed" in the wallet.
  * - Rejected withdrawals flip to "cancelled" and the amount is re-credited.
- * - Withdrawals missing locally (lost on reload — the store is in-memory)
- *   are re-inserted so the history stays complete.
+ * - Deposits and withdrawals missing locally (lost on reload — the store is
+ *   in-memory) are re-inserted so the history stays complete. Merging a
+ *   deposit never credits balance: that happened at deposit time and lives
+ *   in the server-side balance backup.
  *
  * `suppressEffects` marks every terminal withdrawal as processed WITHOUT
  * crediting balances or notifying. Used right after adopting the server-side
  * balance backup, which already reflects those outcomes.
  */
-export function processWithdrawals(list: ServerWithdrawal[], suppressEffects = false): void {
+export function processServerTransactions(list: ServerTx[], suppressEffects = false): void {
   if (!Array.isArray(list) || list.length === 0) return;
 
   const processed = readProcessed();
   let restored = 0;
-  const newlyCompleted: ServerWithdrawal[] = [];
-  const newlyRejected:  ServerWithdrawal[] = [];
+  const newlyCompleted: ServerTx[] = [];
+  const newlyRejected:  ServerTx[] = [];
 
-  for (const wd of list) {
-    if (wd.status !== 'completed' && wd.status !== 'rejected') continue;
-    if (processed.has(wd.id)) continue;
-    processed.add(wd.id);
+  for (const tx of list) {
+    if ((tx.type ?? 'withdrawal') !== 'withdrawal') continue;
+    if (tx.status !== 'completed' && tx.status !== 'rejected') continue;
+    if (processed.has(tx.id)) continue;
+    processed.add(tx.id);
     if (suppressEffects) continue;
-    if (wd.status === 'rejected') {
-      restored += wd.amount;
-      newlyRejected.push(wd);
+    if (tx.status === 'rejected') {
+      restored += tx.amount;
+      newlyRejected.push(tx);
     } else {
-      newlyCompleted.push(wd);
+      newlyCompleted.push(tx);
     }
   }
 
@@ -73,34 +77,36 @@ export function processWithdrawals(list: ServerWithdrawal[], suppressEffects = f
     const byId = new Map(s.transactions.map(t => [t.id, t] as const));
     let changed = false;
 
-    for (const wd of list) {
-      const target = SERVER_TO_LOCAL[wd.status] ?? 'pending';
-      const existing = byId.get(wd.id);
+    for (const tx of list) {
+      const txType = (tx.type ?? 'withdrawal') as Transaction['type'];
+      if (txType !== 'withdrawal' && txType !== 'deposit') continue;
+      const target = SERVER_TO_LOCAL[tx.status] ?? 'pending';
+      const existing = byId.get(tx.id);
       if (existing) {
         if (existing.status !== target) {
-          byId.set(wd.id, {
+          byId.set(tx.id, {
             ...existing,
             status:      target,
-            txHash:      wd.txHash ?? existing.txHash,
-            adminNote:   wd.adminNote ?? existing.adminNote,
-            completedAt: wd.processedAt ?? existing.completedAt,
+            txHash:      tx.txHash ?? existing.txHash,
+            adminNote:   tx.adminNote ?? existing.adminNote,
+            completedAt: tx.processedAt ?? existing.completedAt,
           });
           changed = true;
         }
       } else {
-        byId.set(wd.id, {
-          id:          wd.id,
+        byId.set(tx.id, {
+          id:          tx.id,
           userId:      s.currentUser.id,
-          type:        'withdrawal',
-          amount:      wd.amount,
-          currency:    wd.currency,
-          network:     wd.network ?? 'TON',
-          address:     wd.address ?? '',
+          type:        txType,
+          amount:      tx.amount,
+          currency:    tx.currency,
+          network:     tx.network ?? 'TON',
+          address:     tx.address ?? '',
           status:      target,
-          txHash:      wd.txHash ?? undefined,
-          adminNote:   wd.adminNote ?? undefined,
-          createdAt:   wd.createdAt ?? new Date().toISOString(),
-          completedAt: wd.processedAt ?? undefined,
+          txHash:      tx.txHash ?? undefined,
+          adminNote:   tx.adminNote ?? undefined,
+          createdAt:   tx.createdAt ?? new Date().toISOString(),
+          completedAt: tx.processedAt ?? undefined,
         });
         changed = true;
       }
@@ -123,17 +129,17 @@ export function processWithdrawals(list: ServerWithdrawal[], suppressEffects = f
   });
 
   const { addNotification } = useAppStore.getState();
-  for (const wd of newlyCompleted) {
+  for (const tx of newlyCompleted) {
     addNotification({
       type: 'withdrawal', title: 'Retrait approuvé ! ✅',
-      message: `Votre retrait de ${wd.amount.toFixed(2)} ${wd.currency} a été envoyé.`,
+      message: `Votre retrait de ${tx.amount.toFixed(2)} ${tx.currency} a été envoyé.`,
       isRead: false,
     });
   }
-  for (const wd of newlyRejected) {
+  for (const tx of newlyRejected) {
     addNotification({
       type: 'withdrawal', title: 'Retrait refusé',
-      message: `${wd.amount.toFixed(2)} ${wd.currency} recrédité sur votre solde.${wd.adminNote ? ` Motif : ${wd.adminNote}` : ''}`,
+      message: `${tx.amount.toFixed(2)} ${tx.currency} recrédité sur votre solde.${tx.adminNote ? ` Motif : ${tx.adminNote}` : ''}`,
       isRead: false,
     });
   }
@@ -141,14 +147,14 @@ export function processWithdrawals(list: ServerWithdrawal[], suppressEffects = f
   writeProcessed(processed);
 }
 
-/** Fetch the caller's withdrawals from the backend and reconcile them. */
-export async function syncWithdrawals(telegramId: number): Promise<void> {
+/** Fetch the caller's deposits + withdrawals and reconcile them locally. */
+export async function syncServerTransactions(telegramId: number, suppressEffects = false): Promise<void> {
   if (!telegramId) return;
-  let list: ServerWithdrawal[];
+  let list: ServerTx[];
   try {
-    const res = await fetch(`/api/user/withdrawals?telegram_id=${telegramId}`);
+    const res = await fetch(`/api/user/transactions?telegram_id=${telegramId}`);
     if (!res.ok) return;
-    list = await res.json() as ServerWithdrawal[];
+    list = await res.json() as ServerTx[];
   } catch { return; }
-  processWithdrawals(list);
+  processServerTransactions(list, suppressEffects);
 }
