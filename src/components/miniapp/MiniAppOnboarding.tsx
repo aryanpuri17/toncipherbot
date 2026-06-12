@@ -4,7 +4,8 @@ import { haptic } from '../../lib/haptics';
 
 interface Props { onDone: () => void; }
 
-const SLIDES = 3;
+type PlatformConfig = ReturnType<typeof useAppStore.getState>['platformConfig'];
+type CurrentUser = ReturnType<typeof useAppStore.getState>['currentUser'];
 
 // Stable coin positions — generated once, not on every render
 const COIN_SEEDS = Array.from({ length: 18 }, (_, i) => ({
@@ -38,10 +39,12 @@ const CoinRain: React.FC<{ show: boolean }> = ({ show }) => (
 
 export const MiniAppOnboarding: React.FC<Props> = ({ onDone }) => {
   const [slide, setSlide] = useState(0);
-  const { platformConfig, updateUser } = useAppStore();
+  const { platformConfig, updateUser, currentUser } = useAppStore();
+  const bonusEnabled = platformConfig.welcomeBonusEnabled && platformConfig.welcomeBonusAmount > 0;
+  const SLIDES = bonusEnabled ? 6 : 5;
 
   const complete = (claimBonus: boolean) => {
-    if (claimBonus && platformConfig.welcomeBonusEnabled && platformConfig.welcomeBonusAmount > 0) {
+    if (claimBonus && bonusEnabled) {
       haptic.success();
       const bonus = platformConfig.welcomeBonusAmount;
       const u = useAppStore.getState().currentUser;
@@ -56,11 +59,8 @@ export const MiniAppOnboarding: React.FC<Props> = ({ onDone }) => {
 
   const next = () => {
     haptic.impact('light');
-    if (slide < SLIDES - 1) {
-      setSlide(s => s + 1);
-    } else {
-      complete(true);
-    }
+    if (slide < SLIDES - 1) setSlide(s => s + 1);
+    else complete(true);
   };
 
   const skip = () => {
@@ -69,29 +69,34 @@ export const MiniAppOnboarding: React.FC<Props> = ({ onDone }) => {
   };
 
   const isLastSlide = slide === SLIDES - 1;
-  const bonusEnabled = platformConfig.welcomeBonusEnabled && platformConfig.welcomeBonusAmount > 0;
+  const isBonusSlide = bonusEnabled && isLastSlide;
+
+  let btnLabel: string;
+  if (isBonusSlide) btnLabel = `🎁 Réclamer ${platformConfig.welcomeBonusAmount.toFixed(2)} TON !`;
+  else if (isLastSlide) btnLabel = "Accéder à l'app →";
+  else btnLabel = 'Suivant →';
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col" style={{ background: 'linear-gradient(180deg,#0f0c29 0%,#1a1a2e 40%,#16213e 100%)' }}>
-      {/* Skip button */}
-      <div className="flex justify-end px-5 pt-5">
-        <button
-          onClick={skip}
-          className="text-xs text-slate-500 hover:text-slate-300 transition-colors px-3 py-1.5 rounded-lg hover:bg-white/5"
-        >
+      {/* Skip */}
+      <div className="flex justify-end px-5 pt-5 shrink-0">
+        <button onClick={skip} className="text-xs text-slate-500 hover:text-slate-300 transition-colors px-3 py-1.5 rounded-lg hover:bg-white/5">
           Passer
         </button>
       </div>
 
       {/* Slide content */}
-      <div key={slide} className="flex-1 flex flex-col items-center justify-center px-6 page-enter">
+      <div key={slide} className="flex-1 flex flex-col items-center justify-center px-5 page-enter overflow-y-auto">
         {slide === 0 && <Slide0 />}
-        {slide === 1 && <Slide1 platformConfig={platformConfig} />}
-        {slide === 2 && <Slide2 bonusEnabled={bonusEnabled} bonusAmount={platformConfig.welcomeBonusAmount} />}
+        {slide === 1 && <Slide1 />}
+        {slide === 2 && <Slide2 platformConfig={platformConfig} />}
+        {slide === 3 && <Slide3 />}
+        {slide === 4 && <Slide4 platformConfig={platformConfig} currentUser={currentUser} />}
+        {slide === 5 && bonusEnabled && <Slide5 bonusAmount={platformConfig.welcomeBonusAmount} />}
       </div>
 
       {/* Progress dots */}
-      <div className="flex justify-center gap-2 py-4">
+      <div className="flex justify-center gap-2 py-3 shrink-0">
         {Array.from({ length: SLIDES }, (_, i) => (
           <div
             key={i}
@@ -106,23 +111,21 @@ export const MiniAppOnboarding: React.FC<Props> = ({ onDone }) => {
       </div>
 
       {/* CTA button */}
-      <div className="px-6 pb-10">
+      <div className="px-6 pb-10 shrink-0">
         <button
           onClick={next}
           className="tap-scale w-full py-4 rounded-2xl font-bold text-base text-white btn-primary shadow-lg shadow-blue-500/20"
         >
-          {isLastSlide
-            ? (bonusEnabled ? `🎁 Réclamer ${platformConfig.welcomeBonusAmount.toFixed(2)} TON !` : 'Accéder à l\'app →')
-            : 'Suivant →'}
+          {btnLabel}
         </button>
       </div>
     </div>
   );
 };
 
-// ── Slide 0: Bienvenue ──────────────────────────────────────────────
+// ── Slide 0 : Bienvenue ─────────────────────────────────────────────
 const Slide0: React.FC = () => (
-  <div className="flex flex-col items-center text-center gap-6">
+  <div className="flex flex-col items-center text-center gap-6 w-full">
     <div className="animate-float text-7xl select-none">💎</div>
     <div className="space-y-3">
       <h1 className="text-3xl font-black text-white leading-tight">
@@ -130,71 +133,210 @@ const Slide0: React.FC = () => (
         <span className="gradient-text">TonCipher</span>
       </h1>
       <p className="text-slate-400 text-base leading-relaxed max-w-xs">
-        Gagnez des <span className="text-white font-semibold">TON réels</span> en accomplissant des missions, en jouant et en invitant vos amis.
+        La plateforme Telegram qui vous fait gagner de vrais{' '}
+        <span className="text-white font-semibold">TON</span> — en quelques clics.
       </p>
     </div>
     <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-500/10 border border-emerald-500/20">
       <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-      <span className="text-xs font-semibold text-emerald-400">Retraits TON disponibles</span>
+      <span className="text-xs font-semibold text-emerald-400">Retraits TON en temps réel</span>
     </div>
   </div>
 );
 
-// ── Slide 1: Comment gagner ─────────────────────────────────────────
-const Slide1: React.FC<{ platformConfig: ReturnType<typeof useAppStore.getState>['platformConfig'] }> = ({ platformConfig }) => {
-  const ways = [
-    { icon: '📋', label: 'Tâches',    desc: `Rejoignez canaux · bots`, reward: `+${platformConfig.referralBonusSignup.toFixed(2)} TON / tâche`, color: 'text-blue-400', bg: 'bg-blue-500/10 border-blue-500/20' },
-    { icon: '🎰', label: 'Jeux',      desc: 'Wheel · Crash · Mines…',   reward: 'jusqu\'à ×10 la mise',                                         color: 'text-purple-400', bg: 'bg-purple-500/10 border-purple-500/20' },
-    { icon: '👥', label: 'Parrainage',desc: 'Invitez vos amis',         reward: `+${platformConfig.referralBonusSignup.toFixed(2)} TON / ami`,   color: 'text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/20' },
-  ];
-  return (
-    <div className="w-full flex flex-col gap-5">
-      <div className="text-center">
-        <h2 className="text-2xl font-black text-white">Comment gagner ?</h2>
-        <p className="text-slate-400 text-sm mt-1">3 façons de gagner des TON</p>
+// ── Slide 1 : Tableau de bord ───────────────────────────────────────
+const Slide1: React.FC = () => (
+  <div className="w-full flex flex-col items-center gap-5">
+    <div className="text-center">
+      <h2 className="text-2xl font-black text-white">Votre tableau de bord</h2>
+      <p className="text-slate-400 text-sm mt-1">Suivez vos gains en temps réel</p>
+    </div>
+
+    {/* Mock balance card */}
+    <div className="card-sheen animated-gradient w-full rounded-3xl p-5 relative overflow-hidden">
+      <div
+        className="absolute inset-0 opacity-30 pointer-events-none"
+        style={{ background: 'radial-gradient(circle at 80% 20%,#60a5fa,transparent 60%)' }}
+      />
+      <p className="text-xs text-blue-200/70 font-semibold uppercase tracking-widest mb-1">Solde disponible</p>
+      <p className="text-4xl font-black text-white">
+        2.45 <span className="text-blue-300 text-2xl">TON</span>
+      </p>
+      <p className="text-xs text-blue-200/50 mt-0.5">≈ 12.30 $</p>
+      <div className="mt-4 flex gap-2">
+        <div className="flex-1 rounded-2xl bg-white/10 px-3 py-2 text-center">
+          <p className="text-xs text-slate-400">Total gagné</p>
+          <p className="text-sm font-bold text-white">5.20 TON</p>
+        </div>
+        <div className="flex-1 rounded-2xl bg-white/10 px-3 py-2 text-center">
+          <p className="text-xs text-slate-400">Tâches</p>
+          <p className="text-sm font-bold text-white">47</p>
+        </div>
+        <div className="flex-1 rounded-2xl bg-amber-500/20 border border-amber-500/30 px-3 py-2 text-center">
+          <p className="text-xs text-amber-400">Série</p>
+          <p className="text-sm font-bold text-amber-300">🔥 7j</p>
+        </div>
       </div>
-      <div className="space-y-3">
-        {ways.map(w => (
-          <div key={w.label} className={`animate-pop-in flex items-center gap-4 p-4 rounded-2xl border ${w.bg}`}>
-            <div className="text-3xl">{w.icon}</div>
-            <div className="flex-1 min-w-0">
-              <p className="font-bold text-white text-sm">{w.label}</p>
-              <p className="text-xs text-slate-400">{w.desc}</p>
-            </div>
-            <div className={`text-xs font-bold text-right shrink-0 ${w.color}`}>{w.reward}</div>
+    </div>
+
+    <p className="text-xs text-slate-500 text-center max-w-xs">
+      Revenez chaque jour pour maintenir votre série et booster vos gains
+    </p>
+  </div>
+);
+
+// ── Slide 2 : Tâches ───────────────────────────────────────────────
+const MOCK_TASKS = [
+  { icon: '📢', title: 'Rejoindre @TonCipherOfficial', sub: 'Canal Telegram', reward: '+0.05 TON', color: 'text-blue-400',   bg: 'bg-blue-500/10 border-blue-500/20' },
+  { icon: '🐦', title: 'Suivre sur Twitter / X',       sub: 'Réseau social',  reward: '+0.03 TON', color: 'text-sky-400',    bg: 'bg-sky-500/10 border-sky-500/20'   },
+  { icon: '🤖', title: 'Démarrer @TonCipherBot',       sub: 'Bot Telegram',   reward: '+0.02 TON', color: 'text-violet-400', bg: 'bg-violet-500/10 border-violet-500/20' },
+];
+
+const Slide2: React.FC<{ platformConfig: PlatformConfig }> = ({ platformConfig }) => (
+  <div className="w-full flex flex-col gap-4">
+    <div className="text-center">
+      <h2 className="text-2xl font-black text-white">Gagnez avec les tâches</h2>
+      <p className="text-slate-400 text-sm mt-1">Chaque mission = des TON crédités instantanément</p>
+    </div>
+
+    <div className="space-y-2.5">
+      {MOCK_TASKS.map((t, i) => (
+        <div
+          key={i}
+          className={`flex items-center gap-3 p-3.5 rounded-2xl border ${t.bg} animate-pop-in`}
+          style={{ animationDelay: `${i * 0.08}s` }}
+        >
+          <div className="text-2xl w-10 h-10 flex items-center justify-center rounded-xl bg-white/5 shrink-0">
+            {t.icon}
           </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-bold text-white truncate">{t.title}</p>
+            <p className="text-xs text-slate-400">{t.sub}</p>
+          </div>
+          <div className="flex flex-col items-end gap-1.5 shrink-0">
+            <span className={`text-xs font-bold ${t.color}`}>{t.reward}</span>
+            <span className="text-xs px-2 py-0.5 rounded-full bg-white/10 text-slate-300 whitespace-nowrap">
+              Commencer →
+            </span>
+          </div>
+        </div>
+      ))}
+    </div>
+
+    <div className="text-center px-4 py-2 rounded-2xl bg-white/5 border border-white/10">
+      <p className="text-xs text-slate-400">
+        Jusqu'à <span className="text-white font-semibold">+{platformConfig.referralBonusSignup.toFixed(2)} TON</span> par tâche
+        · Nouvelles missions chaque jour
+      </p>
+    </div>
+  </div>
+);
+
+// ── Slide 3 : Jeux ─────────────────────────────────────────────────
+const MOCK_GAMES = [
+  { icon: '🎡', name: 'Roue',   sub: '×2 à ×10',    grad: 'from-violet-600/30 to-violet-900/20 border-violet-500/30' },
+  { icon: '🚀', name: 'Crash',  sub: 'jusqu\'à ×100', grad: 'from-blue-600/30 to-blue-900/20 border-blue-500/30'     },
+  { icon: '💣', name: 'Mines',  sub: 'stratégie',    grad: 'from-amber-600/30 to-amber-900/20 border-amber-500/30'  },
+  { icon: '🎰', name: 'Jackpot',sub: 'gros lots',    grad: 'from-rose-600/30 to-rose-900/20 border-rose-500/30'     },
+];
+
+const Slide3: React.FC = () => (
+  <div className="w-full flex flex-col gap-4">
+    <div className="text-center">
+      <h2 className="text-2xl font-black text-white">Jouez &amp; multipliez</h2>
+      <p className="text-slate-400 text-sm mt-1">4 jeux, des centaines de façons de gagner</p>
+    </div>
+
+    <div className="grid grid-cols-2 gap-3">
+      {MOCK_GAMES.map((g, i) => (
+        <div
+          key={i}
+          className={`flex flex-col items-center gap-2 p-4 rounded-2xl bg-gradient-to-br border animate-pop-in ${g.grad}`}
+          style={{ animationDelay: `${i * 0.07}s` }}
+        >
+          <span className="text-4xl">{g.icon}</span>
+          <p className="text-sm font-bold text-white text-center leading-tight">{g.name}</p>
+          <span className="text-xs font-semibold text-white/60 bg-white/10 px-2 py-0.5 rounded-full">
+            {g.sub}
+          </span>
+        </div>
+      ))}
+    </div>
+
+    <p className="text-xs text-slate-500 text-center">
+      Jouez avec vos TON gagnés — retirez à tout moment
+    </p>
+  </div>
+);
+
+// ── Slide 4 : Parrainage ────────────────────────────────────────────
+const Slide4: React.FC<{ platformConfig: PlatformConfig; currentUser: CurrentUser }> = ({ platformConfig, currentUser }) => {
+  const code = currentUser?.referralCode || 'TC-XXXXX';
+  const bonus = platformConfig.referralBonusSignup.toFixed(2);
+
+  return (
+    <div className="w-full flex flex-col items-center gap-5 text-center">
+      <div>
+        <h2 className="text-2xl font-black text-white">Invitez vos amis</h2>
+        <p className="text-slate-400 text-sm mt-1">Vous gagnez tous les deux, sans limite</p>
+      </div>
+
+      {/* Friend chain visual */}
+      <div className="flex items-center gap-1.5">
+        {['👤', '👤', '👤'].map((a, i) => (
+          <React.Fragment key={i}>
+            <div className="w-11 h-11 rounded-full bg-gradient-to-br from-blue-500/30 to-violet-500/30 border border-blue-500/30 flex items-center justify-center text-xl">
+              {a}
+            </div>
+            {i < 2 && <span className="text-slate-600 text-base">→</span>}
+          </React.Fragment>
         ))}
+        <span className="text-slate-600 text-base ml-1">= 💎💎💎</span>
+      </div>
+
+      {/* Reward pills */}
+      <div className="w-full flex flex-col gap-2">
+        <div className="flex items-center gap-3 p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/20">
+          <span className="text-2xl shrink-0">🎁</span>
+          <div className="text-left">
+            <p className="text-sm font-bold text-emerald-300">Vous recevez</p>
+            <p className="text-xs text-slate-400">+{bonus} TON par ami parrainé</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-3 p-3 rounded-2xl bg-blue-500/10 border border-blue-500/20">
+          <span className="text-2xl shrink-0">🤝</span>
+          <div className="text-left">
+            <p className="text-sm font-bold text-blue-300">Votre ami reçoit</p>
+            <p className="text-xs text-slate-400">+{bonus} TON à son inscription</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Referral code preview */}
+      <div className="w-full px-4 py-3 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-between">
+        <p className="text-xs text-slate-500">Votre code</p>
+        <span className="text-sm font-black text-white tracking-widest">{code}</span>
       </div>
     </div>
   );
 };
 
-// ── Slide 2: Bonus ──────────────────────────────────────────────────
-const Slide2: React.FC<{ bonusEnabled: boolean; bonusAmount: number }> = ({ bonusEnabled, bonusAmount }) => (
+// ── Slide 5 : Bonus de bienvenue ────────────────────────────────────
+const Slide5: React.FC<{ bonusAmount: number }> = ({ bonusAmount }) => (
   <div className="relative flex flex-col items-center text-center gap-6 w-full">
-    <CoinRain show={bonusEnabled} />
-    {bonusEnabled ? (
-      <>
-        <div className="text-6xl animate-pop-in select-none">🎁</div>
-        <div className="space-y-2">
-          <p className="text-slate-400 text-sm font-semibold uppercase tracking-widest">Bonus de bienvenue</p>
-          <p className="text-5xl font-black text-white">
-            +{bonusAmount.toFixed(2)} <span className="text-blue-400">TON</span>
-          </p>
-          <p className="text-slate-400 text-sm">Crédité immédiatement sur votre solde</p>
-        </div>
-        <div className="px-5 py-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/20">
-          <p className="text-xs text-emerald-400 font-semibold">Aucun dépôt requis · Retrait possible dès 0.1 TON</p>
-        </div>
-      </>
-    ) : (
-      <>
-        <div className="text-6xl animate-float select-none">🚀</div>
-        <div className="space-y-2">
-          <h2 className="text-2xl font-black text-white">Vous êtes prêt !</h2>
-          <p className="text-slate-400 text-base">Commencez à gagner dès maintenant</p>
-        </div>
-      </>
-    )}
+    <CoinRain show />
+    <div className="text-6xl animate-pop-in select-none">🎁</div>
+    <div className="space-y-2">
+      <p className="text-slate-400 text-sm font-semibold uppercase tracking-widest">Bonus de bienvenue</p>
+      <p className="text-5xl font-black text-white">
+        +{bonusAmount.toFixed(2)} <span className="text-blue-400">TON</span>
+      </p>
+      <p className="text-slate-400 text-sm">Crédité immédiatement sur votre solde</p>
+    </div>
+    <div className="px-5 py-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/20">
+      <p className="text-xs text-emerald-400 font-semibold">
+        Aucun dépôt requis · Retrait possible dès 0.1 TON
+      </p>
+    </div>
   </div>
 );
