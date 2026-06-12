@@ -165,12 +165,10 @@ export const MiniAppReferral: React.FC = () => {
     else window.open(shareUrl, '_blank');
   };
 
-  const BONUS_TON = platformConfig.referralBonusSignup;
+  const DEPOSIT_PCT = platformConfig.referralBonusDepositPercent ?? 5;
 
-  // Use the real backend balance if available, fallback to count × bonus
-  const totalEarned = lastSyncedReferralBalance > 0
-    ? lastSyncedReferralBalance
-    : currentUser.referralCount * BONUS_TON;
+  // Use the real backend balance if available, fallback to 0
+  const totalEarned = lastSyncedReferralBalance > 0 ? lastSyncedReferralBalance : 0;
 
   const activeMilestones = referralMilestones
     .filter(m => m.isActive)
@@ -215,8 +213,8 @@ export const MiniAppReferral: React.FC = () => {
                 </div>
                 <div className="w-px bg-white/20" />
                 <div className="text-center">
-                  <p className="text-2xl font-bold text-amber-300">+{BONUS_TON.toFixed(2)}</p>
-                  <p className="text-purple-200 text-xs mt-0.5">TON / ami</p>
+                  <p className="text-2xl font-bold text-amber-300">{DEPOSIT_PCT}%</p>
+                  <p className="text-purple-200 text-xs mt-0.5">sur dépôts</p>
                 </div>
               </div>
             </div>
@@ -271,7 +269,7 @@ export const MiniAppReferral: React.FC = () => {
                 <div className="w-10 h-10 rounded-xl bg-emerald-500/15 flex items-center justify-center mx-auto">
                   <TrendingUp className="w-4 h-4 text-emerald-400" />
                 </div>
-                <p className="text-[11px] text-slate-300 leading-tight">+{BONUS_TON.toFixed(2)} TON crédité</p>
+                <p className="text-[11px] text-slate-300 leading-tight">{DEPOSIT_PCT}% sur chaque dépôt</p>
               </div>
             </div>
           </div>

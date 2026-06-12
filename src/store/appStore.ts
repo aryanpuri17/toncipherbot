@@ -651,6 +651,11 @@ const mockReferralMilestones: ReferralMilestone[] = [
   { id: '4', referralCount: 100, reward: 75.00, description: 'Invitez 100 amis', isActive: true },
 ];
 
+const _savedPlatformConfig: Partial<PlatformConfig> = (() => {
+  try { return JSON.parse(localStorage.getItem('tc_platform_config') ?? '{}') as Partial<PlatformConfig>; }
+  catch { return {}; }
+})();
+
 const mockPlatformConfig: PlatformConfig = {
   botToken: '',
   botUsername: 'TonCipher_bot',
@@ -962,7 +967,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   dailyLimits: mockDailyLimits,
   paymentProviders: mockPaymentProviders,
   adminUsers: mockAdminUsers,
-  platformConfig: mockPlatformConfig,
+  platformConfig: { ...mockPlatformConfig, ..._savedPlatformConfig },
   platformStats: mockStats,
   logs: mockLogs,
   referralMilestones: mockReferralMilestones,
@@ -1629,6 +1634,7 @@ useAppStore.subscribe((state) => {
       lastSyncedReferralBalance: state.lastSyncedReferralBalance,
       completedTaskIds: state.completedTaskIds.slice(-300),
     }));
+    localStorage.setItem('tc_platform_config', JSON.stringify(state.platformConfig));
     localStorage.setItem('tc_completed_tasks', JSON.stringify(state.completedTaskIds));
     localStorage.setItem('tc_boosters', JSON.stringify(state.activeBoosters));
     if (state.referralBoostExpiresAt) {

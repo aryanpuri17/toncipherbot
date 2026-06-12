@@ -272,13 +272,13 @@ const Slide3: React.FC = () => (
 // ── Slide 4 : Parrainage ────────────────────────────────────────────
 const Slide4: React.FC<{ platformConfig: PlatformConfig; currentUser: CurrentUser }> = ({ platformConfig, currentUser }) => {
   const code = currentUser?.referralCode || 'TC-XXXXX';
-  const bonus = platformConfig.referralBonusSignup.toFixed(2);
+  const pct  = platformConfig.referralBonusDepositPercent ?? 5;
 
   return (
     <div className="w-full flex flex-col items-center gap-5 text-center">
       <div>
         <h2 className="text-2xl font-black text-white">Invitez vos amis</h2>
-        <p className="text-slate-400 text-sm mt-1">Vous gagnez tous les deux, sans limite</p>
+        <p className="text-slate-400 text-sm mt-1">Gagnez sur chaque dépôt de vos filleuls</p>
       </div>
 
       {/* Friend chain visual */}
@@ -294,21 +294,22 @@ const Slide4: React.FC<{ platformConfig: PlatformConfig; currentUser: CurrentUse
         <span className="text-slate-600 text-base ml-1">= 💎💎💎</span>
       </div>
 
-      {/* Reward pills */}
+      {/* Commission pill — big & prominent */}
+      <div className="w-full p-4 rounded-2xl bg-gradient-to-br from-emerald-600/30 to-emerald-900/20 border border-emerald-500/30 flex flex-col items-center gap-1">
+        <p className="text-4xl font-black text-emerald-300">{pct}%</p>
+        <p className="text-sm font-semibold text-white">sur chaque dépôt de votre filleul</p>
+        <p className="text-xs text-slate-400">Automatique · Sans limite · À vie</p>
+      </div>
+
+      {/* How */}
       <div className="w-full flex flex-col gap-2">
-        <div className="flex items-center gap-3 p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/20">
-          <span className="text-2xl shrink-0">🎁</span>
-          <div className="text-left">
-            <p className="text-sm font-bold text-emerald-300">Vous recevez</p>
-            <p className="text-xs text-slate-400">+{bonus} TON par ami parrainé</p>
-          </div>
+        <div className="flex items-center gap-3 p-3 rounded-2xl bg-white/5 border border-white/10">
+          <span className="text-xl shrink-0">1️⃣</span>
+          <p className="text-xs text-slate-300 text-left">Votre ami s'inscrit avec votre lien et dépose</p>
         </div>
-        <div className="flex items-center gap-3 p-3 rounded-2xl bg-blue-500/10 border border-blue-500/20">
-          <span className="text-2xl shrink-0">🤝</span>
-          <div className="text-left">
-            <p className="text-sm font-bold text-blue-300">Votre ami reçoit</p>
-            <p className="text-xs text-slate-400">+{bonus} TON à son inscription</p>
-          </div>
+        <div className="flex items-center gap-3 p-3 rounded-2xl bg-white/5 border border-white/10">
+          <span className="text-xl shrink-0">2️⃣</span>
+          <p className="text-xs text-slate-300 text-left">Vous recevez <span className="text-emerald-400 font-bold">{pct}%</span> de son dépôt, crédité instantanément</p>
         </div>
       </div>
 
