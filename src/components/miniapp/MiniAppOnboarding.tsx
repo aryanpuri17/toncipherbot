@@ -271,51 +271,41 @@ const Slide3: React.FC = () => (
 
 // ── Slide 4 : Parrainage ────────────────────────────────────────────
 const Slide4: React.FC<{ platformConfig: PlatformConfig; currentUser: CurrentUser }> = ({ platformConfig, currentUser }) => {
-  const code       = currentUser?.referralCode || 'TC-XXXXX';
-  const pct        = platformConfig.referralBonusDepositPercent ?? 5;
-  const inviteBonus = platformConfig.welcomeBonusAmount > 0 && platformConfig.welcomeBonusEnabled
-    ? platformConfig.welcomeBonusAmount
-    : null;
+  const code        = currentUser?.referralCode || 'TC-XXXXX';
+  const pct         = platformConfig.referralBonusDepositPercent ?? 5;
+  const signupBonus = platformConfig.referralBonusSignup ?? 0;
 
   return (
     <div className="w-full flex flex-col items-center gap-4 text-center">
       <div>
         <h2 className="text-2xl font-black text-white">Invitez vos amis</h2>
-        <p className="text-slate-400 text-sm mt-1">Gagnez sur chaque tâche de vos filleuls</p>
+        <p className="text-slate-400 text-sm mt-1">Deux récompenses à chaque invitation</p>
       </div>
 
-      {/* Commission pill — big & prominent */}
-      <div className="w-full p-4 rounded-2xl bg-gradient-to-br from-emerald-600/30 to-emerald-900/20 border border-emerald-500/30 flex flex-col items-center gap-1">
-        <p className="text-4xl font-black text-emerald-300">{pct}%</p>
-        <p className="text-sm font-semibold text-white">sur les gains de chaque filleul</p>
-        <p className="text-xs text-slate-400">Automatique · Sans limite · À vie</p>
+      {/* Two reward cards side by side */}
+      <div className="w-full grid grid-cols-2 gap-3">
+        <div className="flex flex-col items-center gap-1 p-4 rounded-2xl bg-gradient-to-br from-amber-600/30 to-amber-900/20 border border-amber-500/30">
+          <p className="text-3xl font-black text-amber-300">+{signupBonus.toFixed(2)}</p>
+          <p className="text-xs font-semibold text-white">TON / ami inscrit</p>
+          <p className="text-[10px] text-slate-400 text-center">dès l'inscription</p>
+        </div>
+        <div className="flex flex-col items-center gap-1 p-4 rounded-2xl bg-gradient-to-br from-emerald-600/30 to-emerald-900/20 border border-emerald-500/30">
+          <p className="text-3xl font-black text-emerald-300">{pct}%</p>
+          <p className="text-xs font-semibold text-white">sur ses tâches</p>
+          <p className="text-[10px] text-slate-400 text-center">à vie, sans limite</p>
+        </div>
       </div>
 
-      {/* Reward pills */}
+      {/* Steps */}
       <div className="w-full flex flex-col gap-2">
         <div className="flex items-center gap-3 p-3 rounded-2xl bg-white/5 border border-white/10">
-          <span className="text-xl shrink-0">1️⃣</span>
-          <p className="text-xs text-slate-300 text-left">Votre ami s'inscrit avec votre lien</p>
+          <span className="text-lg shrink-0">1️⃣</span>
+          <p className="text-xs text-slate-300 text-left">Votre ami s'inscrit → vous recevez <span className="text-amber-400 font-bold">+{signupBonus.toFixed(2)} TON</span></p>
         </div>
         <div className="flex items-center gap-3 p-3 rounded-2xl bg-white/5 border border-white/10">
-          <span className="text-xl shrink-0">2️⃣</span>
-          <p className="text-xs text-slate-300 text-left">Il accomplit des tâches et gagne du TON</p>
+          <span className="text-lg shrink-0">2️⃣</span>
+          <p className="text-xs text-slate-300 text-left">Il accomplit des tâches → vous recevez <span className="text-emerald-400 font-bold">{pct}%</span> de chaque gain</p>
         </div>
-        <div className="flex items-center gap-3 p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/20">
-          <span className="text-xl shrink-0">3️⃣</span>
-          <p className="text-xs text-slate-300 text-left">
-            Vous recevez <span className="text-emerald-400 font-bold">{pct}%</span> de tout ce qu'il gagne, instantanément
-          </p>
-        </div>
-        {inviteBonus !== null && (
-          <div className="flex items-center gap-3 p-3 rounded-2xl bg-blue-500/10 border border-blue-500/20">
-            <span className="text-xl shrink-0">🎁</span>
-            <p className="text-xs text-slate-300 text-left">
-              Bonus d'invitation : votre ami reçoit{' '}
-              <span className="text-blue-300 font-bold">+{inviteBonus.toFixed(2)} TON</span> à l'inscription
-            </p>
-          </div>
-        )}
       </div>
 
       {/* Referral code preview */}
