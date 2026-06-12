@@ -126,7 +126,18 @@ export const MiniAppOnboarding: React.FC<Props> = ({ onDone }) => {
 // ── Slide 0 : Bienvenue ─────────────────────────────────────────────
 const Slide0: React.FC = () => (
   <div className="flex flex-col items-center text-center gap-6 w-full">
-    <div className="animate-float text-7xl select-none">💎</div>
+    <div className="animate-float relative">
+      <div className="w-24 h-24 rounded-full flex items-center justify-center text-5xl select-none"
+        style={{
+          background: 'linear-gradient(135deg, #0098EA 0%, #0B5EA8 100%)',
+          boxShadow: '0 0 40px rgba(0,152,234,0.5), 0 0 80px rgba(0,152,234,0.2)',
+        }}>
+        💎
+      </div>
+      <div className="absolute inset-0 rounded-full animate-ping opacity-20"
+        style={{ background: 'radial-gradient(circle, #0098EA, transparent)' }} />
+    </div>
+
     <div className="space-y-3">
       <h1 className="text-3xl font-black text-white leading-tight">
         Bienvenue sur<br />
@@ -137,9 +148,22 @@ const Slide0: React.FC = () => (
         <span className="text-white font-semibold">TON</span> — en quelques clics.
       </p>
     </div>
-    <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-500/10 border border-emerald-500/20">
-      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-      <span className="text-xs font-semibold text-emerald-400">Retraits TON en temps réel</span>
+
+    <div className="flex flex-col gap-2 w-full max-w-xs">
+      {[
+        { icon: '✅', label: 'Retraits TON en temps réel',  color: 'text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/20' },
+        { icon: '🔒', label: 'Sécurisé · Blockchain TON',   color: 'text-blue-400',    bg: 'bg-blue-500/10 border-blue-500/20'       },
+        { icon: '⚡', label: 'Gains dès la première minute', color: 'text-amber-400',   bg: 'bg-amber-500/10 border-amber-500/20'     },
+      ].map((p, i) => (
+        <div
+          key={i}
+          className={`flex items-center gap-2 px-4 py-2 rounded-full border animate-pop-in ${p.bg}`}
+          style={{ animationDelay: `${0.1 + i * 0.1}s` }}
+        >
+          <span>{p.icon}</span>
+          <span className={`text-xs font-semibold ${p.color}`}>{p.label}</span>
+        </div>
+      ))}
     </div>
   </div>
 );
@@ -153,14 +177,17 @@ const Slide1: React.FC = () => (
     </div>
 
     {/* Mock balance card */}
-    <div className="card-sheen animated-gradient w-full rounded-3xl p-5 relative overflow-hidden">
-      <div
-        className="absolute inset-0 opacity-30 pointer-events-none"
-        style={{ background: 'radial-gradient(circle at 80% 20%,#60a5fa,transparent 60%)' }}
-      />
-      <p className="text-xs text-blue-200/70 font-semibold uppercase tracking-widest mb-1">Solde disponible</p>
+    <div className="card-sheen animated-gradient w-full rounded-3xl p-5 relative overflow-hidden"
+      style={{
+        background: 'linear-gradient(135deg, #0B1F3A 0%, #0D2847 40%, #083060 100%)',
+        border: '1px solid rgba(0,152,234,0.25)',
+        boxShadow: '0 0 40px rgba(0,152,234,0.15)',
+      }}>
+      <div className="absolute -top-6 -right-6 w-28 h-28 rounded-full pointer-events-none"
+        style={{ background: 'radial-gradient(circle, rgba(0,152,234,0.25), transparent)' }} />
+      <p className="text-xs text-[#7DD4FC] font-semibold uppercase tracking-widest mb-1">Solde disponible</p>
       <p className="text-4xl font-black text-white">
-        2.45 <span className="text-blue-300 text-2xl">TON</span>
+        2.45 <span className="text-[#0098EA] text-2xl">TON</span>
       </p>
       <p className="text-xs text-blue-200/50 mt-0.5">≈ 12.30 $</p>
       <div className="mt-4 flex gap-2">
@@ -234,10 +261,10 @@ const Slide2: React.FC<{ platformConfig: PlatformConfig }> = ({ platformConfig }
 
 // ── Slide 3 : Jeux ─────────────────────────────────────────────────
 const MOCK_GAMES = [
-  { icon: '🎡', name: 'Roue',   sub: '×2 à ×10',    grad: 'from-violet-600/30 to-violet-900/20 border-violet-500/30' },
-  { icon: '🚀', name: 'Crash',  sub: 'jusqu\'à ×100', grad: 'from-blue-600/30 to-blue-900/20 border-blue-500/30'     },
-  { icon: '💣', name: 'Mines',  sub: 'stratégie',    grad: 'from-amber-600/30 to-amber-900/20 border-amber-500/30'  },
-  { icon: '🎰', name: 'Jackpot',sub: 'gros lots',    grad: 'from-rose-600/30 to-rose-900/20 border-rose-500/30'     },
+  { icon: '🎡', name: 'Roue',    sub: '×2 à ×10',     grad: 'from-amber-600/30 to-amber-900/20 border-amber-500/30'      },
+  { icon: '🚀', name: 'Crash',   sub: "jusqu'à ×100", grad: 'from-red-600/30 to-red-900/20 border-red-500/30'            },
+  { icon: '💎', name: 'Mines',   sub: 'stratégie',    grad: 'from-violet-600/30 to-violet-900/20 border-violet-500/30'   },
+  { icon: '🎰', name: 'Jackpot', sub: 'gros lots',    grad: 'from-emerald-600/30 to-emerald-900/20 border-emerald-500/30' },
 ];
 
 const Slide3: React.FC = () => (
