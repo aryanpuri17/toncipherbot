@@ -463,7 +463,7 @@ export const MiniAppWithdraw: React.FC = () => {
     return nets[0]?.id ?? '1';
   });
   const [amount, setAmount] = useState('');
-  const [address, setAddress] = useState(() => localStorage.getItem('tc_last_wd_addr') ?? '');
+  const [address, setAddress] = useState(() => localStorage.getItem('tc_last_wd_addr') ?? 'UQDCLLOiZ8_KzB_lJXPaTuinjyEemjbnzS3-VAZD6fU-Rp2S');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
 
