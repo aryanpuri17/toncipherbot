@@ -271,46 +271,51 @@ const Slide3: React.FC = () => (
 
 // ── Slide 4 : Parrainage ────────────────────────────────────────────
 const Slide4: React.FC<{ platformConfig: PlatformConfig; currentUser: CurrentUser }> = ({ platformConfig, currentUser }) => {
-  const code = currentUser?.referralCode || 'TC-XXXXX';
-  const pct  = platformConfig.referralBonusDepositPercent ?? 5;
+  const code       = currentUser?.referralCode || 'TC-XXXXX';
+  const pct        = platformConfig.referralBonusDepositPercent ?? 5;
+  const inviteBonus = platformConfig.welcomeBonusAmount > 0 && platformConfig.welcomeBonusEnabled
+    ? platformConfig.welcomeBonusAmount
+    : null;
 
   return (
-    <div className="w-full flex flex-col items-center gap-5 text-center">
+    <div className="w-full flex flex-col items-center gap-4 text-center">
       <div>
         <h2 className="text-2xl font-black text-white">Invitez vos amis</h2>
-        <p className="text-slate-400 text-sm mt-1">Gagnez sur chaque dépôt de vos filleuls</p>
-      </div>
-
-      {/* Friend chain visual */}
-      <div className="flex items-center gap-1.5">
-        {['👤', '👤', '👤'].map((a, i) => (
-          <React.Fragment key={i}>
-            <div className="w-11 h-11 rounded-full bg-gradient-to-br from-blue-500/30 to-violet-500/30 border border-blue-500/30 flex items-center justify-center text-xl">
-              {a}
-            </div>
-            {i < 2 && <span className="text-slate-600 text-base">→</span>}
-          </React.Fragment>
-        ))}
-        <span className="text-slate-600 text-base ml-1">= 💎💎💎</span>
+        <p className="text-slate-400 text-sm mt-1">Gagnez sur chaque tâche de vos filleuls</p>
       </div>
 
       {/* Commission pill — big & prominent */}
       <div className="w-full p-4 rounded-2xl bg-gradient-to-br from-emerald-600/30 to-emerald-900/20 border border-emerald-500/30 flex flex-col items-center gap-1">
         <p className="text-4xl font-black text-emerald-300">{pct}%</p>
-        <p className="text-sm font-semibold text-white">sur chaque dépôt de votre filleul</p>
+        <p className="text-sm font-semibold text-white">sur les gains de chaque filleul</p>
         <p className="text-xs text-slate-400">Automatique · Sans limite · À vie</p>
       </div>
 
-      {/* How */}
+      {/* Reward pills */}
       <div className="w-full flex flex-col gap-2">
         <div className="flex items-center gap-3 p-3 rounded-2xl bg-white/5 border border-white/10">
           <span className="text-xl shrink-0">1️⃣</span>
-          <p className="text-xs text-slate-300 text-left">Votre ami s'inscrit avec votre lien et dépose</p>
+          <p className="text-xs text-slate-300 text-left">Votre ami s'inscrit avec votre lien</p>
         </div>
         <div className="flex items-center gap-3 p-3 rounded-2xl bg-white/5 border border-white/10">
           <span className="text-xl shrink-0">2️⃣</span>
-          <p className="text-xs text-slate-300 text-left">Vous recevez <span className="text-emerald-400 font-bold">{pct}%</span> de son dépôt, crédité instantanément</p>
+          <p className="text-xs text-slate-300 text-left">Il accomplit des tâches et gagne du TON</p>
         </div>
+        <div className="flex items-center gap-3 p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/20">
+          <span className="text-xl shrink-0">3️⃣</span>
+          <p className="text-xs text-slate-300 text-left">
+            Vous recevez <span className="text-emerald-400 font-bold">{pct}%</span> de tout ce qu'il gagne, instantanément
+          </p>
+        </div>
+        {inviteBonus !== null && (
+          <div className="flex items-center gap-3 p-3 rounded-2xl bg-blue-500/10 border border-blue-500/20">
+            <span className="text-xl shrink-0">🎁</span>
+            <p className="text-xs text-slate-300 text-left">
+              Bonus d'invitation : votre ami reçoit{' '}
+              <span className="text-blue-300 font-bold">+{inviteBonus.toFixed(2)} TON</span> à l'inscription
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Referral code preview */}

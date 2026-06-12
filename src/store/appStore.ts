@@ -1134,8 +1134,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       todayEarnings: state.currentUser.todayEarnings + earned,
       totalEarnings: state.currentUser.totalEarnings + earned,
     };
-    // Referral bonus: 10% of earned amount credited to referrer
-    const referralBonus = parseFloat((earned * 0.10).toFixed(6));
+    // Referral bonus: configurable % of task earnings credited to referrer
+    const referralBonus = parseFloat((earned * (state.platformConfig.referralBonusDepositPercent / 100)).toFixed(6));
     const referrer = state.currentUser.referredBy
       ? state.users.find(u => u.referralCode === state.currentUser.referredBy && u.id !== state.currentUser.id)
       : null;
@@ -1160,7 +1160,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (!state.currentUser.referredBy) return;
     const referrer = state.users.find(u => u.referralCode === state.currentUser.referredBy && u.id !== state.currentUser.id);
     if (!referrer) return;
-    const bonus = parseFloat((earned * 0.10).toFixed(6));
+    const bonus = parseFloat((earned * (state.platformConfig.referralBonusDepositPercent / 100)).toFixed(6));
     set(s => ({
       users: s.users.map(u => u.id === referrer.id
         ? { ...u, balanceMain: u.balanceMain + bonus, totalEarnings: u.totalEarnings + bonus }
