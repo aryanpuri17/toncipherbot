@@ -377,3 +377,30 @@ body {
   filter: brightness(1.15);
   transition: filter 0.2s ease;
 }
+
+/* ── REFERRAL ────────────────────────────────────────────────────────── */
+.referral-hero-card {
+  background: linear-gradient(135deg, #0B1F3A 0%, #0D2847 50%, #0a1f3d 100%);
+  border: 1px solid rgba(0,152,234,0.3);
+  box-shadow: 0 0 40px rgba(0,152,234,0.12), 0 8px 32px rgba(0,0,0,0.4);
+}
+.referral-line {
+  stroke-dasharray: 200;
+  stroke-dashoffset: 200;
+  animation: lineGrow 0.8s ease forwards;
+}
+@keyframes lineGrow { to { stroke-dashoffset: 0; } }
+.referral-node {
+  transform-origin: center;
+  transform: scale(0);
+  animation: nodeIn 0.3s ease forwards;
+}
+@keyframes nodeIn { to { transform: scale(1); } }
+.referral-pulse {
+  transform-origin: center;
+  animation: centralPulse 2.5s ease-in-out infinite;
+}
+@keyframes centralPulse {
+  0%,100% { opacity: 0.4; transform: scale(1);   }
+  50%     { opacity: 0.1; transform: scale(1.4); }
+}
