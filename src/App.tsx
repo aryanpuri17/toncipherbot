@@ -28,7 +28,7 @@ import { MiniAppNotifications } from './components/miniapp/MiniAppNotifications'
 import { MiniAppShop } from './components/miniapp/MiniAppShop';
 import { MiniAppGames } from './components/miniapp/MiniAppGames';
 
-import { Bell, Menu, ChevronRight, Globe, Info, Wallet, Shield } from 'lucide-react';
+import { Bell, Menu, ChevronRight, Info, Wallet } from 'lucide-react';
 import { useTonConnectUI, useTonWallet } from '@tonconnect/ui-react';
 import { useDepositMonitor } from './hooks/useDepositMonitor';
 import { hadSavedBalance } from './store/appStore';
@@ -40,47 +40,56 @@ const MiniAppSettings: React.FC = () => {
     <div className="space-y-5 animate-slide-up">
       <div className="flex items-center gap-3">
         <button onClick={() => setMiniAppPage('profile')} className="p-2 rounded-lg hover:bg-white/5 text-slate-400">←</button>
-        <h1 className="text-xl font-bold text-white">Paramètres</h1>
+        <div>
+          <h1 className="text-xl font-bold text-white">Paramètres</h1>
+          <p className="text-xs text-slate-500">Gérez vos préférences</p>
+        </div>
       </div>
       <div className="space-y-2">
-        <div className="glass-card-light p-4 flex items-center gap-3">
-          <Globe className="w-5 h-5 text-blue-400" />
-          <div className="flex-1">
-            <p className="text-sm font-medium text-white">Langue</p>
-            <p className="text-xs text-slate-400">Français</p>
-          </div>
-          <ChevronRight className="w-4 h-4 text-slate-500" />
-        </div>
         <button
           onClick={() => setMiniAppPage('notifications')}
-          className="w-full glass-card-light p-4 flex items-center gap-3 hover:bg-white/[0.04] transition-colors"
+          className="w-full glass-card-light p-4 flex items-center gap-3 hover:bg-white/[0.04] transition-colors rounded-2xl"
         >
-          <Bell className="w-5 h-5 text-purple-400" />
+          <div className="w-9 h-9 rounded-xl bg-violet-500/15 flex items-center justify-center flex-shrink-0">
+            <Bell className="w-4 h-4 text-violet-400" />
+          </div>
           <div className="flex-1 text-left">
-            <p className="text-sm font-medium text-white">Notifications</p>
-            <p className="text-xs text-slate-400">Voir toutes les notifications</p>
+            <p className="text-sm font-semibold text-white">Notifications</p>
+            <p className="text-xs text-slate-400">Dépôts, récompenses et alertes</p>
           </div>
           <ChevronRight className="w-4 h-4 text-slate-500" />
         </button>
-        <div className="glass-card-light p-4 flex items-center gap-3">
-          <Shield className="w-5 h-5 text-emerald-400" />
-          <div className="flex-1">
-            <p className="text-sm font-medium text-white">Sécurité</p>
-            <p className="text-xs text-slate-400">2FA non configuré</p>
-          </div>
-          <ChevronRight className="w-4 h-4 text-slate-500" />
-        </div>
-        <div className="glass-card p-4 space-y-2">
-          <div className="flex items-center gap-3">
-            <Info className="w-5 h-5 text-slate-400" />
+
+        <div
+          className="glass-card p-4 rounded-2xl"
+          style={{ border: '1px solid rgba(0,152,234,0.15)', background: 'rgba(0,152,234,0.04)' }}
+        >
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+              style={{ background: 'rgba(0,152,234,0.15)' }}>
+              <Info className="w-4 h-4" style={{ color: '#0098EA' }} />
+            </div>
             <div>
-              <p className="text-sm font-medium text-white">À propos</p>
-              <p className="text-xs text-slate-400">TonCipher v1.0 — @{platformConfig.botUsername}</p>
+              <p className="text-sm font-semibold text-white">À propos</p>
+              <p className="text-xs text-slate-400">TonCipher v1.0</p>
             </div>
           </div>
-          {platformConfig.mainChannel && (
-            <p className="text-xs text-slate-500 pl-8">Canal: {platformConfig.mainChannel}</p>
-          )}
+          <div className="space-y-1.5 pl-12">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-slate-500">Bot</span>
+              <span className="text-xs font-semibold text-white">@{platformConfig.botUsername || 'TonCipher_bot'}</span>
+            </div>
+            {platformConfig.mainChannel && (
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-slate-500">Canal</span>
+                <span className="text-xs font-semibold text-white">{platformConfig.mainChannel}</span>
+              </div>
+            )}
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-slate-500">Réseau</span>
+              <span className="text-xs font-semibold" style={{ color: '#0098EA' }}>TON Blockchain</span>
+            </div>
+          </div>
         </div>
       </div>
     </div>
