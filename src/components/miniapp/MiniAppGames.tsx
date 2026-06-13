@@ -90,19 +90,62 @@ const snd = {
   boom() {
     const ctx = _ac(); if (!ctx) return;
     const t = ctx.currentTime;
-    const sr = ctx.sampleRate, len = Math.floor(sr * 0.32);
-    const buf = ctx.createBuffer(1, len, sr), d = buf.getChannelData(0);
-    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.exp(-i / (sr * 0.07));
-    const ns = ctx.createBufferSource(), ng = ctx.createGain();
-    ns.buffer = buf; ns.connect(ng); ng.connect(ctx.destination);
-    ng.gain.value = 0.5; ns.start(t); ns.stop(t + 0.35);
+    // Sub-bass kick — plus long, plus percutant
+    const kick = ctx.createOscillator(), kg = ctx.createGain();
+    kick.connect(kg); kg.connect(ctx.destination); kick.type = 'sine';
+    kick.frequency.setValueAtTime(220, t); kick.frequency.exponentialRampToValueAtTime(22, t + 0.28);
+    kg.gain.setValueAtTime(0.85, t); kg.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+    kick.start(t); kick.stop(t + 0.38);
+    // Mid crack — sawtooth avec pitch sweep plus long
+    const crack = ctx.createOscillator(), cg = ctx.createGain();
+    crack.connect(cg); cg.connect(ctx.destination); crack.type = 'sawtooth';
+    crack.frequency.setValueAtTime(1100, t); crack.frequency.exponentialRampToValueAtTime(80, t + 0.12);
+    cg.gain.setValueAtTime(0.40, t); cg.gain.exponentialRampToValueAtTime(0.001, t + 0.13);
+    crack.start(t); crack.stop(t + 0.14);
+    // Noise body — deux couches : lowpass grave + bandpass mid crackling
+    const sr  = ctx.sampleRate;
+    const len = Math.floor(sr * 0.7);
+    const buf = ctx.createBuffer(1, len, sr);
+    const d   = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.exp(-i / (sr * 0.18));
+    const ns1 = ctx.createBufferSource(), lp = ctx.createBiquadFilter(), ng1 = ctx.createGain();
+    lp.type = 'lowpass'; lp.frequency.value = 700;
+    ns1.buffer = buf; ns1.connect(lp); lp.connect(ng1); ng1.connect(ctx.destination);
+    ng1.gain.value = 0.55; ns1.start(t); ns1.stop(t + 0.72);
+    const ns2 = ctx.createBufferSource(), bp = ctx.createBiquadFilter(), ng2 = ctx.createGain();
+    bp.type = 'bandpass'; bp.frequency.value = 2200; bp.Q.value = 0.8;
+    ns2.buffer = buf; ns2.connect(bp); bp.connect(ng2); ng2.connect(ctx.destination);
+    ng2.gain.setValueAtTime(0.28, t); ng2.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+    ns2.start(t); ns2.stop(t + 0.20);
   },
   reveal() {
     const ctx = _ac(); if (!ctx) return;
-    const t = ctx.currentTime, o = ctx.createOscillator(), g = ctx.createGain();
-    o.connect(g); g.connect(ctx.destination); o.type = 'sine'; o.frequency.value = 880;
-    g.gain.setValueAtTime(0.09, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.11);
-    o.start(t); o.stop(t + 0.12);
+    const t = ctx.currentTime;
+    // Accord Mi6/Sol#6/Si6/Mi7 — arpège ascendant gem casino
+    ([1319, 1661, 1976, 2637] as const).forEach((f, i) => {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.connect(g); g.connect(ctx.destination);
+      o.type = 'sine'; o.frequency.value = f;
+      const vol   = [0.14, 0.09, 0.07, 0.04][i];
+      const delay = i * 0.028;
+      g.gain.setValueAtTime(0, t + delay);
+      g.gain.linearRampToValueAtTime(vol, t + delay + 0.012);
+      g.gain.exponentialRampToValueAtTime(0.001, t + delay + 0.55);
+      o.start(t + delay); o.stop(t + delay + 0.6);
+    });
+    // Shimmer cristallin plus long et plus audible
+    const sh = ctx.createOscillator(), sg = ctx.createGain();
+    sh.connect(sg); sg.connect(ctx.destination); sh.type = 'sine';
+    sh.frequency.setValueAtTime(5200, t); sh.frequency.exponentialRampToValueAtTime(2600, t + 0.12);
+    sg.gain.setValueAtTime(0, t); sg.gain.linearRampToValueAtTime(0.10, t + 0.008);
+    sg.gain.exponentialRampToValueAtTime(0.001, t + 0.14);
+    sh.start(t); sh.stop(t + 0.15);
+    // Micro "ping" métallique — transitoire de contact gem
+    const ping = ctx.createOscillator(), pg = ctx.createGain();
+    ping.connect(pg); pg.connect(ctx.destination); ping.type = 'triangle';
+    ping.frequency.setValueAtTime(3400, t); ping.frequency.exponentialRampToValueAtTime(2800, t + 0.04);
+    pg.gain.setValueAtTime(0.08, t); pg.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
+    ping.start(t); ping.stop(t + 0.07);
   },
   spin() {
     const ctx = _ac(); if (!ctx) return;
@@ -288,7 +331,7 @@ function rollWheel(streak: number, demo = false): { mult: number; idx: number[] 
   return raw[0];
 }
 
-const WheelSVG: React.FC<{ rotation: number }> = ({ rotation }) => {
+const WheelSVG: React.FC<{ rotation: number; winIdx?: number | null }> = ({ rotation, winIdx }) => {
   const studs = Array.from({ length: 20 }, (_, i) => pt(i * 18, WRADIUS + 14));
   return (
     <svg width="280" height="280" viewBox="0 0 300 300" style={{
@@ -305,6 +348,10 @@ const WheelSVG: React.FC<{ rotation: number }> = ({ rotation }) => {
           <stop offset="0%" stopColor="#fde68a" />
           <stop offset="100%" stopColor="#78350f" />
         </radialGradient>
+        <filter id="wSegGlow" x="-40%" y="-40%" width="180%" height="180%">
+          <feGaussianBlur stdDeviation="5" result="blur" />
+          <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+        </filter>
       </defs>
       <circle cx={CX} cy={CY} r={WRADIUS + 22} fill="#1a0e00" />
       <circle cx={CX} cy={CY} r={WRADIUS + 22} fill="none" stroke="#fbbf24" strokeWidth="3" />
@@ -331,6 +378,17 @@ const WheelSVG: React.FC<{ rotation: number }> = ({ rotation }) => {
           </g>
         );
       })}
+      {/* Winning segment glow — appears after spin stops */}
+      {winIdx != null && (
+        <path
+          d={arcPath(winIdx)}
+          fill={SEGS[winIdx].text + '30'}
+          stroke={SEGS[winIdx].text}
+          strokeWidth="2.5"
+          filter="url(#wSegGlow)"
+          style={{ animation: 'winSegPulse 1.2s ease-in-out infinite alternate' }}
+        />
+      )}
       <circle cx={CX} cy={CY} r={27} fill="url(#wHub)" stroke="#fbbf24" strokeWidth="2.5" />
       <circle cx={CX} cy={CY} r={18} fill="#1a0800" />
       <circle cx={CX} cy={CY} r={9}  fill="#fbbf24" opacity="0.25" />
@@ -348,16 +406,20 @@ const WheelGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
   const [result, setResult]   = useState<{ seg: Seg; win: number } | null>(null);
   const [hist, setHist]       = useState<number[]>([]);
   const [bigWin, setBigWin]   = useState(false);
+  const [winIdx, setWinIdx]   = useState<number | null>(null);
   const mountedRef            = useRef(true);
   const spinTimerRef          = useRef<ReturnType<typeof setTimeout> | null>(null);
   const bigWinTimerRef        = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const tickTimers            = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const ptrRef                = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
-      if (spinTimerRef.current) clearTimeout(spinTimerRef.current);
+      if (spinTimerRef.current)  clearTimeout(spinTimerRef.current);
       if (bigWinTimerRef.current) clearTimeout(bigWinTimerRef.current);
+      tickTimers.current.forEach(clearTimeout);
     };
   }, []);
 
@@ -376,14 +438,41 @@ const WheelGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
     rotRef.current = newRot;
     setRot(newRot);
     setSpin(true);
+    setWinIdx(null);
     snd.spin();
     haptic.impact('medium');
     setResult(null);
+
+    // Schedule tick sounds — exponentially decelerating like a real wheel
+    tickTimers.current.forEach(clearTimeout);
+    tickTimers.current = [];
+    {
+      let elapsed = 0;
+      let interval = 55;
+      while (elapsed < 4050) {
+        elapsed += interval;
+        const t = elapsed;
+        tickTimers.current.push(setTimeout(() => {
+          if (!mountedRef.current) return;
+          snd.tick();
+          // Flash the pointer via direct DOM manipulation (no re-render)
+          const el = ptrRef.current;
+          if (el) {
+            el.style.animation = 'none';
+            void el.offsetHeight; // force reflow to restart animation
+            el.style.animation = 'ptrFlash 0.2s ease-out';
+          }
+        }, t));
+        interval = Math.min(370, interval * 1.052);
+      }
+    }
+
     const used = Math.min(effBet, bal);
     const win = +(used * rule.mult).toFixed(6);
     spinTimerRef.current = setTimeout(() => {
       if (!mountedRef.current) return;
       setSpin(false);
+      setWinIdx(idx);
       placeGameBet(used, win);
       recordGameResult('Roue', used, win);
       setResult({ seg: SEGS[idx], win });
@@ -405,6 +494,16 @@ const WheelGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
 
   return (
     <div className="space-y-5 pb-4">
+      <style>{`
+        @keyframes ptrFlash {
+          0%   { filter: brightness(3) drop-shadow(0 0 18px #fbbf24); transform: scaleY(1.25); }
+          100% { filter: brightness(1) drop-shadow(0 2px 8px rgba(251,191,36,0.8)); transform: scaleY(1); }
+        }
+        @keyframes winSegPulse {
+          0%   { opacity: 0.55; }
+          100% { opacity: 1; }
+        }
+      `}</style>
       <BigWinEffect show={bigWin} />
       <div className="flex items-center gap-3">
         <button onClick={onBack} className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center text-slate-400 hover:text-white transition-colors">
@@ -437,15 +536,18 @@ const WheelGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
 
       <div className="flex flex-col items-center gap-3">
         <div className="relative">
-          <div className="absolute z-10" style={{
-            top: '-6px', left: '50%', transform: 'translateX(-50%)',
-            width: 0, height: 0,
-            borderLeft: '13px solid transparent', borderRight: '13px solid transparent',
-            borderTop: '26px solid #fbbf24',
-            filter: 'drop-shadow(0 2px 8px rgba(251,191,36,0.8))',
-          }} />
+          {/* Pointer — inner div ref'd for direct animation on each tick */}
+          <div className="absolute z-10" style={{ top: '-6px', left: '50%', transform: 'translateX(-50%)' }}>
+            <div ref={ptrRef} style={{
+              width: 0, height: 0,
+              borderLeft: '13px solid transparent', borderRight: '13px solid transparent',
+              borderTop: '26px solid #fbbf24',
+              filter: 'drop-shadow(0 2px 8px rgba(251,191,36,0.8))',
+              transformOrigin: 'top center',
+            }} />
+          </div>
           <div style={{ filter: 'drop-shadow(0 0 36px rgba(251,191,36,0.12))' }}>
-            <WheelSVG rotation={rotation} />
+            <WheelSVG rotation={rotation} winIdx={winIdx} />
           </div>
         </div>
         {result && !spinning && (
@@ -635,6 +737,7 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
   const [queuedBet, setQueuedBet] = useState<number | null>(null);
   const [toast, setToast]         = useState<{ id: number; text: string; win: boolean } | null>(null);
   const [bigWin, setBigWin]       = useState(false);
+  const [cashFlash, setCashFlash] = useState(false);
   const crashMountedRef           = useRef(true);
   const crashBigWinTimer          = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -674,6 +777,8 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
     snd.cashout();
     haptic.success();
     onResultRef.current(true);
+    setCashFlash(true);
+    setTimeout(() => setCashFlash(false), 450);
     setCashedOut(m);
     setToast({ id: Date.now(), text: `+${win.toFixed(4)} TON`, win: true });
     if (m >= 3) {
@@ -901,6 +1006,8 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
         @keyframes chipIn { from{opacity:0;transform:scale(0.5)} to{opacity:1;transform:scale(1)} }
         @keyframes multGlow { 0%,100%{text-shadow:0 0 20px rgba(34,197,94,0.4)} 50%{text-shadow:0 0 40px rgba(34,197,94,0.9)} }
         @keyframes rocketThrust { 0%,100%{opacity:0.82} 50%{opacity:0.45} }
+        @keyframes rocketWobble { 0%{transform:rotate(-3deg) scale(1)} 100%{transform:rotate(3deg) scale(1.04)} }
+        @keyframes cashoutFlash { 0%{opacity:1} 100%{opacity:0} }
         @keyframes mineReveal { 0%{transform:scale(0.6);opacity:0} 60%{transform:scale(1.12)} 100%{transform:scale(1);opacity:1} }
         @keyframes gemShine { 0%,100%{filter:brightness(1)} 50%{filter:brightness(1.5)} }
       `}</style>
@@ -1057,28 +1164,31 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
           {/* fusée / explosion */}
           {phase === 'flying' && (
             <g transform={`translate(${tipX},${tipY}) rotate(${planeAngle})`}>
-              {/* Flammes du réacteur */}
-              <ellipse cx="-16" cy="0" rx="11" ry="5.5" fill="#f97316" opacity="0.22" />
-              <ellipse cx="-13" cy="0" rx="8"  ry="3.8" fill="#fb923c" opacity="0.50" />
-              <ellipse cx="-11" cy="0" rx="5"  ry="2.2" fill="#fde68a" opacity="0.82" />
-              {/* Corps principal */}
-              <path d="M18,0 L12,-2 L-9,-4 L-14,-2 L-14,2 L-9,4 L12,2 Z" fill="#f43f5e" />
-              {/* Nez */}
-              <path d="M12,-2 L18,0 L12,2 Z" fill="#fda4af" />
-              {/* Aile haute */}
-              <path d="M-1,-4 L-8,-13 L-12,-4 Z" fill="#fb7185" opacity="0.9" />
-              {/* Aile basse */}
-              <path d="M-1,4 L-8,13 L-12,4 Z" fill="#fb7185" opacity="0.9" />
-              {/* Aileron haut */}
-              <path d="M-10,-4 L-14,-9 L-14,-4 Z" fill="#be123c" />
-              {/* Aileron bas */}
-              <path d="M-10,4 L-14,9 L-14,4 Z" fill="#be123c" />
-              {/* Hublot */}
-              <circle cx="5" cy="0" r="3.2" fill="#bfdbfe" opacity="0.95" />
-              <circle cx="5" cy="0" r="1.9" fill="#60a5fa" />
-              <circle cx="4.2" cy="-0.8" r="0.7" fill="#fff" opacity="0.6" />
-              {/* Halo de vitesse */}
-              <circle r="10" fill="#f43f5e" opacity="0.06" />
+              {/* Inner g avec wobble — amplitude augmente avec le multiplicateur */}
+              <g style={{ animation: mult > 10 ? 'rocketWobble 0.18s ease-in-out infinite alternate' : mult > 3 ? 'rocketWobble 0.3s ease-in-out infinite alternate' : mult > 1.5 ? 'rocketWobble 0.5s ease-in-out infinite alternate' : undefined, transformOrigin: 'center' }}>
+                {/* Flammes du réacteur */}
+                <ellipse cx="-16" cy="0" rx="11" ry="5.5" fill="#f97316" opacity="0.22" />
+                <ellipse cx="-13" cy="0" rx="8"  ry="3.8" fill="#fb923c" opacity="0.50" />
+                <ellipse cx="-11" cy="0" rx="5"  ry="2.2" fill="#fde68a" opacity="0.82" />
+                {/* Corps principal */}
+                <path d="M18,0 L12,-2 L-9,-4 L-14,-2 L-14,2 L-9,4 L12,2 Z" fill="#f43f5e" />
+                {/* Nez */}
+                <path d="M12,-2 L18,0 L12,2 Z" fill="#fda4af" />
+                {/* Aile haute */}
+                <path d="M-1,-4 L-8,-13 L-12,-4 Z" fill="#fb7185" opacity="0.9" />
+                {/* Aile basse */}
+                <path d="M-1,4 L-8,13 L-12,4 Z" fill="#fb7185" opacity="0.9" />
+                {/* Aileron haut */}
+                <path d="M-10,-4 L-14,-9 L-14,-4 Z" fill="#be123c" />
+                {/* Aileron bas */}
+                <path d="M-10,4 L-14,9 L-14,4 Z" fill="#be123c" />
+                {/* Hublot */}
+                <circle cx="5" cy="0" r="3.2" fill="#bfdbfe" opacity="0.95" />
+                <circle cx="5" cy="0" r="1.9" fill="#60a5fa" />
+                <circle cx="4.2" cy="-0.8" r="0.7" fill="#fff" opacity="0.6" />
+                {/* Halo de vitesse */}
+                <circle r="10" fill="#f43f5e" opacity="0.06" />
+              </g>
             </g>
           )}
           {isCrashed && (
@@ -1094,6 +1204,12 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
             </g>
           )}
         </svg>
+
+        {/* Flash vert au cashout */}
+        {cashFlash && (
+          <div className="absolute inset-0 pointer-events-none rounded-2xl"
+            style={{ background: 'rgba(34,197,94,0.18)', animation: 'cashoutFlash 0.45s ease-out forwards' }} />
+        )}
 
         {/* superposition centrale */}
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
@@ -1424,10 +1540,45 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
   return (
     <div className="pb-4" style={{ background: '#060a18', minHeight: '100%' }}>
       <style>{`
-        @keyframes mineReveal { 0%{transform:scale(0.6);opacity:0} 60%{transform:scale(1.12)} 100%{transform:scale(1);opacity:1} }
-        @keyframes gemShine { 0%,100%{filter:brightness(1)} 50%{filter:brightness(1.55)} }
-        @keyframes mineGridShake { 0%,100%{transform:translate(0,0)} 15%{transform:translate(-5px,3px)} 30%{transform:translate(5px,-3px)} 45%{transform:translate(-4px,-2px)} 60%{transform:translate(4px,2px)} 80%{transform:translate(-2px,1px)} }
-        @keyframes boomFlash { 0%{box-shadow:0 0 0 rgba(239,68,68,0)} 30%{box-shadow:0 0 28px rgba(239,68,68,0.85)} 100%{box-shadow:0 0 10px rgba(239,68,68,0.4)} }
+        @keyframes tileFlipFront { 0%{transform:rotateY(0deg)} 100%{transform:rotateY(90deg)} }
+        @keyframes tileFlipBack  { 0%{transform:rotateY(-90deg)} 100%{transform:rotateY(0deg)} }
+        @keyframes tileIdle {
+          0%,100%{box-shadow:0 0 0px rgba(100,149,255,0); transform:scale(1)}
+          45%    {box-shadow:0 0 8px rgba(100,149,255,0.22),0 0 3px rgba(100,149,255,0.10) inset; transform:scale(1.015)}
+        }
+        @keyframes tileSweep { 0%{background-position:-120% center} 100%{background-position:220% center} }
+        @keyframes mineReveal {
+          0%  {transform:rotateY(0deg) scale(0.55);opacity:0}
+          50% {transform:rotateY(0deg) scale(1.20);opacity:1}
+          72% {transform:rotateY(0deg) scale(0.93)}
+          88% {transform:rotateY(0deg) scale(1.05)}
+          100%{transform:rotateY(0deg) scale(1)}
+        }
+        @keyframes gemShine {
+          0%,100%{filter:brightness(1.1) drop-shadow(0 0 4px rgba(74,222,128,0.45));box-shadow:0 0 14px rgba(74,222,128,0.45),0 0 5px rgba(74,222,128,0.25) inset}
+          50%    {filter:brightness(1.85) drop-shadow(0 0 14px rgba(74,222,128,0.90));box-shadow:0 0 28px rgba(74,222,128,0.80),0 0 10px rgba(74,222,128,0.40) inset}
+        }
+        @keyframes mineGridShake {
+          0%,100%{transform:translate(0,0) rotate(0deg)}
+          12%    {transform:translate(-7px,5px) rotate(-0.5deg)}
+          25%    {transform:translate(7px,-5px) rotate(0.5deg)}
+          38%    {transform:translate(-6px,-4px) rotate(-0.3deg)}
+          52%    {transform:translate(6px,4px) rotate(0.3deg)}
+          68%    {transform:translate(-3px,2px)}
+          84%    {transform:translate(2px,-1px)}
+        }
+        @keyframes boomFlash {
+          0%  {box-shadow:0 0 0 rgba(239,68,68,0);transform:scale(1);filter:brightness(1)}
+          8%  {box-shadow:0 0 0 4px rgba(255,255,100,0.9),0 0 40px 6px rgba(239,68,68,1),0 0 12px rgba(255,120,0,1) inset;transform:scale(1.18);filter:brightness(2.2)}
+          22% {box-shadow:0 0 28px 2px rgba(239,68,68,0.85),0 0 8px rgba(255,80,0,0.5) inset;transform:scale(1.07);filter:brightness(1.4)}
+          55% {box-shadow:0 0 18px rgba(239,68,68,0.55);transform:scale(1.02);filter:brightness(1.1)}
+          100%{box-shadow:0 0 10px rgba(239,68,68,0.30);transform:scale(1);filter:brightness(1)}
+        }
+        @keyframes gridFlashRed {
+          0%  {outline:0px solid rgba(239,68,68,0)}
+          10% {outline:3px solid rgba(239,68,68,0.85);box-shadow:0 0 40px rgba(239,68,68,0.4)}
+          100%{outline:0px solid rgba(239,68,68,0);box-shadow:none}
+        }
       `}</style>
       <BigWinEffect show={bigWin} />
       {/* Header */}
@@ -1475,39 +1626,126 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
             animation: phase === 'lost' ? 'mineGridShake 0.45s ease' : undefined,
           }}>
           {Array.from({ length: GRID_SIZE }, (_, idx) => {
-            const isMine = minePos.has(idx);
-            const isRev  = revealed.has(idx);
+            const isMine    = minePos.has(idx);
+            const isRev     = revealed.has(idx);
             const showBoom  = isRev && isMine;
             const showGem   = isRev && !isMine;
             const showGhost = (phase === 'lost' || phase === 'won') && isMine && !isRev;
+            const isPlayable = phase === 'playing' && !isRev;
             return (
-              <button key={idx} onClick={() => revealTile(idx)}
-                disabled={phase !== 'playing' || isRev}
+              <div
+                key={idx}
                 style={{
                   aspectRatio: '1',
-                  background: showBoom ? 'radial-gradient(circle at 50% 40%, rgba(239,68,68,0.45), rgba(127,29,29,0.35))' :
-                               showGem  ? 'radial-gradient(circle at 50% 40%, rgba(34,197,94,0.35), rgba(20,83,45,0.3))' :
-                               showGhost ? 'rgba(239,68,68,0.08)' :
-                               phase === 'playing' ? 'linear-gradient(160deg,#1e2a52,#161d3a)' : '#111830',
-                  border: showBoom ? '2px solid rgba(239,68,68,0.6)' :
-                          showGem  ? '2px solid rgba(34,197,94,0.45)' :
-                          showGhost ? '1px solid rgba(239,68,68,0.2)' :
-                          phase === 'playing' ? '1px solid #2a3a6e' : '1px solid #1e2847',
-                  borderRadius: 12,
-                  fontSize: 18,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  transition: 'background 0.18s, border-color 0.18s, transform 0.12s',
-                  animation: showBoom ? 'mineReveal 0.25s ease-out, boomFlash 0.6s ease-out forwards' :
-                             showGem  ? 'mineReveal 0.25s ease-out, gemShine 2.2s ease-in-out 0.3s infinite' : undefined,
-                  boxShadow: showGem ? '0 0 12px rgba(34,197,94,0.25)' : undefined,
-                  cursor: phase === 'playing' && !isRev ? 'pointer' : 'default',
-                  opacity: showGhost ? 0.5 : 1,
+                  position: 'relative',
+                  perspective: '500px',
+                  cursor: isPlayable ? 'pointer' : 'default',
                 }}
-                onMouseEnter={e => { if (phase === 'playing' && !isRev) (e.currentTarget as HTMLButtonElement).style.background = '#243059'; }}
-                onMouseLeave={e => { if (phase === 'playing' && !isRev) (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(160deg,#1e2a52,#161d3a)'; }}
+                onClick={() => { if (isPlayable) revealTile(idx); }}
               >
-                {showBoom ? '💣' : showGem ? '💎' : showGhost ? '💣' : null}
-              </button>
+                {/* ── Face avant — visible avant révélation ── */}
+                <div
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    borderRadius: 12,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backfaceVisibility: 'hidden',
+                    WebkitBackfaceVisibility: 'hidden',
+                    transformStyle: 'preserve-3d',
+                    transform: isRev ? 'rotateY(90deg)' : 'rotateY(0deg)',
+                    transition: isRev ? 'transform 0.18s ease-in' : 'none',
+                    background: showGhost
+                      ? 'rgba(239,68,68,0.08)'
+                      : phase === 'playing'
+                        ? 'linear-gradient(160deg,#1e2a52,#161d3a)'
+                        : '#111830',
+                    border: showGhost
+                      ? '1px solid rgba(239,68,68,0.22)'
+                      : phase === 'playing'
+                        ? '1px solid #2a3a6e'
+                        : '1px solid #1e2847',
+                    animation: isPlayable ? 'tileIdle 3.2s ease-in-out infinite' : undefined,
+                    animationDelay: isPlayable ? `${(idx * 0.13) % 1.6}s` : undefined,
+                    opacity: showGhost ? 0.45 : 1,
+                    overflow: 'hidden',
+                  }}
+                  onMouseEnter={e => {
+                    if (isPlayable) {
+                      (e.currentTarget as HTMLDivElement).style.background = '#243059';
+                      (e.currentTarget as HTMLDivElement).style.borderColor = '#3a4f8e';
+                    }
+                  }}
+                  onMouseLeave={e => {
+                    if (isPlayable) {
+                      (e.currentTarget as HTMLDivElement).style.background = 'linear-gradient(160deg,#1e2a52,#161d3a)';
+                      (e.currentTarget as HTMLDivElement).style.borderColor = '#2a3a6e';
+                    }
+                  }}
+                >
+                  {/* Sweep shimmer diagonal */}
+                  {isPlayable && (
+                    <div
+                      aria-hidden="true"
+                      style={{
+                        position: 'absolute',
+                        inset: 0,
+                        borderRadius: 12,
+                        background: 'linear-gradient(105deg,transparent 30%,rgba(255,255,255,0.045) 50%,transparent 70%)',
+                        backgroundSize: '200% 100%',
+                        animation: 'tileSweep 4s ease-in-out infinite',
+                        animationDelay: `${(idx * 0.19) % 2}s`,
+                        pointerEvents: 'none',
+                      }}
+                    />
+                  )}
+                  {showGhost && <span style={{ fontSize: 18, opacity: 0.5 }}>💣</span>}
+                </div>
+
+                {/* ── Face arrière — visible après révélation ── */}
+                <div
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    borderRadius: 12,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: 20,
+                    backfaceVisibility: 'hidden',
+                    WebkitBackfaceVisibility: 'hidden',
+                    transformStyle: 'preserve-3d',
+                    transform: isRev ? 'rotateY(0deg)' : 'rotateY(-90deg)',
+                    transition: isRev ? 'transform 0.18s ease-out 0.18s' : 'none',
+                    background: showBoom
+                      ? 'radial-gradient(circle at 50% 35%,rgba(239,68,68,0.65),rgba(127,29,29,0.55))'
+                      : showGem
+                        ? 'radial-gradient(circle at 45% 30%,rgba(74,222,128,0.60),rgba(20,83,45,0.50))'
+                        : 'transparent',
+                    border: showBoom
+                      ? '2px solid rgba(239,68,68,0.90)'
+                      : showGem
+                        ? '2px solid rgba(74,222,128,0.80)'
+                        : 'none',
+                    boxShadow: showGem
+                      ? '0 0 22px rgba(74,222,128,0.65),0 0 8px rgba(74,222,128,0.35) inset'
+                      : showBoom
+                        ? '0 0 26px rgba(239,68,68,0.75)'
+                        : undefined,
+                    animation: showBoom
+                      ? 'boomFlash 0.65s ease-out forwards'
+                      : showGem
+                        ? 'mineReveal 0.32s cubic-bezier(0.34,1.56,0.64,1) forwards, gemShine 2.4s ease-in-out 0.35s infinite'
+                        : undefined,
+                    filter: showGem ? 'brightness(1.18)' : undefined,
+                  }}
+                >
+                  {showBoom && '💣'}
+                  {showGem  && '💎'}
+                </div>
+              </div>
             );
           })}
         </div>
@@ -1701,13 +1939,15 @@ const RouletteGame: React.FC<{ onBack: () => void; streak: number; onResult: OnR
   const mountedRef                = useRef(true);
   const spinTimerRef              = useRef<ReturnType<typeof setTimeout> | null>(null);
   const bigWinTimerRef            = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const rTickTimers               = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   useEffect(() => {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
-      if (spinTimerRef.current) clearTimeout(spinTimerRef.current);
+      if (spinTimerRef.current)  clearTimeout(spinTimerRef.current);
       if (bigWinTimerRef.current) clearTimeout(bigWinTimerRef.current);
+      rTickTimers.current.forEach(clearTimeout);
     };
   }, []);
 
@@ -1730,14 +1970,52 @@ const RouletteGame: React.FC<{ onBack: () => void; streak: number; onResult: OnR
     setRotation(newRot);
     // Ball counter-clockwise, settles near pointer (top)
     const curBall = ballRef.current % 360;
-    const newBall = ballRef.current - 14 * 360 - curBall + (Math.random() * DEG_PER_SLOT * 0.5 - DEG_PER_SLOT * 0.25);
-    ballRef.current = newBall;
-    setBallAngle(newBall);
+    const finalBall = ballRef.current - 14 * 360 - curBall + (Math.random() * DEG_PER_SLOT * 0.5 - DEG_PER_SLOT * 0.25);
+    ballRef.current = finalBall;
+    setBallAngle(finalBall);
     setPhase('spinning');
     snd.spin();
     haptic.impact('medium');
     setResult(null);
     const used = effBet;
+
+    // Cliquetis bille — commence rapide (~30ms) ralentit jusqu'à ~360ms
+    rTickTimers.current.forEach(clearTimeout);
+    rTickTimers.current = [];
+    {
+      let elapsed = 0;
+      let interval = 28;
+      while (elapsed < 4600) {
+        elapsed += interval;
+        const t = elapsed;
+        rTickTimers.current.push(setTimeout(() => {
+          if (!mountedRef.current) return;
+          snd.tick();
+        }, t));
+        interval = Math.min(380, interval * 1.038);
+      }
+    }
+
+    // Rebonds finaux — la bille "hésite" entre 2 cases avant de se stabiliser
+    rTickTimers.current.push(setTimeout(() => {
+      if (!mountedRef.current) return;
+      ballRef.current = finalBall + DEG_PER_SLOT * 0.85;
+      setBallAngle(finalBall + DEG_PER_SLOT * 0.85);
+      snd.tick();
+    }, 4750));
+    rTickTimers.current.push(setTimeout(() => {
+      if (!mountedRef.current) return;
+      ballRef.current = finalBall - DEG_PER_SLOT * 0.35;
+      setBallAngle(finalBall - DEG_PER_SLOT * 0.35);
+      snd.tick();
+    }, 4950));
+    rTickTimers.current.push(setTimeout(() => {
+      if (!mountedRef.current) return;
+      ballRef.current = finalBall;
+      setBallAngle(finalBall);
+      haptic.impact('light');
+    }, 5080));
+
     spinTimerRef.current = setTimeout(() => {
       if (!mountedRef.current) return;
       const mult = roulettePayout(selectedBet, n);
@@ -1756,7 +2034,7 @@ const RouletteGame: React.FC<{ onBack: () => void; streak: number; onResult: OnR
         haptic.impact('heavy'); haptic.success();
       } else if (mult > 0) { snd.win(); haptic.success(); }
       else { snd.lose(); haptic.error(); }
-    }, 5100);
+    }, 5200);
   };
 
   const reset = () => { setPhase('idle'); setResult(null); };
