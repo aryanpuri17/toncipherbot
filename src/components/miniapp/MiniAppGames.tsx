@@ -1497,12 +1497,10 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
   return (
     <div className="pb-4" style={{ background: '#060a18', minHeight: '100%' }}>
       <style>{`
+        @keyframes mineReveal { 0%{transform:scale(0.6);opacity:0} 60%{transform:scale(1.12)} 100%{transform:scale(1);opacity:1} }
+        @keyframes gemShine { 0%,100%{filter:brightness(1)} 50%{filter:brightness(1.55)} }
         @keyframes mineGridShake { 0%,100%{transform:translate(0,0)} 15%{transform:translate(-5px,3px)} 30%{transform:translate(5px,-3px)} 45%{transform:translate(-4px,-2px)} 60%{transform:translate(4px,2px)} 80%{transform:translate(-2px,1px)} }
-        @keyframes gemShine { 0%,100%{filter:brightness(1)} 50%{filter:brightness(1.6)} }
-        @keyframes tileFlip { 0%{transform:rotateY(0deg)} 100%{transform:rotateY(180deg)} }
-        @keyframes boomPulse { 0%{box-shadow:0 0 0 0 rgba(239,68,68,0.9)} 60%{box-shadow:0 0 0 10px rgba(239,68,68,0)} 100%{box-shadow:0 0 0 0 rgba(239,68,68,0)} }
-        @keyframes tileShimmer { 0%{background-position:200% center} 100%{background-position:-200% center} }
-        @keyframes tileWait { 0%,100%{box-shadow:0 0 0px rgba(59,130,246,0)} 50%{box-shadow:0 0 8px rgba(59,130,246,0.25)} }
+        @keyframes boomFlash { 0%{box-shadow:0 0 0 rgba(239,68,68,0)} 30%{box-shadow:0 0 28px rgba(239,68,68,0.85)} 100%{box-shadow:0 0 10px rgba(239,68,68,0.4)} }
       `}</style>
       <BigWinEffect show={bigWin} />
       {/* Header */}
@@ -1550,77 +1548,39 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
             animation: phase === 'lost' ? 'mineGridShake 0.45s ease' : undefined,
           }}>
           {Array.from({ length: GRID_SIZE }, (_, idx) => {
-            const isMine    = minePos.has(idx);
-            const isRev     = revealed.has(idx);
+            const isMine = minePos.has(idx);
+            const isRev  = revealed.has(idx);
             const showBoom  = isRev && isMine;
             const showGem   = isRev && !isMine;
             const showGhost = (phase === 'lost' || phase === 'won') && isMine && !isRev;
-            const isPlayable = phase === 'playing' && !isRev;
             return (
-              <div key={idx}
-                style={{ aspectRatio: '1', perspective: '500px', cursor: isPlayable ? 'pointer' : 'default' }}
-                onClick={() => revealTile(idx)}
+              <button key={idx} onClick={() => revealTile(idx)}
+                disabled={phase !== 'playing' || isRev}
+                style={{
+                  aspectRatio: '1',
+                  background: showBoom ? 'radial-gradient(circle at 50% 40%, rgba(239,68,68,0.45), rgba(127,29,29,0.35))' :
+                               showGem  ? 'radial-gradient(circle at 50% 40%, rgba(34,197,94,0.35), rgba(20,83,45,0.3))' :
+                               showGhost ? 'rgba(239,68,68,0.08)' :
+                               phase === 'playing' ? 'linear-gradient(160deg,#1e2a52,#161d3a)' : '#111830',
+                  border: showBoom ? '2px solid rgba(239,68,68,0.6)' :
+                          showGem  ? '2px solid rgba(34,197,94,0.45)' :
+                          showGhost ? '1px solid rgba(239,68,68,0.2)' :
+                          phase === 'playing' ? '1px solid #2a3a6e' : '1px solid #1e2847',
+                  borderRadius: 12,
+                  fontSize: 18,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  transition: 'background 0.18s, border-color 0.18s, transform 0.12s',
+                  animation: showBoom ? 'mineReveal 0.25s ease-out, boomFlash 0.6s ease-out forwards' :
+                             showGem  ? 'mineReveal 0.25s ease-out, gemShine 2.2s ease-in-out 0.3s infinite' : undefined,
+                  boxShadow: showGem ? '0 0 12px rgba(34,197,94,0.25)' : undefined,
+                  cursor: phase === 'playing' && !isRev ? 'pointer' : 'default',
+                  opacity: showGhost ? 0.5 : 1,
+                }}
+                onMouseEnter={e => { if (phase === 'playing' && !isRev) (e.currentTarget as HTMLButtonElement).style.background = '#243059'; }}
+                onMouseLeave={e => { if (phase === 'playing' && !isRev) (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(160deg,#1e2a52,#161d3a)'; }}
               >
-                {/* 3D flip container */}
-                <div style={{
-                  width: '100%', height: '100%',
-                  position: 'relative',
-                  transformStyle: 'preserve-3d',
-                  transition: isRev || showGhost ? 'transform 0.38s ease-in-out' : undefined,
-                  transform: (isRev || showGhost) ? 'rotateY(180deg)' : 'rotateY(0deg)',
-                }}>
-                  {/* Face avant — case cachée */}
-                  <div style={{
-                    position: 'absolute', inset: 0,
-                    backfaceVisibility: 'hidden',
-                    WebkitBackfaceVisibility: 'hidden',
-                    borderRadius: 12,
-                    background: isPlayable
-                      ? 'linear-gradient(160deg,#1e2a52,#161d3a)'
-                      : phase === 'playing' ? 'linear-gradient(160deg,#1e2a52,#161d3a)' : '#111830',
-                    border: isPlayable ? '1px solid #2a3a6e' : '1px solid #1e2847',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    animation: isPlayable ? 'tileWait 2.8s ease-in-out infinite' : undefined,
-                    backgroundImage: isPlayable
-                      ? 'linear-gradient(160deg,#1e2a52,#161d3a), linear-gradient(105deg, transparent 40%, rgba(255,255,255,0.05) 50%, transparent 60%)'
-                      : undefined,
-                    backgroundSize: isPlayable ? 'auto, 200%' : undefined,
-                  }} />
-                  {/* Face arrière — gem ou bombe */}
-                  <div style={{
-                    position: 'absolute', inset: 0,
-                    backfaceVisibility: 'hidden',
-                    WebkitBackfaceVisibility: 'hidden',
-                    transform: 'rotateY(180deg)',
-                    borderRadius: 12,
-                    fontSize: 20,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    background: showBoom
-                      ? 'radial-gradient(circle at 50% 40%, rgba(239,68,68,0.5), rgba(127,29,29,0.4))'
-                      : showGhost
-                      ? 'rgba(239,68,68,0.08)'
-                      : 'radial-gradient(circle at 50% 40%, rgba(34,197,94,0.35), rgba(20,83,45,0.3))',
-                    border: showBoom
-                      ? '2px solid rgba(239,68,68,0.65)'
-                      : showGhost
-                      ? '1px solid rgba(239,68,68,0.2)'
-                      : '2px solid rgba(34,197,94,0.5)',
-                    boxShadow: showBoom
-                      ? undefined
-                      : showGhost
-                      ? undefined
-                      : '0 0 14px rgba(34,197,94,0.3)',
-                    animation: showBoom
-                      ? 'boomPulse 0.6s ease-out'
-                      : showGem
-                      ? 'gemShine 2.2s ease-in-out 0.3s infinite'
-                      : undefined,
-                    opacity: showGhost ? 0.45 : 1,
-                  }}>
-                    {showBoom ? '💣' : showGhost ? '💣' : '💎'}
-                  </div>
-                </div>
-              </div>
+                {showBoom ? '💣' : showGem ? '💎' : showGhost ? '💣' : null}
+              </button>
             );
           })}
         </div>
