@@ -96,28 +96,37 @@ export const MiniAppCreateTask: React.FC = () => {
 
   if (submitted) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4 animate-slide-up">
-        <div className="w-16 h-16 rounded-2xl bg-amber-500/20 flex items-center justify-center">
-          <Clock className="w-8 h-8 text-amber-400" />
+      <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-5 animate-slide-up px-4">
+        <div className="relative">
+          <div className="absolute inset-0 rounded-2xl bg-amber-400/20 blur-xl animate-pulse" />
+          <div className="relative w-20 h-20 rounded-2xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center">
+            <Clock className="w-9 h-9 text-amber-400" />
+          </div>
         </div>
-        <h2 className="text-xl font-bold text-white">En attente d'approbation</h2>
-        <p className="text-sm text-slate-400 text-center px-6">
-          Votre tâche a été soumise. L'admin va la vérifier avant qu'elle soit publiée.
-          Vous serez notifié par le bot.
-        </p>
-        <p className="text-xs text-amber-400/80 text-center px-6">
-          {totalCost.toFixed(4)} TON déduits de votre solde — remboursé si refusé.
-        </p>
-        <div className="flex gap-3">
+
+        <div className="text-center space-y-2">
+          <h2 className="text-xl font-bold text-white">Soumise avec succès</h2>
+          <p className="text-sm text-slate-400 leading-relaxed max-w-[260px]">
+            Votre tâche est en attente de validation. Vous serez notifié par le bot dès son approbation.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-500/10 border border-amber-500/20">
+          <span className="text-xs text-amber-400/80">Déduit :</span>
+          <span className="text-sm font-bold text-amber-400">{totalCost.toFixed(4)} TON</span>
+          <span className="text-xs text-slate-500">• remboursé si refusé</span>
+        </div>
+
+        <div className="flex gap-3 w-full max-w-[280px]">
           <button
             onClick={() => setMiniAppPage('myTasks')}
-            className="btn-primary px-5 py-2.5 rounded-xl text-sm font-semibold text-white"
+            className="flex-1 btn-primary py-2.5 rounded-xl text-sm font-semibold text-white"
           >
             Mes campagnes
           </button>
           <button
             onClick={() => setMiniAppPage('tasks')}
-            className="px-5 py-2.5 rounded-xl glass-card-light text-sm font-medium text-slate-300"
+            className="flex-1 py-2.5 rounded-xl glass-card-light text-sm font-medium text-slate-300"
           >
             Retour
           </button>
@@ -130,28 +139,38 @@ export const MiniAppCreateTask: React.FC = () => {
     <div className="space-y-5 animate-slide-up">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <button onClick={() => setMiniAppPage('tasks')} className="p-2 rounded-lg hover:bg-white/5 text-slate-400">←</button>
-        <h1 className="text-xl font-bold text-white">Créer une tâche</h1>
+        <button
+          onClick={() => setMiniAppPage('tasks')}
+          className="p-2 rounded-lg hover:bg-white/5 text-slate-400 transition-colors"
+        >←</button>
+        <div>
+          <h1 className="text-xl font-bold text-white">Créer une tâche</h1>
+          <p className="text-xs text-slate-500">Promouvoir votre canal ou bot</p>
+        </div>
       </div>
 
       {/* Type selector */}
       <div className="glass-card p-4 space-y-3">
-        <p className="text-xs text-slate-400">Catégorie</p>
+        <p className="text-xs font-medium text-slate-400">Type de tâche</p>
         <div className="grid grid-cols-2 gap-2">
-          {TASK_TYPES.map(opt => (
-            <button
-              key={opt.value}
-              onClick={() => setType(opt.value)}
-              className={`py-2.5 px-3 rounded-xl text-xs font-medium text-left transition-all flex items-center gap-2 ${
-                type === opt.value
-                  ? 'bg-blue-500/15 border border-blue-500/40 text-white'
-                  : 'glass-card-light text-slate-400'
-              }`}
-            >
-              <span className="text-base">{opt.icon}</span>
-              {opt.label}
-            </button>
-          ))}
+          {TASK_TYPES.map(opt => {
+            const isActive = type === opt.value;
+            return (
+              <button
+                key={opt.value}
+                onClick={() => setType(opt.value)}
+                className="py-2.5 px-3 rounded-xl text-xs font-semibold text-left transition-all flex items-center gap-2 border"
+                style={
+                  isActive
+                    ? { background: 'rgba(0,152,234,0.12)', borderColor: 'rgba(0,152,234,0.35)', color: '#fff' }
+                    : { background: 'rgba(255,255,255,0.04)', borderColor: 'transparent', color: '#94a3b8' }
+                }
+              >
+                <span className="text-base">{opt.icon}</span>
+                <span>{opt.label}</span>
+              </button>
+            );
+          })}
         </div>
 
         {needsAdmin && (
@@ -175,7 +194,7 @@ export const MiniAppCreateTask: React.FC = () => {
             value={title}
             onChange={e => setTitle(e.target.value)}
             placeholder="Ex: Rejoindre mon canal"
-            className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white text-sm placeholder:text-slate-600 focus:outline-none focus:border-blue-500/50"
+            className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white text-sm placeholder:text-slate-600 focus:outline-none focus:border-[#0098EA]/50"
           />
         </div>
 
@@ -186,7 +205,7 @@ export const MiniAppCreateTask: React.FC = () => {
             value={description}
             onChange={e => setDescription(e.target.value)}
             placeholder="Décrivez votre tâche"
-            className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white text-sm placeholder:text-slate-600 focus:outline-none focus:border-blue-500/50"
+            className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white text-sm placeholder:text-slate-600 focus:outline-none focus:border-[#0098EA]/50"
           />
         </div>
 
@@ -199,7 +218,7 @@ export const MiniAppCreateTask: React.FC = () => {
             value={targetUrl}
             onChange={e => setTargetUrl(e.target.value)}
             placeholder="https://t.me/votre_canal"
-            className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white text-sm font-mono placeholder:text-slate-600 focus:outline-none focus:border-blue-500/50"
+            className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white text-sm font-mono placeholder:text-slate-600 focus:outline-none focus:border-[#0098EA]/50"
           />
         </div>
 
@@ -215,43 +234,60 @@ export const MiniAppCreateTask: React.FC = () => {
             step="100"
             value={executions}
             onChange={e => setExecutions(e.target.value)}
-            className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white text-sm font-mono focus:outline-none focus:border-blue-500/50"
+            className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white text-sm font-mono focus:outline-none focus:border-[#0098EA]/50"
           />
         </div>
       </div>
 
       {/* Cost summary */}
-      <div className="glass-card-light p-4 space-y-2">
+      <div className="glass-card p-4 space-y-2.5">
+        <p className="text-xs font-semibold text-slate-400 mb-1">Récapitulatif</p>
+
         <div className="flex justify-between text-xs">
-          <span className="text-slate-400">Prix par exécution</span>
+          <span className="text-slate-500">Prix par exécution</span>
           <span className="text-white font-semibold">{priceFixed.toFixed(4)} TON</span>
         </div>
         <div className="flex justify-between text-xs">
-          <span className="text-slate-400">Récompense par utilisateur</span>
+          <span className="text-slate-500">Récompense par utilisateur</span>
           <span className="text-emerald-400 font-semibold">+{workerReward.toFixed(4)} TON</span>
         </div>
         <div className="flex justify-between text-xs">
-          <span className="text-slate-400">Nombre d'exécutions</span>
+          <span className="text-slate-500">Nombre d'exécutions</span>
           <span className="text-white font-semibold">{execCount > 0 ? execCount.toLocaleString() : '—'}</span>
         </div>
-        <div className="h-px bg-white/8 my-1" />
-        <div className="flex justify-between text-xs">
-          <span className="text-slate-400 font-medium">Coût total</span>
-          <span className="text-amber-400 font-bold text-sm">
-            {execCount > 0 ? totalCost.toFixed(4) : '—'} TON
+
+        <div className="h-px bg-white/[0.06] my-0.5" />
+
+        <div className="flex justify-between items-center">
+          <span className="text-xs font-semibold text-white">Coût total</span>
+          <span
+            className="text-base font-bold"
+            style={{ color: execCount > 0 ? '#f59e0b' : '#64748b' }}
+          >
+            {execCount > 0 ? `${totalCost.toFixed(4)} TON` : '—'}
           </span>
         </div>
+
         {currentUser.taskCredits > 0 && execCount > 0 && (
           <div className="flex justify-between text-xs">
-            <span className="text-blue-400">Crédits campagnes</span>
-            <span className="text-blue-400 font-semibold">-{Math.min(currentUser.taskCredits, totalCost).toFixed(4)} TON</span>
+            <span style={{ color: '#0098EA' }}>Crédits campagnes</span>
+            <span className="font-semibold" style={{ color: '#0098EA' }}>
+              -{Math.min(currentUser.taskCredits, totalCost).toFixed(4)} TON
+            </span>
           </div>
         )}
+
         <div className="flex justify-between text-xs">
-          <span className="text-slate-400">Votre solde</span>
-          <span className={`font-semibold ${(currentUser.balanceMain + currentUser.taskCredits) >= totalCost && totalCost > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+          <span className="text-slate-500">Votre solde</span>
+          <span className={`font-semibold ${
+            (currentUser.balanceMain + currentUser.taskCredits) >= totalCost && totalCost > 0
+              ? 'text-emerald-400'
+              : 'text-slate-400'
+          }`}>
             {currentUser.balanceMain.toFixed(4)} TON
-            {currentUser.taskCredits > 0 && <span className="text-blue-400"> +{currentUser.taskCredits.toFixed(4)} crédits</span>}
+            {currentUser.taskCredits > 0 && (
+              <span style={{ color: '#0098EA' }}> +{currentUser.taskCredits.toFixed(4)} crédits</span>
+            )}
           </span>
         </div>
       </div>

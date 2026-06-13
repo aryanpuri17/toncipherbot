@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAppStore } from '../../store/appStore';
 import {
-  Copy, Check, Users, Gift, Lock, Share2, TrendingUp,
+  Copy, Check, Users, Gift, Lock, Share2,
   Trophy, ChevronRight,
 } from 'lucide-react';
 
@@ -197,30 +197,43 @@ export const MiniAppReferral: React.FC = () => {
       {tab === 'invite' && (
         <div className="space-y-4">
           {/* Hero card — uses real API balance */}
-          <div className="relative overflow-hidden rounded-2xl p-5 bg-gradient-to-br from-purple-600/80 via-blue-600/70 to-cyan-500/60">
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_30%,rgba(255,255,255,0.08),transparent)]" />
+          <div className="relative overflow-hidden rounded-2xl p-5 referral-hero-card">
+            {/* Réseau de nœuds SVG animé */}
+            <svg className="absolute inset-0 w-full h-full opacity-[0.12] pointer-events-none" viewBox="0 0 340 160" preserveAspectRatio="xMidYMid slice">
+              <line x1="170" y1="80" x2="60"  y2="30"  stroke="#0098EA" strokeWidth="1" className="referral-line" style={{ animationDelay: '0s' }} />
+              <line x1="170" y1="80" x2="280" y2="30"  stroke="#0098EA" strokeWidth="1" className="referral-line" style={{ animationDelay: '0.2s' }} />
+              <line x1="170" y1="80" x2="40"  y2="110" stroke="#0098EA" strokeWidth="1" className="referral-line" style={{ animationDelay: '0.4s' }} />
+              <line x1="170" y1="80" x2="300" y2="115" stroke="#0098EA" strokeWidth="1" className="referral-line" style={{ animationDelay: '0.1s' }} />
+              <line x1="170" y1="80" x2="170" y2="145" stroke="#0098EA" strokeWidth="1" className="referral-line" style={{ animationDelay: '0.3s' }} />
+              {([[60,30],[280,30],[40,110],[300,115],[170,145]] as [number,number][]).map(([x,y],i) => (
+                <circle key={i} cx={x} cy={y} r="5" fill="#0098EA" className="referral-node" style={{ animationDelay: `${i * 0.15}s` }} />
+              ))}
+              <circle cx="170" cy="80" r="9" fill="#0098EA" opacity="0.9" />
+              <circle cx="170" cy="80" r="14" fill="none" stroke="#0098EA" strokeWidth="1.5" opacity="0.4" className="referral-pulse" />
+            </svg>
+
             <div className="relative">
-              <p className="text-purple-100 text-xs font-medium mb-1 uppercase tracking-wider">Programme de parrainage</p>
-              <h2 className="text-2xl font-bold text-white mb-3">Invitez vos amis<br />gagnez du TON 💎</h2>
-              <div className="flex gap-3">
-                <div className="text-center">
-                  <p className="text-3xl font-bold text-white">{currentUser.referralCount}</p>
-                  <p className="text-purple-200 text-xs mt-0.5">Ami{currentUser.referralCount !== 1 ? 's' : ''} invité{currentUser.referralCount !== 1 ? 's' : ''}</p>
+              <p className="text-[#7DD4FC] text-xs font-medium uppercase tracking-widest mb-1">Programme de parrainage</p>
+              <h2 className="text-2xl font-bold text-white mb-4">
+                Invitez vos amis<br />
+                <span style={{ color: '#0098EA' }}>gagnez du TON</span> 💎
+              </h2>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="rounded-xl bg-white/10 px-3 py-2.5">
+                  <p className="text-2xl font-bold text-white leading-none">{currentUser.referralCount}</p>
+                  <p className="text-[11px] text-blue-200 mt-0.5">Ami{currentUser.referralCount !== 1 ? 's' : ''} invité{currentUser.referralCount !== 1 ? 's' : ''}</p>
                 </div>
-                <div className="w-px bg-white/20" />
-                <div className="text-center">
-                  <p className="text-3xl font-bold text-emerald-300">{totalEarned.toFixed(2)}</p>
-                  <p className="text-purple-200 text-xs mt-0.5">TON gagnés</p>
+                <div className="rounded-xl bg-white/10 px-3 py-2.5">
+                  <p className="text-2xl font-bold text-emerald-300 leading-none">{totalEarned.toFixed(2)}</p>
+                  <p className="text-[11px] text-blue-200 mt-0.5">TON gagnés</p>
                 </div>
-                <div className="w-px bg-white/20" />
-                <div className="text-center">
-                  <p className="text-2xl font-bold text-amber-300">+{SIGNUP_BONUS.toFixed(2)}</p>
-                  <p className="text-purple-200 text-xs mt-0.5">TON / ami</p>
+                <div className="rounded-xl bg-white/10 px-3 py-2.5">
+                  <p className="text-xl font-bold text-amber-300 leading-none">+{SIGNUP_BONUS.toFixed(2)}</p>
+                  <p className="text-[11px] text-blue-200 mt-0.5">TON / ami inscrit</p>
                 </div>
-                <div className="w-px bg-white/20" />
-                <div className="text-center">
-                  <p className="text-2xl font-bold text-sky-300">{DEPOSIT_PCT}%</p>
-                  <p className="text-purple-200 text-xs mt-0.5">/ tâche</p>
+                <div className="rounded-xl bg-white/10 px-3 py-2.5">
+                  <p className="text-xl font-bold text-sky-300 leading-none">{DEPOSIT_PCT}%</p>
+                  <p className="text-[11px] text-blue-200 mt-0.5">sur chaque tâche</p>
                 </div>
               </div>
             </div>
@@ -258,25 +271,28 @@ export const MiniAppReferral: React.FC = () => {
           {/* How it works */}
           <div className="glass-card p-4 space-y-3">
             <p className="text-xs font-bold text-slate-300 uppercase tracking-wider">Comment ça marche</p>
-            <div className="grid grid-cols-3 gap-3 text-center">
-              <div className="space-y-2">
-                <div className="w-10 h-10 rounded-xl bg-blue-500/15 flex items-center justify-center mx-auto">
-                  <Share2 className="w-4 h-4 text-blue-400" />
-                </div>
-                <p className="text-[11px] text-slate-300 leading-tight">Partagez votre lien</p>
-              </div>
-              <div className="space-y-2">
-                <div className="w-10 h-10 rounded-xl bg-purple-500/15 flex items-center justify-center mx-auto">
-                  <Users className="w-4 h-4 text-purple-400" />
-                </div>
-                <p className="text-[11px] text-slate-300 leading-tight">Votre ami s'inscrit</p>
-              </div>
-              <div className="space-y-2">
-                <div className="w-10 h-10 rounded-xl bg-emerald-500/15 flex items-center justify-center mx-auto">
-                  <TrendingUp className="w-4 h-4 text-emerald-400" />
-                </div>
-                <p className="text-[11px] text-slate-300 leading-tight">+{SIGNUP_BONUS.toFixed(2)} TON + {DEPOSIT_PCT}% tâches</p>
-              </div>
+            <div className="flex items-start gap-0">
+              {[
+                { icon: <Share2 className="w-4 h-4" />, color: 'bg-blue-500/20 text-blue-400',     label: 'Partagez',      sub: 'Envoyez votre lien à un ami' },
+                { icon: <Users  className="w-4 h-4" />, color: 'bg-purple-500/20 text-purple-400', label: "Il s'inscrit",  sub: 'Via votre lien Telegram' },
+                { icon: <Gift   className="w-4 h-4" />, color: 'bg-emerald-500/20 text-emerald-400', label: 'Vous gagnez', sub: `+${SIGNUP_BONUS.toFixed(2)} TON + ${DEPOSIT_PCT}% tâches` },
+              ].map((step, i) => (
+                <React.Fragment key={i}>
+                  <div className="flex flex-col items-center text-center flex-1 gap-2">
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${step.color}`}>
+                      {step.icon}
+                    </div>
+                    <p className="text-xs font-semibold text-white leading-tight">{step.label}</p>
+                    <p className="text-[10px] text-slate-400 leading-tight">{step.sub}</p>
+                  </div>
+                  {i < 2 && (
+                    <div className="flex-shrink-0 mt-5 px-1 flex items-center">
+                      <div className="w-4 h-px bg-white/20" />
+                      <div className="w-0 h-0 border-t-[3px] border-t-transparent border-b-[3px] border-b-transparent border-l-[4px] border-l-white/20" />
+                    </div>
+                  )}
+                </React.Fragment>
+              ))}
             </div>
           </div>
 

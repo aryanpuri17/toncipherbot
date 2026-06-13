@@ -4,33 +4,151 @@ import { useTonConnectUI, useTonWallet } from '@tonconnect/ui-react';
 import { ArrowDownLeft, ArrowUpRight, TrendingUp, Copy, CheckCircle, ChevronRight, AlertCircle, Wallet, Unlink } from 'lucide-react';
 import { haptic } from '../../lib/haptics';
 
+// ── Shared TxRow component ─────────────────────────────────────────────────
+
+type Tx = ReturnType<typeof useAppStore.getState>['transactions'][0];
+const isDebitType = (type: string) =>
+  ['withdrawal', 'purchase', 'fee', 'admin_debit'].includes(type);
+
+const TX_ICON: Record<string, React.ReactNode> = {
+  deposit:    <ArrowDownLeft className="w-4 h-4" />,
+  withdrawal: <ArrowUpRight className="w-4 h-4" />,
+  reward:     <TrendingUp className="w-4 h-4" />,
+  referral:   <TrendingUp className="w-4 h-4" />,
+  bonus:      <TrendingUp className="w-4 h-4" />,
+};
+
+const TX_LABELS_LOCAL: Record<string, string> = {
+  deposit:      'Dépôt',
+  withdrawal:   'Retrait',
+  reward:       'Récompense tâche',
+  referral:     'Bonus parrainage',
+  bonus:        'Bonus promo',
+  purchase:     'Achat boutique',
+  fee:          'Frais',
+  admin_credit: 'Crédit admin',
+  admin_debit:  'Débit admin',
+};
+
+const TxRow: React.FC<{ tx: Tx }> = ({ tx }) => {
+  const debit = isDebitType(tx.type);
+  const cancelled = tx.status === 'cancelled' || tx.status === 'failed';
+
+  return (
+    <div className="glass-card-light p-3.5 flex items-center gap-3">
+      <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${
+        tx.type === 'deposit'    ? 'bg-emerald-500/20 text-emerald-400' :
+        tx.type === 'withdrawal' ? 'bg-orange-500/20 text-orange-400'  :
+        tx.type === 'reward' || tx.type === 'referral' || tx.type === 'bonus'
+                                 ? 'bg-blue-500/20 text-blue-400'      :
+                                   'bg-slate-500/20 text-slate-400'
+      }`}>
+        {TX_ICON[tx.type] ?? <TrendingUp className="w-4 h-4" />}
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium text-white">
+          {TX_LABELS_LOCAL[tx.type] ?? tx.type}
+        </p>
+        <p className="text-xs text-slate-500">
+          {tx.network || 'Interne'} · {new Date(tx.createdAt).toLocaleDateString('fr-FR')}
+        </p>
+      </div>
+      <div className="text-right flex-shrink-0">
+        <p className={`text-sm font-semibold ${
+          cancelled ? 'text-slate-500 line-through' :
+          debit     ? 'text-orange-400' : 'text-emerald-400'
+        }`}>
+          {debit ? '−' : '+'}{tx.amount.toFixed(2)} {tx.currency}
+        </p>
+        <p className={`text-[10px] font-medium ${
+          tx.status === 'completed'                           ? 'text-emerald-400' :
+          tx.status === 'pending'                             ? 'text-amber-400'   :
+          tx.status === 'cancelled' || tx.status === 'failed' ? 'text-red-400'    :
+                                                                'text-blue-400'
+        }`}>
+          {tx.status === 'completed'  ? '✓ Complété'   :
+           tx.status === 'pending'    ? '⏳ En attente' :
+           tx.status === 'cancelled'  ? '✕ Refusé'     :
+           tx.status === 'failed'     ? '✕ Échoué'     : '🔄 Confirmation'}
+        </p>
+      </div>
+    </div>
+  );
+};
+
+// ── MiniAppWallet ──────────────────────────────────────────────────────────
+
 export const MiniAppWallet: React.FC = () => {
   const { currentUser: u, transactions, setMiniAppPage } = useAppStore();
   const userTx = transactions.filter(t => t.userId === u.id);
+  const withdrawable = Math.max(0, u.balanceMain - u.taskCredits);
 
   return (
     <div className="space-y-5 animate-slide-up">
       <h1 className="text-xl font-bold text-white">Wallet</h1>
 
-      {/* Balance */}
-      <div className="glass-card p-5 bg-gradient-to-r from-blue-500/20 to-cyan-500/10 flex items-center gap-4">
-        <span className="text-3xl">💰</span>
-        <div className="flex-1">
-          <p className="text-xs text-slate-400 mb-0.5">Solde disponible</p>
-          <p className="text-2xl font-bold text-white">{u.balanceMain.toFixed(2)} TON</p>
-          <p className="text-xs text-emerald-400 mt-0.5">Total gagné: {u.totalEarnings.toFixed(2)} TON</p>
-          {u.taskCredits > 0 && (
-            <p className="text-xs text-blue-400 mt-0.5">dont {u.taskCredits.toFixed(2)} TON crédits campagnes</p>
+      {/* Balance card — identité TON cohérente avec Dashboard */}
+      <div className="wallet-balance-card relative overflow-hidden rounded-2xl p-5">
+        <div className="absolute -top-8 -right-8 w-32 h-32 rounded-full pointer-events-none"
+          style={{ background: 'radial-gradient(circle, rgba(0,152,234,0.2), transparent)' }} />
+        <div className="absolute -bottom-6 -left-4 w-20 h-20 rounded-full pointer-events-none"
+          style={{ background: 'radial-gradient(circle, rgba(0,152,234,0.12), transparent)' }} />
+
+        <div className="relative">
+          <p className="text-[#7DD4FC] text-xs font-medium uppercase tracking-widest mb-1">
+            Solde disponible
+          </p>
+          <p className="text-3xl font-bold text-white tracking-tight">
+            {u.balanceMain.toFixed(2)}{' '}
+            <span style={{ color: '#0098EA' }}>TON</span>
+          </p>
+
+          <div className="flex items-center gap-3 mt-2 flex-wrap">
+            <span className="text-xs text-emerald-400">
+              Total gagné : {u.totalEarnings.toFixed(2)} TON
+            </span>
+            {u.taskCredits > 0 && (
+              <>
+                <span className="text-white/20">·</span>
+                <span className="text-xs text-blue-400">
+                  dont {u.taskCredits.toFixed(2)} TON crédits campagnes
+                </span>
+              </>
+            )}
+          </div>
+
+          {u.taskCredits > 0 && u.balanceMain > 0 && (
+            <div className="mt-3">
+              <div className="flex justify-between text-[10px] text-slate-500 mb-1">
+                <span>Retirable</span>
+                <span>{withdrawable.toFixed(2)} / {u.balanceMain.toFixed(2)} TON</span>
+              </div>
+              <div className="h-1 rounded-full bg-white/10 overflow-hidden">
+                <div
+                  className="h-full rounded-full"
+                  style={{
+                    width: `${(withdrawable / u.balanceMain) * 100}%`,
+                    background: 'linear-gradient(90deg, #0098EA, #34d399)',
+                  }}
+                />
+              </div>
+            </div>
           )}
         </div>
       </div>
 
       {/* Actions */}
       <div className="grid grid-cols-2 gap-3">
-        <button onClick={() => setMiniAppPage('deposit')} className="btn-primary py-3.5 rounded-xl text-sm font-semibold text-white flex items-center justify-center gap-2">
+        <button
+          onClick={() => setMiniAppPage('deposit')}
+          className="wallet-action-btn wallet-action-deposit py-3.5 rounded-xl text-sm font-semibold text-white flex items-center justify-center gap-2"
+        >
           <ArrowDownLeft className="w-4 h-4" /> Déposer
         </button>
-        <button onClick={() => setMiniAppPage('withdraw')} className="btn-accent py-3.5 rounded-xl text-sm font-semibold text-white flex items-center justify-center gap-2">
+        <button
+          onClick={() => setMiniAppPage('withdraw')}
+          className="wallet-action-btn wallet-action-withdraw py-3.5 rounded-xl text-sm font-semibold text-white flex items-center justify-center gap-2"
+        >
           <ArrowUpRight className="w-4 h-4" /> Retirer
         </button>
       </div>
@@ -45,28 +163,13 @@ export const MiniAppWallet: React.FC = () => {
         </div>
         <div className="space-y-2">
           {userTx.slice(0, 5).map(tx => (
-            <div key={tx.id} className="glass-card-light p-3.5 flex items-center gap-3">
-              <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${tx.type === 'deposit' ? 'bg-emerald-500/20 text-emerald-400' : tx.type === 'withdrawal' ? 'bg-orange-500/20 text-orange-400' : 'bg-blue-500/20 text-blue-400'}`}>
-                {tx.type === 'deposit' ? <ArrowDownLeft className="w-4 h-4" /> : tx.type === 'withdrawal' ? <ArrowUpRight className="w-4 h-4" /> : <TrendingUp className="w-4 h-4" />}
-              </div>
-              <div className="flex-1">
-                <p className="text-sm font-medium text-white">
-                  {tx.type === 'deposit' ? 'Dépôt' : tx.type === 'withdrawal' ? 'Retrait' : tx.type === 'purchase' ? 'Achat' : 'Récompense'}
-                </p>
-                <p className="text-xs text-slate-500">{tx.network || 'Interne'} • {new Date(tx.createdAt).toLocaleDateString('fr-FR')}</p>
-              </div>
-              <div className="text-right">
-                <p className={`text-sm font-semibold ${tx.type === 'withdrawal' || tx.type === 'purchase' ? 'text-orange-400' : 'text-emerald-400'}`}>
-                  {tx.type === 'withdrawal' || tx.type === 'purchase' ? '-' : '+'}{tx.amount.toFixed(2)} {tx.currency}
-                </p>
-                <p key={tx.status} className={`animate-pop-in text-[10px] font-medium ${tx.status === 'completed' ? 'text-emerald-400' : tx.status === 'pending' ? 'text-amber-400' : tx.status === 'cancelled' || tx.status === 'failed' ? 'text-red-400' : 'text-blue-400'}`}>
-                  {tx.status === 'completed' ? '✓ Complété' : tx.status === 'pending' ? '⏳ En attente' : tx.status === 'cancelled' ? '✕ Refusé' : tx.status === 'failed' ? '✕ Échoué' : '🔄 Confirmation'}
-                </p>
-              </div>
-            </div>
+            <TxRow key={tx.id} tx={tx} />
           ))}
           {userTx.length === 0 && (
-            <p className="text-center text-sm text-slate-500 py-6">Aucune transaction</p>
+            <div className="py-10 text-center space-y-2">
+              <p className="text-2xl">💸</p>
+              <p className="text-sm text-slate-500">Aucune transaction pour l'instant</p>
+            </div>
           )}
         </div>
       </div>
@@ -201,18 +304,23 @@ export const MiniAppDeposit: React.FC = () => {
 
   if (txStatus === 'success') {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4 animate-slide-up">
-        <div className="text-5xl">✅</div>
-        <h2 className="text-xl font-bold text-white">
-          {isNativeTON ? 'Transaction envoyée!' : 'Dépôt enregistré!'}
-        </h2>
-        <p className="text-sm text-slate-400 text-center px-4">{successMsg}</p>
-        <div className="p-3 rounded-lg bg-blue-500/5 border border-blue-500/20 w-full max-w-xs">
-          <p className="text-xs text-blue-400 text-center">
-            🔄 Votre solde sera mis à jour automatiquement après confirmation.
+      <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-5 animate-slide-up px-4">
+        <div className="w-20 h-20 rounded-full flex items-center justify-center"
+          style={{ background: 'radial-gradient(circle, rgba(16,185,129,0.2), transparent)', border: '1px solid rgba(16,185,129,0.3)' }}>
+          <CheckCircle className="w-10 h-10 text-emerald-400" />
+        </div>
+        <div className="text-center space-y-1">
+          <h2 className="text-xl font-bold text-white">
+            {isNativeTON ? 'Transaction envoyée !' : 'Dépôt enregistré !'}
+          </h2>
+          <p className="text-sm text-slate-400 leading-relaxed">{successMsg}</p>
+        </div>
+        <div className="w-full p-3 rounded-xl bg-[#0098EA]/10 border border-[#0098EA]/20">
+          <p className="text-xs text-[#7DD4FC] text-center">
+            🔄 Votre solde sera mis à jour automatiquement après confirmation blockchain.
           </p>
         </div>
-        <button onClick={goBack} className="btn-primary px-6 py-3 rounded-xl text-sm font-semibold text-white">
+        <button onClick={goBack} className="btn-primary px-8 py-3.5 rounded-xl text-sm font-semibold text-white">
           Retour au wallet
         </button>
       </div>
@@ -513,14 +621,31 @@ export const MiniAppWithdraw: React.FC = () => {
 
   if (success) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4 animate-slide-up">
-        <div className="text-5xl">✅</div>
-        <h2 className="text-xl font-bold text-white">Retrait soumis !</h2>
-        <p className="text-sm text-slate-400 text-center">
-          Votre retrait de {parsedAmount.toFixed(2)} {selected?.symbol} est en cours de traitement.<br />
-          Vous recevrez <span className="text-emerald-400 font-semibold">{Math.max(0, netReceived).toFixed(2)} {selected?.symbol}</span> après frais de réseau.
-        </p>
-        <button onClick={() => useAppStore.getState().setMiniAppPage('wallet')} className="btn-primary px-6 py-3 rounded-xl text-sm font-semibold text-white">
+      <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-5 animate-slide-up px-4">
+        <div className="w-20 h-20 rounded-full flex items-center justify-center"
+          style={{ background: 'radial-gradient(circle, rgba(16,185,129,0.2), transparent)', border: '1px solid rgba(16,185,129,0.3)' }}>
+          <CheckCircle className="w-10 h-10 text-emerald-400" />
+        </div>
+        <div className="text-center space-y-1">
+          <h2 className="text-xl font-bold text-white">Retrait soumis !</h2>
+          <p className="text-sm text-slate-400 leading-relaxed">
+            Votre retrait de {parsedAmount.toFixed(2)} {selected?.symbol} est en cours de traitement.
+            <br />Vous recevrez{' '}
+            <span className="text-emerald-400 font-semibold">
+              {Math.max(0, netReceived).toFixed(2)} {selected?.symbol}
+            </span>{' '}
+            après frais de réseau.
+          </p>
+        </div>
+        <div className="w-full p-3 rounded-xl bg-amber-500/5 border border-amber-500/20">
+          <p className="text-xs text-amber-400 text-center">
+            🔐 Validation admin sous 12-24h · Votre solde est réservé
+          </p>
+        </div>
+        <button
+          onClick={() => useAppStore.getState().setMiniAppPage('wallet')}
+          className="btn-primary px-8 py-3.5 rounded-xl text-sm font-semibold text-white"
+        >
           Retour au wallet
         </button>
       </div>
@@ -686,18 +811,6 @@ export const MiniAppWithdraw: React.FC = () => {
   );
 };
 
-const TX_LABELS: Record<string, string> = {
-  deposit:      'Dépôt',
-  withdrawal:   'Retrait',
-  reward:       'Récompense tâche',
-  referral:     'Bonus parrainage',
-  bonus:        'Bonus promo',
-  purchase:     'Achat boutique',
-  fee:          'Frais',
-  admin_credit: 'Crédit admin',
-  admin_debit:  'Débit admin',
-};
-
 const TX_FILTER_GROUPS: { id: string; label: string; types: string[] }[] = [
   { id: 'all',      label: 'Tout',       types: [] },
   { id: 'in',       label: '⬇ Entrants', types: ['deposit', 'reward', 'referral', 'bonus', 'admin_credit'] },
@@ -713,8 +826,6 @@ export const MiniAppHistory: React.FC = () => {
   const userTx = transactions.filter(t => t.userId === u.id);
   const group   = TX_FILTER_GROUPS.find(g => g.id === filter)!;
   const visible = group.types.length === 0 ? userTx : userTx.filter(t => group.types.includes(t.type));
-
-  const isDebit = (type: string) => ['withdrawal', 'purchase', 'fee', 'admin_debit'].includes(type);
 
   return (
     <div className="space-y-5 animate-slide-up">
@@ -741,37 +852,17 @@ export const MiniAppHistory: React.FC = () => {
 
       <div className="space-y-2">
         {visible.map(tx => (
-          <div key={tx.id} className="glass-card p-4">
-            <div className="flex items-center gap-3">
-              <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${tx.type === 'deposit' ? 'bg-emerald-500/20 text-emerald-400' : isDebit(tx.type) ? 'bg-orange-500/20 text-orange-400' : 'bg-blue-500/20 text-blue-400'}`}>
-                {tx.type === 'deposit'
-                  ? <ArrowDownLeft className="w-5 h-5" />
-                  : isDebit(tx.type)
-                  ? <ArrowUpRight className="w-5 h-5" />
-                  : <TrendingUp className="w-5 h-5" />}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-white">{TX_LABELS[tx.type] ?? tx.type}</p>
-                <p className="text-xs text-slate-500">{new Date(tx.createdAt).toLocaleString('fr-FR')}</p>
-              </div>
-              <div className="text-right flex-shrink-0">
-                <p className={`text-base font-bold ${tx.status === 'cancelled' || tx.status === 'failed' ? 'text-slate-500 line-through' : isDebit(tx.type) ? 'text-orange-400' : 'text-emerald-400'}`}>
-                  {isDebit(tx.type) ? '−' : '+'}{tx.amount.toFixed(2)}
-                </p>
-                <p className={`text-[10px] font-medium ${tx.status === 'completed' ? 'text-emerald-400' : tx.status === 'pending' ? 'text-amber-400' : tx.status === 'cancelled' || tx.status === 'failed' ? 'text-red-400' : 'text-slate-500'}`}>
-                  {tx.status === 'completed' ? '✓ Complété' : tx.status === 'pending' ? '⏳ En attente' : tx.status === 'cancelled' ? '✕ Refusé' : tx.status === 'failed' ? '✕ Échoué' : tx.currency}
-                </p>
-              </div>
-            </div>
-            {tx.txHash && (
-              <div className="mt-2 pt-2 border-t border-white/5">
-                <p className="text-[10px] text-slate-500 font-mono truncate">TX: {tx.txHash}</p>
-              </div>
-            )}
-          </div>
+          <TxRow key={tx.id} tx={tx} />
         ))}
         {visible.length === 0 && (
-          <p className="text-center text-sm text-slate-500 py-10">Aucune transaction dans cette catégorie</p>
+          <div className="py-14 text-center space-y-3">
+            <p className="text-3xl">📭</p>
+            <p className="text-sm font-medium text-slate-400">
+              {filter === 'all'
+                ? "Aucune transaction pour l'instant"
+                : 'Aucune transaction dans cette catégorie'}
+            </p>
+          </div>
         )}
       </div>
     </div>

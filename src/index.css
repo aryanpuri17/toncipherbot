@@ -367,3 +367,114 @@ body {
   transform: translateY(-1px);
   box-shadow: 0 4px 20px rgba(0,0,0,0.3);
 }
+
+/* ── TASKS ───────────────────────────────────────────────────────────── */
+.glass-card.border-emerald-500\/20 {
+  transition: background 0.4s ease, border-color 0.4s ease;
+}
+.glass-card:not(.border-emerald-500\/20):hover .text-emerald-400,
+.glass-card:not(.border-emerald-500\/20):hover .text-amber-400 {
+  filter: brightness(1.15);
+  transition: filter 0.2s ease;
+}
+
+/* ── REFERRAL ────────────────────────────────────────────────────────── */
+.referral-hero-card {
+  background: linear-gradient(135deg, #0B1F3A 0%, #0D2847 50%, #0a1f3d 100%);
+  border: 1px solid rgba(0,152,234,0.3);
+  box-shadow: 0 0 40px rgba(0,152,234,0.12), 0 8px 32px rgba(0,0,0,0.4);
+}
+.referral-line {
+  stroke-dasharray: 200;
+  stroke-dashoffset: 200;
+  animation: lineGrow 0.8s ease forwards;
+}
+@keyframes lineGrow { to { stroke-dashoffset: 0; } }
+.referral-node {
+  transform-origin: center;
+  transform: scale(0);
+  animation: nodeIn 0.3s ease forwards;
+}
+@keyframes nodeIn { to { transform: scale(1); } }
+.referral-pulse {
+  transform-origin: center;
+  animation: centralPulse 2.5s ease-in-out infinite;
+}
+@keyframes centralPulse {
+  0%,100% { opacity: 0.4; transform: scale(1);   }
+  50%     { opacity: 0.1; transform: scale(1.4); }
+}
+
+/* ─── WALLET ────────────────────────────────────────────────────────────── */
+
+.wallet-balance-card {
+  background: linear-gradient(135deg, #0B1F3A 0%, #0D2847 40%, #083060 100%);
+  border: 1px solid rgba(0, 152, 234, 0.25);
+  box-shadow: 0 0 40px rgba(0, 152, 234, 0.1), 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.wallet-action-btn {
+  transition: transform 0.15s ease, filter 0.15s ease;
+}
+.wallet-action-btn:active {
+  transform: scale(0.97);
+}
+
+.wallet-action-deposit {
+  background: linear-gradient(135deg, #065f46, #047857);
+  border: 1px solid rgba(52, 211, 153, 0.3);
+  box-shadow: 0 4px 16px rgba(16, 185, 129, 0.2);
+}
+.wallet-action-deposit:hover {
+  filter: brightness(1.1);
+}
+
+.wallet-action-withdraw {
+  background: linear-gradient(135deg, #7c2d12, #9a3412);
+  border: 1px solid rgba(249, 115, 22, 0.3);
+  box-shadow: 0 4px 16px rgba(249, 115, 22, 0.15);
+}
+.wallet-action-withdraw:hover {
+  filter: brightness(1.1);
+}
+
+/* ─── NAV BAR ───────────────────────────────────────────────────────────── */
+
+.nav-bar {
+  background: rgba(11, 17, 40, 0.96);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-top: 1px solid rgba(0, 152, 234, 0.12);
+  box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.nav-pill {
+  background: rgba(0, 152, 234, 0.1);
+  border: 1px solid rgba(0, 152, 234, 0.22);
+}
+
+.nav-item-active {
+  color: #0098EA;
+}
+
+.nav-dot {
+  background: #0098EA;
+  box-shadow: 0 0 4px rgba(0, 152, 234, 0.8);
+}
+
+/* ─── PROFILE ───────────────────────────────────────────────────────────── */
+
+.profile-menu-item {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 1rem;
+  transition: background 0.15s ease, border-color 0.15s ease;
+  cursor: pointer;
+}
+.profile-menu-item:hover {
+  background: rgba(255, 255, 255, 0.055);
+}
+.profile-menu-item:active {
+  background: rgba(255, 255, 255, 0.07);
+  transform: scale(0.99);
+}

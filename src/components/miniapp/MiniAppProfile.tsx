@@ -59,52 +59,134 @@ export const MiniAppProfile: React.FC = () => {
   return (
     <div className="space-y-5 animate-slide-up">
       {/* Profile Header */}
-      <div className="text-center pt-2">
-        {profile.avatarUrl && !imgError ? (
-          <img
-            src={profile.avatarUrl}
-            alt={profile.firstName}
-            onError={() => setImgError(true)}
-            className="w-20 h-20 rounded-full object-cover mx-auto mb-3"
-          />
-        ) : (
-          <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-2xl font-bold text-white mx-auto mb-3">
-            {profile.firstName?.charAt(0) ?? '?'}
+      <div className="flex items-center gap-4 pt-2 pb-1">
+        <div className="relative flex-shrink-0">
+          {profile.avatarUrl && !imgError ? (
+            <img
+              src={profile.avatarUrl}
+              alt={profile.firstName}
+              onError={() => setImgError(true)}
+              className="w-16 h-16 rounded-2xl object-cover"
+              style={{ boxShadow: '0 0 0 2px rgba(0,152,234,0.4)' }}
+            />
+          ) : (
+            <div
+              className="w-16 h-16 rounded-2xl flex items-center justify-center text-xl font-bold text-white"
+              style={{
+                background: 'linear-gradient(135deg, #0098EA, #0B5EA8)',
+                boxShadow: '0 0 0 2px rgba(0,152,234,0.4), 0 4px 16px rgba(0,152,234,0.2)',
+              }}
+            >
+              {profile.firstName?.charAt(0) ?? '?'}
+            </div>
+          )}
+          {u.loginStreak >= 3 && (
+            <div className="absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full bg-orange-500 flex items-center justify-center text-[10px] font-bold text-white border-2 border-[#0B1140]">
+              {u.loginStreak}
+            </div>
+          )}
+        </div>
+
+        <div className="flex-1 min-w-0">
+          <h1 className="text-lg font-bold text-white leading-tight truncate">
+            {profile.firstName}{profile.lastName ? ` ${profile.lastName}` : ''}
+          </h1>
+          <p className="text-sm text-slate-400">@{profile.username}</p>
+          <p className="text-[10px] text-slate-600 font-mono mt-0.5">ID: {uId}</p>
+        </div>
+
+        {u.loginStreak >= 1 && (
+          <div className="flex flex-col items-center flex-shrink-0">
+            <span className="text-2xl">🔥</span>
+            <span className="text-[10px] text-orange-400 font-bold">{u.loginStreak}j</span>
           </div>
         )}
-        <h1 className="text-lg font-bold text-white">{profile.firstName} {profile.lastName}</h1>
-        <p className="text-sm text-slate-400">@{profile.username}</p>
       </div>
 
       {/* Stats */}
       <div className="grid grid-cols-2 gap-3">
-        <div className="glass-card p-4 text-center">
-          <p className="text-2xl font-bold text-blue-400">{u.tasksCompleted}</p>
-          <p className="text-xs text-slate-400">Tâches complétées</p>
-        </div>
-        <div className="glass-card p-4 text-center">
-          <p className="text-2xl font-bold text-purple-400">{u.referralCount}</p>
-          <p className="text-xs text-slate-400">Filleuls</p>
-        </div>
-        <div className="glass-card p-4 text-center">
-          <p className="text-lg font-bold text-white">{u.totalEarnings.toFixed(2)} TON</p>
-          <p className="text-xs text-slate-400">Total gagné</p>
-        </div>
-        <div className="glass-card p-4 text-center">
-          <p className="text-lg font-bold text-emerald-400">{u.todayEarnings.toFixed(2)} TON</p>
-          <p className="text-xs text-slate-400">Aujourd'hui</p>
-        </div>
+        {[
+          {
+            value: u.tasksCompleted,
+            label: 'Tâches',
+            format: (v: number) => v.toString(),
+            color: 'text-blue-400',
+            accent: 'rgba(59,130,246,0.08)',
+            border: 'rgba(59,130,246,0.15)',
+            bar: '#3b82f6',
+            icon: '✅',
+          },
+          {
+            value: u.referralCount,
+            label: 'Filleuls',
+            format: (v: number) => v.toString(),
+            color: 'text-purple-400',
+            accent: 'rgba(139,92,246,0.08)',
+            border: 'rgba(139,92,246,0.15)',
+            bar: '#8b5cf6',
+            icon: '👥',
+          },
+          {
+            value: u.totalEarnings,
+            label: 'Total gagné',
+            format: (v: number) => `${v.toFixed(2)} TON`,
+            color: 'text-white',
+            accent: 'rgba(0,152,234,0.08)',
+            border: 'rgba(0,152,234,0.15)',
+            bar: '#0098EA',
+            icon: '💎',
+          },
+          {
+            value: u.todayEarnings,
+            label: "Aujourd'hui",
+            format: (v: number) => `${v.toFixed(2)} TON`,
+            color: 'text-emerald-400',
+            accent: 'rgba(16,185,129,0.08)',
+            border: 'rgba(16,185,129,0.15)',
+            bar: '#10b981',
+            icon: '📈',
+          },
+        ].map((stat, i) => (
+          <div
+            key={i}
+            className="glass-card p-4 relative overflow-hidden"
+            style={{ background: stat.accent, border: `1px solid ${stat.border}` }}
+          >
+            <div className="flex items-start justify-between mb-2">
+              <span className="text-base">{stat.icon}</span>
+            </div>
+            <p className={`text-xl font-bold leading-none ${stat.color}`}>
+              {stat.format(stat.value)}
+            </p>
+            <p className="text-[11px] text-slate-400 mt-1">{stat.label}</p>
+            <div
+              className="absolute bottom-0 left-0 right-0 h-0.5 rounded-b"
+              style={{ background: `linear-gradient(90deg, ${stat.bar}, transparent)` }}
+            />
+          </div>
+        ))}
       </div>
 
       {/* Menu */}
       <div className="space-y-2">
-        <button onClick={() => setMiniAppPage('shop')} className="w-full glass-card-light p-3.5 flex items-center gap-3 hover:bg-white/[0.04] transition-colors">
-          <Store className="w-5 h-5 text-amber-400" />
+        <button
+          onClick={() => setMiniAppPage('shop')}
+          className="profile-menu-item w-full p-3.5 flex items-center gap-3"
+        >
+          <div className="w-9 h-9 rounded-xl bg-amber-500/15 flex items-center justify-center flex-shrink-0">
+            <Store className="w-4 h-4 text-amber-400" />
+          </div>
           <span className="text-sm text-white flex-1 text-left">Boutique</span>
           <ChevronRight className="w-4 h-4 text-slate-500" />
         </button>
-        <button onClick={() => setMiniAppPage('settings')} className="w-full glass-card-light p-3.5 flex items-center gap-3 hover:bg-white/[0.04] transition-colors">
-          <Settings className="w-5 h-5 text-slate-400" />
+
+        <button
+          onClick={() => setMiniAppPage('settings')}
+          className="profile-menu-item w-full p-3.5 flex items-center gap-3"
+        >
+          <div className="w-9 h-9 rounded-xl bg-slate-500/15 flex items-center justify-center flex-shrink-0">
+            <Settings className="w-4 h-4 text-slate-400" />
+          </div>
           <span className="text-sm text-white flex-1 text-left">Paramètres</span>
           <ChevronRight className="w-4 h-4 text-slate-500" />
         </button>
@@ -112,20 +194,21 @@ export const MiniAppProfile: React.FC = () => {
         {isAdmin && (
           <button
             onClick={() => { window.location.hash = '#admin'; setCurrentView('admin'); }}
-            className="w-full glass-card-light p-3.5 flex items-center gap-3 hover:bg-white/[0.04] transition-colors border border-blue-500/20"
+            className="profile-menu-item w-full p-3.5 flex items-center gap-3"
+            style={{ borderColor: 'rgba(0,152,234,0.25)' }}
           >
-            <Shield className="w-5 h-5 text-blue-400" />
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+              style={{ background: 'rgba(0,152,234,0.15)' }}>
+              <Shield className="w-4 h-4" style={{ color: '#0098EA' }} />
+            </div>
             <span className="text-sm text-white flex-1 text-left">Panel Admin</span>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full mr-1"
+              style={{ background: 'rgba(0,152,234,0.15)', color: '#0098EA', border: '1px solid rgba(0,152,234,0.3)' }}>
+              ADMIN
+            </span>
             <ChevronRight className="w-4 h-4 text-slate-500" />
           </button>
         )}
-      </div>
-
-      {/* Debug chip — shows real Telegram ID and username for admin verification */}
-      <div className="glass-card p-3 text-center opacity-60">
-        <p className="text-[10px] text-slate-500 font-mono">
-          ID: {uId} · @{profile.username}
-        </p>
       </div>
     </div>
   );

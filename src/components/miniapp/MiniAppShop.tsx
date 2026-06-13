@@ -2,11 +2,11 @@ import React, { useState } from 'react';
 import { useAppStore, ShopItem } from '../../store/appStore';
 import { ShoppingCart, X, AlertCircle } from 'lucide-react';
 
-const categoryLabels: Record<string, string> = {
-  boosters:    '⚡ Boosters',
-  packs:       '🎁 Packs',
-  premium:     '👑 Premium',
-  collectibles:'💎 Collectibles',
+const categoryMeta: Record<string, { emoji: string; label: string }> = {
+  boosters:     { emoji: '⚡', label: 'Boosters'     },
+  packs:        { emoji: '🎁', label: 'Packs'        },
+  premium:      { emoji: '👑', label: 'Premium'      },
+  collectibles: { emoji: '💎', label: 'Collectibles' },
 };
 
 export const MiniAppShop: React.FC = () => {
@@ -39,13 +39,26 @@ export const MiniAppShop: React.FC = () => {
   return (
     <div className="space-y-5 animate-slide-up">
       {/* Header */}
-      <div className="flex items-center gap-3">
-        <button onClick={() => setMiniAppPage('profile')} className="p-2 rounded-lg hover:bg-white/5 text-slate-400">←</button>
-        <div>
-          <h1 className="text-xl font-bold text-white">Boutique</h1>
-          <p className="text-sm text-slate-400">
-            Solde: <span className="text-emerald-400 font-semibold">{currentUser.balanceMain.toFixed(2)} TON</span>
-          </p>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setMiniAppPage('profile')}
+            className="p-2 rounded-lg hover:bg-white/5 text-slate-400 transition-colors"
+          >←</button>
+          <div>
+            <h1 className="text-xl font-bold text-white">Boutique</h1>
+            <p className="text-xs text-slate-500">Solde disponible</p>
+          </div>
+        </div>
+        <div
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border"
+          style={{ background: 'rgba(0,152,234,0.08)', borderColor: 'rgba(0,152,234,0.2)' }}
+        >
+          <span className="text-sm">💎</span>
+          <span className="text-sm font-bold" style={{ color: '#0098EA' }}>
+            {currentUser.balanceMain.toFixed(2)}
+          </span>
+          <span className="text-xs text-slate-500 font-medium">TON</span>
         </div>
       </div>
 
@@ -58,8 +71,8 @@ export const MiniAppShop: React.FC = () => {
               <X className="w-4 h-4" />
             </button>
           </div>
-          <div className="flex items-center gap-3 p-3 rounded-xl bg-white/3">
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500/15 to-purple-500/15 border border-white/10 flex items-center justify-center text-2xl flex-shrink-0">
+          <div className="flex items-center gap-3 p-3 rounded-xl bg-amber-500/[0.04] border border-amber-500/10">
+            <div className="w-12 h-12 rounded-xl bg-amber-500/15 border border-amber-500/20 flex items-center justify-center text-2xl flex-shrink-0">
               {confirmItem.icon}
             </div>
             <div className="flex-1">
@@ -111,15 +124,24 @@ export const MiniAppShop: React.FC = () => {
       {/* Category tabs — only show if there are items */}
       {activeItems.length > 0 && (
         <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 no-scrollbar">
-          {categories.map(cat => (
-            <button
-              key={cat}
-              onClick={() => setActiveCategory(cat)}
-              className={`px-3 py-2 rounded-xl text-xs font-medium whitespace-nowrap transition-all ${activeCategory === cat ? 'bg-blue-500/15 text-blue-400 border border-blue-500/30' : 'bg-white/5 text-slate-400 border border-transparent'}`}
-            >
-              {cat === 'all' ? '🛒 Tout' : (categoryLabels[cat] ?? cat)}
-            </button>
-          ))}
+          {categories.map(cat => {
+            const isActive = activeCategory === cat;
+            const meta = cat === 'all' ? null : categoryMeta[cat];
+            return (
+              <button
+                key={cat}
+                onClick={() => setActiveCategory(cat)}
+                className="px-3 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all border"
+                style={
+                  isActive
+                    ? { background: 'rgba(0,152,234,0.12)', color: '#0098EA', borderColor: 'rgba(0,152,234,0.3)' }
+                    : { background: 'rgba(255,255,255,0.04)', color: '#94a3b8', borderColor: 'transparent' }
+                }
+              >
+                {cat === 'all' ? '🛒 Tout' : `${meta?.emoji ?? ''} ${meta?.label ?? cat}`}
+              </button>
+            );
+          })}
         </div>
       )}
 
@@ -134,41 +156,50 @@ export const MiniAppShop: React.FC = () => {
           return (
             <div key={item.id} className={`glass-card p-4 space-y-3 transition-all ${isSoldOut ? 'opacity-50' : ''}`}>
               <div className="flex items-start gap-3">
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500/15 to-purple-500/15 border border-white/10 flex items-center justify-center text-2xl flex-shrink-0">
+                <div className="w-12 h-12 rounded-xl bg-amber-500/15 border border-amber-500/20 flex items-center justify-center text-2xl flex-shrink-0">
                   {item.icon}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap mb-0.5">
                     <h3 className="text-sm font-semibold text-white">{item.name}</h3>
                     {isSoldOut && (
-                      <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-500/20 text-red-400">Épuisé</span>
+                      <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-red-500/20 text-red-400 border border-red-500/20">
+                        Épuisé
+                      </span>
                     )}
                     {item.maxPurchases != null && !isSoldOut && (
-                      <span className="px-1.5 py-0.5 rounded text-[9px] text-slate-400 bg-white/5">
+                      <span className="px-2 py-0.5 rounded-full text-[9px] font-semibold text-amber-400 bg-amber-500/10 border border-amber-500/20">
                         {item.maxPurchases - item.purchases} restants
                       </span>
                     )}
                   </div>
                   <p className="text-xs text-slate-400 leading-relaxed">{item.description}</p>
                   {item.duration && (
-                    <p className="text-[10px] text-blue-400 mt-1">
-                      ⏱ Durée: {item.duration >= 24 ? `${item.duration / 24}j` : `${item.duration}h`}
-                    </p>
+                    <span className="inline-flex items-center gap-1 mt-1 px-1.5 py-0.5 rounded-md text-[9px] font-semibold bg-blue-500/10 border border-blue-500/15 text-blue-400">
+                      ⏱ {item.duration >= 24 ? `${item.duration / 24}j` : `${item.duration}h`}
+                    </span>
                   )}
                 </div>
               </div>
 
               {result && (
-                <p className={`text-xs font-medium ${result.success ? 'text-emerald-400' : 'text-red-400'}`}>
-                  {result.success ? '✓' : '✗'} {result.message}
-                </p>
+                <div className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold ${
+                  result.success
+                    ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400'
+                    : 'bg-red-500/10 border border-red-500/20 text-red-400'
+                }`}>
+                  <span>{result.success ? '✓' : '✗'}</span>
+                  <span>{result.message}</span>
+                </div>
               )}
 
               <div className="flex items-center justify-between border-t border-white/5 pt-3">
                 <div>
                   <span className="text-lg font-bold text-amber-400">{item.price.toFixed(2)} TON</span>
                   {!canAfford && !isSoldOut && (
-                    <p className="text-[10px] text-red-400 mt-0.5">Solde insuffisant</p>
+                    <p className="flex items-center gap-1 text-[10px] text-red-400 mt-0.5">
+                      <AlertCircle className="w-2.5 h-2.5" /> Solde insuffisant
+                    </p>
                   )}
                 </div>
                 <button
