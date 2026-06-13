@@ -248,10 +248,6 @@ export const MiniAppCreateTask: React.FC = () => {
           <span className="text-white font-semibold">{priceFixed.toFixed(4)} TON</span>
         </div>
         <div className="flex justify-between text-xs">
-          <span className="text-slate-500">Récompense par utilisateur</span>
-          <span className="text-emerald-400 font-semibold">+{workerReward.toFixed(4)} TON</span>
-        </div>
-        <div className="flex justify-between text-xs">
           <span className="text-slate-500">Nombre d'exécutions</span>
           <span className="text-white font-semibold">{execCount > 0 ? execCount.toLocaleString() : '—'}</span>
         </div>
