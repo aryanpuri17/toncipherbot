@@ -62,7 +62,7 @@ export const MiniAppCreateTask: React.FC = () => {
           description:    description.trim() || `Complétez cette tâche pour gagner ${workerReward.toFixed(4)} TON`,
           targetUrl:      targetUrl.trim(), // NEVER modified
           reward:         workerReward,
-          totalBudget:    totalCost,
+          totalBudget:    parseFloat((workerReward * execCount).toFixed(8)),
           maxCompletions: execCount,
         }),
       });
