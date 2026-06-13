@@ -2028,6 +2028,43 @@ function rollPlinko(rows: PlinkoRows, risk: PlinkoRisk, streak: number, demo = f
   return { slot: Math.min(slots - 1, pos), path };
 }
 
+// ── Plinko physics engine ────────────────────────────────────────────
+// The ball falls under real gravity and hops in parabolic arcs from peg
+// to peg. The landing slot is still decided by rollPlinko() (so payouts
+// are untouched) — physics only drives the *visual* path between the
+// pre-computed contact points.
+type PhysBall = {
+  id:   number;
+  pts:  { x: number; y: number }[];  // contact waypoints: top → each peg → slot
+  seg:  number;                       // current segment index
+  segT: number;                       // elapsed time in current segment (s)
+  T:    number;                       // duration of current segment (s)
+  sx:   number; sy: number;           // segment start position
+  vx:   number; vy0: number;          // segment launch velocity
+  x:    number; y: number;            // live position
+  bet:  number; win: number; mult: number; slot: number;
+  trail: { x: number; y: number }[];
+};
+type Flash = { x: number; y: number; t: number };
+
+const PLINKO_GRAV       = 5200;  // px/s² — bigger = bouncier hops
+const PLINKO_SEG_T      = 0.135; // s per peg-to-peg hop
+const PLINKO_SEG_T_LAST = 0.22;  // s for the final drop into the slot
+const PLINKO_BALL_R     = 3 * 1.55;
+const PLINKO_DPR        = Math.min(typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1, 2);
+
+// Compute the parabolic launch velocity so the ball reaches the next
+// waypoint exactly in T seconds under PLINKO_GRAV. vy0 comes out negative
+// (upward) which gives the satisfying little "bounce" off each peg.
+function plinkoInitSeg(b: PhysBall) {
+  const a = b.pts[b.seg];
+  const c = b.pts[b.seg + 1];
+  const T = b.seg === b.pts.length - 2 ? PLINKO_SEG_T_LAST : PLINKO_SEG_T;
+  b.T = T; b.segT = 0; b.sx = a.x; b.sy = a.y;
+  b.vx  = (c.x - a.x) / T;
+  b.vy0 = (c.y - a.y - 0.5 * PLINKO_GRAV * T * T) / T;
+}
+
 const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResult }> = ({ onBack, streak, onResult }) => {
   const { currentUser, placeGameBet, recordGameResult, demoMode, demoBalance } = useAppStore();
   const bal = demoMode ? demoBalance : currentUser.balanceMain;
@@ -2053,6 +2090,15 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
   const mountedRef        = useRef(true);
   const plinkoBigWinTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Physics engine refs (positions live outside React state for 60fps draws)
+  const canvasRef   = useRef<HTMLCanvasElement | null>(null);
+  const physBalls   = useRef<PhysBall[]>([]);
+  const flashes     = useRef<Flash[]>([]);
+  const rafRef      = useRef<number | null>(null);
+  const lastTsRef   = useRef(0);
+  const loopRef     = useRef<((ts: number) => void) | null>(null);
+  const apiRef      = useRef<{ contact: (pt: { x: number; y: number }) => void; finish: (b: PhysBall) => void }>({ contact: () => {}, finish: () => {} });
+
   useEffect(() => {
     mountedRef.current = true;
     return () => {
@@ -2062,6 +2108,10 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
       if (autoPlayTimerRef.current)  clearTimeout(autoPlayTimerRef.current);
       for (const t of ballTimers.current.values()) clearTimeout(t);
       ballTimers.current.clear();
+      if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+      physBalls.current = [];
+      flashes.current = [];
       // Credit all in-flight wins so no bet is lost on unmount
       const st = useAppStore.getState();
       for (const w of pendingWins.current.values()) st.placeGameBet(0, w);
@@ -2082,10 +2132,6 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
   const BOARD_H     = rows * ROW_H + 60;
   const pegX        = (r: number, c: number) => BOARD_W / 2 - (r * PEG_SPACING) / 2 + c * PEG_SPACING;
   const pegY        = (r: number) => 24 + r * ROW_H;
-  const toSvgX      = (r: number, c: number) => r <= 0 ? BOARD_W / 2 : pegX(r, c);
-  const toSvgY      = (r: number) => r <= 0 ? 8 : pegY(r) - PEG_SPACING * 0.3;
-  const rowDelayMs  = rows <= 8 ? 180 : rows <= 12 ? 130 : 90;
-  const transDur    = rows <= 8 ? 165 : rows <= 12 ? 118 : 78;
 
   const slotColor = (mult: number) => {
     if (mult >= 10)  return '#f59e0b';
@@ -2096,78 +2142,187 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
     return '#ef4444';
   };
 
-  const animateBall = (
-    ballId: number, path: boolean[], betAmt: number, win: number, mult: number, slot: number
-  ) => {
-    let step = 0;
-    let col  = 0;
+  // Build the sequence of contact points the ball arcs through:
+  // top → top of each peg on its predetermined path → the target slot.
+  const buildPts = (path: boolean[], slot: number) => {
+    const pts: { x: number; y: number }[] = [{ x: BOARD_W / 2, y: 8 }];
+    let c = 0;
+    for (let r = 0; r < rows; r++) {
+      pts.push({ x: pegX(r, c), y: pegY(r) - (PEG_R + PLINKO_BALL_R) });
+      if (path[r]) c++;
+    }
+    pts.push({ x: pegX(rows, slot), y: BOARD_H + 6 });
+    return pts;
+  };
 
-    const tick = () => {
-      if (!mountedRef.current) return;
-      if (step >= path.length) {
-        // Ball landed — credit win
-        pendingWins.current.delete(ballId);
-        placeGameBet(0, win);
-        recordGameResult('Plinko', betAmt, win);
-        sessionGainRef.current = +(sessionGainRef.current + win - betAmt).toFixed(4);
-        setSessionGain(sessionGainRef.current);
-        setHist(h => [{ slot, mult }, ...h.slice(0, 7)]);
-        setLastWin({ mult, win });
-        setFinalSlot(slot);
-        if (mult >= 10) {
-          setBigWin(true);
-          if (plinkoBigWinTimer.current) clearTimeout(plinkoBigWinTimer.current);
-          plinkoBigWinTimer.current = setTimeout(() => { if (mountedRef.current) setBigWin(false); }, 2600);
-          snd.win(); haptic.success();
-        } else if (mult >= 1) { snd.win(); haptic.success(); }
-        else                  { snd.lose(); haptic.error(); }
-        onResult(mult >= 1);
-        setActiveBalls(prev => prev.filter(b => b.id !== ballId));
-        ballTimers.current.delete(ballId);
+  const startLoop = () => {
+    if (rafRef.current != null || !loopRef.current) return;
+    lastTsRef.current = 0;
+    rafRef.current = requestAnimationFrame(loopRef.current);
+  };
 
-        // Auto-play: launch next single ball after brief pause
-        if (autoPlayRef.current) {
-          const st = useAppStore.getState();
-          const nextBal = st.demoMode ? st.demoBalance : st.currentUser.balanceMain;
-          if (nextBal >= betAmt) {
-            autoPlayTimerRef.current = setTimeout(() => {
-              if (!mountedRef.current || !autoPlayRef.current) return;
-              const st2 = useAppStore.getState();
-              const bal2 = st2.demoMode ? st2.demoBalance : st2.currentUser.balanceMain;
-              if (bal2 < betAmt) { setAutoPlay(false); autoPlayRef.current = false; return; }
-              const { slot: s2, path: p2 } = rollPlinko(rows, risk, streak, demoMode);
-              const m2  = PLINKO_MULTS[risk][rows][s2];
-              const w2  = +(betAmt * m2).toFixed(6);
-              st2.placeGameBet(betAmt, 0);
-              const id2 = nextBallId.current++;
-              pendingWins.current.set(id2, w2);
-              setActiveBalls(prev => [...prev, { id: id2, path: p2, row: 0, col: 0, bet: betAmt, win: w2, mult: m2, slot: s2, trail: [] }]);
-              animateBall(id2, p2, betAmt, w2, m2, s2);
-            }, 200);
+  const launchBall = (id: number, path: boolean[], betAmt: number, win: number, mult: number, slot: number) => {
+    const pts = buildPts(path, slot);
+    const b: PhysBall = {
+      id, pts, seg: 0, segT: 0, T: PLINKO_SEG_T,
+      sx: pts[0].x, sy: pts[0].y, vx: 0, vy0: 0, x: pts[0].x, y: pts[0].y,
+      bet: betAmt, win, mult, slot, trail: [],
+    };
+    plinkoInitSeg(b);
+    physBalls.current.push(b);
+    startLoop();
+  };
+
+  // Side-effect handlers — reassigned every render so the long-lived rAF
+  // loop always calls into fresh closures (current rows/risk/balance/etc.).
+  apiRef.current.contact = (pt) => {
+    snd.tick();
+    if (physBalls.current.length <= 3) haptic.tick();
+    flashes.current.push({ x: pt.x, y: pt.y, t: 0 });
+  };
+
+  apiRef.current.finish = (b) => {
+    if (!mountedRef.current) return;
+    pendingWins.current.delete(b.id);
+    placeGameBet(0, b.win);
+    recordGameResult('Plinko', b.bet, b.win);
+    sessionGainRef.current = +(sessionGainRef.current + b.win - b.bet).toFixed(4);
+    setSessionGain(sessionGainRef.current);
+    setHist(h => [{ slot: b.slot, mult: b.mult }, ...h.slice(0, 7)]);
+    setLastWin({ mult: b.mult, win: b.win });
+    setFinalSlot(b.slot);
+    if (b.mult >= 10) {
+      setBigWin(true);
+      if (plinkoBigWinTimer.current) clearTimeout(plinkoBigWinTimer.current);
+      plinkoBigWinTimer.current = setTimeout(() => { if (mountedRef.current) setBigWin(false); }, 2600);
+      snd.win(); haptic.success();
+    } else if (b.mult >= 1) { snd.win(); haptic.success(); }
+    else                    { snd.lose(); haptic.error(); }
+    onResult(b.mult >= 1);
+    setActiveBalls(prev => prev.filter(x => x.id !== b.id));
+
+    // Auto-play: launch the next single ball after a brief pause
+    if (autoPlayRef.current) {
+      const st = useAppStore.getState();
+      const nextBal = st.demoMode ? st.demoBalance : st.currentUser.balanceMain;
+      if (nextBal >= b.bet) {
+        autoPlayTimerRef.current = setTimeout(() => {
+          if (!mountedRef.current || !autoPlayRef.current) return;
+          const st2 = useAppStore.getState();
+          const bal2 = st2.demoMode ? st2.demoBalance : st2.currentUser.balanceMain;
+          if (bal2 < b.bet) { setAutoPlay(false); autoPlayRef.current = false; return; }
+          const { slot: s2, path: p2 } = rollPlinko(rows, risk, streak, demoMode);
+          const m2  = PLINKO_MULTS[risk][rows][s2];
+          const w2  = +(b.bet * m2).toFixed(6);
+          st2.placeGameBet(b.bet, 0);
+          const id2 = nextBallId.current++;
+          pendingWins.current.set(id2, w2);
+          setActiveBalls(prev => [...prev, { id: id2, path: p2, row: 0, col: 0, bet: b.bet, win: w2, mult: m2, slot: s2, trail: [] }]);
+          launchBall(id2, p2, b.bet, w2, m2, s2);
+        }, 180);
+      } else {
+        setAutoPlay(false);
+        autoPlayRef.current = false;
+      }
+    }
+  };
+
+  // The physics + render loop — created once, driven by requestAnimationFrame.
+  if (!loopRef.current) {
+    loopRef.current = (ts: number) => {
+      const last = lastTsRef.current || ts;
+      let dt = (ts - last) / 1000;
+      lastTsRef.current = ts;
+      if (dt > 0.05) dt = 0.05; // clamp big jumps (tab switch)
+
+      const balls = physBalls.current;
+      const finished: PhysBall[] = [];
+      for (const b of balls) {
+        b.trail.unshift({ x: b.x, y: b.y });
+        if (b.trail.length > 7) b.trail.pop();
+        b.segT += dt;
+        if (b.segT >= b.T) {
+          const arrived = b.seg + 1;
+          b.x = b.pts[arrived].x;
+          b.y = b.pts[arrived].y;
+          if (arrived >= b.pts.length - 1) {
+            finished.push(b);
           } else {
-            setAutoPlay(false);
-            autoPlayRef.current = false;
+            apiRef.current.contact(b.pts[arrived]);
+            b.seg = arrived;
+            plinkoInitSeg(b);
           }
+        } else {
+          const t = b.segT;
+          b.x = b.sx + b.vx * t;
+          b.y = b.sy + b.vy0 * t + 0.5 * PLINKO_GRAV * t * t;
         }
-        return;
+      }
+      if (finished.length) physBalls.current = balls.filter(b => !finished.includes(b));
+
+      for (const f of flashes.current) f.t += dt;
+      if (flashes.current.length) flashes.current = flashes.current.filter(f => f.t < 0.4);
+
+      // ── draw ──
+      const canvas = canvasRef.current;
+      if (canvas) {
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          ctx.save();
+          ctx.scale(PLINKO_DPR, PLINKO_DPR);
+          // peg-impact rings
+          for (const f of flashes.current) {
+            const p = f.t / 0.4;
+            ctx.beginPath();
+            ctx.arc(f.x, f.y, PLINKO_BALL_R + p * 8, 0, Math.PI * 2);
+            ctx.strokeStyle = `rgba(251,191,36,${0.5 * (1 - p)})`;
+            ctx.lineWidth = 1.6 * (1 - p);
+            ctx.stroke();
+          }
+          // balls
+          for (const b of physBalls.current) {
+            for (let i = b.trail.length - 1; i >= 0; i--) {
+              const tp = b.trail[i];
+              const f  = 1 - i / b.trail.length;
+              ctx.beginPath();
+              ctx.arc(tp.x, tp.y, PLINKO_BALL_R * (0.35 + f * 0.4), 0, Math.PI * 2);
+              ctx.fillStyle = `rgba(251,191,36,${f * 0.22})`;
+              ctx.fill();
+            }
+            const g = ctx.createRadialGradient(
+              b.x - PLINKO_BALL_R * 0.3, b.y - PLINKO_BALL_R * 0.3, PLINKO_BALL_R * 0.2,
+              b.x, b.y, PLINKO_BALL_R,
+            );
+            g.addColorStop(0, '#fef9c3');
+            g.addColorStop(0.5, '#fbbf24');
+            g.addColorStop(1, '#d97706');
+            ctx.shadowColor = 'rgba(251,191,36,0.85)';
+            ctx.shadowBlur = 10;
+            ctx.beginPath();
+            ctx.arc(b.x, b.y, PLINKO_BALL_R, 0, Math.PI * 2);
+            ctx.fillStyle = g;
+            ctx.fill();
+            ctx.shadowBlur = 0;
+            ctx.beginPath();
+            ctx.arc(b.x - PLINKO_BALL_R * 0.35, b.y - PLINKO_BALL_R * 0.35, PLINKO_BALL_R * 0.4, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(255,255,255,0.6)';
+            ctx.fill();
+          }
+          ctx.restore();
+        }
       }
 
-      const goRight = path[step];
-      if (goRight) col++;
-      step++;
-      snd.tick();
-      haptic.tick();
-      const prevX = toSvgX(step - 1, col - (goRight ? 1 : 0));
-      const prevY = toSvgY(step - 1);
-      setActiveBalls(prev => prev.map(b => b.id !== ballId ? b : {
-        ...b, row: step, col, trail: [{ x: prevX, y: prevY }, ...b.trail].slice(0, 2),
-      }));
-      const t = setTimeout(tick, rowDelayMs);
-      ballTimers.current.set(ballId, t);
+      for (const b of finished) apiRef.current.finish(b);
+
+      if (physBalls.current.length > 0 || flashes.current.length > 0) {
+        rafRef.current = requestAnimationFrame(loopRef.current!);
+      } else {
+        rafRef.current = null;
+        lastTsRef.current = 0;
+      }
     };
-    const t0 = setTimeout(tick, 120);
-    ballTimers.current.set(ballId, t0);
-  };
+  }
 
   const dropMulti = (count: number) => {
     const snapBet = Math.min(bet, bal);
@@ -2190,7 +2345,7 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
         const id = nextBallId.current++;
         pendingWins.current.set(id, win);
         setActiveBalls(prev => [...prev, { id, path, row: 0, col: 0, bet: snapBet, win, mult: m, slot, trail: [] }]);
-        animateBall(id, path, snapBet, win, m, slot);
+        launchBall(id, path, snapBet, win, m, slot);
       }, i * 300);
     }
   };
@@ -2221,6 +2376,7 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
       <div className="px-4 pt-4 space-y-4">
         {/* Board */}
         <div style={{ background: '#080c1e', border: '1px solid #1e2847', borderRadius: 16, overflow: 'visible', position: 'relative', padding: '12px 0' }} className="flex justify-center">
+          <div style={{ position: 'relative', width: BOARD_W, height: BOARD_H + 44 }}>
           <svg width={BOARD_W} height={BOARD_H + 44} style={{ display: 'block' }}>
             <defs>
               <radialGradient id="plinkoBallGrad" cx="35%" cy="30%">
@@ -2247,27 +2403,6 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
               ))
             )}
 
-            {/* Multi-ball rendering */}
-            {activeBalls.map(ball => {
-              const bx = toSvgX(ball.row, ball.col);
-              const by = toSvgY(ball.row);
-              return (
-                <g key={ball.id}>
-                  {ball.trail.map((pos, ti) => (
-                    <circle key={ti} cx={pos.x} cy={pos.y}
-                      r={PEG_R * 2.5 * (0.25 + ti * 0.12)}
-                      fill="#fbbf24" opacity={0.08 + ti * 0.06} />
-                  ))}
-                  <circle cx={bx} cy={by} r={PEG_R * 2.5}
-                    fill="url(#plinkoBallGrad)" filter="url(#plinkoBallGlow)"
-                    style={{ transition: `cx ${transDur}ms ease-in, cy ${transDur}ms ease-in` }} />
-                  <circle cx={bx - PEG_R * 0.7} cy={by - PEG_R * 0.7}
-                    r={PEG_R * 0.55} fill="#fff" opacity="0.55"
-                    style={{ transition: `cx ${transDur}ms ease-in, cy ${transDur}ms ease-in` }} />
-                </g>
-              );
-            })}
-
             {/* Slots */}
             {mults.map((m, i) => {
               const sx    = pegX(rows, i) - PEG_SPACING / 2;
@@ -2288,6 +2423,13 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
               );
             })}
           </svg>
+          <canvas
+            ref={canvasRef}
+            width={Math.round(BOARD_W * PLINKO_DPR)}
+            height={Math.round((BOARD_H + 44) * PLINKO_DPR)}
+            style={{ position: 'absolute', top: 0, left: 0, width: BOARD_W, height: BOARD_H + 44, pointerEvents: 'none' }}
+          />
+          </div>
 
           {/* Result overlay */}
           {lastWin && !dropping && (
