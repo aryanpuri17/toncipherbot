@@ -90,47 +90,62 @@ const snd = {
   boom() {
     const ctx = _ac(); if (!ctx) return;
     const t = ctx.currentTime;
-    // Sub-bass thump — the "physical" punch of the explosion
+    // Sub-bass kick — plus long, plus percutant
     const kick = ctx.createOscillator(), kg = ctx.createGain();
     kick.connect(kg); kg.connect(ctx.destination); kick.type = 'sine';
-    kick.frequency.setValueAtTime(200, t); kick.frequency.exponentialRampToValueAtTime(28, t + 0.2);
-    kg.gain.setValueAtTime(0.75, t); kg.gain.exponentialRampToValueAtTime(0.001, t + 0.28);
-    kick.start(t); kick.stop(t + 0.3);
-    // High crack — the sharp initial "snap"
+    kick.frequency.setValueAtTime(220, t); kick.frequency.exponentialRampToValueAtTime(22, t + 0.28);
+    kg.gain.setValueAtTime(0.85, t); kg.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+    kick.start(t); kick.stop(t + 0.38);
+    // Mid crack — sawtooth avec pitch sweep plus long
     const crack = ctx.createOscillator(), cg = ctx.createGain();
     crack.connect(cg); cg.connect(ctx.destination); crack.type = 'sawtooth';
-    crack.frequency.setValueAtTime(900, t); crack.frequency.exponentialRampToValueAtTime(150, t + 0.06);
-    cg.gain.setValueAtTime(0.35, t); cg.gain.exponentialRampToValueAtTime(0.001, t + 0.07);
-    crack.start(t); crack.stop(t + 0.08);
-    // Noise body — long rumble with low-pass filter for realism
-    const sr = ctx.sampleRate, len = Math.floor(sr * 0.6);
-    const buf = ctx.createBuffer(1, len, sr), d = buf.getChannelData(0);
-    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.exp(-i / (sr * 0.14));
-    const ns = ctx.createBufferSource(), filt = ctx.createBiquadFilter(), ng = ctx.createGain();
-    filt.type = 'lowpass'; filt.frequency.value = 900;
-    ns.buffer = buf; ns.connect(filt); filt.connect(ng); ng.connect(ctx.destination);
-    ng.gain.value = 0.6; ns.start(t); ns.stop(t + 0.65);
+    crack.frequency.setValueAtTime(1100, t); crack.frequency.exponentialRampToValueAtTime(80, t + 0.12);
+    cg.gain.setValueAtTime(0.40, t); cg.gain.exponentialRampToValueAtTime(0.001, t + 0.13);
+    crack.start(t); crack.stop(t + 0.14);
+    // Noise body — deux couches : lowpass grave + bandpass mid crackling
+    const sr  = ctx.sampleRate;
+    const len = Math.floor(sr * 0.7);
+    const buf = ctx.createBuffer(1, len, sr);
+    const d   = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.exp(-i / (sr * 0.18));
+    const ns1 = ctx.createBufferSource(), lp = ctx.createBiquadFilter(), ng1 = ctx.createGain();
+    lp.type = 'lowpass'; lp.frequency.value = 700;
+    ns1.buffer = buf; ns1.connect(lp); lp.connect(ng1); ng1.connect(ctx.destination);
+    ng1.gain.value = 0.55; ns1.start(t); ns1.stop(t + 0.72);
+    const ns2 = ctx.createBufferSource(), bp = ctx.createBiquadFilter(), ng2 = ctx.createGain();
+    bp.type = 'bandpass'; bp.frequency.value = 2200; bp.Q.value = 0.8;
+    ns2.buffer = buf; ns2.connect(bp); bp.connect(ng2); ng2.connect(ctx.destination);
+    ng2.gain.setValueAtTime(0.28, t); ng2.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+    ns2.start(t); ns2.stop(t + 0.20);
   },
   reveal() {
     const ctx = _ac(); if (!ctx) return;
     const t = ctx.currentTime;
-    // Crystal chime — triad C6/G6/C7 for a glassy, satisfying ring
-    ([1047, 1568, 2093] as number[]).forEach((f, i) => {
+    // Accord Mi6/Sol#6/Si6/Mi7 — arpège ascendant gem casino
+    ([1319, 1661, 1976, 2637] as const).forEach((f, i) => {
       const o = ctx.createOscillator(), g = ctx.createGain();
       o.connect(g); g.connect(ctx.destination);
       o.type = 'sine'; o.frequency.value = f;
-      const vol = [0.16, 0.09, 0.05][i];
-      g.gain.setValueAtTime(0, t);
-      g.gain.linearRampToValueAtTime(vol, t + 0.006);
-      g.gain.exponentialRampToValueAtTime(0.001, t + 0.42);
-      o.start(t); o.stop(t + 0.45);
+      const vol   = [0.14, 0.09, 0.07, 0.04][i];
+      const delay = i * 0.028;
+      g.gain.setValueAtTime(0, t + delay);
+      g.gain.linearRampToValueAtTime(vol, t + delay + 0.012);
+      g.gain.exponentialRampToValueAtTime(0.001, t + delay + 0.55);
+      o.start(t + delay); o.stop(t + delay + 0.6);
     });
-    // Glassy attack shimmer — high transient that fades fast
+    // Shimmer cristallin plus long et plus audible
     const sh = ctx.createOscillator(), sg = ctx.createGain();
     sh.connect(sg); sg.connect(ctx.destination); sh.type = 'sine';
-    sh.frequency.setValueAtTime(4200, t); sh.frequency.exponentialRampToValueAtTime(2100, t + 0.07);
-    sg.gain.setValueAtTime(0.07, t); sg.gain.exponentialRampToValueAtTime(0.001, t + 0.09);
-    sh.start(t); sh.stop(t + 0.1);
+    sh.frequency.setValueAtTime(5200, t); sh.frequency.exponentialRampToValueAtTime(2600, t + 0.12);
+    sg.gain.setValueAtTime(0, t); sg.gain.linearRampToValueAtTime(0.10, t + 0.008);
+    sg.gain.exponentialRampToValueAtTime(0.001, t + 0.14);
+    sh.start(t); sh.stop(t + 0.15);
+    // Micro "ping" métallique — transitoire de contact gem
+    const ping = ctx.createOscillator(), pg = ctx.createGain();
+    ping.connect(pg); pg.connect(ctx.destination); ping.type = 'triangle';
+    ping.frequency.setValueAtTime(3400, t); ping.frequency.exponentialRampToValueAtTime(2800, t + 0.04);
+    pg.gain.setValueAtTime(0.08, t); pg.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
+    ping.start(t); ping.stop(t + 0.07);
   },
   spin() {
     const ctx = _ac(); if (!ctx) return;
@@ -1525,14 +1540,44 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
   return (
     <div className="pb-4" style={{ background: '#060a18', minHeight: '100%' }}>
       <style>{`
-        @keyframes mineReveal { 0%{transform:scale(0.5) rotate(-8deg);opacity:0} 55%{transform:scale(1.18) rotate(3deg)} 80%{transform:scale(0.95)} 100%{transform:scale(1) rotate(0deg);opacity:1} }
-        @keyframes gemShine { 0%,100%{filter:brightness(1.1) drop-shadow(0 0 4px rgba(74,222,128,0.4))} 50%{filter:brightness(1.7) drop-shadow(0 0 10px rgba(74,222,128,0.85))} }
-        @keyframes mineGridShake { 0%,100%{transform:translate(0,0)} 15%{transform:translate(-6px,4px)} 30%{transform:translate(6px,-4px)} 45%{transform:translate(-5px,-3px)} 60%{transform:translate(5px,3px)} 80%{transform:translate(-2px,1px)} }
+        @keyframes tileFlipFront { 0%{transform:rotateY(0deg)} 100%{transform:rotateY(90deg)} }
+        @keyframes tileFlipBack  { 0%{transform:rotateY(-90deg)} 100%{transform:rotateY(0deg)} }
+        @keyframes tileIdle {
+          0%,100%{box-shadow:0 0 0px rgba(100,149,255,0); transform:scale(1)}
+          45%    {box-shadow:0 0 8px rgba(100,149,255,0.22),0 0 3px rgba(100,149,255,0.10) inset; transform:scale(1.015)}
+        }
+        @keyframes tileSweep { 0%{background-position:-120% center} 100%{background-position:220% center} }
+        @keyframes mineReveal {
+          0%  {transform:rotateY(0deg) scale(0.55);opacity:0}
+          50% {transform:rotateY(0deg) scale(1.20);opacity:1}
+          72% {transform:rotateY(0deg) scale(0.93)}
+          88% {transform:rotateY(0deg) scale(1.05)}
+          100%{transform:rotateY(0deg) scale(1)}
+        }
+        @keyframes gemShine {
+          0%,100%{filter:brightness(1.1) drop-shadow(0 0 4px rgba(74,222,128,0.45));box-shadow:0 0 14px rgba(74,222,128,0.45),0 0 5px rgba(74,222,128,0.25) inset}
+          50%    {filter:brightness(1.85) drop-shadow(0 0 14px rgba(74,222,128,0.90));box-shadow:0 0 28px rgba(74,222,128,0.80),0 0 10px rgba(74,222,128,0.40) inset}
+        }
+        @keyframes mineGridShake {
+          0%,100%{transform:translate(0,0) rotate(0deg)}
+          12%    {transform:translate(-7px,5px) rotate(-0.5deg)}
+          25%    {transform:translate(7px,-5px) rotate(0.5deg)}
+          38%    {transform:translate(-6px,-4px) rotate(-0.3deg)}
+          52%    {transform:translate(6px,4px) rotate(0.3deg)}
+          68%    {transform:translate(-3px,2px)}
+          84%    {transform:translate(2px,-1px)}
+        }
         @keyframes boomFlash {
-          0%  {box-shadow:0 0 0 rgba(239,68,68,0); transform:scale(1)}
-          15% {box-shadow:0 0 32px 4px rgba(239,68,68,1), 0 0 8px rgba(255,100,0,0.9) inset; transform:scale(1.12)}
-          40% {box-shadow:0 0 24px rgba(239,68,68,0.8); transform:scale(1.04)}
-          100%{box-shadow:0 0 12px rgba(239,68,68,0.35); transform:scale(1)}
+          0%  {box-shadow:0 0 0 rgba(239,68,68,0);transform:scale(1);filter:brightness(1)}
+          8%  {box-shadow:0 0 0 4px rgba(255,255,100,0.9),0 0 40px 6px rgba(239,68,68,1),0 0 12px rgba(255,120,0,1) inset;transform:scale(1.18);filter:brightness(2.2)}
+          22% {box-shadow:0 0 28px 2px rgba(239,68,68,0.85),0 0 8px rgba(255,80,0,0.5) inset;transform:scale(1.07);filter:brightness(1.4)}
+          55% {box-shadow:0 0 18px rgba(239,68,68,0.55);transform:scale(1.02);filter:brightness(1.1)}
+          100%{box-shadow:0 0 10px rgba(239,68,68,0.30);transform:scale(1);filter:brightness(1)}
+        }
+        @keyframes gridFlashRed {
+          0%  {outline:0px solid rgba(239,68,68,0)}
+          10% {outline:3px solid rgba(239,68,68,0.85);box-shadow:0 0 40px rgba(239,68,68,0.4)}
+          100%{outline:0px solid rgba(239,68,68,0);box-shadow:none}
         }
       `}</style>
       <BigWinEffect show={bigWin} />
@@ -1581,41 +1626,126 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
             animation: phase === 'lost' ? 'mineGridShake 0.45s ease' : undefined,
           }}>
           {Array.from({ length: GRID_SIZE }, (_, idx) => {
-            const isMine = minePos.has(idx);
-            const isRev  = revealed.has(idx);
+            const isMine    = minePos.has(idx);
+            const isRev     = revealed.has(idx);
             const showBoom  = isRev && isMine;
             const showGem   = isRev && !isMine;
             const showGhost = (phase === 'lost' || phase === 'won') && isMine && !isRev;
+            const isPlayable = phase === 'playing' && !isRev;
             return (
-              <button key={idx} onClick={() => revealTile(idx)}
-                disabled={phase !== 'playing' || isRev}
+              <div
+                key={idx}
                 style={{
                   aspectRatio: '1',
-                  background: showBoom ? 'radial-gradient(circle at 50% 35%, rgba(239,68,68,0.6), rgba(127,29,29,0.5))' :
-                               showGem  ? 'radial-gradient(circle at 45% 35%, rgba(74,222,128,0.55), rgba(20,83,45,0.45))' :
-                               showGhost ? 'rgba(239,68,68,0.08)' :
-                               phase === 'playing' ? 'linear-gradient(160deg,#1e2a52,#161d3a)' : '#111830',
-                  border: showBoom ? '2px solid rgba(239,68,68,0.85)' :
-                          showGem  ? '2px solid rgba(74,222,128,0.75)' :
-                          showGhost ? '1px solid rgba(239,68,68,0.2)' :
-                          phase === 'playing' ? '1px solid #2a3a6e' : '1px solid #1e2847',
-                  borderRadius: 12,
-                  fontSize: 20,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  transition: 'background 0.18s, border-color 0.18s, transform 0.12s',
-                  animation: showBoom ? 'mineReveal 0.25s ease-out, boomFlash 0.6s ease-out forwards' :
-                             showGem  ? 'mineReveal 0.25s ease-out, gemShine 2.2s ease-in-out 0.3s infinite' : undefined,
-                  boxShadow: showGem  ? '0 0 18px rgba(74,222,128,0.55), 0 0 6px rgba(74,222,128,0.3) inset' :
-                             showBoom ? '0 0 22px rgba(239,68,68,0.7)' : undefined,
-                  filter: showGem ? 'brightness(1.15)' : undefined,
-                  cursor: phase === 'playing' && !isRev ? 'pointer' : 'default',
-                  opacity: showGhost ? 0.5 : 1,
+                  position: 'relative',
+                  perspective: '500px',
+                  cursor: isPlayable ? 'pointer' : 'default',
                 }}
-                onMouseEnter={e => { if (phase === 'playing' && !isRev) (e.currentTarget as HTMLButtonElement).style.background = '#243059'; }}
-                onMouseLeave={e => { if (phase === 'playing' && !isRev) (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(160deg,#1e2a52,#161d3a)'; }}
+                onClick={() => { if (isPlayable) revealTile(idx); }}
               >
-                {showBoom ? '💣' : showGem ? '💎' : showGhost ? '💣' : null}
-              </button>
+                {/* ── Face avant — visible avant révélation ── */}
+                <div
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    borderRadius: 12,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backfaceVisibility: 'hidden',
+                    WebkitBackfaceVisibility: 'hidden',
+                    transformStyle: 'preserve-3d',
+                    transform: isRev ? 'rotateY(90deg)' : 'rotateY(0deg)',
+                    transition: isRev ? 'transform 0.18s ease-in' : 'none',
+                    background: showGhost
+                      ? 'rgba(239,68,68,0.08)'
+                      : phase === 'playing'
+                        ? 'linear-gradient(160deg,#1e2a52,#161d3a)'
+                        : '#111830',
+                    border: showGhost
+                      ? '1px solid rgba(239,68,68,0.22)'
+                      : phase === 'playing'
+                        ? '1px solid #2a3a6e'
+                        : '1px solid #1e2847',
+                    animation: isPlayable ? 'tileIdle 3.2s ease-in-out infinite' : undefined,
+                    animationDelay: isPlayable ? `${(idx * 0.13) % 1.6}s` : undefined,
+                    opacity: showGhost ? 0.45 : 1,
+                    overflow: 'hidden',
+                  }}
+                  onMouseEnter={e => {
+                    if (isPlayable) {
+                      (e.currentTarget as HTMLDivElement).style.background = '#243059';
+                      (e.currentTarget as HTMLDivElement).style.borderColor = '#3a4f8e';
+                    }
+                  }}
+                  onMouseLeave={e => {
+                    if (isPlayable) {
+                      (e.currentTarget as HTMLDivElement).style.background = 'linear-gradient(160deg,#1e2a52,#161d3a)';
+                      (e.currentTarget as HTMLDivElement).style.borderColor = '#2a3a6e';
+                    }
+                  }}
+                >
+                  {/* Sweep shimmer diagonal */}
+                  {isPlayable && (
+                    <div
+                      aria-hidden="true"
+                      style={{
+                        position: 'absolute',
+                        inset: 0,
+                        borderRadius: 12,
+                        background: 'linear-gradient(105deg,transparent 30%,rgba(255,255,255,0.045) 50%,transparent 70%)',
+                        backgroundSize: '200% 100%',
+                        animation: 'tileSweep 4s ease-in-out infinite',
+                        animationDelay: `${(idx * 0.19) % 2}s`,
+                        pointerEvents: 'none',
+                      }}
+                    />
+                  )}
+                  {showGhost && <span style={{ fontSize: 18, opacity: 0.5 }}>💣</span>}
+                </div>
+
+                {/* ── Face arrière — visible après révélation ── */}
+                <div
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    borderRadius: 12,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: 20,
+                    backfaceVisibility: 'hidden',
+                    WebkitBackfaceVisibility: 'hidden',
+                    transformStyle: 'preserve-3d',
+                    transform: isRev ? 'rotateY(0deg)' : 'rotateY(-90deg)',
+                    transition: isRev ? 'transform 0.18s ease-out 0.18s' : 'none',
+                    background: showBoom
+                      ? 'radial-gradient(circle at 50% 35%,rgba(239,68,68,0.65),rgba(127,29,29,0.55))'
+                      : showGem
+                        ? 'radial-gradient(circle at 45% 30%,rgba(74,222,128,0.60),rgba(20,83,45,0.50))'
+                        : 'transparent',
+                    border: showBoom
+                      ? '2px solid rgba(239,68,68,0.90)'
+                      : showGem
+                        ? '2px solid rgba(74,222,128,0.80)'
+                        : 'none',
+                    boxShadow: showGem
+                      ? '0 0 22px rgba(74,222,128,0.65),0 0 8px rgba(74,222,128,0.35) inset'
+                      : showBoom
+                        ? '0 0 26px rgba(239,68,68,0.75)'
+                        : undefined,
+                    animation: showBoom
+                      ? 'boomFlash 0.65s ease-out forwards'
+                      : showGem
+                        ? 'mineReveal 0.32s cubic-bezier(0.34,1.56,0.64,1) forwards, gemShine 2.4s ease-in-out 0.35s infinite'
+                        : undefined,
+                    filter: showGem ? 'brightness(1.18)' : undefined,
+                  }}
+                >
+                  {showBoom && '💣'}
+                  {showGem  && '💎'}
+                </div>
+              </div>
             );
           })}
         </div>
