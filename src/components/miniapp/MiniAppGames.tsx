@@ -1043,10 +1043,11 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
     ? `${curvePath} L${xOf(elapsedS).toFixed(1)},${PY0 + PH} L${PX0},${PY0 + PH} Z`
     : '';
 
-  // angle de l'avion (pente du dernier segment à l'écran)
-  let planeAngle = -18;
-  if (samples.length >= 3) {
-    const a = samples[Math.max(0, samples.length - 4)];
+  // angle de l'avion — moyenne sur les 6 derniers samples pour éviter les saccades
+  let planeAngle = -22;
+  if (samples.length >= 2) {
+    const lookback = Math.min(6, samples.length - 1);
+    const a = samples[samples.length - 1 - lookback];
     const b = samples[samples.length - 1];
     planeAngle = Math.atan2(yOf(b[1]) - yOf(a[1]), xOf(b[0]) - xOf(a[0])) * 180 / Math.PI;
   }
@@ -1076,15 +1077,17 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
       return { label: `ENCAISSER · ${(myBet * mult).toFixed(4)} TON`, onClick: () => doCashout(multRef.current), kind: 'cash' as const, disabled: false };
     }
     if (queuedBet !== null) {
-      return { label: 'MISE PLACÉE POUR LE PROCHAIN TOUR ✓ · toucher pour annuler', onClick: cancelQueued, kind: 'queued' as const, disabled: false };
+      return { label: 'MISE PLACÉE ✓ · toucher pour annuler', onClick: cancelQueued, kind: 'queued' as const, disabled: false };
     }
-    return { label: `MISER AU PROCHAIN TOUR · ${effBet.toFixed(2)} TON`, onClick: queueBet, kind: 'bet' as const, disabled: effBet < 0.01 };
+    // Après crash ou en spectateur : bouton discret — ne pas pousser à jouer
+    return { label: `PROCHAIN TOUR · ${effBet.toFixed(2)} TON`, onClick: queueBet, kind: 'next' as const, disabled: effBet < 0.01 };
   })();
 
   const btnStyle: React.CSSProperties =
     mainBtn.kind === 'cash'   ? { background: 'linear-gradient(135deg,#22c55e,#16a34a)', animation: 'crashPulse 1.1s ease-in-out infinite', color: '#052e16' } :
     mainBtn.kind === 'cancel' ? { background: 'rgba(239,68,68,0.14)', border: '1px solid rgba(239,68,68,0.45)', color: '#f87171' } :
     mainBtn.kind === 'queued' ? { background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.4)', color: '#4ade80' } :
+    mainBtn.kind === 'next'   ? { background: 'rgba(255,255,255,0.03)', border: '1px solid #1e2847', color: '#334155', fontSize: 11 } :
     mainBtn.disabled          ? { background: 'rgba(255,255,255,0.05)', color: '#475569', cursor: 'not-allowed' } :
                                 { background: 'linear-gradient(135deg,#4f6ff0,#6366f1)', boxShadow: '0 4px 16px rgba(79,111,240,0.35)', color: '#fff' };
 
@@ -1306,34 +1309,33 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
 
           {/* fusée / explosion */}
           {phase === 'flying' && (
-            <g transform={`translate(${tipX},${tipY}) rotate(${planeAngle})`}>
-              {/* Inner g avec wobble — amplitude augmente avec le multiplicateur */}
-              <g style={{ animation: mult > 10 ? 'rocketWobble 0.18s ease-in-out infinite alternate' : mult > 3 ? 'rocketWobble 0.3s ease-in-out infinite alternate' : mult > 1.5 ? 'rocketWobble 0.5s ease-in-out infinite alternate' : undefined, transformOrigin: 'center' }}>
-                {/* Flammes du réacteur */}
+            // translate au bout de la courbe → rotate selon pente → scale 1.5× → translate -18 pour aligner LE NEZ (x=18) au bout de la courbe
+            <g transform={`translate(${tipX},${tipY}) rotate(${planeAngle}) scale(1.5) translate(-18,0)`}>
+              {/* Wobble — amplitude augmente avec le multiplicateur */}
+              <g style={{ animation: mult > 10 ? 'rocketWobble 0.18s ease-in-out infinite alternate' : mult > 3 ? 'rocketWobble 0.3s ease-in-out infinite alternate' : mult > 1.5 ? 'rocketWobble 0.5s ease-in-out infinite alternate' : undefined, transformOrigin: '2px 0px' }}>
+                {/* Flammes — taille réactive au multiplicateur */}
                 <ellipse cx="-17" cy="0" rx={mult > 5 ? 14 : mult > 2 ? 12 : 10} ry={mult > 5 ? 7 : 6} fill="#f97316"
                   style={{ '--flame-max-opacity': '0.28', transformOrigin: '-17px 0px', animation: 'thrustPulse 0.22s ease-in-out infinite alternate', animationDelay: '0s' } as React.CSSProperties} />
                 <ellipse cx="-13" cy="0" rx={mult > 5 ? 10 : mult > 2 ? 9 : 7} ry={mult > 5 ? 4.5 : 3.8} fill="#fb923c"
                   style={{ '--flame-max-opacity': '0.60', transformOrigin: '-13px 0px', animation: 'thrustPulse 0.17s ease-in-out infinite alternate', animationDelay: '0.05s' } as React.CSSProperties} />
                 <ellipse cx="-11" cy="0" rx={mult > 5 ? 7 : mult > 2 ? 6 : 5} ry={mult > 5 ? 3 : 2.2} fill="#fde68a"
                   style={{ '--flame-max-opacity': '0.92', transformOrigin: '-11px 0px', animation: 'thrustPulse 0.13s ease-in-out infinite alternate', animationDelay: '0.09s' } as React.CSSProperties} />
-                {/* Corps principal */}
+                {/* Corps */}
                 <path d="M18,0 L12,-2 L-9,-4 L-14,-2 L-14,2 L-9,4 L12,2 Z" fill="#f43f5e" />
                 {/* Nez */}
                 <path d="M12,-2 L18,0 L12,2 Z" fill="#fda4af" />
-                {/* Aile haute */}
-                <path d="M-1,-4 L-8,-13 L-12,-4 Z" fill="#fb7185" opacity="0.9" />
-                {/* Aile basse */}
-                <path d="M-1,4 L-8,13 L-12,4 Z" fill="#fb7185" opacity="0.9" />
-                {/* Aileron haut */}
-                <path d="M-10,-4 L-14,-9 L-14,-4 Z" fill="#be123c" />
-                {/* Aileron bas */}
-                <path d="M-10,4 L-14,9 L-14,4 Z" fill="#be123c" />
+                {/* Ailes */}
+                <path d="M-1,-4 L-9,-15 L-13,-4 Z" fill="#fb7185" opacity="0.9" />
+                <path d="M-1,4 L-9,15 L-13,4 Z"  fill="#fb7185" opacity="0.9" />
+                {/* Ailerons */}
+                <path d="M-10,-4 L-14,-10 L-14,-4 Z" fill="#be123c" />
+                <path d="M-10,4 L-14,10 L-14,4 Z"   fill="#be123c" />
                 {/* Hublot */}
-                <circle cx="5" cy="0" r="3.2" fill="#bfdbfe" opacity="0.95" />
-                <circle cx="5" cy="0" r="1.9" fill="#60a5fa" />
-                <circle cx="4.2" cy="-0.8" r="0.7" fill="#fff" opacity="0.6" />
+                <circle cx="5" cy="0" r="3.6" fill="#bfdbfe" opacity="0.95" />
+                <circle cx="5" cy="0" r="2.2" fill="#60a5fa" />
+                <circle cx="4.2" cy="-0.9" r="0.9" fill="#fff" opacity="0.7" />
                 {/* Halo de vitesse */}
-                <circle r="10" fill="#f43f5e" opacity="0.06" />
+                <circle cx="2" cy="0" r="12" fill="#f43f5e" opacity="0.07" />
               </g>
             </g>
           )}
