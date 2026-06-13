@@ -5,6 +5,21 @@
 
 ---
 
+## 🔌 CONNECTEURS À UTILISER OBLIGATOIREMENT
+
+Tu disposes de plusieurs connecteurs MCP — **utilise-les activement** pour ce brief :
+
+| Connecteur | Utilisation demandée |
+|---|---|
+| **Context7** | Cherche la doc officielle React 19 sur les hooks `useRef` / `useState` pour gérer plusieurs animations simultanées. Cherche aussi la doc SVG sur les transitions `cx`/`cy`. |
+| **motion** (Framer Motion) | Consulte les APIs `motion.circle` et `useAnimate` pour voir si on peut améliorer les animations de boule sans casser le SVG existant. Si oui, propose comment l'intégrer. |
+| **Exa** | Recherche "Plinko game React multi-ball SVG implementation" et "Plinko auto-play React" — trouve les meilleures pratiques et patterns existants, cite tes sources. |
+| **Figma** | Crée un mockup visuel du nouveau plateau Plinko avec : boule plus grande, slots plus hauts, sélecteur multi-boules, toggle auto-play. Partage le lien ou une description détaillée pixel par pixel. |
+
+**Ne produis pas de réponse sans avoir utilisé au moins Context7 + Exa.**
+
+---
+
 ## Contexte projet
 
 TonCipher est une mini-app Telegram qui permet de gagner de vrais TON (cryptomonnaie).
