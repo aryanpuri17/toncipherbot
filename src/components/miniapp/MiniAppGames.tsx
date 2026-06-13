@@ -288,7 +288,7 @@ function rollWheel(streak: number, demo = false): { mult: number; idx: number[] 
   return raw[0];
 }
 
-const WheelSVG: React.FC<{ rotation: number }> = ({ rotation }) => {
+const WheelSVG: React.FC<{ rotation: number; winIdx?: number | null }> = ({ rotation, winIdx }) => {
   const studs = Array.from({ length: 20 }, (_, i) => pt(i * 18, WRADIUS + 14));
   return (
     <svg width="280" height="280" viewBox="0 0 300 300" style={{
@@ -305,6 +305,10 @@ const WheelSVG: React.FC<{ rotation: number }> = ({ rotation }) => {
           <stop offset="0%" stopColor="#fde68a" />
           <stop offset="100%" stopColor="#78350f" />
         </radialGradient>
+        <filter id="wSegGlow" x="-40%" y="-40%" width="180%" height="180%">
+          <feGaussianBlur stdDeviation="5" result="blur" />
+          <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+        </filter>
       </defs>
       <circle cx={CX} cy={CY} r={WRADIUS + 22} fill="#1a0e00" />
       <circle cx={CX} cy={CY} r={WRADIUS + 22} fill="none" stroke="#fbbf24" strokeWidth="3" />
@@ -331,6 +335,17 @@ const WheelSVG: React.FC<{ rotation: number }> = ({ rotation }) => {
           </g>
         );
       })}
+      {/* Winning segment glow — appears after spin stops */}
+      {winIdx != null && (
+        <path
+          d={arcPath(winIdx)}
+          fill={SEGS[winIdx].text + '30'}
+          stroke={SEGS[winIdx].text}
+          strokeWidth="2.5"
+          filter="url(#wSegGlow)"
+          style={{ animation: 'winSegPulse 1.2s ease-in-out infinite alternate' }}
+        />
+      )}
       <circle cx={CX} cy={CY} r={27} fill="url(#wHub)" stroke="#fbbf24" strokeWidth="2.5" />
       <circle cx={CX} cy={CY} r={18} fill="#1a0800" />
       <circle cx={CX} cy={CY} r={9}  fill="#fbbf24" opacity="0.25" />
@@ -348,16 +363,20 @@ const WheelGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
   const [result, setResult]   = useState<{ seg: Seg; win: number } | null>(null);
   const [hist, setHist]       = useState<number[]>([]);
   const [bigWin, setBigWin]   = useState(false);
+  const [winIdx, setWinIdx]   = useState<number | null>(null);
   const mountedRef            = useRef(true);
   const spinTimerRef          = useRef<ReturnType<typeof setTimeout> | null>(null);
   const bigWinTimerRef        = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const tickTimers            = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const ptrRef                = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
-      if (spinTimerRef.current) clearTimeout(spinTimerRef.current);
+      if (spinTimerRef.current)  clearTimeout(spinTimerRef.current);
       if (bigWinTimerRef.current) clearTimeout(bigWinTimerRef.current);
+      tickTimers.current.forEach(clearTimeout);
     };
   }, []);
 
@@ -376,14 +395,41 @@ const WheelGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
     rotRef.current = newRot;
     setRot(newRot);
     setSpin(true);
+    setWinIdx(null);
     snd.spin();
     haptic.impact('medium');
     setResult(null);
+
+    // Schedule tick sounds — exponentially decelerating like a real wheel
+    tickTimers.current.forEach(clearTimeout);
+    tickTimers.current = [];
+    {
+      let elapsed = 0;
+      let interval = 55;
+      while (elapsed < 4050) {
+        elapsed += interval;
+        const t = elapsed;
+        tickTimers.current.push(setTimeout(() => {
+          if (!mountedRef.current) return;
+          snd.tick();
+          // Flash the pointer via direct DOM manipulation (no re-render)
+          const el = ptrRef.current;
+          if (el) {
+            el.style.animation = 'none';
+            void el.offsetHeight; // force reflow to restart animation
+            el.style.animation = 'ptrFlash 0.2s ease-out';
+          }
+        }, t));
+        interval = Math.min(370, interval * 1.052);
+      }
+    }
+
     const used = Math.min(effBet, bal);
     const win = +(used * rule.mult).toFixed(6);
     spinTimerRef.current = setTimeout(() => {
       if (!mountedRef.current) return;
       setSpin(false);
+      setWinIdx(idx);
       placeGameBet(used, win);
       recordGameResult('Roue', used, win);
       setResult({ seg: SEGS[idx], win });
@@ -405,6 +451,16 @@ const WheelGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
 
   return (
     <div className="space-y-5 pb-4">
+      <style>{`
+        @keyframes ptrFlash {
+          0%   { filter: brightness(3) drop-shadow(0 0 18px #fbbf24); transform: scaleY(1.25); }
+          100% { filter: brightness(1) drop-shadow(0 2px 8px rgba(251,191,36,0.8)); transform: scaleY(1); }
+        }
+        @keyframes winSegPulse {
+          0%   { opacity: 0.55; }
+          100% { opacity: 1; }
+        }
+      `}</style>
       <BigWinEffect show={bigWin} />
       <div className="flex items-center gap-3">
         <button onClick={onBack} className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center text-slate-400 hover:text-white transition-colors">
@@ -437,15 +493,18 @@ const WheelGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
 
       <div className="flex flex-col items-center gap-3">
         <div className="relative">
-          <div className="absolute z-10" style={{
-            top: '-6px', left: '50%', transform: 'translateX(-50%)',
-            width: 0, height: 0,
-            borderLeft: '13px solid transparent', borderRight: '13px solid transparent',
-            borderTop: '26px solid #fbbf24',
-            filter: 'drop-shadow(0 2px 8px rgba(251,191,36,0.8))',
-          }} />
+          {/* Pointer — inner div ref'd for direct animation on each tick */}
+          <div className="absolute z-10" style={{ top: '-6px', left: '50%', transform: 'translateX(-50%)' }}>
+            <div ref={ptrRef} style={{
+              width: 0, height: 0,
+              borderLeft: '13px solid transparent', borderRight: '13px solid transparent',
+              borderTop: '26px solid #fbbf24',
+              filter: 'drop-shadow(0 2px 8px rgba(251,191,36,0.8))',
+              transformOrigin: 'top center',
+            }} />
+          </div>
           <div style={{ filter: 'drop-shadow(0 0 36px rgba(251,191,36,0.12))' }}>
-            <WheelSVG rotation={rotation} />
+            <WheelSVG rotation={rotation} winIdx={winIdx} />
           </div>
         </div>
         {result && !spinning && (
@@ -635,6 +694,7 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
   const [queuedBet, setQueuedBet] = useState<number | null>(null);
   const [toast, setToast]         = useState<{ id: number; text: string; win: boolean } | null>(null);
   const [bigWin, setBigWin]       = useState(false);
+  const [cashFlash, setCashFlash] = useState(false);
   const crashMountedRef           = useRef(true);
   const crashBigWinTimer          = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -674,6 +734,8 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
     snd.cashout();
     haptic.success();
     onResultRef.current(true);
+    setCashFlash(true);
+    setTimeout(() => setCashFlash(false), 450);
     setCashedOut(m);
     setToast({ id: Date.now(), text: `+${win.toFixed(4)} TON`, win: true });
     if (m >= 3) {
@@ -901,6 +963,8 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
         @keyframes chipIn { from{opacity:0;transform:scale(0.5)} to{opacity:1;transform:scale(1)} }
         @keyframes multGlow { 0%,100%{text-shadow:0 0 20px rgba(34,197,94,0.4)} 50%{text-shadow:0 0 40px rgba(34,197,94,0.9)} }
         @keyframes rocketThrust { 0%,100%{opacity:0.82} 50%{opacity:0.45} }
+        @keyframes rocketWobble { 0%{transform:rotate(-3deg) scale(1)} 100%{transform:rotate(3deg) scale(1.04)} }
+        @keyframes cashoutFlash { 0%{opacity:1} 100%{opacity:0} }
         @keyframes mineReveal { 0%{transform:scale(0.6);opacity:0} 60%{transform:scale(1.12)} 100%{transform:scale(1);opacity:1} }
         @keyframes gemShine { 0%,100%{filter:brightness(1)} 50%{filter:brightness(1.5)} }
       `}</style>
@@ -1057,28 +1121,31 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
           {/* fusée / explosion */}
           {phase === 'flying' && (
             <g transform={`translate(${tipX},${tipY}) rotate(${planeAngle})`}>
-              {/* Flammes du réacteur */}
-              <ellipse cx="-16" cy="0" rx="11" ry="5.5" fill="#f97316" opacity="0.22" />
-              <ellipse cx="-13" cy="0" rx="8"  ry="3.8" fill="#fb923c" opacity="0.50" />
-              <ellipse cx="-11" cy="0" rx="5"  ry="2.2" fill="#fde68a" opacity="0.82" />
-              {/* Corps principal */}
-              <path d="M18,0 L12,-2 L-9,-4 L-14,-2 L-14,2 L-9,4 L12,2 Z" fill="#f43f5e" />
-              {/* Nez */}
-              <path d="M12,-2 L18,0 L12,2 Z" fill="#fda4af" />
-              {/* Aile haute */}
-              <path d="M-1,-4 L-8,-13 L-12,-4 Z" fill="#fb7185" opacity="0.9" />
-              {/* Aile basse */}
-              <path d="M-1,4 L-8,13 L-12,4 Z" fill="#fb7185" opacity="0.9" />
-              {/* Aileron haut */}
-              <path d="M-10,-4 L-14,-9 L-14,-4 Z" fill="#be123c" />
-              {/* Aileron bas */}
-              <path d="M-10,4 L-14,9 L-14,4 Z" fill="#be123c" />
-              {/* Hublot */}
-              <circle cx="5" cy="0" r="3.2" fill="#bfdbfe" opacity="0.95" />
-              <circle cx="5" cy="0" r="1.9" fill="#60a5fa" />
-              <circle cx="4.2" cy="-0.8" r="0.7" fill="#fff" opacity="0.6" />
-              {/* Halo de vitesse */}
-              <circle r="10" fill="#f43f5e" opacity="0.06" />
+              {/* Inner g avec wobble — amplitude augmente avec le multiplicateur */}
+              <g style={{ animation: mult > 10 ? 'rocketWobble 0.18s ease-in-out infinite alternate' : mult > 3 ? 'rocketWobble 0.3s ease-in-out infinite alternate' : mult > 1.5 ? 'rocketWobble 0.5s ease-in-out infinite alternate' : undefined, transformOrigin: 'center' }}>
+                {/* Flammes du réacteur */}
+                <ellipse cx="-16" cy="0" rx="11" ry="5.5" fill="#f97316" opacity="0.22" />
+                <ellipse cx="-13" cy="0" rx="8"  ry="3.8" fill="#fb923c" opacity="0.50" />
+                <ellipse cx="-11" cy="0" rx="5"  ry="2.2" fill="#fde68a" opacity="0.82" />
+                {/* Corps principal */}
+                <path d="M18,0 L12,-2 L-9,-4 L-14,-2 L-14,2 L-9,4 L12,2 Z" fill="#f43f5e" />
+                {/* Nez */}
+                <path d="M12,-2 L18,0 L12,2 Z" fill="#fda4af" />
+                {/* Aile haute */}
+                <path d="M-1,-4 L-8,-13 L-12,-4 Z" fill="#fb7185" opacity="0.9" />
+                {/* Aile basse */}
+                <path d="M-1,4 L-8,13 L-12,4 Z" fill="#fb7185" opacity="0.9" />
+                {/* Aileron haut */}
+                <path d="M-10,-4 L-14,-9 L-14,-4 Z" fill="#be123c" />
+                {/* Aileron bas */}
+                <path d="M-10,4 L-14,9 L-14,4 Z" fill="#be123c" />
+                {/* Hublot */}
+                <circle cx="5" cy="0" r="3.2" fill="#bfdbfe" opacity="0.95" />
+                <circle cx="5" cy="0" r="1.9" fill="#60a5fa" />
+                <circle cx="4.2" cy="-0.8" r="0.7" fill="#fff" opacity="0.6" />
+                {/* Halo de vitesse */}
+                <circle r="10" fill="#f43f5e" opacity="0.06" />
+              </g>
             </g>
           )}
           {isCrashed && (
@@ -1094,6 +1161,12 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
             </g>
           )}
         </svg>
+
+        {/* Flash vert au cashout */}
+        {cashFlash && (
+          <div className="absolute inset-0 pointer-events-none rounded-2xl"
+            style={{ background: 'rgba(34,197,94,0.18)', animation: 'cashoutFlash 0.45s ease-out forwards' }} />
+        )}
 
         {/* superposition centrale */}
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
@@ -1424,10 +1497,12 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
   return (
     <div className="pb-4" style={{ background: '#060a18', minHeight: '100%' }}>
       <style>{`
-        @keyframes mineReveal { 0%{transform:scale(0.6);opacity:0} 60%{transform:scale(1.12)} 100%{transform:scale(1);opacity:1} }
-        @keyframes gemShine { 0%,100%{filter:brightness(1)} 50%{filter:brightness(1.55)} }
         @keyframes mineGridShake { 0%,100%{transform:translate(0,0)} 15%{transform:translate(-5px,3px)} 30%{transform:translate(5px,-3px)} 45%{transform:translate(-4px,-2px)} 60%{transform:translate(4px,2px)} 80%{transform:translate(-2px,1px)} }
-        @keyframes boomFlash { 0%{box-shadow:0 0 0 rgba(239,68,68,0)} 30%{box-shadow:0 0 28px rgba(239,68,68,0.85)} 100%{box-shadow:0 0 10px rgba(239,68,68,0.4)} }
+        @keyframes gemShine { 0%,100%{filter:brightness(1)} 50%{filter:brightness(1.6)} }
+        @keyframes tileFlip { 0%{transform:rotateY(0deg)} 100%{transform:rotateY(180deg)} }
+        @keyframes boomPulse { 0%{box-shadow:0 0 0 0 rgba(239,68,68,0.9)} 60%{box-shadow:0 0 0 10px rgba(239,68,68,0)} 100%{box-shadow:0 0 0 0 rgba(239,68,68,0)} }
+        @keyframes tileShimmer { 0%{background-position:200% center} 100%{background-position:-200% center} }
+        @keyframes tileWait { 0%,100%{box-shadow:0 0 0px rgba(59,130,246,0)} 50%{box-shadow:0 0 8px rgba(59,130,246,0.25)} }
       `}</style>
       <BigWinEffect show={bigWin} />
       {/* Header */}
@@ -1475,39 +1550,77 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
             animation: phase === 'lost' ? 'mineGridShake 0.45s ease' : undefined,
           }}>
           {Array.from({ length: GRID_SIZE }, (_, idx) => {
-            const isMine = minePos.has(idx);
-            const isRev  = revealed.has(idx);
+            const isMine    = minePos.has(idx);
+            const isRev     = revealed.has(idx);
             const showBoom  = isRev && isMine;
             const showGem   = isRev && !isMine;
             const showGhost = (phase === 'lost' || phase === 'won') && isMine && !isRev;
+            const isPlayable = phase === 'playing' && !isRev;
             return (
-              <button key={idx} onClick={() => revealTile(idx)}
-                disabled={phase !== 'playing' || isRev}
-                style={{
-                  aspectRatio: '1',
-                  background: showBoom ? 'radial-gradient(circle at 50% 40%, rgba(239,68,68,0.45), rgba(127,29,29,0.35))' :
-                               showGem  ? 'radial-gradient(circle at 50% 40%, rgba(34,197,94,0.35), rgba(20,83,45,0.3))' :
-                               showGhost ? 'rgba(239,68,68,0.08)' :
-                               phase === 'playing' ? 'linear-gradient(160deg,#1e2a52,#161d3a)' : '#111830',
-                  border: showBoom ? '2px solid rgba(239,68,68,0.6)' :
-                          showGem  ? '2px solid rgba(34,197,94,0.45)' :
-                          showGhost ? '1px solid rgba(239,68,68,0.2)' :
-                          phase === 'playing' ? '1px solid #2a3a6e' : '1px solid #1e2847',
-                  borderRadius: 12,
-                  fontSize: 18,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  transition: 'background 0.18s, border-color 0.18s, transform 0.12s',
-                  animation: showBoom ? 'mineReveal 0.25s ease-out, boomFlash 0.6s ease-out forwards' :
-                             showGem  ? 'mineReveal 0.25s ease-out, gemShine 2.2s ease-in-out 0.3s infinite' : undefined,
-                  boxShadow: showGem ? '0 0 12px rgba(34,197,94,0.25)' : undefined,
-                  cursor: phase === 'playing' && !isRev ? 'pointer' : 'default',
-                  opacity: showGhost ? 0.5 : 1,
-                }}
-                onMouseEnter={e => { if (phase === 'playing' && !isRev) (e.currentTarget as HTMLButtonElement).style.background = '#243059'; }}
-                onMouseLeave={e => { if (phase === 'playing' && !isRev) (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(160deg,#1e2a52,#161d3a)'; }}
+              <div key={idx}
+                style={{ aspectRatio: '1', perspective: '500px', cursor: isPlayable ? 'pointer' : 'default' }}
+                onClick={() => revealTile(idx)}
               >
-                {showBoom ? '💣' : showGem ? '💎' : showGhost ? '💣' : null}
-              </button>
+                {/* 3D flip container */}
+                <div style={{
+                  width: '100%', height: '100%',
+                  position: 'relative',
+                  transformStyle: 'preserve-3d',
+                  transition: isRev || showGhost ? 'transform 0.38s ease-in-out' : undefined,
+                  transform: (isRev || showGhost) ? 'rotateY(180deg)' : 'rotateY(0deg)',
+                }}>
+                  {/* Face avant — case cachée */}
+                  <div style={{
+                    position: 'absolute', inset: 0,
+                    backfaceVisibility: 'hidden',
+                    WebkitBackfaceVisibility: 'hidden',
+                    borderRadius: 12,
+                    background: isPlayable
+                      ? 'linear-gradient(160deg,#1e2a52,#161d3a)'
+                      : phase === 'playing' ? 'linear-gradient(160deg,#1e2a52,#161d3a)' : '#111830',
+                    border: isPlayable ? '1px solid #2a3a6e' : '1px solid #1e2847',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    animation: isPlayable ? 'tileWait 2.8s ease-in-out infinite' : undefined,
+                    backgroundImage: isPlayable
+                      ? 'linear-gradient(160deg,#1e2a52,#161d3a), linear-gradient(105deg, transparent 40%, rgba(255,255,255,0.05) 50%, transparent 60%)'
+                      : undefined,
+                    backgroundSize: isPlayable ? 'auto, 200%' : undefined,
+                  }} />
+                  {/* Face arrière — gem ou bombe */}
+                  <div style={{
+                    position: 'absolute', inset: 0,
+                    backfaceVisibility: 'hidden',
+                    WebkitBackfaceVisibility: 'hidden',
+                    transform: 'rotateY(180deg)',
+                    borderRadius: 12,
+                    fontSize: 20,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    background: showBoom
+                      ? 'radial-gradient(circle at 50% 40%, rgba(239,68,68,0.5), rgba(127,29,29,0.4))'
+                      : showGhost
+                      ? 'rgba(239,68,68,0.08)'
+                      : 'radial-gradient(circle at 50% 40%, rgba(34,197,94,0.35), rgba(20,83,45,0.3))',
+                    border: showBoom
+                      ? '2px solid rgba(239,68,68,0.65)'
+                      : showGhost
+                      ? '1px solid rgba(239,68,68,0.2)'
+                      : '2px solid rgba(34,197,94,0.5)',
+                    boxShadow: showBoom
+                      ? undefined
+                      : showGhost
+                      ? undefined
+                      : '0 0 14px rgba(34,197,94,0.3)',
+                    animation: showBoom
+                      ? 'boomPulse 0.6s ease-out'
+                      : showGem
+                      ? 'gemShine 2.2s ease-in-out 0.3s infinite'
+                      : undefined,
+                    opacity: showGhost ? 0.45 : 1,
+                  }}>
+                    {showBoom ? '💣' : showGhost ? '💣' : '💎'}
+                  </div>
+                </div>
+              </div>
             );
           })}
         </div>
@@ -1701,13 +1814,15 @@ const RouletteGame: React.FC<{ onBack: () => void; streak: number; onResult: OnR
   const mountedRef                = useRef(true);
   const spinTimerRef              = useRef<ReturnType<typeof setTimeout> | null>(null);
   const bigWinTimerRef            = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const rTickTimers               = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   useEffect(() => {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
-      if (spinTimerRef.current) clearTimeout(spinTimerRef.current);
+      if (spinTimerRef.current)  clearTimeout(spinTimerRef.current);
       if (bigWinTimerRef.current) clearTimeout(bigWinTimerRef.current);
+      rTickTimers.current.forEach(clearTimeout);
     };
   }, []);
 
@@ -1730,14 +1845,52 @@ const RouletteGame: React.FC<{ onBack: () => void; streak: number; onResult: OnR
     setRotation(newRot);
     // Ball counter-clockwise, settles near pointer (top)
     const curBall = ballRef.current % 360;
-    const newBall = ballRef.current - 14 * 360 - curBall + (Math.random() * DEG_PER_SLOT * 0.5 - DEG_PER_SLOT * 0.25);
-    ballRef.current = newBall;
-    setBallAngle(newBall);
+    const finalBall = ballRef.current - 14 * 360 - curBall + (Math.random() * DEG_PER_SLOT * 0.5 - DEG_PER_SLOT * 0.25);
+    ballRef.current = finalBall;
+    setBallAngle(finalBall);
     setPhase('spinning');
     snd.spin();
     haptic.impact('medium');
     setResult(null);
     const used = effBet;
+
+    // Cliquetis bille — commence rapide (~30ms) ralentit jusqu'à ~360ms
+    rTickTimers.current.forEach(clearTimeout);
+    rTickTimers.current = [];
+    {
+      let elapsed = 0;
+      let interval = 28;
+      while (elapsed < 4600) {
+        elapsed += interval;
+        const t = elapsed;
+        rTickTimers.current.push(setTimeout(() => {
+          if (!mountedRef.current) return;
+          snd.tick();
+        }, t));
+        interval = Math.min(380, interval * 1.038);
+      }
+    }
+
+    // Rebonds finaux — la bille "hésite" entre 2 cases avant de se stabiliser
+    rTickTimers.current.push(setTimeout(() => {
+      if (!mountedRef.current) return;
+      ballRef.current = finalBall + DEG_PER_SLOT * 0.85;
+      setBallAngle(finalBall + DEG_PER_SLOT * 0.85);
+      snd.tick();
+    }, 4750));
+    rTickTimers.current.push(setTimeout(() => {
+      if (!mountedRef.current) return;
+      ballRef.current = finalBall - DEG_PER_SLOT * 0.35;
+      setBallAngle(finalBall - DEG_PER_SLOT * 0.35);
+      snd.tick();
+    }, 4950));
+    rTickTimers.current.push(setTimeout(() => {
+      if (!mountedRef.current) return;
+      ballRef.current = finalBall;
+      setBallAngle(finalBall);
+      haptic.impact('light');
+    }, 5080));
+
     spinTimerRef.current = setTimeout(() => {
       if (!mountedRef.current) return;
       const mult = roulettePayout(selectedBet, n);
@@ -1756,7 +1909,7 @@ const RouletteGame: React.FC<{ onBack: () => void; streak: number; onResult: OnR
         haptic.impact('heavy'); haptic.success();
       } else if (mult > 0) { snd.win(); haptic.success(); }
       else { snd.lose(); haptic.error(); }
-    }, 5100);
+    }, 5200);
   };
 
   const reset = () => { setPhase('idle'); setResult(null); };
