@@ -90,19 +90,47 @@ const snd = {
   boom() {
     const ctx = _ac(); if (!ctx) return;
     const t = ctx.currentTime;
-    const sr = ctx.sampleRate, len = Math.floor(sr * 0.32);
+    // Sub-bass thump — the "physical" punch of the explosion
+    const kick = ctx.createOscillator(), kg = ctx.createGain();
+    kick.connect(kg); kg.connect(ctx.destination); kick.type = 'sine';
+    kick.frequency.setValueAtTime(200, t); kick.frequency.exponentialRampToValueAtTime(28, t + 0.2);
+    kg.gain.setValueAtTime(0.75, t); kg.gain.exponentialRampToValueAtTime(0.001, t + 0.28);
+    kick.start(t); kick.stop(t + 0.3);
+    // High crack — the sharp initial "snap"
+    const crack = ctx.createOscillator(), cg = ctx.createGain();
+    crack.connect(cg); cg.connect(ctx.destination); crack.type = 'sawtooth';
+    crack.frequency.setValueAtTime(900, t); crack.frequency.exponentialRampToValueAtTime(150, t + 0.06);
+    cg.gain.setValueAtTime(0.35, t); cg.gain.exponentialRampToValueAtTime(0.001, t + 0.07);
+    crack.start(t); crack.stop(t + 0.08);
+    // Noise body — long rumble with low-pass filter for realism
+    const sr = ctx.sampleRate, len = Math.floor(sr * 0.6);
     const buf = ctx.createBuffer(1, len, sr), d = buf.getChannelData(0);
-    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.exp(-i / (sr * 0.07));
-    const ns = ctx.createBufferSource(), ng = ctx.createGain();
-    ns.buffer = buf; ns.connect(ng); ng.connect(ctx.destination);
-    ng.gain.value = 0.5; ns.start(t); ns.stop(t + 0.35);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.exp(-i / (sr * 0.14));
+    const ns = ctx.createBufferSource(), filt = ctx.createBiquadFilter(), ng = ctx.createGain();
+    filt.type = 'lowpass'; filt.frequency.value = 900;
+    ns.buffer = buf; ns.connect(filt); filt.connect(ng); ng.connect(ctx.destination);
+    ng.gain.value = 0.6; ns.start(t); ns.stop(t + 0.65);
   },
   reveal() {
     const ctx = _ac(); if (!ctx) return;
-    const t = ctx.currentTime, o = ctx.createOscillator(), g = ctx.createGain();
-    o.connect(g); g.connect(ctx.destination); o.type = 'sine'; o.frequency.value = 880;
-    g.gain.setValueAtTime(0.09, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.11);
-    o.start(t); o.stop(t + 0.12);
+    const t = ctx.currentTime;
+    // Crystal chime — triad C6/G6/C7 for a glassy, satisfying ring
+    ([1047, 1568, 2093] as number[]).forEach((f, i) => {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.connect(g); g.connect(ctx.destination);
+      o.type = 'sine'; o.frequency.value = f;
+      const vol = [0.16, 0.09, 0.05][i];
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(vol, t + 0.006);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.42);
+      o.start(t); o.stop(t + 0.45);
+    });
+    // Glassy attack shimmer — high transient that fades fast
+    const sh = ctx.createOscillator(), sg = ctx.createGain();
+    sh.connect(sg); sg.connect(ctx.destination); sh.type = 'sine';
+    sh.frequency.setValueAtTime(4200, t); sh.frequency.exponentialRampToValueAtTime(2100, t + 0.07);
+    sg.gain.setValueAtTime(0.07, t); sg.gain.exponentialRampToValueAtTime(0.001, t + 0.09);
+    sh.start(t); sh.stop(t + 0.1);
   },
   spin() {
     const ctx = _ac(); if (!ctx) return;
@@ -1497,10 +1525,15 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
   return (
     <div className="pb-4" style={{ background: '#060a18', minHeight: '100%' }}>
       <style>{`
-        @keyframes mineReveal { 0%{transform:scale(0.6);opacity:0} 60%{transform:scale(1.12)} 100%{transform:scale(1);opacity:1} }
-        @keyframes gemShine { 0%,100%{filter:brightness(1)} 50%{filter:brightness(1.55)} }
-        @keyframes mineGridShake { 0%,100%{transform:translate(0,0)} 15%{transform:translate(-5px,3px)} 30%{transform:translate(5px,-3px)} 45%{transform:translate(-4px,-2px)} 60%{transform:translate(4px,2px)} 80%{transform:translate(-2px,1px)} }
-        @keyframes boomFlash { 0%{box-shadow:0 0 0 rgba(239,68,68,0)} 30%{box-shadow:0 0 28px rgba(239,68,68,0.85)} 100%{box-shadow:0 0 10px rgba(239,68,68,0.4)} }
+        @keyframes mineReveal { 0%{transform:scale(0.5) rotate(-8deg);opacity:0} 55%{transform:scale(1.18) rotate(3deg)} 80%{transform:scale(0.95)} 100%{transform:scale(1) rotate(0deg);opacity:1} }
+        @keyframes gemShine { 0%,100%{filter:brightness(1.1) drop-shadow(0 0 4px rgba(74,222,128,0.4))} 50%{filter:brightness(1.7) drop-shadow(0 0 10px rgba(74,222,128,0.85))} }
+        @keyframes mineGridShake { 0%,100%{transform:translate(0,0)} 15%{transform:translate(-6px,4px)} 30%{transform:translate(6px,-4px)} 45%{transform:translate(-5px,-3px)} 60%{transform:translate(5px,3px)} 80%{transform:translate(-2px,1px)} }
+        @keyframes boomFlash {
+          0%  {box-shadow:0 0 0 rgba(239,68,68,0); transform:scale(1)}
+          15% {box-shadow:0 0 32px 4px rgba(239,68,68,1), 0 0 8px rgba(255,100,0,0.9) inset; transform:scale(1.12)}
+          40% {box-shadow:0 0 24px rgba(239,68,68,0.8); transform:scale(1.04)}
+          100%{box-shadow:0 0 12px rgba(239,68,68,0.35); transform:scale(1)}
+        }
       `}</style>
       <BigWinEffect show={bigWin} />
       {/* Header */}
@@ -1558,21 +1591,23 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
                 disabled={phase !== 'playing' || isRev}
                 style={{
                   aspectRatio: '1',
-                  background: showBoom ? 'radial-gradient(circle at 50% 40%, rgba(239,68,68,0.45), rgba(127,29,29,0.35))' :
-                               showGem  ? 'radial-gradient(circle at 50% 40%, rgba(34,197,94,0.35), rgba(20,83,45,0.3))' :
+                  background: showBoom ? 'radial-gradient(circle at 50% 35%, rgba(239,68,68,0.6), rgba(127,29,29,0.5))' :
+                               showGem  ? 'radial-gradient(circle at 45% 35%, rgba(74,222,128,0.55), rgba(20,83,45,0.45))' :
                                showGhost ? 'rgba(239,68,68,0.08)' :
                                phase === 'playing' ? 'linear-gradient(160deg,#1e2a52,#161d3a)' : '#111830',
-                  border: showBoom ? '2px solid rgba(239,68,68,0.6)' :
-                          showGem  ? '2px solid rgba(34,197,94,0.45)' :
+                  border: showBoom ? '2px solid rgba(239,68,68,0.85)' :
+                          showGem  ? '2px solid rgba(74,222,128,0.75)' :
                           showGhost ? '1px solid rgba(239,68,68,0.2)' :
                           phase === 'playing' ? '1px solid #2a3a6e' : '1px solid #1e2847',
                   borderRadius: 12,
-                  fontSize: 18,
+                  fontSize: 20,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   transition: 'background 0.18s, border-color 0.18s, transform 0.12s',
                   animation: showBoom ? 'mineReveal 0.25s ease-out, boomFlash 0.6s ease-out forwards' :
                              showGem  ? 'mineReveal 0.25s ease-out, gemShine 2.2s ease-in-out 0.3s infinite' : undefined,
-                  boxShadow: showGem ? '0 0 12px rgba(34,197,94,0.25)' : undefined,
+                  boxShadow: showGem  ? '0 0 18px rgba(74,222,128,0.55), 0 0 6px rgba(74,222,128,0.3) inset' :
+                             showBoom ? '0 0 22px rgba(239,68,68,0.7)' : undefined,
+                  filter: showGem ? 'brightness(1.15)' : undefined,
                   cursor: phase === 'playing' && !isRev ? 'pointer' : 'default',
                   opacity: showGhost ? 0.5 : 1,
                 }}
