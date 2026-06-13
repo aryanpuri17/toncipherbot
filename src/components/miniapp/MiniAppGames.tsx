@@ -2084,8 +2084,10 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
   const pegY        = (r: number) => 24 + r * ROW_H;
   const toSvgX      = (r: number, c: number) => r <= 0 ? BOARD_W / 2 : pegX(r, c);
   const toSvgY      = (r: number) => r <= 0 ? 8 : pegY(r) - PEG_SPACING * 0.3;
-  const rowDelayMs  = rows <= 8 ? 180 : rows <= 12 ? 130 : 90;
-  const transDur    = rows <= 8 ? 165 : rows <= 12 ? 118 : 78;
+  const rowDelayMs  = rows <= 8 ? 350 : rows <= 12 ? 250 : 175;
+  const transDur    = Math.round(rowDelayMs * 0.62);
+  const cxDur       = Math.round(transDur * 0.72);
+  const cxDelay     = Math.round(transDur * 0.28);
 
   const slotColor = (mult: number) => {
     if (mult >= 10)  return '#f59e0b';
@@ -2255,15 +2257,15 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
                 <g key={ball.id}>
                   {ball.trail.map((pos, ti) => (
                     <circle key={ti} cx={pos.x} cy={pos.y}
-                      r={PEG_R * 2.5 * (0.25 + ti * 0.12)}
-                      fill="#fbbf24" opacity={0.08 + ti * 0.06} />
+                      r={PEG_R * 1.6 * (0.3 + ti * 0.1)}
+                      fill="#fbbf24" opacity={0.07 + ti * 0.05} />
                   ))}
-                  <circle cx={bx} cy={by} r={PEG_R * 2.5}
+                  <circle cx={bx} cy={by} r={PEG_R * 1.6}
                     fill="url(#plinkoBallGrad)" filter="url(#plinkoBallGlow)"
-                    style={{ transition: `cx ${transDur}ms ease-in, cy ${transDur}ms ease-in` }} />
-                  <circle cx={bx - PEG_R * 0.7} cy={by - PEG_R * 0.7}
-                    r={PEG_R * 0.55} fill="#fff" opacity="0.55"
-                    style={{ transition: `cx ${transDur}ms ease-in, cy ${transDur}ms ease-in` }} />
+                    style={{ transition: `cy ${transDur}ms ease-in, cx ${cxDur}ms ease-out ${cxDelay}ms` }} />
+                  <circle cx={bx - PEG_R * 0.55} cy={by - PEG_R * 0.55}
+                    r={PEG_R * 0.42} fill="#fff" opacity="0.55"
+                    style={{ transition: `cy ${transDur}ms ease-in, cx ${cxDur}ms ease-out ${cxDelay}ms` }} />
                 </g>
               );
             })}
