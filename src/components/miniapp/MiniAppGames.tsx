@@ -2035,34 +2035,47 @@ function rollPlinko(rows: PlinkoRows, risk: PlinkoRisk, streak: number, demo = f
 // pre-computed contact points.
 type PhysBall = {
   id:   number;
-  pts:  { x: number; y: number }[];  // contact waypoints: top → each peg → slot
-  seg:  number;                       // current segment index
-  segT: number;                       // elapsed time in current segment (s)
-  T:    number;                       // duration of current segment (s)
-  sx:   number; sy: number;           // segment start position
-  vx:   number; vy0: number;          // segment launch velocity
-  x:    number; y: number;            // live position
+  pts:  { x: number; y: number }[];
+  seg:  number;
+  segT: number;
+  T:    number;
+  sx:   number; sy:  number;
+  vx:   number; vy0: number;
+  x:    number; y:   number;
   bet:  number; win: number; mult: number; slot: number;
   trail: { x: number; y: number }[];
+  squishX: number;
+  squishY: number;
+  squishT: number;
+  angle:   number;
 };
 type Flash = { x: number; y: number; t: number };
 
-const PLINKO_GRAV       = 5200;  // px/s² — bigger = bouncier hops
-const PLINKO_SEG_T      = 0.135; // s per peg-to-peg hop
-const PLINKO_SEG_T_LAST = 0.22;  // s for the final drop into the slot
-const PLINKO_BALL_R     = 3 * 1.55;
-const PLINKO_DPR        = Math.min(typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1, 2);
+const PLINKO_GRAV        = 5200;  // px/s²
+const PLINKO_SEG_T_FIRST = 0.22;  // durée premier arc (bille lente)
+const PLINKO_SEG_T_LAST  = 0.065; // durée dernier arc  (bille rapide)
+const PLINKO_SEG_T_SLOT  = 0.18;  // durée arc final → slot
+const PLINKO_BALL_R      = 3 * 1.55;
+const PLINKO_DPR         = Math.min(typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1, 2);
 
-// Compute the parabolic launch velocity so the ball reaches the next
-// waypoint exactly in T seconds under PLINKO_GRAV. vy0 comes out negative
-// (upward) which gives the satisfying little "bounce" off each peg.
+function segDuration(segIndex: number, totalSegs: number): number {
+  const t     = segIndex / Math.max(totalSegs - 1, 1);
+  const eased = t * t; // courbe exponentielle — gravité réaliste
+  return PLINKO_SEG_T_FIRST + (PLINKO_SEG_T_LAST - PLINKO_SEG_T_FIRST) * eased;
+}
+
 function plinkoInitSeg(b: PhysBall) {
-  const a = b.pts[b.seg];
-  const c = b.pts[b.seg + 1];
-  const T = b.seg === b.pts.length - 2 ? PLINKO_SEG_T_LAST : PLINKO_SEG_T;
-  b.T = T; b.segT = 0; b.sx = a.x; b.sy = a.y;
-  b.vx  = (c.x - a.x) / T;
-  b.vy0 = (c.y - a.y - 0.5 * PLINKO_GRAV * T * T) / T;
+  const a      = b.pts[b.seg];
+  const c      = b.pts[b.seg + 1];
+  const isLast = b.seg === b.pts.length - 2;
+  const T      = isLast ? PLINKO_SEG_T_SLOT : segDuration(b.seg, b.pts.length - 2);
+  const jitter = 0.85 + Math.random() * 0.30; // ±15% sur la hauteur de l'arc
+  b.T    = T;
+  b.segT = 0;
+  b.sx   = a.x;
+  b.sy   = a.y;
+  b.vx   = (c.x - a.x) / T;
+  b.vy0  = ((c.y - a.y - 0.5 * PLINKO_GRAV * T * T) / T) * jitter;
 }
 
 const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResult }> = ({ onBack, streak, onResult }) => {
@@ -2164,9 +2177,10 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
   const launchBall = (id: number, path: boolean[], betAmt: number, win: number, mult: number, slot: number) => {
     const pts = buildPts(path, slot);
     const b: PhysBall = {
-      id, pts, seg: 0, segT: 0, T: PLINKO_SEG_T,
+      id, pts, seg: 0, segT: 0, T: PLINKO_SEG_T_FIRST,
       sx: pts[0].x, sy: pts[0].y, vx: 0, vy0: 0, x: pts[0].x, y: pts[0].y,
       bet: betAmt, win, mult, slot, trail: [],
+      squishX: 1, squishY: 1, squishT: 999, angle: 0,
     };
     plinkoInitSeg(b);
     physBalls.current.push(b);
@@ -2240,6 +2254,22 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
       for (const b of balls) {
         b.trail.unshift({ x: b.x, y: b.y });
         if (b.trail.length > 7) b.trail.pop();
+
+        // Squish animation — phase 1 : écrasement (0→60ms), phase 2 : overshoot élastique (60→120ms)
+        if (b.squishT < 0.06) {
+          const p = b.squishT / 0.06;
+          b.squishX = 1.0 + 0.30 * (1 - p);
+          b.squishY = 1.0 - 0.30 * (1 - p);
+        } else if (b.squishT < 0.12) {
+          const p = (b.squishT - 0.06) / 0.06;
+          b.squishX = 1.0 - 0.08 * Math.sin(p * Math.PI);
+          b.squishY = 1.0 + 0.08 * Math.sin(p * Math.PI);
+        } else {
+          b.squishX = 1.0;
+          b.squishY = 1.0;
+        }
+        b.squishT += dt;
+
         b.segT += dt;
         if (b.segT >= b.T) {
           const arrived = b.seg + 1;
@@ -2248,12 +2278,14 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
           if (arrived >= b.pts.length - 1) {
             finished.push(b);
           } else {
+            b.squishT = 0; b.squishX = 1.30; b.squishY = 0.70;
             apiRef.current.contact(b.pts[arrived]);
             b.seg = arrived;
             plinkoInitSeg(b);
           }
         } else {
           const t = b.segT;
+          b.angle += b.vx * dt * 0.012;
           b.x = b.sx + b.vx * t;
           b.y = b.sy + b.vy0 * t + 0.5 * PLINKO_GRAV * t * t;
         }
@@ -2282,6 +2314,7 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
           }
           // balls
           for (const b of physBalls.current) {
+            // traînée
             for (let i = b.trail.length - 1; i >= 0; i--) {
               const tp = b.trail[i];
               const f  = 1 - i / b.trail.length;
@@ -2290,24 +2323,30 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
               ctx.fillStyle = `rgba(251,191,36,${f * 0.22})`;
               ctx.fill();
             }
+            // corps bille avec squish + rotation
+            ctx.save();
+            ctx.translate(b.x, b.y);
+            ctx.rotate(b.angle);
+            ctx.scale(b.squishX, b.squishY);
             const g = ctx.createRadialGradient(
-              b.x - PLINKO_BALL_R * 0.3, b.y - PLINKO_BALL_R * 0.3, PLINKO_BALL_R * 0.2,
-              b.x, b.y, PLINKO_BALL_R,
+              -PLINKO_BALL_R * 0.3, -PLINKO_BALL_R * 0.3, PLINKO_BALL_R * 0.2,
+              0, 0, PLINKO_BALL_R,
             );
-            g.addColorStop(0, '#fef9c3');
+            g.addColorStop(0,   '#fef9c3');
             g.addColorStop(0.5, '#fbbf24');
-            g.addColorStop(1, '#d97706');
+            g.addColorStop(1,   '#d97706');
             ctx.shadowColor = 'rgba(251,191,36,0.85)';
-            ctx.shadowBlur = 10;
+            ctx.shadowBlur  = 10;
             ctx.beginPath();
-            ctx.arc(b.x, b.y, PLINKO_BALL_R, 0, Math.PI * 2);
+            ctx.arc(0, 0, PLINKO_BALL_R, 0, Math.PI * 2);
             ctx.fillStyle = g;
             ctx.fill();
             ctx.shadowBlur = 0;
             ctx.beginPath();
-            ctx.arc(b.x - PLINKO_BALL_R * 0.35, b.y - PLINKO_BALL_R * 0.35, PLINKO_BALL_R * 0.4, 0, Math.PI * 2);
-            ctx.fillStyle = 'rgba(255,255,255,0.6)';
+            ctx.arc(-PLINKO_BALL_R * 0.35, -PLINKO_BALL_R * 0.35, PLINKO_BALL_R * 0.4, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(255,255,255,0.60)';
             ctx.fill();
+            ctx.restore();
           }
           ctx.restore();
         }
