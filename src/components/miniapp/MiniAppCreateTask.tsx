@@ -62,7 +62,7 @@ export const MiniAppCreateTask: React.FC = () => {
           description:    description.trim() || `Complétez cette tâche pour gagner ${workerReward.toFixed(4)} TON`,
           targetUrl:      targetUrl.trim(), // NEVER modified
           reward:         workerReward,
-          totalBudget:    totalCost,
+          totalBudget:    parseFloat((workerReward * execCount).toFixed(8)),
           maxCompletions: execCount,
         }),
       });
@@ -246,10 +246,6 @@ export const MiniAppCreateTask: React.FC = () => {
         <div className="flex justify-between text-xs">
           <span className="text-slate-500">Prix par exécution</span>
           <span className="text-white font-semibold">{priceFixed.toFixed(4)} TON</span>
-        </div>
-        <div className="flex justify-between text-xs">
-          <span className="text-slate-500">Récompense par utilisateur</span>
-          <span className="text-emerald-400 font-semibold">+{workerReward.toFixed(4)} TON</span>
         </div>
         <div className="flex justify-between text-xs">
           <span className="text-slate-500">Nombre d'exécutions</span>
