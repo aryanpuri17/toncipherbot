@@ -1995,6 +1995,19 @@ const PLINKO_MULTS: Record<PlinkoRisk, Record<PlinkoRows, number[]>> = {
   },
 };
 
+// ── ActiveBall type for multi-ball animation system ─────────────────
+type ActiveBall = {
+  id:    number;
+  path:  boolean[];
+  row:   number;
+  col:   number;
+  bet:   number;
+  win:   number;
+  mult:  number;
+  slot:  number;
+  trail: { x: number; y: number }[];
+};
+
 function rollPlinko(rows: PlinkoRows, risk: PlinkoRisk, streak: number, demo = false): { slot: number; path: boolean[] } {
   const slots = rows + 1;
   const center = rows / 2;
@@ -2018,37 +2031,61 @@ function rollPlinko(rows: PlinkoRows, risk: PlinkoRisk, streak: number, demo = f
 const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResult }> = ({ onBack, streak, onResult }) => {
   const { currentUser, placeGameBet, recordGameResult, demoMode, demoBalance } = useAppStore();
   const bal = demoMode ? demoBalance : currentUser.balanceMain;
-  const [bet, setBet]     = useState(0.01);
-  const [rows, setRows]   = useState<PlinkoRows>(12);
-  const [risk, setRisk]   = useState<PlinkoRisk>('medium');
-  const [dropping, setDropping] = useState(false);
-  const [ballPos, setBallPos]   = useState<{ row: number; col: number } | null>(null);
-  const [finalSlot, setFinalSlot] = useState<number | null>(null);
-  const [lastWin, setLastWin]     = useState<{ mult: number; win: number } | null>(null);
-  const [hist, setHist]           = useState<Array<{ slot: number; mult: number }>>([]);
-  const [bigWin, setBigWin]       = useState(false);
-  const animTimerRef              = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const plinkoBigWinTimer         = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const mountedRef                = useRef(true);
-  const pendingBetRef             = useRef<{ win: number } | null>(null);
+
+  const [bet, setBet]                   = useState(0.01);
+  const [rows, setRows]                 = useState<PlinkoRows>(12);
+  const [risk, setRisk]                 = useState<PlinkoRisk>('medium');
+  const [ballCount, setBallCount]       = useState<1 | 3 | 5 | 10>(1);
+  const [autoPlay, setAutoPlay]         = useState(false);
+  const [activeBalls, setActiveBalls]   = useState<ActiveBall[]>([]);
+  const [sessionGain, setSessionGain]   = useState(0);
+  const [finalSlot, setFinalSlot]       = useState<number | null>(null);
+  const [lastWin, setLastWin]           = useState<{ mult: number; win: number } | null>(null);
+  const [hist, setHist]                 = useState<Array<{ slot: number; mult: number }>>([]);
+  const [bigWin, setBigWin]             = useState(false);
+
+  const autoPlayRef       = useRef(false);
+  const sessionGainRef    = useRef(0);
+  const nextBallId        = useRef(0);
+  const ballTimers        = useRef(new Map<number, ReturnType<typeof setTimeout>>());
+  const pendingWins       = useRef(new Map<number, number>());
+  const autoPlayTimerRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mountedRef        = useRef(true);
+  const plinkoBigWinTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
-      if (animTimerRef.current) clearTimeout(animTimerRef.current);
+      autoPlayRef.current = false;
       if (plinkoBigWinTimer.current) clearTimeout(plinkoBigWinTimer.current);
-      // Animation was interrupted — still credit the win so the bet isn't lost
-      if (pendingBetRef.current !== null) {
-        useAppStore.getState().placeGameBet(0, pendingBetRef.current.win);
-        pendingBetRef.current = null;
-      }
+      if (autoPlayTimerRef.current)  clearTimeout(autoPlayTimerRef.current);
+      for (const t of ballTimers.current.values()) clearTimeout(t);
+      ballTimers.current.clear();
+      // Credit all in-flight wins so no bet is lost on unmount
+      const st = useAppStore.getState();
+      for (const w of pendingWins.current.values()) st.placeGameBet(0, w);
+      pendingWins.current.clear();
     };
   }, []);
 
-  const effBet = Math.min(bet, bal);
-  const mults  = PLINKO_MULTS[risk][rows];
-  const slots  = rows + 1;
+  const effBet   = Math.min(bet, bal);
+  const mults    = PLINKO_MULTS[risk][rows];
+  const slots    = rows + 1;
+  const dropping = activeBalls.length > 0;
+
+  // Board geometry
+  const BOARD_W     = 300;
+  const PEG_SPACING = Math.min(22, BOARD_W / (rows + 2));
+  const PEG_R       = 3;
+  const ROW_H       = PEG_SPACING * 0.95;
+  const BOARD_H     = rows * ROW_H + 60;
+  const pegX        = (r: number, c: number) => BOARD_W / 2 - (r * PEG_SPACING) / 2 + c * PEG_SPACING;
+  const pegY        = (r: number) => 24 + r * ROW_H;
+  const toSvgX      = (r: number, c: number) => r <= 0 ? BOARD_W / 2 : pegX(r, c);
+  const toSvgY      = (r: number) => r <= 0 ? 8 : pegY(r) - PEG_SPACING * 0.3;
+  const rowDelayMs  = rows <= 8 ? 180 : rows <= 12 ? 130 : 90;
+  const transDur    = rows <= 8 ? 165 : rows <= 12 ? 118 : 78;
 
   const slotColor = (mult: number) => {
     if (mult >= 10)  return '#f59e0b';
@@ -2059,72 +2096,110 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
     return '#ef4444';
   };
 
-  const drop = () => {
-    if (dropping || effBet < 0.01 || bal < 0.01) return;
-    haptic.impact('light');
-    setDropping(true);
-    setFinalSlot(null);
-    setLastWin(null);
-    const { slot, path } = rollPlinko(rows, risk, streak, demoMode);
-    const used = effBet;
-    const mult = mults[slot];
-    const win  = +(used * mult).toFixed(6);
-    placeGameBet(used, 0);
-    pendingBetRef.current = { win };
+  const animateBall = (
+    ballId: number, path: boolean[], betAmt: number, win: number, mult: number, slot: number
+  ) => {
+    let step = 0;
+    let col  = 0;
 
-    let row = 0, col = 0;
-    setBallPos({ row: -1, col: 0 });
-
-    const rowDelay = rows <= 8 ? 180 : rows <= 12 ? 130 : 90;
-    const animStep = () => {
-      if (!mountedRef.current) return; // cleanup effect handles the win credit
-      if (row >= rows) {
-        pendingBetRef.current = null; // normal completion — clear before crediting
+    const tick = () => {
+      if (!mountedRef.current) return;
+      if (step >= path.length) {
+        // Ball landed — credit win
+        pendingWins.current.delete(ballId);
         placeGameBet(0, win);
-        recordGameResult('Plinko', used, win);
-        setFinalSlot(slot);
-        setLastWin({ mult, win });
+        recordGameResult('Plinko', betAmt, win);
+        sessionGainRef.current = +(sessionGainRef.current + win - betAmt).toFixed(4);
+        setSessionGain(sessionGainRef.current);
         setHist(h => [{ slot, mult }, ...h.slice(0, 7)]);
-        setBallPos(null);
-        setDropping(false);
-        onResult(mult >= 1);
+        setLastWin({ mult, win });
+        setFinalSlot(slot);
         if (mult >= 10) {
           setBigWin(true);
           if (plinkoBigWinTimer.current) clearTimeout(plinkoBigWinTimer.current);
           plinkoBigWinTimer.current = setTimeout(() => { if (mountedRef.current) setBigWin(false); }, 2600);
-          snd.win();
-          haptic.success();
+          snd.win(); haptic.success();
         } else if (mult >= 1) { snd.win(); haptic.success(); }
-        else { snd.lose(); haptic.error(); }
+        else                  { snd.lose(); haptic.error(); }
+        onResult(mult >= 1);
+        setActiveBalls(prev => prev.filter(b => b.id !== ballId));
+        ballTimers.current.delete(ballId);
+
+        // Auto-play: launch next single ball after brief pause
+        if (autoPlayRef.current) {
+          const st = useAppStore.getState();
+          const nextBal = st.demoMode ? st.demoBalance : st.currentUser.balanceMain;
+          if (nextBal >= betAmt) {
+            autoPlayTimerRef.current = setTimeout(() => {
+              if (!mountedRef.current || !autoPlayRef.current) return;
+              const st2 = useAppStore.getState();
+              const bal2 = st2.demoMode ? st2.demoBalance : st2.currentUser.balanceMain;
+              if (bal2 < betAmt) { setAutoPlay(false); autoPlayRef.current = false; return; }
+              const { slot: s2, path: p2 } = rollPlinko(rows, risk, streak, demoMode);
+              const m2  = PLINKO_MULTS[risk][rows][s2];
+              const w2  = +(betAmt * m2).toFixed(6);
+              st2.placeGameBet(betAmt, 0);
+              const id2 = nextBallId.current++;
+              pendingWins.current.set(id2, w2);
+              setActiveBalls(prev => [...prev, { id: id2, path: p2, row: 0, col: 0, bet: betAmt, win: w2, mult: m2, slot: s2, trail: [] }]);
+              animateBall(id2, p2, betAmt, w2, m2, s2);
+            }, 200);
+          } else {
+            setAutoPlay(false);
+            autoPlayRef.current = false;
+          }
+        }
         return;
       }
-      if (path[row]) col++;
-      row++;
+
+      const goRight = path[step];
+      if (goRight) col++;
+      step++;
       snd.tick();
       haptic.tick();
-      setBallPos({ row, col });
-      animTimerRef.current = setTimeout(animStep, rowDelay);
+      const prevX = toSvgX(step - 1, col - (goRight ? 1 : 0));
+      const prevY = toSvgY(step - 1);
+      setActiveBalls(prev => prev.map(b => b.id !== ballId ? b : {
+        ...b, row: step, col, trail: [{ x: prevX, y: prevY }, ...b.trail].slice(0, 2),
+      }));
+      const t = setTimeout(tick, rowDelayMs);
+      ballTimers.current.set(ballId, t);
     };
-    animTimerRef.current = setTimeout(animStep, 120);
+    const t0 = setTimeout(tick, 120);
+    ballTimers.current.set(ballId, t0);
   };
 
-  const BOARD_W = 280;
-  const PEG_SPACING = Math.min(22, BOARD_W / (rows + 2));
-  const PEG_R = 3;
-  const ROW_H = PEG_SPACING * 0.95;
-  const BOARD_H = rows * ROW_H + 60;
-
-  const pegX = (r: number, c: number) => BOARD_W / 2 - (r * PEG_SPACING) / 2 + c * PEG_SPACING;
-  const pegY = (r: number) => 24 + r * ROW_H;
-
-  const ballRow  = ballPos?.row ?? -1;
-  const ballCol  = ballPos?.col ?? 0;
-  const ballSvgX = ballRow < 0 ? BOARD_W / 2 : pegX(ballRow, ballCol);
-  const ballSvgY = ballRow < 0 ? 8 : pegY(ballRow) - PEG_SPACING * 0.3;
+  const dropMulti = (count: number) => {
+    const snapBet = Math.min(bet, bal);
+    if (snapBet < 0.01 || bal < snapBet) return;
+    haptic.impact('light');
+    sessionGainRef.current = 0;
+    setSessionGain(0);
+    setLastWin(null);
+    setFinalSlot(null);
+    for (let i = 0; i < count; i++) {
+      setTimeout(() => {
+        if (!mountedRef.current) return;
+        const st = useAppStore.getState();
+        const curBal = st.demoMode ? st.demoBalance : st.currentUser.balanceMain;
+        if (curBal < snapBet) return;
+        const { slot, path } = rollPlinko(rows, risk, streak, demoMode);
+        const m   = mults[slot];
+        const win = +(snapBet * m).toFixed(6);
+        placeGameBet(snapBet, 0);
+        const id = nextBallId.current++;
+        pendingWins.current.set(id, win);
+        setActiveBalls(prev => [...prev, { id, path, row: 0, col: 0, bet: snapBet, win, mult: m, slot, trail: [] }]);
+        animateBall(id, path, snapBet, win, m, slot);
+      }, i * 300);
+    }
+  };
 
   return (
     <div className="pb-4" style={{ background: '#060a18', minHeight: '100%' }}>
       <BigWinEffect show={bigWin} />
+
+      {/* Header */}
       <div style={{ background: '#0d1021', borderBottom: '1px solid #1e2847' }} className="px-4 pt-4 pb-3">
         <div className="flex items-center gap-3">
           <button onClick={onBack} style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid #1e2847' }}
@@ -2146,7 +2221,21 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
       <div className="px-4 pt-4 space-y-4">
         {/* Board */}
         <div style={{ background: '#080c1e', border: '1px solid #1e2847', borderRadius: 16, overflow: 'visible', position: 'relative', padding: '12px 0' }} className="flex justify-center">
-          <svg width={BOARD_W} height={BOARD_H + 36} style={{ display: 'block' }}>
+          <svg width={BOARD_W} height={BOARD_H + 44} style={{ display: 'block' }}>
+            <defs>
+              <radialGradient id="plinkoBallGrad" cx="35%" cy="30%">
+                <stop offset="0%"   stopColor="#fef08a" />
+                <stop offset="100%" stopColor="#d97706" />
+              </radialGradient>
+              <filter id="plinkoBallGlow" x="-80%" y="-80%" width="260%" height="260%">
+                <feGaussianBlur stdDeviation="2.5" result="blur" />
+                <feMerge>
+                  <feMergeNode in="blur" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
+            </defs>
+
             {/* Pegs */}
             {Array.from({ length: rows }, (_, r) =>
               Array.from({ length: r + 1 }, (_, c) => (
@@ -2157,28 +2246,40 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
                 </g>
               ))
             )}
-            {/* Ball glow */}
-            {ballPos !== null && (
-              <g>
-                <circle cx={ballSvgX} cy={ballSvgY} r={PEG_R + 3} fill="#fbbf24" opacity="0.12" />
-                <circle cx={ballSvgX} cy={ballSvgY} r={PEG_R + 1.2} fill="#fbbf24" stroke="#fde68a" strokeWidth="1"
-                  style={{ transition: `cx ${rows <= 8 ? 165 : rows <= 12 ? 118 : 78}ms ease-out, cy ${rows <= 8 ? 165 : rows <= 12 ? 118 : 78}ms ease-out` }} />
-                <circle cx={ballSvgX - 0.6} cy={ballSvgY - 1} r={0.9} fill="#fff" opacity="0.65"
-                  style={{ transition: `cx ${rows <= 8 ? 165 : rows <= 12 ? 118 : 78}ms ease-out, cy ${rows <= 8 ? 165 : rows <= 12 ? 118 : 78}ms ease-out` }} />
-              </g>
-            )}
+
+            {/* Multi-ball rendering */}
+            {activeBalls.map(ball => {
+              const bx = toSvgX(ball.row, ball.col);
+              const by = toSvgY(ball.row);
+              return (
+                <g key={ball.id}>
+                  {ball.trail.map((pos, ti) => (
+                    <circle key={ti} cx={pos.x} cy={pos.y}
+                      r={PEG_R * 2.5 * (0.25 + ti * 0.12)}
+                      fill="#fbbf24" opacity={0.08 + ti * 0.06} />
+                  ))}
+                  <circle cx={bx} cy={by} r={PEG_R * 2.5}
+                    fill="url(#plinkoBallGrad)" filter="url(#plinkoBallGlow)"
+                    style={{ transition: `cx ${transDur}ms ease-in, cy ${transDur}ms ease-in` }} />
+                  <circle cx={bx - PEG_R * 0.7} cy={by - PEG_R * 0.7}
+                    r={PEG_R * 0.55} fill="#fff" opacity="0.55"
+                    style={{ transition: `cx ${transDur}ms ease-in, cy ${transDur}ms ease-in` }} />
+                </g>
+              );
+            })}
+
             {/* Slots */}
             {mults.map((m, i) => {
-              const sx = pegX(rows, i) - PEG_SPACING / 2;
+              const sx    = pegX(rows, i) - PEG_SPACING / 2;
               const slotW = PEG_SPACING - 2;
               const isActive = finalSlot === i;
-              const col = slotColor(m);
+              const col   = slotColor(m);
               return (
                 <g key={i}>
-                  <rect x={sx} y={BOARD_H - 10} width={slotW} height={26} rx={4}
+                  <rect x={sx} y={BOARD_H - 10} width={slotW} height={30} rx={4}
                     fill={isActive ? col : `${col}33`} stroke={col} strokeWidth={isActive ? 2 : 0.5}
                     style={{ transition: 'fill 0.2s' }} />
-                  <text x={sx + slotW / 2} y={BOARD_H + 8} textAnchor="middle" fontSize={Math.min(9, 70 / slots)}
+                  <text x={sx + slotW / 2} y={BOARD_H + 9} textAnchor="middle" fontSize={Math.min(9, 70 / slots)}
                     fontWeight="800" fill={isActive ? '#fff' : col}
                     style={{ userSelect: 'none', pointerEvents: 'none' }}>
                     {m}×
@@ -2187,12 +2288,13 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
               );
             })}
           </svg>
+
           {/* Result overlay */}
           {lastWin && !dropping && (
             <div style={{
               position: 'absolute', top: 8, left: '50%', transform: 'translateX(-50%)',
               background: lastWin.mult >= 1 ? 'rgba(34,197,94,0.9)' : 'rgba(239,68,68,0.9)',
-              padding: '4px 16px', borderRadius: 20, pointerEvents: 'none',
+              padding: '4px 16px', borderRadius: 20, pointerEvents: 'none', whiteSpace: 'nowrap',
             }}>
               <p style={{ fontSize: 14, fontWeight: 900, color: '#fff' }}>
                 ×{lastWin.mult} — {lastWin.win > effBet ? `+${(lastWin.win - effBet).toFixed(4)} TON` : `−${(effBet - lastWin.win).toFixed(4)} TON`}
@@ -2200,6 +2302,21 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
             </div>
           )}
         </div>
+
+        {/* In-flight counter + session gain */}
+        {activeBalls.length > 0 && (
+          <div className="flex items-center justify-between text-xs px-1">
+            <span style={{ color: '#64748b' }}>
+              <span style={{ fontWeight: 700, color: '#fbbf24' }}>{activeBalls.length}</span>
+              {' '}boule{activeBalls.length > 1 ? 's' : ''} en vol
+            </span>
+            {sessionGain !== 0 && (
+              <span style={{ fontWeight: 700, color: sessionGain > 0 ? '#22c55e' : '#f87171' }}>
+                {sessionGain > 0 ? '+' : ''}{sessionGain.toFixed(4)} TON
+              </span>
+            )}
+          </div>
+        )}
 
         {/* History */}
         {hist.length > 0 && (
@@ -2221,15 +2338,14 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
             <p style={{ fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>Lignes</p>
             <div className="flex gap-2">
               {PLINKO_ROWS_OPTIONS.map(r => (
-                <button key={r} onClick={() => { if (!dropping) setRows(r); }}
+                <button key={r} onClick={() => { if (!dropping && !autoPlay) setRows(r); }}
                   style={{
-                    flex: 1, padding: '8px 4px', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: dropping ? 'not-allowed' : 'pointer',
+                    flex: 1, padding: '8px 4px', borderRadius: 10, fontSize: 13, fontWeight: 700,
+                    cursor: (dropping || autoPlay) ? 'not-allowed' : 'pointer',
                     background: rows === r ? '#1e3a5f' : '#080c1e',
                     border: rows === r ? '1px solid #3b82f6' : '1px solid #1e2847',
                     color: rows === r ? '#93c5fd' : '#64748b',
-                  }}>
-                  {r}
-                </button>
+                  }}>{r}</button>
               ))}
             </div>
           </div>
@@ -2241,17 +2357,31 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
               {(['low', 'medium', 'high'] as const).map(r => {
                 const col = r === 'low' ? '#22c55e' : r === 'medium' ? '#f59e0b' : '#ef4444';
                 return (
-                  <button key={r} onClick={() => { if (!dropping) setRisk(r); }}
+                  <button key={r} onClick={() => { if (!dropping && !autoPlay) setRisk(r); }}
                     style={{
-                      flex: 1, padding: '8px 4px', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: dropping ? 'not-allowed' : 'pointer',
+                      flex: 1, padding: '8px 4px', borderRadius: 10, fontSize: 13, fontWeight: 700,
+                      cursor: (dropping || autoPlay) ? 'not-allowed' : 'pointer',
                       background: risk === r ? `${col}18` : '#080c1e',
                       border: risk === r ? `1px solid ${col}60` : '1px solid #1e2847',
                       color: risk === r ? col : '#64748b',
-                    }}>
-                    {r === 'low' ? 'Bas' : r === 'medium' ? 'Moyen' : 'Élevé'}
-                  </button>
+                    }}>{r === 'low' ? 'Bas' : r === 'medium' ? 'Moyen' : 'Élevé'}</button>
                 );
               })}
+            </div>
+          </div>
+
+          {/* Ball count */}
+          <div>
+            <p style={{ fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>Boules par lancer</p>
+            <div className="flex gap-1.5">
+              {([1, 3, 5, 10] as const).map(n => (
+                <button key={n} onClick={() => { if (!dropping && !autoPlay) setBallCount(n); }}
+                  className="flex-1 py-2 rounded-lg text-xs font-semibold transition-all border"
+                  style={ballCount === n
+                    ? { background: 'rgba(0,152,234,0.15)', borderColor: 'rgba(0,152,234,0.4)', color: '#0098EA', cursor: (dropping || autoPlay) ? 'not-allowed' : 'pointer' }
+                    : { background: 'rgba(255,255,255,0.04)', borderColor: '#1e2847', color: '#64748b', cursor: (dropping || autoPlay) ? 'not-allowed' : 'pointer' }
+                  }>×{n}</button>
+              ))}
             </div>
           </div>
 
@@ -2259,7 +2389,7 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
           <div>
             <p style={{ fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>Montant de la mise</p>
             <div style={{ background: '#080c1e', border: '1px solid #1e2847', borderRadius: 12 }} className="flex items-center px-3 py-2.5">
-              <input type="number" value={bet} min={0.01} max={50} step={0.01} disabled={dropping}
+              <input type="number" value={bet} min={0.01} max={50} step={0.01} disabled={dropping || autoPlay}
                 onChange={e => { const v = +e.target.value; if (!isNaN(v)) setBet(Math.max(0.01, Math.min(50, v))); }}
                 style={{ flex: 1, background: 'transparent', color: '#f8fafc', fontSize: 20, fontWeight: 700, outline: 'none', border: 'none' }} />
               <span style={{ fontSize: 13, fontWeight: 700, color: '#64748b' }}>TON</span>
@@ -2267,15 +2397,46 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
           </div>
           <BetQuickButtons setBet={setBet} maxBal={bal} />
 
-          <button onClick={drop} disabled={dropping || effBet < 0.01 || bal < 0.01}
-            style={!dropping && effBet >= 0.01 && bal >= 0.01 ? {
-              background: 'linear-gradient(135deg,#f59e0b,#d97706)',
-              boxShadow: '0 4px 16px rgba(245,158,11,0.35)',
-              width: '100%', padding: '14px', borderRadius: 12,
-              color: '#451a03', fontWeight: 900, fontSize: 14, cursor: 'pointer', letterSpacing: '0.05em',
-            } : { background: 'rgba(255,255,255,0.05)', width: '100%', padding: '14px', borderRadius: 12, color: '#475569', fontWeight: 700, fontSize: 14, cursor: 'not-allowed' }}>
-            {dropping ? '🎯 En chute…' : bal < 0.01 ? (demoMode ? 'Démo épuisé' : 'Solde insuffisant') : `🎯 LÂCHER · ${effBet.toFixed(2)} TON`}
-          </button>
+          {/* Drop + Auto-play */}
+          <div className="flex gap-2">
+            <button
+              onClick={() => dropMulti(ballCount)}
+              disabled={autoPlay || dropping || effBet < 0.01 || bal < 0.01}
+              style={(!autoPlay && !dropping && effBet >= 0.01 && bal >= 0.01) ? {
+                flex: 1, background: 'linear-gradient(135deg,#f59e0b,#d97706)',
+                boxShadow: '0 4px 16px rgba(245,158,11,0.35)',
+                padding: '14px 8px', borderRadius: 12,
+                color: '#451a03', fontWeight: 900, fontSize: 14, cursor: 'pointer', letterSpacing: '0.05em',
+              } : {
+                flex: 1, background: 'rgba(255,255,255,0.05)',
+                padding: '14px 8px', borderRadius: 12, color: '#475569', fontWeight: 700, fontSize: 14, cursor: 'not-allowed',
+              }}>
+              {dropping ? '🎯 En chute…'
+                : bal < 0.01 ? (demoMode ? 'Démo épuisé' : 'Solde insuffisant')
+                : ballCount > 1 ? `🎯 ×${ballCount} — ${(effBet * ballCount).toFixed(2)} TON`
+                : `🎯 LÂCHER · ${effBet.toFixed(2)} TON`}
+            </button>
+
+            <button
+              onClick={() => {
+                const next = !autoPlay;
+                setAutoPlay(next);
+                autoPlayRef.current = next;
+                if (next) {
+                  setBallCount(1);
+                  dropMulti(1);
+                }
+              }}
+              disabled={!autoPlay && (effBet < 0.01 || bal < 0.01)}
+              className="py-3 px-3 rounded-xl text-xs font-semibold transition-all border flex items-center gap-1.5 flex-shrink-0"
+              style={autoPlay
+                ? { background: 'rgba(239,68,68,0.12)', borderColor: 'rgba(239,68,68,0.3)', color: '#f87171' }
+                : { background: 'rgba(255,255,255,0.04)', borderColor: '#1e2847', color: '#94a3b8' }
+              }>
+              {autoPlay && <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />}
+              {autoPlay ? 'Stop' : 'Auto'}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -2564,63 +2725,64 @@ export const MiniAppGames: React.FC = () => {
         </button>
       ))}
 
-      {/* Mes résultats */}
+      {/* Mes gains */}
       {gameHistory.length > 0 && (() => {
-        const total   = gameHistory.length;
-        const wins    = gameHistory.filter(r => r.win > r.bet).length;
-        const winRate = Math.round((wins / total) * 100);
-        const profit  = +gameHistory.reduce((s, r) => s + r.win - r.bet, 0).toFixed(4);
-        const last10  = gameHistory.slice(0, 10);
+        const total     = gameHistory.length;
+        const wonSess   = gameHistory.filter(r => r.win > r.bet);
+        const totalWon  = +wonSess.reduce((s, r) => s + r.win - r.bet, 0).toFixed(4);
+        const bestWin   = wonSess.length > 0 ? Math.max(...wonSess.map(r => r.win - r.bet)) : 0;
+        const recentWins = wonSess.slice(0, 8);
         return (
           <div style={{ background: '#0d1021', border: '1px solid #1e2847', borderRadius: 16 }} className="p-4 space-y-3">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold" style={{ color: '#f8fafc' }}>Mes résultats</h3>
+              <h3 className="text-sm font-semibold" style={{ color: '#f8fafc' }}>Mes gains</h3>
               <span style={{ fontSize: 11, color: '#64748b' }}>{total} partie{total !== 1 ? 's' : ''}</span>
             </div>
-            {/* Stats row */}
+            {/* Stats row — only positive metrics */}
             <div className="grid grid-cols-3 gap-2 text-center">
-              <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 10 }} className="py-2.5">
-                <p style={{ fontSize: 15, fontWeight: 700, color: winRate >= 50 ? '#22c55e' : '#f87171' }}>{winRate}%</p>
-                <p style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>Taux de victoire</p>
+              <div style={{ background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.15)', borderRadius: 10 }} className="py-2.5">
+                <p style={{ fontSize: 15, fontWeight: 700, color: '#22c55e' }}>+{totalWon.toFixed(2)}</p>
+                <p style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>TON gagnés</p>
+              </div>
+              <div style={{ background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.15)', borderRadius: 10 }} className="py-2.5">
+                <p style={{ fontSize: 15, fontWeight: 700, color: '#fbbf24' }}>+{bestWin.toFixed(2)}</p>
+                <p style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>Meilleur gain</p>
               </div>
               <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 10 }} className="py-2.5">
-                <p style={{ fontSize: 15, fontWeight: 700, color: profit >= 0 ? '#22c55e' : '#f87171' }}>{profit >= 0 ? '+' : ''}{profit.toFixed(2)}</p>
-                <p style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>Profit (TON)</p>
-              </div>
-              <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 10 }} className="py-2.5">
-                <p style={{ fontSize: 15, fontWeight: 700, color: '#94a3b8' }}>{wins}/{total}</p>
+                <p style={{ fontSize: 15, fontWeight: 700, color: '#94a3b8' }}>{wonSess.length}</p>
                 <p style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>Victoires</p>
               </div>
             </div>
-            {/* Last 10 entries */}
-            <div className="space-y-1.5">
-              {last10.map((r, i) => {
-                const net  = +(r.win - r.bet).toFixed(4);
-                const won  = r.win > r.bet;
-                const push = r.win === r.bet;
-                return (
-                  <div key={i} className="flex items-center justify-between py-1" style={{ borderBottom: i < last10.length - 1 ? '1px solid rgba(30,40,71,0.5)' : 'none' }}>
-                    <div className="flex items-center gap-2">
-                      <span style={{
-                        width: 24, height: 24, borderRadius: '50%', flexShrink: 0,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10,
-                        background: won ? 'rgba(34,197,94,0.18)' : push ? 'rgba(245,158,11,0.15)' : 'rgba(239,68,68,0.15)',
-                        color: won ? '#22c55e' : push ? '#f59e0b' : '#f87171',
-                      }}>
-                        {won ? '↑' : push ? '=' : '↓'}
-                      </span>
-                      <div>
-                        <p style={{ fontSize: 12, color: '#f8fafc', lineHeight: 1 }}>{r.game}</p>
-                        <p style={{ fontSize: 10, color: '#64748b' }}>Mise {r.bet.toFixed(2)} TON</p>
+            {/* Wins only */}
+            {recentWins.length > 0 ? (
+              <div className="space-y-1.5">
+                {recentWins.map((r, i) => {
+                  const net = +(r.win - r.bet).toFixed(4);
+                  return (
+                    <div key={i} className="flex items-center justify-between py-1" style={{ borderBottom: i < recentWins.length - 1 ? '1px solid rgba(30,40,71,0.5)' : 'none' }}>
+                      <div className="flex items-center gap-2">
+                        <span style={{
+                          width: 24, height: 24, borderRadius: '50%', flexShrink: 0,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10,
+                          background: 'rgba(34,197,94,0.18)', color: '#22c55e',
+                        }}>↑</span>
+                        <div>
+                          <p style={{ fontSize: 12, color: '#f8fafc', lineHeight: 1 }}>{r.game}</p>
+                          <p style={{ fontSize: 10, color: '#64748b' }}>Mise {r.bet.toFixed(2)} TON</p>
+                        </div>
                       </div>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: '#22c55e' }}>
+                        +{net.toFixed(4)} TON
+                      </span>
                     </div>
-                    <span style={{ fontSize: 13, fontWeight: 600, color: won ? '#22c55e' : push ? '#f59e0b' : '#64748b' }}>
-                      {won ? `+${net.toFixed(4)}` : push ? '±0' : `−${r.bet.toFixed(4)}`} TON
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="text-center py-3">
+                <p style={{ fontSize: 12, color: '#64748b' }}>🎯 Jouez pour décrocher votre première victoire !</p>
+              </div>
+            )}
           </div>
         );
       })()}
