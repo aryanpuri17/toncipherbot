@@ -1094,7 +1094,7 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
   const ac = parseFloat(autoCash) || 2;
 
   return (
-    <div className="pb-4" style={{ background: '#060a18', minHeight: '100%' }}>
+    <div className="flex flex-col" style={{ background: '#060a18', minHeight: '100%' }}>
       <style>{`
         @keyframes crashShake {
           0%,100%{transform:translate(0,0) rotate(0deg)}
@@ -1152,7 +1152,7 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
 
       <BigWinEffect show={bigWin} />
       {/* En-tête compact */}
-      <div style={{ background: '#0d1021', borderBottom: '1px solid #1e2847' }} className="px-4 pt-2 pb-2 space-y-2">
+      <div style={{ flexShrink: 0, background: '#0d1021', borderBottom: '1px solid #1e2847' }} className="px-4 pt-2 pb-2 space-y-2">
         <div className="flex items-center gap-2">
           <button onClick={onBack} style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid #1e2847' }}
             className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-white transition-colors flex-shrink-0">
@@ -1187,13 +1187,15 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
       </div>
 
       {/* Méta du tour */}
-      <div className="px-4 pt-2 pb-1 flex items-center justify-between">
+      <div style={{ flexShrink: 0 }} className="px-4 pt-2 pb-1 flex items-center justify-between">
         <span style={{ fontSize: 11, color: '#64748b' }}>Tour <span style={{ color: '#94a3b8', fontWeight: 700 }}>#{roundId}</span></span>
         <span style={{ fontSize: 11, color: '#64748b' }}>👥 {joinedFakes.length + (myBet !== null ? 1 : 0)} joueurs · 💰 {potTotal.toFixed(2)} TON</span>
       </div>
 
-      {/* Graphique */}
+      {/* Graphique — flex-grow pendant le vol, hauteur fixe sinon */}
       <div className="mx-4 mt-1 relative" style={{
+        flex: phase === 'flying' ? '1 1 0%' : undefined,
+        minHeight: phase === 'flying' ? 0 : undefined,
         borderRadius: 16,
         border: isCrashed
           ? '1px solid rgba(239,68,68,0.50)'
@@ -1203,13 +1205,13 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
         background: 'radial-gradient(120% 120% at 20% 100%, #0c1230 0%, #060a18 60%)',
         overflow: 'hidden',
         animation: isCrashed ? 'crashShake 0.55s cubic-bezier(0.36,0.07,0.19,0.97) both' : undefined,
-        transition: 'border-color 0.25s',
+        transition: 'border-color 0.25s, flex 0.3s',
       }}>
         {isCrashed && (
           <div className="absolute inset-0 pointer-events-none"
             style={{ borderRadius: 16, zIndex: 10, animation: 'crashRedFlash 0.38s ease-out forwards' }} />
         )}
-        <svg width="100%" viewBox={`0 0 ${VB_W} ${VB_H}`} style={{ display: 'block' }}>
+        <svg width="100%" height={phase === 'flying' ? '100%' : undefined} viewBox={`0 0 ${VB_W} ${VB_H}`} preserveAspectRatio="xMidYMid meet" style={{ display: 'block' }}>
           <defs>
             <linearGradient id="avFillG" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="#22c55e" stopOpacity="0.32" />
@@ -1501,7 +1503,7 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
       </div>
 
       {/* Bouton principal */}
-      <div className="px-4 pt-3">
+      <div style={{ flexShrink: 0 }} className="px-4 pt-3">
         <button onClick={mainBtn.onClick} disabled={mainBtn.disabled}
           className="w-full py-4 rounded-xl font-black text-sm active:scale-[0.98] transition-all tracking-wide uppercase"
           style={btnStyle}>
@@ -1509,8 +1511,8 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
         </button>
       </div>
 
-      {/* Tableau des joueurs en direct */}
-      <div style={{ background: '#0d1021', border: '1px solid #1e2847' }} className="mx-4 mt-3 rounded-xl overflow-hidden">
+      {/* Tableau des joueurs — masqué en vol (libère l'espace) */}
+      {phase !== 'flying' && <div style={{ background: '#0d1021', border: '1px solid #1e2847' }} className="mx-4 mt-3 rounded-xl overflow-hidden">
         <div style={{ borderBottom: '1px solid #1e2847' }} className="flex items-center justify-between px-3 py-2">
           <div className="grid grid-cols-4 flex-1">
             {['JOUEUR', 'ENC.', 'MISE', 'PROFIT'].map(h => (
@@ -1533,9 +1535,7 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
                 ? <span style={{ color: '#4ade80' }}>+{((myBet ?? 0) * cashedOut - (myBet ?? 0)).toFixed(2)}</span>
                 : myBet !== null && isCrashed
                   ? <span style={{ color: '#f87171' }}>−{myBet.toFixed(2)}</span>
-                  : myBet !== null && phase === 'flying'
-                    ? <span style={{ color: '#818cf8' }}>En vol…</span>
-                    : <span style={{ color: '#64748b' }}>—</span>}
+                  : <span style={{ color: '#64748b' }}>—</span>}
             </span>
           </div>
         )}
@@ -1548,7 +1548,7 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
             className="grid grid-cols-4 px-3 py-2 items-center">
             <span style={{ fontSize: 12, color: '#94a3b8' }}>{f.name}</span>
             <span style={{ fontSize: 12, fontWeight: 700, color: f.cashedAt !== null ? '#4ade80' : isCrashed ? '#f87171' : '#64748b' }}>
-              {f.cashedAt !== null ? `×${f.cashedAt.toFixed(2)}` : isCrashed ? 'CRASH' : phase === 'flying' ? '…' : '—'}
+              {f.cashedAt !== null ? `×${f.cashedAt.toFixed(2)}` : isCrashed ? 'CRASH' : '—'}
             </span>
             <span style={{ fontSize: 12, color: '#cbd5e1' }}>{f.bet.toFixed(2)}</span>
             <span style={{ fontSize: 12, fontWeight: 700 }}>
@@ -1560,10 +1560,26 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
             </span>
           </div>
         ))}
-      </div>
+      </div>}
 
-      {/* Panneau de mise */}
-      <div style={{ background: '#0d1021', border: '1px solid #1e2847' }} className="mx-4 mt-3 rounded-xl p-4 space-y-3">
+      {/* Panneau de mise — compact en vol, complet sinon */}
+      {phase === 'flying' ? (
+        <div style={{ flexShrink: 0, background: '#0d1021', border: '1px solid #1e2847' }} className="mx-4 mt-2 mb-4 rounded-xl px-3 py-2 flex items-center gap-3">
+          <div style={{ flex: 1 }}>
+            <p style={{ fontSize: 9, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 2 }}>Mise en cours</p>
+            <p style={{ fontSize: 15, fontWeight: 700, color: myBet !== null ? '#f8fafc' : '#475569' }}>
+              {myBet !== null ? `${myBet.toFixed(2)} TON` : 'Spectateur'}
+            </p>
+          </div>
+          {autoCash ? (
+            <div style={{ textAlign: 'right' }}>
+              <p style={{ fontSize: 9, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 2 }}>Auto ×</p>
+              <p style={{ fontSize: 15, fontWeight: 700, color: '#f59e0b' }}>{autoCash}</p>
+            </div>
+          ) : null}
+        </div>
+      ) : (
+      <div style={{ background: '#0d1021', border: '1px solid #1e2847' }} className="mx-4 mt-3 rounded-xl p-4 space-y-3 pb-6">
         <p style={{ fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Montant de la mise</p>
         <div style={{ background: '#080c1e', border: '1px solid #1e2847', borderRadius: 12, opacity: myBet !== null ? 0.5 : 1 }}
           className="flex items-center px-3 py-2.5">
@@ -1598,6 +1614,7 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
           </div>
         </div>
       </div>
+      )}
     </div>
   );
 };
