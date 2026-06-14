@@ -1222,6 +1222,46 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
               <stop offset="0%" stopColor="#ef4444" stopOpacity="0.32" />
               <stop offset="100%" stopColor="#ef4444" stopOpacity="0.02" />
             </linearGradient>
+            {/* Gradients avion — préfixe "cg" pour éviter conflits */}
+            <linearGradient id="cgBody" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%"   stopColor="#5d0505"/>
+              <stop offset="15%"  stopColor="#9b1717"/>
+              <stop offset="38%"  stopColor="#dc2626"/>
+              <stop offset="62%"  stopColor="#ef4444"/>
+              <stop offset="83%"  stopColor="#fca5a5"/>
+              <stop offset="100%" stopColor="#7f1d1d"/>
+            </linearGradient>
+            <linearGradient id="cgNose" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%"   stopColor="#dc2626"/>
+              <stop offset="65%"  stopColor="#fecaca"/>
+              <stop offset="100%" stopColor="#fff5f5"/>
+            </linearGradient>
+            <linearGradient id="cgWingUp" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%"   stopColor="#7f1d1d"/>
+              <stop offset="45%"  stopColor="#b91c1c"/>
+              <stop offset="100%" stopColor="#991b1b"/>
+            </linearGradient>
+            <linearGradient id="cgWingDn" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%"   stopColor="#991b1b"/>
+              <stop offset="55%"  stopColor="#b91c1c"/>
+              <stop offset="100%" stopColor="#7f1d1d"/>
+            </linearGradient>
+            <radialGradient id="cgCanopy" cx="35%" cy="22%" r="72%">
+              <stop offset="0%"   stopColor="#e0f2fe"/>
+              <stop offset="20%"  stopColor="#7dd3fc"/>
+              <stop offset="55%"  stopColor="#0369a1"/>
+              <stop offset="100%" stopColor="#082f49"/>
+            </radialGradient>
+            <linearGradient id="cgGold" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%"   stopColor="#ca8a04" stopOpacity={0}/>
+              <stop offset="20%"  stopColor="#fbbf24" stopOpacity={0.95}/>
+              <stop offset="80%"  stopColor="#fde68a" stopOpacity={0.95}/>
+              <stop offset="100%" stopColor="#ca8a04" stopOpacity={0}/>
+            </linearGradient>
+            <radialGradient id="cgHeat" cx="50%" cy="50%" r="50%">
+              <stop offset="0%"   stopColor="#f97316" stopOpacity={0.55}/>
+              <stop offset="100%" stopColor="#f97316" stopOpacity={0}/>
+            </radialGradient>
           </defs>
 
           {/* étoiles en dérive (2 couches) */}
@@ -1320,22 +1360,38 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
                   style={{ '--flame-max-opacity': '0.60', transformOrigin: '-13px 0px', animation: 'thrustPulse 0.17s ease-in-out infinite alternate', animationDelay: '0.05s' } as React.CSSProperties} />
                 <ellipse cx="-11" cy="0" rx={mult > 5 ? 7 : mult > 2 ? 6 : 5} ry={mult > 5 ? 3 : 2.2} fill="#fde68a"
                   style={{ '--flame-max-opacity': '0.92', transformOrigin: '-11px 0px', animation: 'thrustPulse 0.13s ease-in-out infinite alternate', animationDelay: '0.09s' } as React.CSSProperties} />
-                {/* Corps */}
-                <path d="M18,0 L12,-2 L-9,-4 L-14,-2 L-14,2 L-9,4 L12,2 Z" fill="#f43f5e" />
+                {/* ═══ NOUVEAU CORPS — style Aviator/Spribe ═══ */}
+                {/* Chaleur réacteur */}
+                <ellipse cx="-20" cy="0" rx="16" ry="10" fill="url(#cgHeat)"/>
+                {/* Fuselage trapu */}
+                <path d="M 24,0 C 22,-2 19,-4.5 14,-6.5 C 8,-8.5 2,-9.5 -4,-10.0 C -9,-10.4 -13,-10.0 -16,-8.5 C -17.5,-7.5 -18,-5 -18,-3 L -18,3 C -18,5 -17.5,7.5 -16,8.5 C -13,10.0 -9,10.4 -4,10.0 C 2,9.5 8,8.5 14,6.5 C 19,4.5 22,2 24,0 Z" fill="url(#cgBody)"/>
                 {/* Nez */}
-                <path d="M12,-2 L18,0 L12,2 Z" fill="#fda4af" />
-                {/* Ailes */}
-                <path d="M-1,-4 L-9,-15 L-13,-4 Z" fill="#fb7185" opacity="0.9" />
-                <path d="M-1,4 L-9,15 L-13,4 Z"  fill="#fb7185" opacity="0.9" />
-                {/* Ailerons */}
-                <path d="M-10,-4 L-14,-10 L-14,-4 Z" fill="#be123c" />
-                <path d="M-10,4 L-14,10 L-14,4 Z"   fill="#be123c" />
-                {/* Hublot */}
-                <circle cx="5" cy="0" r="3.6" fill="#bfdbfe" opacity="0.95" />
-                <circle cx="5" cy="0" r="2.2" fill="#60a5fa" />
-                <circle cx="4.2" cy="-0.9" r="0.9" fill="#fff" opacity="0.7" />
-                {/* Halo de vitesse */}
-                <circle cx="2" cy="0" r="12" fill="#f43f5e" opacity="0.07" />
+                <path d="M 14,-6.5 L 24,0 L 14,6.5 Z" fill="url(#cgNose)"/>
+                <path d="M 14,-6.5 L 24,0 L 16,-2.5 Z" fill="white" opacity={0.28}/>
+                {/* Aile supérieure */}
+                <path d="M 8,-9.5 L 4,-10 C 0,-11 -4,-12.5 -7,-15 C -10,-17.5 -12,-21 -13,-26 L -16,-26 C -16,-23 -14,-19 -11,-15.5 C -9,-13 -6,-11 -4,-10 L -16,-8.5 L 8,-9.5 Z" fill="url(#cgWingUp)"/>
+                {/* Aile inférieure */}
+                <path d="M 8,9.5 L 4,10 C 0,11 -4,12.5 -7,15 C -10,17.5 -12,21 -13,26 L -16,26 C -16,23 -14,19 -11,15.5 C -9,13 -6,11 -4,10 L -16,8.5 L 8,9.5 Z" fill="url(#cgWingDn)"/>
+                {/* Empennage supérieur */}
+                <path d="M -13,-8.5 L -16,-19 L -18,-19 L -18,-8.5 Z" fill="#7f1d1d"/>
+                <path d="M -13,-8.5 L -16,-19 L -14.5,-19 L -12,-8.5 Z" fill="#b91c1c"/>
+                {/* Empennage inférieur */}
+                <path d="M -13,8.5 L -16,19 L -18,19 L -18,8.5 Z" fill="#7f1d1d"/>
+                <path d="M -13,8.5 L -16,19 L -14.5,19 L -12,8.5 Z" fill="#b91c1c"/>
+                {/* Liseré doré casino */}
+                <line x1="-16" y1="-0.5" x2="20" y2="-0.5" stroke="url(#cgGold)" strokeWidth={1.2}/>
+                <line x1="-14" y1="1.2" x2="18" y2="1.2" stroke="url(#cgGold)" strokeWidth={0.45} opacity={0.55}/>
+                {/* Cockpit bombé */}
+                <ellipse cx="6.5" cy="0" rx="7.5" ry="8.5" fill="#3b0000" opacity={0.92}/>
+                <ellipse cx="6.5" cy="0" rx="6.2" ry="7.2" fill="url(#cgCanopy)"/>
+                <ellipse cx="5.0" cy="-3.2" rx="3.8" ry="2.0" fill="white" opacity={0.42} transform="rotate(-12,5.0,-3.2)"/>
+                <ellipse cx="3.5" cy="-4.5" rx="1.4" ry="0.7" fill="white" opacity={0.78} transform="rotate(-12,3.5,-4.5)"/>
+                <line x1="6.5" y1="-7.2" x2="6.5" y2="7.2" stroke="#082f49" strokeWidth={0.65} opacity={0.70}/>
+                {/* Feux wingtip */}
+                <circle cx="-13" cy="-25.5" r="1.1" fill="#fbbf24" opacity={0.90}/>
+                <circle cx="-13" cy="25.5" r="1.1" fill="#fbbf24" opacity={0.90}/>
+                {/* Feu queue */}
+                <circle cx="-17" cy="0" r="0.9" fill="#f87171" opacity={0.80}/>
               </g>
             </g>
           )}
