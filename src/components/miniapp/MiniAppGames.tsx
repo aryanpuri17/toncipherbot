@@ -763,7 +763,7 @@ type FakePlayer = {
 
 function makeFakeRoster(): FakePlayer[] {
   const pool = [...ALL_FAKE_NAMES].sort(() => Math.random() - 0.5);
-  const n = 7 + Math.floor(Math.random() * 5); // 7–11 joueurs par tour
+  const n = 5; // 5 joueurs par tour — propre et lisible
   return pool.slice(0, n).map(name => ({
     name,
     bet: randomFakeBet(),
@@ -1151,23 +1151,20 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
       `}</style>
 
       <BigWinEffect show={bigWin} />
-      {/* En-tête */}
-      <div style={{ background: '#0d1021', borderBottom: '1px solid #1e2847' }} className="px-4 pt-4 pb-3 space-y-3">
-        <div className="flex items-center gap-3">
+      {/* En-tête compact */}
+      <div style={{ background: '#0d1021', borderBottom: '1px solid #1e2847' }} className="px-4 pt-2 pb-2 space-y-2">
+        <div className="flex items-center gap-2">
           <button onClick={onBack} style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid #1e2847' }}
-            className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-white transition-colors">
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-white transition-colors flex-shrink-0">
             <ArrowLeft className="w-4 h-4" />
           </button>
-          <div className="flex-1">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h2 className="text-base font-bold text-white">Crash ✈️</h2>
-              <span className="flex items-center gap-1" style={{ fontSize: 9, fontWeight: 800, color: '#f87171', letterSpacing: '0.08em' }}>
-                <span style={{ width: 6, height: 6, borderRadius: 99, background: '#ef4444', animation: 'crashBlink 1.2s infinite' }} />
-                EN DIRECT
-              </span>
-              <StreakChip streak={streak} />
-            </div>
-            <p className="text-[11px]" style={{ color: '#64748b' }}>Misez avant le décollage · Encaissez avant le crash</p>
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            <h2 className="text-base font-bold text-white whitespace-nowrap">Crash ✈️</h2>
+            <span className="flex items-center gap-1 flex-shrink-0" style={{ fontSize: 9, fontWeight: 800, color: '#f87171', letterSpacing: '0.08em' }}>
+              <span style={{ width: 6, height: 6, borderRadius: 99, background: '#ef4444', animation: 'crashBlink 1.2s infinite' }} />
+              EN DIRECT
+            </span>
+            <StreakChip streak={streak} />
           </div>
           <MuteButton />
           <GameBalanceChip bal={bal} demo={demoMode} />
@@ -1175,7 +1172,7 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
 
         {/* Historique des tours */}
         <div className="flex gap-1.5 overflow-x-auto pb-0.5 no-scrollbar">
-          {history.slice(0, 14).map((h, i) => (
+          {history.slice(0, 10).map((h, i) => (
             <span key={`${roundId}-${i}`} style={{
               flexShrink: 0, fontSize: 11, fontWeight: 700,
               padding: '2px 8px', borderRadius: 20,
@@ -1190,7 +1187,7 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
       </div>
 
       {/* Méta du tour */}
-      <div className="px-4 pt-3 pb-1 flex items-center justify-between">
+      <div className="px-4 pt-2 pb-1 flex items-center justify-between">
         <span style={{ fontSize: 11, color: '#64748b' }}>Tour <span style={{ color: '#94a3b8', fontWeight: 700 }}>#{roundId}</span></span>
         <span style={{ fontSize: 11, color: '#64748b' }}>👥 {joinedFakes.length + (myBet !== null ? 1 : 0)} joueurs · 💰 {potTotal.toFixed(2)} TON</span>
       </div>
@@ -1350,7 +1347,7 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
           {/* fusée / explosion */}
           {phase === 'flying' && (
             // translate au bout de la courbe → rotate selon pente → scale 1.5× → translate -18 pour aligner LE NEZ (x=18) au bout de la courbe
-            <g transform={`translate(${tipX},${tipY}) rotate(${planeAngle}) scale(1.5) translate(-18,0)`}>
+            <g transform={`translate(${tipX},${tipY}) rotate(${planeAngle}) scale(1.1) translate(-18,0)`}>
               {/* Wobble — amplitude augmente avec le multiplicateur */}
               <g style={{ animation: mult > 10 ? 'rocketWobble 0.18s ease-in-out infinite alternate' : mult > 3 ? 'rocketWobble 0.3s ease-in-out infinite alternate' : mult > 1.5 ? 'rocketWobble 0.5s ease-in-out infinite alternate' : undefined, transformOrigin: '2px 0px' }}>
                 {/* Flammes — taille réactive au multiplicateur */}
