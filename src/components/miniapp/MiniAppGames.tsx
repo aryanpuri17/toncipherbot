@@ -844,7 +844,7 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
     myCashRef.current = { t: tRef.current, m };
     const win = +(myBetRef.current * m).toFixed(6);
     placeGameBet(0, win);
-    recordGameResult('Crash', myBetRef.current, win);
+    recordGameResult('Aviator', myBetRef.current, win);
     if (!demoMode) dheRecord(win - myBetRef.current);
     snd.cashout();
     haptic.success();
@@ -962,7 +962,7 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
           setMult(cp);
           snd.crash();
           if (myBetRef.current !== null && cashedRef.current === null) {
-            recordGameResult('Crash', myBetRef.current, 0);
+            recordGameResult('Aviator', myBetRef.current, 0);
             if (!demoMode) dheRecord(-myBetRef.current);
             onResultRef.current(false);
             setToast({ id: Date.now(), text: `−${myBetRef.current.toFixed(2)} TON`, win: false });
@@ -1094,7 +1094,7 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
   const ac = parseFloat(autoCash) || 2;
 
   return (
-    <div className="flex flex-col" style={{ background: '#060a18', minHeight: '100%' }}>
+    <div className="flex flex-col" style={{ position: 'fixed', inset: 0, zIndex: 50, background: '#060a18', overflow: 'hidden' }}>
       <style>{`
         @keyframes crashShake {
           0%,100%{transform:translate(0,0) rotate(0deg)}
@@ -1159,7 +1159,10 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
             <ArrowLeft className="w-4 h-4" />
           </button>
           <div className="flex items-center gap-2 flex-1 min-w-0">
-            <h2 className="text-base font-bold text-white whitespace-nowrap">Crash ✈️</h2>
+            <div className="flex items-center gap-1.5">
+              <span style={{ width: 26, height: 26, borderRadius: 7, background: 'linear-gradient(135deg,#ef4444,#dc2626)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, flexShrink: 0 }}>✈️</span>
+              <h2 className="text-base font-bold text-white whitespace-nowrap">Aviator</h2>
+            </div>
             <span className="flex items-center gap-1 flex-shrink-0" style={{ fontSize: 9, fontWeight: 800, color: '#f87171', letterSpacing: '0.08em' }}>
               <span style={{ width: 6, height: 6, borderRadius: 99, background: '#ef4444', animation: 'crashBlink 1.2s infinite' }} />
               EN DIRECT
@@ -1194,8 +1197,8 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
 
       {/* Graphique — flex-grow pendant le vol, hauteur fixe sinon */}
       <div className="mx-4 mt-1 relative" style={{
-        flex: phase === 'flying' ? '1 1 0%' : undefined,
-        minHeight: phase === 'flying' ? 0 : undefined,
+        flex: '1 1 0%',
+        minHeight: 0,
         borderRadius: 16,
         border: isCrashed
           ? '1px solid rgba(239,68,68,0.50)'
@@ -1211,7 +1214,7 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
           <div className="absolute inset-0 pointer-events-none"
             style={{ borderRadius: 16, zIndex: 10, animation: 'crashRedFlash 0.38s ease-out forwards' }} />
         )}
-        <svg width="100%" height={phase === 'flying' ? '100%' : undefined} viewBox={`0 0 ${VB_W} ${VB_H}`} preserveAspectRatio="xMidYMid meet" style={{ display: 'block' }}>
+        <svg width="100%" height="100%" viewBox={`0 0 ${VB_W} ${VB_H}`} preserveAspectRatio="xMidYMid meet" style={{ display: 'block' }}>
           <defs>
             <linearGradient id="avFillG" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="#22c55e" stopOpacity="0.32" />
@@ -1453,12 +1456,14 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
               }}>
                 {countdown.toFixed(1)}s
               </p>
-              <div style={{ width: 130, height: 4, background: 'rgba(255,255,255,0.08)', borderRadius: 99, margin: '8px auto 0', overflow: 'hidden' }}>
-                <div style={{
-                  width: `${(countdown / (BET_MS / 1000)) * 100}%`, height: '100%',
-                  background: countdown < 3 ? 'linear-gradient(90deg,#ef4444,#f97316)' : 'linear-gradient(90deg,#4f6ff0,#818cf8)',
-                  borderRadius: 99, transition: 'width 0.05s linear',
-                }} />
+              <div style={{ display: 'flex', gap: 6, justifyContent: 'center', marginTop: 12 }}>
+                {[0, 1, 2].map(i => (
+                  <div key={i} style={{
+                    width: 7, height: 7, borderRadius: '50%',
+                    background: countdown < 3 ? '#ef4444' : '#3b82f6',
+                    animation: `crashBlink 0.75s ease-in-out ${(i * 0.22).toFixed(2)}s infinite alternate`,
+                  }} />
+                ))}
               </div>
               {myBet !== null && (
                 <p style={{ fontSize: 11, fontWeight: 700, color: '#4ade80', marginTop: 8 }}>✓ Mise placée · {myBet.toFixed(2)} TON</p>
@@ -1512,7 +1517,7 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
       </div>
 
       {/* Tableau des joueurs — masqué en vol (libère l'espace) */}
-      {phase !== 'flying' && <div style={{ background: '#0d1021', border: '1px solid #1e2847' }} className="mx-4 mt-3 rounded-xl overflow-hidden">
+      {phase !== 'flying' && <div style={{ background: '#0d1021', border: '1px solid #1e2847', maxHeight: 132, overflowY: 'auto', overflowX: 'hidden', flexShrink: 0 }} className="mx-4 mt-2 rounded-xl">
         <div style={{ borderBottom: '1px solid #1e2847' }} className="flex items-center justify-between px-3 py-2">
           <div className="grid grid-cols-4 flex-1">
             {['JOUEUR', 'ENC.', 'MISE', 'PROFIT'].map(h => (
@@ -3201,10 +3206,10 @@ const CATALOG = [
   },
   {
     id: 'crash' as ActiveGame,
-    title: 'Crash',
-    desc: 'Encaisse avant le crash — ou tout perdre',
+    title: 'Aviator',
+    desc: 'Encaisse avant que le pilote s\'envole !',
     stats: 'jusqu\'à ×100 · multijoueur',
-    emoji: '🚀',
+    emoji: '✈️',
     badge: 'HOT',
     accentFrom: '#ef4444', accentTo: '#f97316',
     glow: 'rgba(239,68,68,0.4)',
@@ -3286,7 +3291,7 @@ export const MiniAppGames: React.FC = () => {
 
   // Live feed auto-rotation — new fake entry every 8–18 seconds
   useEffect(() => {
-    const GAME_NAMES = ['Crash', 'Plinko', 'Roulette', 'Mines', 'Roue'];
+    const GAME_NAMES = ['Aviator', 'Plinko', 'Roulette', 'Mines', 'Roue'];
     const scheduleNext = () => {
       const ms = 8000 + Math.floor(Math.random() * 10000);
       return setTimeout(() => {

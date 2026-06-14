@@ -57,7 +57,17 @@ export const AdminConfig: React.FC = () => {
     setTimeout(() => setWdChannelSaved('idle'), 2500);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
+    // Strip sensitive credentials — those stay as env vars server-side
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { botToken: _bt, apiId: _ai, apiHash: _ah, databaseUrl: _du, ...rest } = platformConfig;
+    try {
+      await adminFetch('/api/admin/config/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ configs: rest }),
+      });
+    } catch { /* silent — Zustand + localStorage already updated */ }
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);
   };
@@ -585,7 +595,7 @@ export const AdminConfig: React.FC = () => {
       {/* Save Button */}
       <div className="flex justify-end items-center gap-3">
         {saved && <span className="text-sm text-emerald-400 font-medium">✓ Configuration sauvegardée</span>}
-        <button onClick={handleSave} className={`px-6 py-3 rounded-xl text-sm font-semibold text-white transition-all ${saved ? 'bg-emerald-600/80' : 'btn-primary'}`}>
+        <button onClick={() => { void handleSave(); }} className={`px-6 py-3 rounded-xl text-sm font-semibold text-white transition-all ${saved ? 'bg-emerald-600/80' : 'btn-primary'}`}>
           💾 Sauvegarder la configuration
         </button>
       </div>
