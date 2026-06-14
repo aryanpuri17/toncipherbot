@@ -26,7 +26,7 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 BOT_TOKEN         = os.getenv("BOT_TOKEN", "")
 WEBAPP_URL        = os.getenv("WEBAPP_URL", "https://toncipherbot.onrender.com")
 PORT              = int(os.getenv("PORT", 8080))
-DB_PATH           = os.path.join(os.path.dirname(__file__), "toncipherbot.db")
+DB_PATH           = os.path.join(os.path.dirname(__file__), "data", "toncipherbot.db")
 ADMIN_SECRET      = os.getenv("ADMIN_SECRET", "")
 ADMIN_TELEGRAM_ID = int(os.getenv("ADMIN_TELEGRAM_ID", "0"))
 # Canal Telegram obligatoire (ex: @TonCipher_official ou -100xxxxxxxxxx)
@@ -200,6 +200,7 @@ def _short_id() -> str:
 # ── Database ───────────────────────────────────────────────────────────────────
 
 async def init_db() -> None:
+    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("""
             CREATE TABLE IF NOT EXISTS users (
@@ -1239,7 +1240,36 @@ async def api_transactions(request: web.Request) -> web.Response:
 # The mini app is client-side; without this, config changed in the admin panel
 # would only exist in the admin's own browser. Users fetch it on app start.
 
-_CONFIG_KEYS = {"promoEvent", "streakMilestones", "withdrawalChannel"}
+# Keys returned by the public /api/config endpoint (safe for all users to read)
+_PUBLIC_CONFIG_KEYS = {
+    "promoEvent", "streakMilestones", "withdrawalChannel",
+    "welcomeBonusEnabled", "welcomeBonusAmount",
+    "maintenanceMode", "maintenanceMessage", "registrationEnabled",
+    "referralBonusSignup", "referralBonusActivity", "referralBonusDeposit",
+    "referralBonusDepositPercent", "referralLevels", "referralCodeLength",
+    "streakBonusPerDay", "bonusTaskMultiplier",
+    "depositBonusPercent", "firstDepositBonus",
+    "botUsername", "appShortName",
+    "mainChannel", "mainGroup", "supportBot", "announcementChannel",
+}
+
+# Keys that admin can write — superset of public keys
+_ADMIN_CONFIG_KEYS = _PUBLIC_CONFIG_KEYS | {
+    "autoWithdrawalEnabled", "autoWithdrawalMaxAmount", "withdrawalReviewThreshold",
+    "minWithdrawalInterval", "requireVerificationAbove",
+    "globalDailyWithdrawalLimit", "globalDailyDepositLimit", "maxPendingWithdrawals",
+    "taskVerificationTimeout", "taskCooldownGlobal", "maxDailyTasks",
+    "minDepositForBonus", "taskCreationFeeRate", "taskPricePerExecution",
+    "taskMinExecutions", "taskMaxExecutions",
+    "adminNotifyDeposit", "adminNotifyWithdrawal", "adminNotifyFraud",
+    "adminNotifyNewUser", "adminChatId",
+    "antifraudEnabled", "vpnDetectionEnabled", "deviceFingerprintEnabled",
+    "maxAccountsPerDevice", "maxAccountsPerIP",
+    "suspiciousActivityThreshold", "autobanThreshold",
+    "mainWallet", "hotWalletThreshold", "coldWalletThreshold",
+    "xpPerTask", "xpPerReferral", "xpPerDeposit", "xpMultiplier", "maxLevel",
+    "streakMultiplier", "maxStreakBonus", "streakResetHours",
+}
 
 
 async def _configured_withdrawal_channel() -> str:
@@ -1266,7 +1296,7 @@ async def api_config_get(request: web.Request) -> web.Response:
             rows = await cur.fetchall()
     config: dict = {}
     for key, value in rows:
-        if key not in _CONFIG_KEYS:
+        if key not in _PUBLIC_CONFIG_KEYS:
             continue
         try:
             config[key] = json.loads(value)
@@ -1283,7 +1313,7 @@ async def api_admin_config_set(request: web.Request) -> web.Response:
     except Exception:
         return web.json_response({"error": "Invalid JSON"}, status=400, headers=_CORS)
     key = data.get("key", "")
-    if key not in _CONFIG_KEYS:
+    if key not in _ADMIN_CONFIG_KEYS:
         return web.json_response({"error": f"Unknown config key: {key}"}, status=400, headers=_CORS)
     value = json.dumps(data.get("value"))
     async with aiosqlite.connect(DB_PATH) as db:
@@ -1294,6 +1324,31 @@ async def api_admin_config_set(request: web.Request) -> web.Response:
         )
         await db.commit()
     return web.json_response({"success": True}, headers=_CORS)
+
+
+async def api_admin_config_bulk(request: web.Request) -> web.Response:
+    if not _check_admin_auth(request):
+        return web.json_response({"error": "Unauthorized"}, status=401, headers=_CORS)
+    try:
+        data = await request.json()
+    except Exception:
+        return web.json_response({"error": "Invalid JSON"}, status=400, headers=_CORS)
+    configs = data.get("configs", {})
+    if not isinstance(configs, dict):
+        return web.json_response({"error": "configs must be an object"}, status=400, headers=_CORS)
+    saved = 0
+    async with aiosqlite.connect(DB_PATH) as db:
+        for key, value in configs.items():
+            if key not in _ADMIN_CONFIG_KEYS:
+                continue
+            await db.execute(
+                """INSERT INTO platform_config (key, value, updated_at) VALUES (?, ?, datetime('now'))
+                   ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at""",
+                (key, json.dumps(value)),
+            )
+            saved += 1
+        await db.commit()
+    return web.json_response({"success": True, "saved": saved}, headers=_CORS)
 
 
 async def api_admin_approve_withdrawal(request: web.Request) -> web.Response:
@@ -2042,6 +2097,7 @@ async def start_web() -> None:
     app.router.add_get( "/api/transactions",               api_transactions)
     app.router.add_get( "/api/config",                     api_config_get)
     app.router.add_post("/api/admin/config",               api_admin_config_set)
+    app.router.add_post("/api/admin/config/bulk",          api_admin_config_bulk)
     app.router.add_post("/api/withdrawal/create",          api_withdrawal_create)
 
     # Admin — users
