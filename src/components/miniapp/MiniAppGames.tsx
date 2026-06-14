@@ -809,6 +809,19 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
   const [toast, setToast]         = useState<{ id: number; text: string; win: boolean } | null>(null);
   const [bigWin, setBigWin]       = useState(false);
   const [cashFlash, setCashFlash] = useState(false);
+  const [betTab, setBetTab]       = useState<'all' | 'my' | 'top'>('all');
+
+  // Second bet panel
+  const [showBet2,   setShowBet2]   = useState(false);
+  const [bet2,       setBet2]       = useState(0.05);
+  const [autoCash2,  setAutoCash2]  = useState('');
+  const [myBet2,     setMyBet2]     = useState<number | null>(null);
+  const [queuedBet2, setQueuedBet2] = useState<number | null>(null);
+  const [cashedOut2, setCashedOut2] = useState<number | null>(null);
+  const myBet2Ref    = useRef<number | null>(null);
+  const queued2Ref   = useRef<number | null>(null);
+  const cashed2Ref   = useRef<number | null>(null);
+  const autoCash2Ref = useRef('');
   const crashMountedRef           = useRef(true);
   const crashBigWinTimer          = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -831,6 +844,7 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
 
   useEffect(() => { streakRef.current = streak; }, [streak]);
   useEffect(() => { autoRef.current = autoCash; }, [autoCash]);
+  useEffect(() => { autoCash2Ref.current = autoCash2; }, [autoCash2]);
   useEffect(() => { onResultRef.current = onResult; }, [onResult]);
   useEffect(() => {
     crashMountedRef.current = true;
@@ -860,6 +874,20 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
     }
   };
 
+  const doCashout2 = (m: number) => {
+    if (phaseRef.current !== 'flying') return;
+    if (myBet2Ref.current === null || cashed2Ref.current !== null) return;
+    cashed2Ref.current = m;
+    const win2 = +(myBet2Ref.current * m).toFixed(6);
+    placeGameBet(0, win2);
+    recordGameResult('Aviator', myBet2Ref.current, win2);
+    if (!demoMode) dheRecord(win2 - myBet2Ref.current);
+    snd.cashout();
+    haptic.success();
+    setCashedOut2(m);
+    setToast({ id: Date.now(), text: `+${win2.toFixed(4)} TON`, win: true });
+  };
+
   // ── Moteur de tours continus ──
   useEffect(() => {
     const beginBetting = () => {
@@ -869,10 +897,13 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
       multRef.current  = 1;
       cashedRef.current = null;
       myCashRef.current = null;
+      cashed2Ref.current = null;
       samplesRef.current = [];
       // mise en file d'attente → devient la mise active du tour
       myBetRef.current = queuedRef.current;
       queuedRef.current = null;
+      myBet2Ref.current = queued2Ref.current;
+      queued2Ref.current = null;
       fakesRef.current = makeFakeRoster();
       setFakes([...fakesRef.current]);
       setPhase('betting');
@@ -881,6 +912,9 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
       setMyBet(myBetRef.current);
       setQueuedBet(null);
       setCashedOut(null);
+      setMyBet2(myBet2Ref.current);
+      setQueuedBet2(null);
+      setCashedOut2(null);
       setRoundId(r => r + 1);
     };
 
@@ -952,6 +986,12 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
             !isNaN(ac) && ac >= 1.01 && m >= ac && ac < crashAtRef.current) {
           doCashout(ac);
         }
+        // encaissement auto bet 2
+        const ac2 = parseFloat(autoCash2Ref.current);
+        if (myBet2Ref.current !== null && cashed2Ref.current === null &&
+            !isNaN(ac2) && ac2 >= 1.01 && m >= ac2 && ac2 < crashAtRef.current) {
+          doCashout2(ac2);
+        }
 
         if (m >= crashAtRef.current) {
           const cp = crashAtRef.current;
@@ -967,6 +1007,10 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
             onResultRef.current(false);
             setToast({ id: Date.now(), text: `−${myBetRef.current.toFixed(2)} TON`, win: false });
             haptic.impact('heavy'); haptic.error();
+          }
+          if (myBet2Ref.current !== null && cashed2Ref.current === null) {
+            recordGameResult('Aviator', myBet2Ref.current, 0);
+            if (!demoMode) dheRecord(-myBet2Ref.current);
           }
           setPhase('crashed');
         } else {
@@ -985,6 +1029,8 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
       // Refund any unresolved bets on unmount (including mid-flight)
       if (myBetRef.current !== null && cashedRef.current === null) placeGameBet(0, myBetRef.current);
       if (queuedRef.current !== null) placeGameBet(0, queuedRef.current);
+      if (myBet2Ref.current !== null && cashed2Ref.current === null) placeGameBet(0, myBet2Ref.current);
+      if (queued2Ref.current !== null) placeGameBet(0, queued2Ref.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -1019,6 +1065,37 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
     placeGameBet(0, queuedRef.current);
     queuedRef.current = null;
     setQueuedBet(null);
+  };
+
+  // ── Actions panel 2 ──
+  const effBet2 = Math.min(bet2, bal);
+  const placeBet2 = () => {
+    if (phaseRef.current !== 'betting' || myBet2Ref.current !== null) return;
+    if (effBet2 < 0.01) return;
+    placeGameBet(effBet2, 0);
+    snd.bet();
+    haptic.impact('light');
+    myBet2Ref.current = effBet2;
+    setMyBet2(effBet2);
+  };
+  const cancelBet2 = () => {
+    if (phaseRef.current !== 'betting' || myBet2Ref.current === null) return;
+    placeGameBet(0, myBet2Ref.current);
+    myBet2Ref.current = null;
+    setMyBet2(null);
+  };
+  const queueBet2 = () => {
+    if (phaseRef.current === 'betting' || queued2Ref.current !== null) return;
+    if (effBet2 < 0.01) return;
+    placeGameBet(effBet2, 0);
+    queued2Ref.current = effBet2;
+    setQueuedBet2(effBet2);
+  };
+  const cancelQueued2 = () => {
+    if (queued2Ref.current === null) return;
+    placeGameBet(0, queued2Ref.current);
+    queued2Ref.current = null;
+    setQueuedBet2(null);
   };
 
   // ── Géométrie du graphique (échelle dynamique) ──
@@ -1065,7 +1142,6 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
   // pot du tour
   const joinedFakes = fakes.filter(f => f.joined);
   const potTotal = joinedFakes.reduce((s, f) => s + f.bet, 0) + (myBet ?? 0);
-  const cashedCount = joinedFakes.filter(f => f.cashedAt !== null).length + (cashedOut !== null ? 1 : 0);
 
   // bouton principal selon l'état
   const mainBtn = (() => {
@@ -1092,6 +1168,29 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
                                 { background: 'linear-gradient(135deg,#4f6ff0,#6366f1)', boxShadow: '0 4px 16px rgba(79,111,240,0.35)', color: '#fff' };
 
   const ac = parseFloat(autoCash) || 2;
+
+  // Bouton panel 2
+  const mainBtn2 = (() => {
+    if (phase === 'betting') {
+      if (myBet2 !== null) return { label: `CANCEL BET 2 · ${myBet2.toFixed(2)} TON`, onClick: cancelBet2, kind: 'cancel' as const, disabled: false };
+      return { label: `BET 2 · ${effBet2.toFixed(2)} TON`, onClick: placeBet2, kind: 'bet' as const, disabled: effBet2 < 0.01 };
+    }
+    if (phase === 'flying' && myBet2 !== null && cashedOut2 === null) {
+      return { label: `CASH OUT BET 2 · ${(myBet2 * mult).toFixed(4)} TON`, onClick: () => doCashout2(multRef.current), kind: 'cash' as const, disabled: false };
+    }
+    if (queuedBet2 !== null) {
+      return { label: 'BET 2 PLACED ✓ · tap to cancel', onClick: cancelQueued2, kind: 'queued' as const, disabled: false };
+    }
+    return { label: `NEXT ROUND BET 2 · ${effBet2.toFixed(2)} TON`, onClick: queueBet2, kind: 'next' as const, disabled: effBet2 < 0.01 };
+  })();
+
+  const btnStyle2: React.CSSProperties =
+    mainBtn2.kind === 'cash'   ? { background: 'linear-gradient(135deg,#22c55e,#16a34a)', animation: 'crashPulse 1.1s ease-in-out infinite', color: '#052e16' } :
+    mainBtn2.kind === 'cancel' ? { background: 'rgba(239,68,68,0.14)', border: '1px solid rgba(239,68,68,0.45)', color: '#f87171' } :
+    mainBtn2.kind === 'queued' ? { background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.4)', color: '#4ade80' } :
+    mainBtn2.kind === 'next'   ? { background: 'rgba(255,255,255,0.03)', border: '1px solid #1e2847', color: '#334155', fontSize: 11 } :
+    mainBtn2.disabled          ? { background: 'rgba(255,255,255,0.05)', color: '#475569', cursor: 'not-allowed' } :
+                                 { background: 'linear-gradient(135deg,#4f6ff0,#6366f1)', boxShadow: '0 4px 16px rgba(79,111,240,0.35)', color: '#fff' };
 
   return (
     <div className="flex flex-col" style={{ position: 'fixed', inset: 0, zIndex: 50, background: '#060a18', overflow: 'hidden' }}>
@@ -1160,8 +1259,17 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
           </button>
           <div className="flex items-center gap-2 flex-1 min-w-0">
             <div className="flex items-center gap-1.5">
-              <span style={{ width: 26, height: 26, borderRadius: 7, background: 'linear-gradient(135deg,#ef4444,#dc2626)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, flexShrink: 0 }}>✈️</span>
-              <h2 className="text-base font-bold text-white whitespace-nowrap">Aviator</h2>
+              <svg viewBox="0 0 108 28" width="74" height="19" style={{ flexShrink: 0, display: 'block' }} aria-label="Aviator">
+                <g fill="#E50539">
+                  <path d="M35.8316259,8.46081696 L32.6511471,21.1003182 C32.3861297,22.1108319 31.7898404,22.9804878 30.8579701,23.7052459 C29.9260998,24.430004 28.9406334,24.794403 27.9091122,24.794403 L32.0257706,8.46081696 L26.9360349,8.46081696 L26.4100399,10.9372758 L22.330818,27.2708618 L27.2796958,27.2708618 C29.6942095,27.2708618 31.9886035,26.3764279 34.1669177,24.5916 C36.3452319,22.8067721 37.7284938,20.7068319 38.324783,18.2923182 L40.1634763,10.9372758 L40.7845436,8.46081696 L35.8316259,8.46081696 Z"/>
+                  <path d="M49.5521237,0.741321696 C49.1378993,0.248453865 48.5871262,0.000134663342 47.8995352,0.000134663342 C47.2081736,0.000134663342 46.5784878,0.248453865 46.0029367,0.741321696 C45.4314254,1.23418953 45.0877646,1.8264389 44.9757247,2.5137606 C44.855605,3.2304389 45.004812,3.83076808 45.4190364,4.32363591 C45.8289516,4.81650374 46.3797247,5.06509227 47.0673157,5.06509227 C47.7589466,5.06509227 48.392403,4.81219451 48.9682234,4.30720698 C49.5397347,3.8016808 49.8877047,3.20539152 49.999206,2.5137606 C50.1112459,1.8264389 49.9620389,1.23418953 49.5521237,0.741321696 M44.9094703,22.9473067 C44.9180888,22.8977506 44.9345177,22.8355362 44.9592958,22.7609327 C44.9840738,22.6863292 45.0007721,22.640813 45.004812,22.6117257 L48.5456499,8.46076309 L40.3416898,8.46076309 L39.7163132,10.9372219 L43.0002135,10.9372219 L40.0518943,22.6117257 C40.010418,22.7154165 39.9772908,22.8603142 39.9441636,23.0590773 C39.7327421,24.3389177 40.0599741,25.3534713 40.9212808,26.1073167 C41.7828569,26.8568529 43.0624279,27.2336409 44.7648419,27.2336409 L45.5017197,27.2336409 L46.1311362,24.757182 C45.1456698,24.6122843 44.7354853,24.0076459 44.9094703,22.9473067"/>
+                  <path d="M58.5553377,21.9865915 C58.3565746,22.7485167 57.9175721,23.4029805 57.2385995,23.9454045 C56.5593576,24.4880978 55.8345995,24.7571551 55.072405,24.7571551 C53.6436269,24.7571551 53.0432978,24.0695641 53.2668389,22.6863022 C53.2711481,22.6658334 53.2875771,22.603619 53.3166643,22.5042374 C53.3454823,22.4048559 53.3621805,22.3302524 53.3702603,22.2806963 L55.7432978,12.7842374 C56.0664898,11.5544918 56.7454623,10.937195 57.7810234,10.937195 L61.3302105,10.937195 L58.5553377,21.9865915 Z M63.1645945,23.3905915 C63.1729436,23.3407661 63.1896419,23.29121 63.21038,23.2413845 C63.2311182,23.1918284 63.2435072,23.1460429 63.251587,23.0964868 L66.9085047,8.46073616 L58.3732728,8.46073616 C56.5965247,8.46073616 54.9442055,8.96195312 53.4157766,9.96007781 C51.8835771,10.9579332 50.9352778,12.2086863 50.5665696,13.7080279 L48.5043352,21.9865915 C48.458819,22.1107511 48.4216519,22.2680379 48.3922953,22.4670703 C48.1647142,23.8460229 48.5662803,24.9850055 49.6015721,25.8834793 C50.6368638,26.7822224 51.9913077,27.233614 53.6686743,27.233614 L54.4432579,27.233614 C55.8965446,27.233614 57.2466793,26.7286264 58.4974324,25.7178434 C59.122809,26.7286264 60.2949187,27.233614 62.0178015,27.233614 L63.7568439,27.233614 L64.3824898,24.7571551 C63.4298813,24.7073297 63.024006,24.2518983 63.1645945,23.3905915 Z"/>
+                  <path d="M87.1846564,13.3020988 L87.118402,13.7079741 L85.0602075,21.9865377 C84.8407062,22.8728918 84.4803471,23.5561736 83.9834394,24.0366524 C83.4865317,24.5168618 82.9688858,24.7571012 82.4264618,24.7571012 C81.933594,24.7571012 81.5565367,24.5376 81.2958284,24.0902484 C81.0348509,23.647206 80.9645566,23.0840439 81.0760579,22.392413 C81.084407,22.3425875 81.1011052,22.2763332 81.1301925,22.18961 C81.1549706,22.1023481 81.1716688,22.0363631 81.1797486,21.9865377 L83.2379431,13.7079741 C83.4450554,12.8962234 83.7887162,12.2377197 84.2651551,11.7324628 C84.7413247,11.2274753 85.2753995,10.9745776 85.8676489,10.9745776 C86.3605167,10.9745776 86.7332648,11.1776499 86.9858933,11.5835252 C87.2385217,11.9934404 87.3090853,12.5649516 87.1846564,13.3020988 M90.9533446,9.81081696 C89.9304419,8.91234314 88.5846165,8.46068229 86.9072499,8.46068229 L86.1326663,8.46068229 C84.3066314,8.46068229 82.6416539,8.96620848 81.1342324,9.97672219 C79.6265416,10.9872359 78.6909007,12.2336798 78.3265017,13.7079741 L76.2265616,21.9865377 C76.1853546,22.1106973 76.1438783,22.2682534 76.114791,22.4670165 C75.8829007,23.8707471 76.2844668,25.0140389 77.3240678,25.9044329 C78.3596289,26.7905177 79.7302324,27.2338294 81.4280678,27.2338294 L82.1654843,27.2338294 C83.9670105,27.2338294 85.6236389,26.7202234 87.1474893,25.7013606 C88.671609,24.6784579 89.6115591,23.4400938 89.9759581,21.9865377 L92.071589,13.7079741 L92.1502324,13.2318045 C92.3740429,11.8485426 91.9762474,10.7098294 90.9533446,9.81081696"/>
+                  <path d="M106.1978,8.46081696 C104.20182,8.46081696 102.474628,8.99085187 101.021072,10.051191 L101.39382,8.46081696 L96.4656808,8.46081696 L91.7360349,27.2336948 L96.6892219,27.2336948 L99.2610224,16.963191 C99.5882544,15.7040888 100.23006,14.5279392 101.186708,13.4347421 C102.143357,12.3372359 103.220125,11.5793506 104.425362,11.1610863 L103.837152,13.6003781 L106.537421,13.6003781 L107.858469,8.46081696 L106.1978,8.46081696 Z"/>
+                  <path d="M12.664387,13.9475132 L12.6724668,13.8917626 L14.9436988,5.02902943 C15.11122,4.28784239 15.4618833,3.67404688 15.9956888,3.19572269 C16.5300329,2.71793716 17.1354793,2.47850574 17.7969456,2.47850574 C18.4188209,2.47850574 18.8729057,2.68588728 19.1758983,3.10819152 C19.470811,3.52268529 19.5742324,4.05649077 19.470811,4.69452569 L19.4150603,5.02902943 L17.1435591,13.8917626 L17.1276688,13.9475132 L12.664387,13.9475132 Z M23.0014145,1.40254564 C21.8697037,0.470136658 20.3474693,0.00016159601 18.4266314,0.00016159601 C16.3307312,0.00016159601 14.489614,0.526156608 12.8876589,1.57033616 C11.2857037,2.61424638 10.2733047,4.00100948 9.8429207,5.73035611 L7.78661147,13.8917626 C6.04918504,13.8917626 4.43915012,13.8995731 3.18785835,13.8995731 C1.4189207,13.8995731 0.000107730673,15.3423561 0.000107730673,17.1118324 L6.97378354,17.1118324 L4.43133965,27.2333985 L9.34089576,27.2333985 L11.8914195,17.1118324 L16.3625117,17.1118324 L14.7764469,23.391992 C14.7287761,23.5115731 14.6967262,23.6710145 14.6649456,23.8703162 C14.489614,24.930386 14.6967262,25.7588349 15.2943621,26.3489297 C15.8841875,26.9384858 16.784816,27.2333985 17.9881676,27.2333985 L19.9491352,27.2333985 L20.5785516,24.754785 C19.8691451,24.7071142 19.5742324,24.324401 19.6940828,23.6149945 L24.1810653,5.73035611 C24.1888758,5.67487481 24.2050354,5.57899451 24.2448958,5.43544339 C24.2847561,5.2840818 24.3006464,5.1882015 24.3084569,5.1327202 C24.5635092,3.58651571 24.1250454,2.34303441 23.0014145,1.40254564 Z"/>
+                  <path d="M76.0941067,8.46081696 L77.216391,4.10418853 L72.263204,4.10418853 L71.1783561,8.46081696 L68.7474135,8.46081696 L68.1177277,10.9372758 L70.5529796,10.9372758 L67.5960419,22.649216 C67.5876928,22.6990414 67.5672239,22.7860339 67.5338274,22.9101935 C67.5007002,23.0343531 67.4842713,23.1173057 67.4759222,23.1709017 C67.26881,24.4256948 67.5130893,25.4157397 68.2047202,26.1445377 C68.9006603,26.8692958 69.9483411,27.2336948 71.3520718,27.2336948 L73.0916529,27.2336948 L73.7251092,24.7197995 C72.7065157,24.6247272 72.2839421,24.0448668 72.4581965,22.984797 C72.4662763,22.9349716 72.4827052,22.8727571 72.5074833,22.7984229 C72.5284908,22.7235501 72.545189,22.6780339 72.5492289,22.649216 L75.5018574,10.9372758 L77.6098773,10.9372758 L78.2395631,8.46081696 L76.0941067,8.46081696 Z"/>
+                </g>
+              </svg>
             </div>
             <span className="flex items-center gap-1 flex-shrink-0" style={{ fontSize: 9, fontWeight: 800, color: '#f87171', letterSpacing: '0.08em' }}>
               <span style={{ width: 6, height: 6, borderRadius: 99, background: '#ef4444', animation: 'crashBlink 1.2s infinite' }} />
@@ -1448,7 +1556,7 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
           {phase === 'betting' ? (
             <div className="text-center">
-              <p style={{ fontSize: 10, fontWeight: 800, color: '#64748b', letterSpacing: '0.2em', textTransform: 'uppercase' }}>Prochain décollage</p>
+              <p style={{ fontSize: 10, fontWeight: 800, color: '#64748b', letterSpacing: '0.2em', textTransform: 'uppercase' }}>WAITING FOR NEXT ROUND</p>
               <p style={{
                 fontSize: 44, fontWeight: 900, fontVariantNumeric: 'tabular-nums', lineHeight: 1.1,
                 color: countdown < 3 ? '#ef4444' : countdown < 5 ? '#f97316' : '#f8fafc',
@@ -1483,10 +1591,10 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
                 color: isCrashed ? '#f87171' : cashedOut !== null ? '#4ade80' : '#94a3b8',
               }}>
                 {isCrashed
-                  ? '💥 CRASHÉ'
+                  ? 'FLEW AWAY!'
                   : cashedOut !== null
-                    ? `✓ Encaissé à ×${cashedOut.toFixed(2)}`
-                    : myBet !== null ? 'En vol · encaissez !' : 'En vol (spectateur)'}
+                    ? `✓ Cashed out @×${cashedOut.toFixed(2)}`
+                    : myBet !== null ? 'Cash out before it flies away!' : 'Watching (no bet)'}
               </p>
             </div>
           )}
@@ -1516,64 +1624,119 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
         </button>
       </div>
 
-      {/* Tableau des joueurs — masqué en vol (libère l'espace) */}
-      {phase !== 'flying' && <div style={{ background: '#0d1021', border: '1px solid #1e2847', maxHeight: 132, overflowY: 'auto', overflowX: 'hidden', flexShrink: 0 }} className="mx-4 mt-2 rounded-xl">
-        <div style={{ borderBottom: '1px solid #1e2847' }} className="flex items-center justify-between px-3 py-2">
-          <div className="grid grid-cols-4 flex-1">
-            {['JOUEUR', 'ENC.', 'MISE', 'PROFIT'].map(h => (
-              <span key={h} style={{ fontSize: 10, fontWeight: 700, color: '#64748b', letterSpacing: '0.06em' }}>{h}</span>
-            ))}
-          </div>
-          <span style={{ fontSize: 10, color: '#64748b' }}>{cashedCount} sortis</span>
+      {/* Tabs All Bets / My Bets / Top */}
+      <div style={{ background: '#0d1021', border: '1px solid #1e2847', flexShrink: 0 }} className="mx-4 mt-2 rounded-xl overflow-hidden">
+        <div style={{ borderBottom: '1px solid #1e2847', display: 'flex' }}>
+          {(['all', 'my', 'top'] as const).map(tab => (
+            <button key={tab} onClick={() => setBetTab(tab)}
+              style={{ flex: 1, padding: '7px 0', fontSize: 11, fontWeight: 700,
+                color: betTab === tab ? '#f8fafc' : '#475569',
+                borderBottom: betTab === tab ? '2px solid #ef4444' : '2px solid transparent',
+                background: 'none', letterSpacing: '0.05em', textTransform: 'uppercase' as const }}>
+              {tab === 'all' ? 'All Bets' : tab === 'my' ? 'My Bets' : 'Top'}
+            </button>
+          ))}
         </div>
-
-        {/* ligne du joueur */}
-        {(myBet !== null || queuedBet !== null) && (
-          <div style={{ background: 'rgba(79,111,240,0.10)', borderBottom: '1px solid #1e2847' }} className="grid grid-cols-4 px-3 py-2 items-center">
-            <span style={{ fontSize: 12, fontWeight: 800, color: '#818cf8' }}>Vous</span>
-            <span style={{ fontSize: 12, color: cashedOut !== null ? '#4ade80' : '#64748b', fontWeight: 700 }}>
-              {cashedOut !== null ? `×${cashedOut.toFixed(2)}` : queuedBet !== null ? 'File' : '—'}
-            </span>
-            <span style={{ fontSize: 12, color: '#f8fafc' }}>{(myBet ?? queuedBet ?? 0).toFixed(2)}</span>
-            <span style={{ fontSize: 12, fontWeight: 800 }}>
-              {cashedOut !== null
-                ? <span style={{ color: '#4ade80' }}>+{((myBet ?? 0) * cashedOut - (myBet ?? 0)).toFixed(2)}</span>
-                : myBet !== null && isCrashed
-                  ? <span style={{ color: '#f87171' }}>−{myBet.toFixed(2)}</span>
-                  : <span style={{ color: '#64748b' }}>—</span>}
-            </span>
-          </div>
-        )}
-
-        {joinedFakes.length === 0 && (
-          <p className="px-3 py-3 text-center" style={{ fontSize: 11, color: '#475569' }}>Les joueurs rejoignent le tour…</p>
-        )}
-        {joinedFakes.map((f, i) => (
-          <div key={f.name} style={{ borderBottom: i < joinedFakes.length - 1 ? '1px solid rgba(30,40,71,0.45)' : 'none' }}
-            className="grid grid-cols-4 px-3 py-2 items-center">
-            <span style={{ fontSize: 12, color: '#94a3b8' }}>{f.name}</span>
-            <span style={{ fontSize: 12, fontWeight: 700, color: f.cashedAt !== null ? '#4ade80' : isCrashed ? '#f87171' : '#64748b' }}>
-              {f.cashedAt !== null ? `×${f.cashedAt.toFixed(2)}` : isCrashed ? 'CRASH' : '—'}
-            </span>
-            <span style={{ fontSize: 12, color: '#cbd5e1' }}>{f.bet.toFixed(2)}</span>
-            <span style={{ fontSize: 12, fontWeight: 700 }}>
-              {f.cashedAt !== null
-                ? <span style={{ color: '#4ade80' }}>+{(f.bet * f.cashedAt - f.bet).toFixed(2)}</span>
-                : isCrashed
-                  ? <span style={{ color: '#f87171' }}>−{f.bet.toFixed(2)}</span>
-                  : <span style={{ color: '#64748b' }}>—</span>}
-            </span>
-          </div>
-        ))}
-      </div>}
+        <div style={{ maxHeight: 120, overflowY: 'auto', overflowX: 'hidden' }}>
+          {betTab === 'all' && (
+            <>
+              <div className="grid grid-cols-4 px-3 py-1" style={{ borderBottom: '1px solid rgba(30,40,71,0.6)' }}>
+                {['USER', 'BET', '×', 'CASH OUT'].map(h => (
+                  <span key={h} style={{ fontSize: 9, fontWeight: 700, color: '#475569', letterSpacing: '0.06em' }}>{h}</span>
+                ))}
+              </div>
+              {(myBet !== null || queuedBet !== null) && (
+                <div className="grid grid-cols-4 px-3 py-1.5 items-center"
+                  style={{ background: 'rgba(79,111,240,0.08)', borderBottom: '1px solid rgba(30,40,71,0.4)' }}>
+                  <span style={{ fontSize: 11, fontWeight: 800, color: '#818cf8' }}>You</span>
+                  <span style={{ fontSize: 11, color: '#cbd5e1' }}>{(myBet ?? queuedBet ?? 0).toFixed(2)}</span>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: cashedOut !== null ? '#4ade80' : '#475569' }}>
+                    {cashedOut !== null ? `×${cashedOut.toFixed(2)}` : '—'}
+                  </span>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: cashedOut !== null ? '#4ade80' : isCrashed ? '#f87171' : '#475569' }}>
+                    {cashedOut !== null
+                      ? `+${((myBet ?? 0) * cashedOut - (myBet ?? 0)).toFixed(2)}`
+                      : myBet !== null && isCrashed ? `-${myBet.toFixed(2)}` : '—'}
+                  </span>
+                </div>
+              )}
+              {joinedFakes.length === 0 && (
+                <p className="px-3 py-3 text-center" style={{ fontSize: 11, color: '#475569' }}>Players joining…</p>
+              )}
+              {joinedFakes.map((f, i) => (
+                <div key={f.name} className="grid grid-cols-4 px-3 py-1.5 items-center"
+                  style={{ borderBottom: i < joinedFakes.length - 1 ? '1px solid rgba(30,40,71,0.3)' : 'none' }}>
+                  <span style={{ fontSize: 11, color: '#94a3b8' }}>{f.name}</span>
+                  <span style={{ fontSize: 11, color: '#cbd5e1' }}>{f.bet.toFixed(2)}</span>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: f.cashedAt !== null ? '#4ade80' : isCrashed ? '#f87171' : '#475569' }}>
+                    {f.cashedAt !== null ? `×${f.cashedAt.toFixed(2)}` : isCrashed ? 'CRASH' : '—'}
+                  </span>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: f.cashedAt !== null ? '#4ade80' : isCrashed ? '#f87171' : '#475569' }}>
+                    {f.cashedAt !== null ? `+${(f.bet * f.cashedAt - f.bet).toFixed(2)}` : isCrashed ? `-${f.bet.toFixed(2)}` : '—'}
+                  </span>
+                </div>
+              ))}
+            </>
+          )}
+          {betTab === 'my' && (
+            <>
+              <div className="grid grid-cols-3 px-3 py-1" style={{ borderBottom: '1px solid rgba(30,40,71,0.6)' }}>
+                {['ROUND', 'BET', 'RESULT'].map(h => (
+                  <span key={h} style={{ fontSize: 9, fontWeight: 700, color: '#475569', letterSpacing: '0.06em' }}>{h}</span>
+                ))}
+              </div>
+              {myBet !== null && (
+                <div className="grid grid-cols-3 px-3 py-1.5 items-center"
+                  style={{ background: 'rgba(79,111,240,0.06)', borderBottom: '1px solid rgba(30,40,71,0.4)' }}>
+                  <span style={{ fontSize: 11, color: '#64748b' }}>#{roundId}</span>
+                  <span style={{ fontSize: 11, color: '#cbd5e1' }}>{myBet.toFixed(2)} TON</span>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: cashedOut !== null ? '#4ade80' : isCrashed ? '#f87171' : '#94a3b8' }}>
+                    {cashedOut !== null ? `×${cashedOut.toFixed(2)} 🏆` : isCrashed ? 'FLEW AWAY!' : 'In flight…'}
+                  </span>
+                </div>
+              )}
+              {history.length === 0 && myBet === null && (
+                <p className="px-3 py-3 text-center" style={{ fontSize: 11, color: '#475569' }}>No bets yet</p>
+              )}
+              {history.slice(0, 8).map((h, i) => (
+                <div key={i} className="grid grid-cols-3 px-3 py-1.5 items-center"
+                  style={{ borderBottom: i < 7 ? '1px solid rgba(30,40,71,0.3)' : 'none' }}>
+                  <span style={{ fontSize: 11, color: '#64748b' }}>Past</span>
+                  <span style={{ fontSize: 11, color: '#64748b' }}>—</span>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: h < 2 ? '#f87171' : h < 10 ? '#818cf8' : '#4ade80' }}>{h.toFixed(2)}×</span>
+                </div>
+              ))}
+            </>
+          )}
+          {betTab === 'top' && (
+            <>
+              <div className="grid grid-cols-2 px-3 py-1" style={{ borderBottom: '1px solid rgba(30,40,71,0.6)' }}>
+                {['MULTIPLIER', 'ROUND'].map(h => (
+                  <span key={h} style={{ fontSize: 9, fontWeight: 700, color: '#475569', letterSpacing: '0.06em' }}>{h}</span>
+                ))}
+              </div>
+              {history.length === 0 && (
+                <p className="px-3 py-3 text-center" style={{ fontSize: 11, color: '#475569' }}>No history yet</p>
+              )}
+              {[...history].sort((a, b) => b - a).slice(0, 8).map((h, i) => (
+                <div key={i} className="grid grid-cols-2 px-3 py-1.5 items-center"
+                  style={{ borderBottom: i < 7 ? '1px solid rgba(30,40,71,0.3)' : 'none' }}>
+                  <span style={{ fontSize: 12, fontWeight: 800, color: h >= 10 ? '#4ade80' : h >= 5 ? '#f59e0b' : '#818cf8' }}>{h.toFixed(2)}×</span>
+                  <span style={{ fontSize: 11, color: '#64748b' }}>Round #{roundId - i}</span>
+                </div>
+              ))}
+            </>
+          )}
+        </div>
+      </div>
 
       {/* Panneau de mise — compact en vol, complet sinon */}
       {phase === 'flying' ? (
-        <div style={{ flexShrink: 0, background: '#0d1021', border: '1px solid #1e2847' }} className="mx-4 mt-2 mb-4 rounded-xl px-3 py-2 flex items-center gap-3">
+        <div style={{ flexShrink: 0, background: '#0d1021', border: '1px solid #1e2847' }} className="mx-4 mt-2 rounded-xl px-3 py-2 flex items-center gap-3">
           <div style={{ flex: 1 }}>
-            <p style={{ fontSize: 9, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 2 }}>Mise en cours</p>
+            <p style={{ fontSize: 9, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 2 }}>Bet in play</p>
             <p style={{ fontSize: 15, fontWeight: 700, color: myBet !== null ? '#f8fafc' : '#475569' }}>
-              {myBet !== null ? `${myBet.toFixed(2)} TON` : 'Spectateur'}
+              {myBet !== null ? `${myBet.toFixed(2)} TON` : 'Watching'}
             </p>
           </div>
           {autoCash ? (
@@ -1584,8 +1747,8 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
           ) : null}
         </div>
       ) : (
-      <div style={{ background: '#0d1021', border: '1px solid #1e2847' }} className="mx-4 mt-3 rounded-xl p-4 space-y-3 pb-6">
-        <p style={{ fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Montant de la mise</p>
+      <div style={{ background: '#0d1021', border: '1px solid #1e2847' }} className="mx-4 mt-3 rounded-xl p-4 space-y-3">
+        <p style={{ fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Bet amount</p>
         <div style={{ background: '#080c1e', border: '1px solid #1e2847', borderRadius: 12, opacity: myBet !== null ? 0.5 : 1 }}
           className="flex items-center px-3 py-2.5">
           <input type="number" value={bet} min={0.01} max={50} step={0.01}
@@ -1598,17 +1761,17 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
 
         <div className="grid grid-cols-2 gap-2">
           <div style={{ background: '#080c1e', border: '1px solid #1e2847', borderRadius: 10 }} className="px-3 py-2">
-            <p style={{ fontSize: 10, color: '#64748b', fontWeight: 600, textTransform: 'uppercase', marginBottom: 2 }}>Profit à ×{ac.toFixed(2)}</p>
+            <p style={{ fontSize: 10, color: '#64748b', fontWeight: 600, textTransform: 'uppercase', marginBottom: 2 }}>Profit at ×{ac.toFixed(2)}</p>
             <p style={{ fontSize: 14, fontWeight: 700, color: '#22c55e' }}>+{(effBet * ac - effBet).toFixed(4)} TON</p>
           </div>
           <div style={{ background: '#080c1e', border: '1px solid #1e2847', borderRadius: 10 }} className="px-3 py-2">
-            <p style={{ fontSize: 10, color: '#64748b', fontWeight: 600, textTransform: 'uppercase', marginBottom: 2 }}>Chance de gagner</p>
+            <p style={{ fontSize: 10, color: '#64748b', fontWeight: 600, textTransform: 'uppercase', marginBottom: 2 }}>Win chance</p>
             <p style={{ fontSize: 14, fontWeight: 700, color: '#f8fafc' }}>{Math.min(97, 97 / ac).toFixed(1)}%</p>
           </div>
         </div>
 
         <div>
-          <p style={{ fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>Encaissement auto (×)</p>
+          <p style={{ fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>Auto cash out (×)</p>
           <div style={{ background: '#080c1e', border: '1px solid #1e2847', borderRadius: 12 }} className="flex items-center px-3 py-2.5 gap-2">
             <input type="number" value={autoCash} placeholder="2.00" min={1.01} step={0.01}
               onChange={e => { setAutoCash(e.target.value); localStorage.setItem('tc_crash_auto', e.target.value); }}
@@ -1619,6 +1782,46 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
           </div>
         </div>
       </div>
+      )}
+
+      {/* Second bet panel */}
+      {showBet2 ? (
+        <div style={{ background: '#0d1021', border: '1px solid #1e2847', flexShrink: 0 }} className="mx-4 mt-2 mb-4 rounded-xl p-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <span style={{ fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Bet 2</span>
+            <button onClick={() => { setShowBet2(false); setMyBet2(null); setQueuedBet2(null); setCashedOut2(null); myBet2Ref.current = null; queued2Ref.current = null; cashed2Ref.current = null; }}
+              style={{ color: '#475569', fontSize: 14 }}>✕</button>
+          </div>
+          <div style={{ background: '#080c1e', border: '1px solid #1e2847', borderRadius: 10, opacity: myBet2 !== null ? 0.5 : 1 }}
+            className="flex items-center px-3 py-2">
+            <input type="number" value={bet2} min={0.01} max={50} step={0.01}
+              disabled={myBet2 !== null}
+              onChange={e => { const v = +e.target.value; if (!isNaN(v)) setBet2(Math.max(0.01, Math.min(50, v))); }}
+              style={{ flex: 1, background: 'transparent', color: '#f8fafc', fontSize: 16, fontWeight: 700, outline: 'none', border: 'none' }} />
+            <span style={{ fontSize: 12, color: '#64748b' }}>TON</span>
+          </div>
+          <div style={{ background: '#080c1e', border: '1px solid #1e2847', borderRadius: 10 }}
+            className="flex items-center px-3 py-2 gap-2">
+            <span style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Auto ×</span>
+            <input type="number" value={autoCash2} placeholder="2.00" min={1.01} step={0.01}
+              onChange={e => setAutoCash2(e.target.value)}
+              style={{ flex: 1, background: 'transparent', color: '#f8fafc', fontSize: 14, fontWeight: 600, outline: 'none', border: 'none' }} />
+            {autoCash2 && <button onClick={() => setAutoCash2('')} style={{ color: '#64748b', fontSize: 12 }}>✕</button>}
+          </div>
+          <button onClick={mainBtn2.onClick} disabled={mainBtn2.disabled}
+            className="w-full py-3 rounded-xl font-black text-sm tracking-wide uppercase active:scale-[0.98] transition-all"
+            style={btnStyle2}>
+            {bal < 0.01 && mainBtn2.kind === 'bet' ? '💸 Insufficient balance' : mainBtn2.label}
+          </button>
+        </div>
+      ) : (
+        <div className="px-4 pb-4 mt-2" style={{ flexShrink: 0 }}>
+          <button onClick={() => setShowBet2(true)}
+            style={{ width: '100%', padding: '8px 0', borderRadius: 10, border: '1px dashed #1e2847',
+              background: 'transparent', color: '#475569', fontSize: 12, fontWeight: 700, letterSpacing: '0.05em' }}>
+            + ADD BET
+          </button>
+        </div>
       )}
     </div>
   );
