@@ -778,8 +778,8 @@ function makeFakeRoster(): FakePlayer[] {
 }
 
 // Géométrie du graphique
-const VB_W = 320, VB_H = 196;
-const PX0 = 34, PY0 = 12, PW = 274, PH = 152;
+const VB_W = 320, VB_H = 248;
+const PX0 = 34, PY0 = 12, PW = 274, PH = 204;
 
 function niceStep(range: number): number {
   const c = [0.2, 0.25, 0.5, 1, 2, 2.5, 5, 10, 20, 25, 50];
@@ -1368,16 +1368,16 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
                 {/* Nez */}
                 <path d="M 14,-6.5 L 24,0 L 14,6.5 Z" fill="url(#cgNose)"/>
                 <path d="M 14,-6.5 L 24,0 L 16,-2.5 Z" fill="white" opacity={0.28}/>
-                {/* Aile supérieure */}
-                <path d="M 8,-9.5 L 4,-10 C 0,-11 -4,-12.5 -7,-15 C -10,-17.5 -12,-21 -13,-26 L -16,-26 C -16,-23 -14,-19 -11,-15.5 C -9,-13 -6,-11 -4,-10 L -16,-8.5 L 8,-9.5 Z" fill="url(#cgWingUp)"/>
-                {/* Aile inférieure */}
-                <path d="M 8,9.5 L 4,10 C 0,11 -4,12.5 -7,15 C -10,17.5 -12,21 -13,26 L -16,26 C -16,23 -14,19 -11,15.5 C -9,13 -6,11 -4,10 L -16,8.5 L 8,9.5 Z" fill="url(#cgWingDn)"/>
+                {/* Aile supérieure — raccourcie ±18 */}
+                <path d="M 8,-9.5 L 4,-10 C 0,-11 -4,-12 -7,-14 C -9,-15.5 -11,-17 -12,-18 L -15,-18 C -15,-16.5 -13,-14 -11,-12.5 C -9,-11.5 -6,-10.5 -4,-10 L -16,-8.5 L 8,-9.5 Z" fill="url(#cgWingUp)"/>
+                {/* Aile inférieure — raccourcie ±18 */}
+                <path d="M 8,9.5 L 4,10 C 0,11 -4,12 -7,14 C -9,15.5 -11,17 -12,18 L -15,18 C -15,16.5 -13,14 -11,12.5 C -9,11.5 -6,10.5 -4,10 L -16,8.5 L 8,9.5 Z" fill="url(#cgWingDn)"/>
                 {/* Empennage supérieur */}
-                <path d="M -13,-8.5 L -16,-19 L -18,-19 L -18,-8.5 Z" fill="#7f1d1d"/>
-                <path d="M -13,-8.5 L -16,-19 L -14.5,-19 L -12,-8.5 Z" fill="#b91c1c"/>
+                <path d="M -13,-8.5 L -16,-14 L -18,-14 L -18,-8.5 Z" fill="#7f1d1d"/>
+                <path d="M -13,-8.5 L -16,-14 L -14.5,-14 L -12,-8.5 Z" fill="#b91c1c"/>
                 {/* Empennage inférieur */}
-                <path d="M -13,8.5 L -16,19 L -18,19 L -18,8.5 Z" fill="#7f1d1d"/>
-                <path d="M -13,8.5 L -16,19 L -14.5,19 L -12,8.5 Z" fill="#b91c1c"/>
+                <path d="M -13,8.5 L -16,14 L -18,14 L -18,8.5 Z" fill="#7f1d1d"/>
+                <path d="M -13,8.5 L -16,14 L -14.5,14 L -12,8.5 Z" fill="#b91c1c"/>
                 {/* Liseré doré casino */}
                 <line x1="-16" y1="-0.5" x2="20" y2="-0.5" stroke="url(#cgGold)" strokeWidth={1.2}/>
                 <line x1="-14" y1="1.2" x2="18" y2="1.2" stroke="url(#cgGold)" strokeWidth={0.45} opacity={0.55}/>
@@ -1388,8 +1388,8 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
                 <ellipse cx="3.5" cy="-4.5" rx="1.4" ry="0.7" fill="white" opacity={0.78} transform="rotate(-12,3.5,-4.5)"/>
                 <line x1="6.5" y1="-7.2" x2="6.5" y2="7.2" stroke="#082f49" strokeWidth={0.65} opacity={0.70}/>
                 {/* Feux wingtip */}
-                <circle cx="-13" cy="-25.5" r="1.1" fill="#fbbf24" opacity={0.90}/>
-                <circle cx="-13" cy="25.5" r="1.1" fill="#fbbf24" opacity={0.90}/>
+                <circle cx="-12" cy="-17.5" r="1.1" fill="#fbbf24" opacity={0.90}/>
+                <circle cx="-12" cy="17.5" r="1.1" fill="#fbbf24" opacity={0.90}/>
                 {/* Feu queue */}
                 <circle cx="-17" cy="0" r="0.9" fill="#f87171" opacity={0.80}/>
               </g>
