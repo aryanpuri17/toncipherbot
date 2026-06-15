@@ -1006,6 +1006,13 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
           if (myBet2Ref.current !== null && cashed2Ref.current === null) {
             recordGameResult('Aviator', myBet2Ref.current, 0);
             if (!demoMode) dheRecord(-myBet2Ref.current);
+            // Only fire loss callbacks if bet1 didn't already fire them (avoid duplicate streak reset)
+            const bet1AlreadyLost = myBetRef.current !== null && cashedRef.current === null;
+            if (!bet1AlreadyLost) {
+              onResultRef.current(false);
+              setToast({ id: Date.now(), text: `−${myBet2Ref.current.toFixed(2)} TON`, win: false });
+              haptic.impact('heavy'); haptic.error();
+            }
           }
           setPhase('crashed');
         } else {
