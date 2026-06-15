@@ -3439,29 +3439,35 @@ const CATALOG = [
 
 // Petit avion rouge à hélice — icône de la carte Aviator (au lieu d'un emoji)
 const AviatorMiniIcon: React.FC = () => (
-  <svg width="30" height="30" viewBox="0 0 40 40" aria-label="Aviator" style={{ display: 'block' }}>
+  <svg width="36" height="36" viewBox="0 0 60 60" aria-label="Aviator" style={{ display: 'block' }}>
     <defs>
-      <linearGradient id="avMiniBody" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stopColor="#ff5a4d"/>
-        <stop offset="50%" stopColor="#e21624"/>
-        <stop offset="100%" stopColor="#9b0a12"/>
-      </linearGradient>
+      <radialGradient id="avBg" cx="50%" cy="45%" r="58%">
+        <stop offset="0%" stopColor="#c0000e"/>
+        <stop offset="100%" stopColor="#7a000a"/>
+      </radialGradient>
     </defs>
-    <g transform="rotate(-18 20 20)">
-      {/* dérive */}
-      <path d="M9 19 L3 9 L7 10 L13 19 Z" fill="#b3121b"/>
-      {/* aile */}
-      <path d="M21 19 L13 30 L18 30 L27 20 Z" fill="#8f0810"/>
-      <path d="M22 17 L15 7 L20 8 L29 17 Z" fill="#e21624"/>
-      {/* fuselage */}
-      <path d="M31 20 C 28 16, 18 14, 9 16 C 5 17, 5 23, 9 24 C 18 26, 28 24, 31 20 Z" fill="url(#avMiniBody)"/>
-      {/* cockpit */}
-      <ellipse cx="20" cy="17.5" rx="3.4" ry="2.2" fill="#2a0407" transform="rotate(-8 20 17.5)"/>
-      <ellipse cx="20.6" cy="17" rx="2.3" ry="1.3" fill="#7dd3fc" opacity="0.9" transform="rotate(-8 20.6 17)"/>
-      {/* spinner + hélice */}
-      <ellipse cx="33" cy="20" rx="1.4" ry="9" fill="#cb011a" opacity="0.25"/>
-      <path d="M31 17 L35 20 L31 23 Z" fill="#fde047"/>
-      <circle cx="33" cy="20" r="1.6" fill="#fbbf24"/>
+    {/* Red circle background */}
+    <circle cx="30" cy="30" r="29" fill="url(#avBg)"/>
+    <circle cx="30" cy="30" r="29" fill="none" stroke="#ff3344" strokeWidth="1" opacity="0.5"/>
+    {/* Propeller plane in white, rotated -20° */}
+    <g transform="rotate(-20 30 28) translate(4 8)" fill="#fff">
+      {/* Tail fin */}
+      <path d="M4 18 L0 9 L4 10 L9 18 Z" opacity="0.85"/>
+      {/* Horizontal stabiliser */}
+      <path d="M5 20 L-1 24 L2 20 L-1 16 Z" opacity="0.85"/>
+      {/* Upper wing */}
+      <path d="M18 15 L11 6 L15 7 L23 15 Z" opacity="0.9"/>
+      {/* Lower wing */}
+      <path d="M17 19 L10 28 L14 28 L22 20 Z" opacity="0.8"/>
+      {/* Fuselage */}
+      <path d="M28 18 C 25 14, 15 12, 5 15 C 2 16, 2 22, 5 23 C 15 26, 25 24, 28 20 Z" opacity="0.95"/>
+      {/* Cockpit */}
+      <ellipse cx="17" cy="16" rx="3" ry="2" fill="#cb011a" opacity="0.9" transform="rotate(-8 17 16)"/>
+      {/* Propeller */}
+      <ellipse cx="30" cy="19" rx="1.2" ry="7" opacity="0.75"/>
+      {/* Nose */}
+      <path d="M28 17 L32 19 L28 21 Z" fill="#fbbf24"/>
+      <circle cx="30" cy="19" r="1.5" fill="#fbbf24"/>
     </g>
   </svg>
 );
