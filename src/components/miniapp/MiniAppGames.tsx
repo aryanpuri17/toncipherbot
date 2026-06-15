@@ -1194,7 +1194,7 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
                                  { background: 'linear-gradient(135deg,#4f6ff0,#6366f1)', boxShadow: '0 4px 16px rgba(79,111,240,0.35)', color: '#fff' };
 
   return (
-    <div className="flex flex-col" style={{ position: 'fixed', inset: 0, zIndex: 50, background: '#060a18', overflow: 'hidden' }}>
+    <div className="flex flex-col" style={{ position: 'fixed', inset: 0, zIndex: 50, background: '#0e0e10', overflow: 'hidden' }}>
       <style>{`
         @keyframes crashShake {
           0%,100%{transform:translate(0,0) rotate(0deg)}
@@ -1248,6 +1248,8 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
         @keyframes multGlow     { 0%,100%{text-shadow:0 0 20px rgba(34,197,94,0.4)} 50%{text-shadow:0 0 45px rgba(34,197,94,0.95),0 0 80px rgba(34,197,94,0.3)} }
         @keyframes rocketThrust { 0%,100%{opacity:0.82} 50%{opacity:0.40} }
         @keyframes rocketWobble { 0%{transform:rotate(-3deg) scale(1)} 100%{transform:rotate(3deg) scale(1.04)} }
+        @keyframes propSpin     { from{transform:scaleX(1)} 50%{transform:scaleX(0.12)} to{transform:scaleX(1)} }
+        @keyframes propSpinSlow { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
       `}</style>
 
       <BigWinEffect show={bigWin} />
@@ -1294,11 +1296,11 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
         minHeight: 0,
         borderRadius: 16,
         border: isCrashed
-          ? '1px solid rgba(239,68,68,0.50)'
+          ? '1px solid rgba(203,1,26,0.55)'
           : phase === 'flying'
-            ? '1px solid rgba(34,197,94,0.30)'
+            ? '1px solid rgba(203,1,26,0.35)'
             : '1px solid rgba(255,255,255,0.07)',
-        background: 'radial-gradient(120% 120% at 20% 100%, #0c1230 0%, #060a18 60%)',
+        background: 'radial-gradient(130% 130% at 50% 100%, #2a0a0e 0%, #160608 28%, #0b0b0d 60%)',
         overflow: 'hidden',
         animation: isCrashed ? 'crashShake 0.55s cubic-bezier(0.36,0.07,0.19,0.97) both' : undefined,
         transition: 'border-color 0.25s, flex 0.3s',
@@ -1310,12 +1312,12 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
         <svg width="100%" height="100%" viewBox={`0 0 ${VB_W} ${VB_H}`} preserveAspectRatio="xMidYMid meet" style={{ display: 'block' }}>
           <defs>
             <linearGradient id="avFillG" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#22c55e" stopOpacity="0.32" />
-              <stop offset="100%" stopColor="#22c55e" stopOpacity="0.02" />
+              <stop offset="0%" stopColor="#cb011a" stopOpacity="0.42" />
+              <stop offset="100%" stopColor="#cb011a" stopOpacity="0.02" />
             </linearGradient>
             <linearGradient id="avFillR" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#ef4444" stopOpacity="0.32" />
-              <stop offset="100%" stopColor="#ef4444" stopOpacity="0.02" />
+              <stop offset="0%" stopColor="#cb011a" stopOpacity="0.42" />
+              <stop offset="100%" stopColor="#cb011a" stopOpacity="0.02" />
             </linearGradient>
             {/* Gradients avion — préfixe "cg" pour éviter conflits */}
             <linearGradient id="cgBody" x1="0" y1="0" x2="0" y2="1">
@@ -1402,8 +1404,9 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
           )}
           {curvePath && phase !== 'betting' && (
             <path d={curvePath} fill="none"
-              stroke={isCrashed ? '#ef4444' : '#22c55e'}
-              strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+              stroke={isCrashed ? '#ff2d4b' : '#cb011a'}
+              strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
+              style={{ filter: isCrashed ? 'none' : 'drop-shadow(0 0 4px rgba(203,1,26,0.55))' }} />
           )}
 
           {/* ligne cible d'encaissement auto */}
@@ -1442,51 +1445,50 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
             </g>
           )}
 
-          {/* fusée / explosion */}
+          {/* avion rouge à hélice — style Aviator */}
           {phase === 'flying' && (
-            // translate au bout de la courbe → rotate selon pente → scale 1.5× → translate -18 pour aligner LE NEZ (x=18) au bout de la courbe
-            <g transform={`translate(${tipX},${tipY}) rotate(${planeAngle}) scale(1.1) translate(-18,0)`}>
+            // translate au bout de la courbe → rotate selon pente → scale → translate pour aligner le nez/hélice au bout de la courbe
+            <g transform={`translate(${tipX},${tipY}) rotate(${planeAngle}) scale(1.15) translate(-20,0)`}>
               {/* Wobble — amplitude augmente avec le multiplicateur */}
               <g style={{ animation: mult > 10 ? 'rocketWobble 0.18s ease-in-out infinite alternate' : mult > 3 ? 'rocketWobble 0.3s ease-in-out infinite alternate' : mult > 1.5 ? 'rocketWobble 0.5s ease-in-out infinite alternate' : undefined, transformOrigin: '2px 0px' }}>
-                {/* Flammes — taille réactive au multiplicateur */}
-                <ellipse cx="-17" cy="0" rx={mult > 5 ? 14 : mult > 2 ? 12 : 10} ry={mult > 5 ? 7 : 6} fill="#f97316"
-                  style={{ '--flame-max-opacity': '0.28', transformOrigin: '-17px 0px', animation: 'thrustPulse 0.22s ease-in-out infinite alternate', animationDelay: '0s' } as React.CSSProperties} />
-                <ellipse cx="-13" cy="0" rx={mult > 5 ? 10 : mult > 2 ? 9 : 7} ry={mult > 5 ? 4.5 : 3.8} fill="#fb923c"
-                  style={{ '--flame-max-opacity': '0.60', transformOrigin: '-13px 0px', animation: 'thrustPulse 0.17s ease-in-out infinite alternate', animationDelay: '0.05s' } as React.CSSProperties} />
-                <ellipse cx="-11" cy="0" rx={mult > 5 ? 7 : mult > 2 ? 6 : 5} ry={mult > 5 ? 3 : 2.2} fill="#fde68a"
-                  style={{ '--flame-max-opacity': '0.92', transformOrigin: '-11px 0px', animation: 'thrustPulse 0.13s ease-in-out infinite alternate', animationDelay: '0.09s' } as React.CSSProperties} />
-                {/* ═══ NOUVEAU CORPS — style Aviator/Spribe ═══ */}
-                {/* Chaleur réacteur */}
-                <ellipse cx="-20" cy="0" rx="16" ry="10" fill="url(#cgHeat)"/>
-                {/* Fuselage trapu */}
-                <path d="M 24,0 C 22,-2 19,-4.5 14,-6.5 C 8,-8.5 2,-9.5 -4,-10.0 C -9,-10.4 -13,-10.0 -16,-8.5 C -17.5,-7.5 -18,-5 -18,-3 L -18,3 C -18,5 -17.5,7.5 -16,8.5 C -13,10.0 -9,10.4 -4,10.0 C 2,9.5 8,8.5 14,6.5 C 19,4.5 22,2 24,0 Z" fill="url(#cgBody)"/>
-                {/* Nez */}
-                <path d="M 14,-6.5 L 24,0 L 14,6.5 Z" fill="url(#cgNose)"/>
-                <path d="M 14,-6.5 L 24,0 L 16,-2.5 Z" fill="white" opacity={0.28}/>
-                {/* Aile supérieure — raccourcie ±18 */}
-                <path d="M 8,-9.5 L 4,-10 C 0,-11 -4,-12 -7,-14 C -9,-15.5 -11,-17 -12,-18 L -15,-18 C -15,-16.5 -13,-14 -11,-12.5 C -9,-11.5 -6,-10.5 -4,-10 L -16,-8.5 L 8,-9.5 Z" fill="url(#cgWingUp)"/>
-                {/* Aile inférieure — raccourcie ±18 */}
-                <path d="M 8,9.5 L 4,10 C 0,11 -4,12 -7,14 C -9,15.5 -11,17 -12,18 L -15,18 C -15,16.5 -13,14 -11,12.5 C -9,11.5 -6,10.5 -4,10 L -16,8.5 L 8,9.5 Z" fill="url(#cgWingDn)"/>
-                {/* Empennage supérieur */}
-                <path d="M -13,-8.5 L -16,-14 L -18,-14 L -18,-8.5 Z" fill="#7f1d1d"/>
-                <path d="M -13,-8.5 L -16,-14 L -14.5,-14 L -12,-8.5 Z" fill="#b91c1c"/>
-                {/* Empennage inférieur */}
-                <path d="M -13,8.5 L -16,14 L -18,14 L -18,8.5 Z" fill="#7f1d1d"/>
-                <path d="M -13,8.5 L -16,14 L -14.5,14 L -12,8.5 Z" fill="#b91c1c"/>
-                {/* Liseré doré casino */}
-                <line x1="-16" y1="-0.5" x2="20" y2="-0.5" stroke="url(#cgGold)" strokeWidth={1.2}/>
-                <line x1="-14" y1="1.2" x2="18" y2="1.2" stroke="url(#cgGold)" strokeWidth={0.45} opacity={0.55}/>
-                {/* Cockpit bombé */}
-                <ellipse cx="6.5" cy="0" rx="7.5" ry="8.5" fill="#3b0000" opacity={0.92}/>
-                <ellipse cx="6.5" cy="0" rx="6.2" ry="7.2" fill="url(#cgCanopy)"/>
-                <ellipse cx="5.0" cy="-3.2" rx="3.8" ry="2.0" fill="white" opacity={0.42} transform="rotate(-12,5.0,-3.2)"/>
-                <ellipse cx="3.5" cy="-4.5" rx="1.4" ry="0.7" fill="white" opacity={0.78} transform="rotate(-12,3.5,-4.5)"/>
-                <line x1="6.5" y1="-7.2" x2="6.5" y2="7.2" stroke="#082f49" strokeWidth={0.65} opacity={0.70}/>
-                {/* Feux wingtip */}
-                <circle cx="-12" cy="-17.5" r="1.1" fill="#fbbf24" opacity={0.90}/>
-                <circle cx="-12" cy="17.5" r="1.1" fill="#fbbf24" opacity={0.90}/>
-                {/* Feu queue */}
-                <circle cx="-17" cy="0" r="0.9" fill="#f87171" opacity={0.80}/>
+                {/* Sillage de vitesse */}
+                <ellipse cx="-20" cy="2.2" rx={mult > 3 ? 16 : 12} ry="2.4" fill="#cb011a" opacity={0.16} />
+
+                {/* Empennage vertical (dérive) */}
+                <path d="M -15,-1 L -23,-14 L -18.5,-14 L -11,-1 Z" fill="#8f0810"/>
+                <path d="M -15,-1 L -23,-14 L -21,-14 L -13,-1 Z" fill="#c01521"/>
+                {/* Stabilisateur horizontal */}
+                <path d="M -13,1 L -23,5.5 L -20,1 L -23,-3 Z" fill="#a30f17"/>
+
+                {/* Aile basse (vue de côté) */}
+                <path d="M 4,3 L -8,15 L -1,15 L 11,3.5 Z" fill="#7d070e"/>
+                <path d="M 6,-1.5 L -5,-13 L 1.5,-13 L 12.5,-1.5 Z" fill="#e21624"/>
+                <path d="M 6,-1.5 L 12.5,-1.5 L 9,-7 L 3,-7 Z" fill="#ff4055" opacity={0.5}/>
+
+                {/* Fuselage rouge */}
+                <path d="M 21,0 C 19,-3 13,-5 5,-5.6 C -3,-6 -12,-5.2 -17,-3 C -18.6,-2.2 -19,-1.1 -19,0 C -19,1.1 -18.6,2.2 -17,3 C -12,5.2 -3,6 5,5.6 C 13,5 19,3 21,0 Z" fill="url(#cgBody)"/>
+                {/* Bande ventrale claire */}
+                <path d="M 17,2.6 C 8,4.2 -3,4.6 -15,3 C -9,3.5 -2,3.8 6,3.4 C 11,3.1 15,2.9 17,2.6 Z" fill="#fff" opacity={0.45}/>
+                {/* Liseré doré */}
+                <line x1="-15" y1="-0.6" x2="19" y2="-0.6" stroke="url(#cgGold)" strokeWidth={0.9}/>
+
+                {/* Cockpit */}
+                <ellipse cx="8.5" cy="-1.8" rx="5" ry="3" fill="#2a0407" transform="rotate(-9,8.5,-1.8)"/>
+                <ellipse cx="8.5" cy="-1.8" rx="4.1" ry="2.3" fill="url(#cgCanopy)" transform="rotate(-9,8.5,-1.8)"/>
+                <ellipse cx="9.8" cy="-2.8" rx="1.7" ry="0.8" fill="#fff" opacity={0.6} transform="rotate(-9,9.8,-2.8)"/>
+
+                {/* Cône d'hélice (spinner) */}
+                <path d="M 21,-2.6 L 25,0 L 21,2.6 Z" fill="#fde047"/>
+                <path d="M 21,-2.6 L 25,0 L 22,-1 Z" fill="#fff" opacity={0.5}/>
+
+                {/* Hélice qui tourne */}
+                <ellipse cx="25" cy="0" rx="1.4" ry="13" fill="#cb011a" opacity={0.12}/>
+                <g style={{ transformOrigin: '25px 0px', animation: 'propSpin 0.1s linear infinite' }}>
+                  <rect x="24.1" y="-13" width="1.8" height="26" rx="0.9" fill="#15110f"/>
+                  <circle cx="25" cy="-12.4" r="1" fill="#555"/>
+                  <circle cx="25" cy="12.4" r="1" fill="#555"/>
+                </g>
+                <circle cx="25" cy="0" r="1.5" fill="#fbbf24"/>
               </g>
             </g>
           )}
@@ -1540,47 +1542,54 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
         {/* superposition centrale */}
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
           {phase === 'betting' ? (
-            <div className="text-center">
-              <p style={{ fontSize: 10, fontWeight: 800, color: '#64748b', letterSpacing: '0.2em', textTransform: 'uppercase' }}>WAITING FOR NEXT ROUND</p>
-              <p style={{
-                fontSize: 44, fontWeight: 900, fontVariantNumeric: 'tabular-nums', lineHeight: 1.1,
-                color: countdown < 3 ? '#ef4444' : countdown < 5 ? '#f97316' : '#f8fafc',
-                animation: countdown < 3 ? 'crashBlink 0.7s ease-in-out infinite' : undefined,
-              }}>
-                {countdown.toFixed(1)}s
-              </p>
-              <div style={{ display: 'flex', gap: 6, justifyContent: 'center', marginTop: 12 }}>
-                {[0, 1, 2].map(i => (
-                  <div key={i} style={{
-                    width: 7, height: 7, borderRadius: '50%',
-                    background: countdown < 3 ? '#ef4444' : '#3b82f6',
-                    animation: `crashBlink 0.75s ease-in-out ${(i * 0.22).toFixed(2)}s infinite alternate`,
-                  }} />
-                ))}
+            <div className="flex flex-col items-center" style={{ width: '70%', maxWidth: 280 }}>
+              {/* Hélice rouge qui tourne */}
+              <svg width="68" height="68" viewBox="0 0 100 100" style={{ marginBottom: 14, animation: 'propSpinSlow 1.2s linear infinite', transformOrigin: '50px 50px' }}>
+                <g fill="#cb011a">
+                  <path d="M50 50 C 40 20, 44 8, 50 6 C 56 8, 60 20, 50 50 Z"/>
+                  <path d="M50 50 C 80 40, 92 44, 94 50 C 92 56, 80 60, 50 50 Z"/>
+                  <path d="M50 50 C 60 80, 56 92, 50 94 C 44 92, 40 80, 50 50 Z"/>
+                  <path d="M50 50 C 20 60, 8 56, 6 50 C 8 44, 20 40, 50 50 Z"/>
+                </g>
+                <circle cx="50" cy="50" r="8" fill="#fbbf24"/>
+                <circle cx="50" cy="50" r="4" fill="#7f1d1d"/>
+              </svg>
+              <p style={{ fontSize: 13, fontWeight: 800, color: '#f8fafc', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 10 }}>Waiting for next round</p>
+              {/* Barre qui se vide */}
+              <div style={{ width: '100%', height: 6, borderRadius: 99, background: 'rgba(255,255,255,0.10)', overflow: 'hidden' }}>
+                <div style={{
+                  height: '100%', borderRadius: 99,
+                  width: `${Math.max(0, Math.min(100, (countdown / (BET_MS / 1000)) * 100))}%`,
+                  background: 'linear-gradient(90deg,#ff4d2e,#cb011a)',
+                  transition: 'width 0.05s linear',
+                }} />
               </div>
               {myBet !== null && (
-                <p style={{ fontSize: 11, fontWeight: 700, color: '#4ade80', marginTop: 8 }}>✓ Bet placed · {myBet.toFixed(2)} TON</p>
+                <p style={{ fontSize: 11, fontWeight: 700, color: '#22c55e', marginTop: 12 }}>✓ Bet placed · {myBet.toFixed(2)} TON</p>
               )}
             </div>
           ) : (
             <div className="text-center">
+              {isCrashed && (
+                <p style={{ fontSize: 15, fontWeight: 800, letterSpacing: '0.14em', color: '#ff2d4b', textTransform: 'uppercase', marginBottom: 2 }}>Flew away!</p>
+              )}
               <p style={{
-                fontSize: 46, fontWeight: 900, lineHeight: 1.05, fontVariantNumeric: 'tabular-nums',
-                color: isCrashed ? '#ef4444' : cashedOut !== null ? '#4ade80' : '#f8fafc',
-                textShadow: isCrashed ? '0 0 24px rgba(239,68,68,0.5)' : '0 0 24px rgba(34,197,94,0.25)',
+                fontSize: 60, fontWeight: 900, lineHeight: 1.0, fontVariantNumeric: 'tabular-nums',
+                color: isCrashed ? '#ff2d4b' : cashedOut !== null ? '#22c55e' : '#ffffff',
+                textShadow: isCrashed ? '0 0 30px rgba(255,45,75,0.55)' : cashedOut !== null ? '0 0 28px rgba(34,197,94,0.35)' : '0 0 30px rgba(203,1,26,0.35)',
               }}>
                 {curM.toFixed(2)}×
               </p>
-              <p style={{
-                fontSize: 12, fontWeight: 700, marginTop: 2,
-                color: isCrashed ? '#f87171' : cashedOut !== null ? '#4ade80' : '#94a3b8',
-              }}>
-                {isCrashed
-                  ? 'FLEW AWAY!'
-                  : cashedOut !== null
+              {!isCrashed && (
+                <p style={{
+                  fontSize: 12, fontWeight: 700, marginTop: 4,
+                  color: cashedOut !== null ? '#22c55e' : '#9ea0a3',
+                }}>
+                  {cashedOut !== null
                     ? `✓ Cashed out @×${cashedOut.toFixed(2)}`
                     : myBet !== null ? 'Cash out before it flies away!' : 'Watching (no bet)'}
-              </p>
+                </p>
+              )}
             </div>
           )}
         </div>
@@ -3442,6 +3451,35 @@ const CATALOG = [
   },
 ] as const;
 
+// Petit avion rouge à hélice — icône de la carte Aviator (au lieu d'un emoji)
+const AviatorMiniIcon: React.FC = () => (
+  <svg width="30" height="30" viewBox="0 0 40 40" aria-label="Aviator" style={{ display: 'block' }}>
+    <defs>
+      <linearGradient id="avMiniBody" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stopColor="#ff5a4d"/>
+        <stop offset="50%" stopColor="#e21624"/>
+        <stop offset="100%" stopColor="#9b0a12"/>
+      </linearGradient>
+    </defs>
+    <g transform="rotate(-18 20 20)">
+      {/* dérive */}
+      <path d="M9 19 L3 9 L7 10 L13 19 Z" fill="#b3121b"/>
+      {/* aile */}
+      <path d="M21 19 L13 30 L18 30 L27 20 Z" fill="#8f0810"/>
+      <path d="M22 17 L15 7 L20 8 L29 17 Z" fill="#e21624"/>
+      {/* fuselage */}
+      <path d="M31 20 C 28 16, 18 14, 9 16 C 5 17, 5 23, 9 24 C 18 26, 28 24, 31 20 Z" fill="url(#avMiniBody)"/>
+      {/* cockpit */}
+      <ellipse cx="20" cy="17.5" rx="3.4" ry="2.2" fill="#2a0407" transform="rotate(-8 20 17.5)"/>
+      <ellipse cx="20.6" cy="17" rx="2.3" ry="1.3" fill="#7dd3fc" opacity="0.9" transform="rotate(-8 20.6 17)"/>
+      {/* spinner + hélice */}
+      <ellipse cx="33" cy="20" rx="1.4" ry="9" fill="#cb011a" opacity="0.25"/>
+      <path d="M31 17 L35 20 L31 23 Z" fill="#fde047"/>
+      <circle cx="33" cy="20" r="1.6" fill="#fbbf24"/>
+    </g>
+  </svg>
+);
+
 export const MiniAppGames: React.FC = () => {
   const { currentUser, demoMode, demoBalance, toggleDemoMode, gameHistory } = useAppStore();
   const [activeGame, setActiveGame] = useState<ActiveGame>(null);
@@ -3585,7 +3623,7 @@ export const MiniAppGames: React.FC = () => {
                 className="game-icon-wrap w-11 h-11 rounded-xl flex items-center justify-center mb-2.5"
                 style={{ background: `linear-gradient(135deg,${game.accentFrom}33,${game.accentTo}22)`, boxShadow: `0 4px 12px ${game.glow}` }}
               >
-                <span className="text-2xl">{game.emoji}</span>
+                {game.id === 'crash' ? <AviatorMiniIcon /> : <span className="text-2xl">{game.emoji}</span>}
               </div>
               <p className="text-white font-bold text-sm leading-tight">{game.title}</p>
               <p className="text-slate-400 text-[11px] mt-0.5 leading-tight">{game.desc}</p>
