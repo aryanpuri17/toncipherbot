@@ -580,9 +580,8 @@ const PAUSE_MS = 1800;  // pause après crash
 const TICK_MS  = 50;
 const GROWTH   = 0.13;  // mult = e^(0.13·t) → ×2 à ~5.3s, ×10 à ~17.7s
 
-// Distribution du point de crash.
-// Spectateur (le joueur ne mise pas) : généreuse → l'historique donne envie.
-// Joueur misé : resserrée selon la série de victoires.
+// Distribution du point de crash — fixe, identique pour tous les joueurs,
+// sans ajustement caché selon le streak ou les gains.
 function rollCrashPoint(demo = false): number {
   const r = Math.random();
   if (demo) {
@@ -973,7 +972,8 @@ const CrashGame: React.FC<{ onBack: () => void; onResult: OnResult }> = ({ onBac
         @keyframes chipIn       { from{opacity:0;transform:scale(0.5)} to{opacity:1;transform:scale(1)} }
         @keyframes multGlow     { 0%,100%{text-shadow:0 0 20px rgba(34,197,94,0.4)} 50%{text-shadow:0 0 45px rgba(34,197,94,0.95),0 0 80px rgba(34,197,94,0.3)} }
         @keyframes rocketThrust { 0%,100%{opacity:0.82} 50%{opacity:0.40} }
-        @keyframes rocketWobble { 0%{transform:rotate(-3deg) scale(1)} 100%{transform:rotate(3deg) scale(1.04)} }
+        @keyframes rocketWobble { 0%{transform:rotate(-4deg) scale(1)} 100%{transform:rotate(4deg) scale(1.05)} }
+        @keyframes smokeRise    { 0%{transform:translate(0,0) scale(1);opacity:0.22} 100%{transform:translate(0,-28px) scale(2.5);opacity:0} }
         @keyframes propSpin     { from{transform:scaleX(1)} 50%{transform:scaleX(0.12)} to{transform:scaleX(1)} }
         @keyframes propSpinSlow { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
       `}</style>
@@ -997,20 +997,7 @@ const CrashGame: React.FC<{ onBack: () => void; onResult: OnResult }> = ({ onBac
               <path d="M76.0941067,8.46081696 L77.216391,4.10418853 L72.263204,4.10418853 L71.1783561,8.46081696 L68.7474135,8.46081696 L68.1177277,10.9372758 L70.5529796,10.9372758 L67.5960419,22.649216 C67.5876928,22.6990414 67.5672239,22.7860339 67.5338274,22.9101935 C67.5007002,23.0343531 67.4842713,23.1173057 67.4759222,23.1709017 C67.26881,24.4256948 67.5130893,25.4157397 68.2047202,26.1445377 C68.9006603,26.8692958 69.9483411,27.2336948 71.3520718,27.2336948 L73.0916529,27.2336948 L73.7251092,24.7197995 C72.7065157,24.6247272 72.2839421,24.0448668 72.4581965,22.984797 C72.4662763,22.9349716 72.4827052,22.8727571 72.5074833,22.7984229 C72.5284908,22.7235501 72.545189,22.6780339 72.5492289,22.649216 L75.5018574,10.9372758 L77.6098773,10.9372758 L78.2395631,8.46081696 L76.0941067,8.46081696 Z"/>
             </g>
           </svg>
-          {/* History chips — fill middle space */}
-          <div className="flex gap-1 overflow-x-auto no-scrollbar items-center" style={{ flex: 1, minWidth: 0 }}>
-            {history.slice(0, 12).map((h, i) => (
-              <span key={`${roundId}-${i}`} style={{
-                flexShrink: 0, fontSize: 10, fontWeight: 700,
-                padding: '2px 6px', borderRadius: 20,
-                animation: i === 0 ? 'chipIn 0.3s ease' : undefined,
-                background: h < 2 ? 'rgba(239,68,68,0.16)' : h < 10 ? 'rgba(79,111,240,0.16)' : 'rgba(34,197,94,0.16)',
-                color: h < 2 ? '#f87171' : h < 10 ? '#818cf8' : '#4ade80',
-              }}>
-                {h.toFixed(2)}×
-              </span>
-            ))}
-          </div>
+          <div style={{ flex: 1 }} />
           <MuteButton />
           <GameBalanceChip bal={bal} demo={demoMode} />
         </div>
@@ -1048,6 +1035,17 @@ const CrashGame: React.FC<{ onBack: () => void; onResult: OnResult }> = ({ onBac
             <linearGradient id="avFillR" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="#ef4444" stopOpacity="0.42" />
               <stop offset="100%" stopColor="#ef4444" stopOpacity="0.02" />
+            </linearGradient>
+            <linearGradient id="jetBodyGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#FF2A3D" stopOpacity="1" />
+              <stop offset="45%" stopColor="#C8000E" stopOpacity="1" />
+              <stop offset="100%" stopColor="#7A000A" stopOpacity="1" />
+            </linearGradient>
+            <linearGradient id="thrustGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="#ffffff" stopOpacity="1" />
+              <stop offset="25%" stopColor="#fde68a" stopOpacity="1" />
+              <stop offset="60%" stopColor="#f97316" stopOpacity="1" />
+              <stop offset="100%" stopColor="#f97316" stopOpacity="0" />
             </linearGradient>
           </defs>
 
@@ -1132,29 +1130,40 @@ const CrashGame: React.FC<{ onBack: () => void; onResult: OnResult }> = ({ onBac
             </g>
           )}
 
-          {/* Aviator plane — flat solid-red silhouette, matches real game's minimalist icon */}
+          {/* Jet supersonique — identité visuelle reprenant le rouge du logo AVIATOR */}
           {phase === 'flying' && (
-            <g transform={`translate(${tipX},${tipY}) rotate(${planeAngle}) scale(1.5) translate(-18,0)`}>
-              <g style={{ animation: mult > 10 ? 'rocketWobble 0.18s ease-in-out infinite alternate' : mult > 3 ? 'rocketWobble 0.3s ease-in-out infinite alternate' : mult > 1.5 ? 'rocketWobble 0.5s ease-in-out infinite alternate' : undefined, transformOrigin: '0px 0px' }}>
-                {/* Motion trail */}
-                <ellipse cx="-14" cy="0.5" rx={mult > 3 ? 13 : 9} ry="2" fill="#ef4444" opacity={0.16} />
+            <g transform={`translate(${tipX},${tipY}) rotate(${planeAngle}) scale(1.8) translate(-18,0)`}>
+              <g style={{ animation: mult > 10 ? 'rocketWobble 0.14s ease-in-out infinite alternate' : mult > 3 ? 'rocketWobble 0.25s ease-in-out infinite alternate' : mult > 1.5 ? 'rocketWobble 0.45s ease-in-out infinite alternate' : undefined, transformOrigin: '0px 0px' }}>
 
-                {/* Tail fin */}
-                <path d="M -10,-0.5 L -17,-8.5 L -13,-0.5 Z" fill="#ef4444" />
+                {/* Traînée de chaleur */}
+                <line x1="-21" y1="-1.7" x2={mult > 3 ? -38 : -28} y2="-1.7" stroke="#f97316" strokeWidth={mult > 3 ? 1.8 : 1.0} opacity={0.18} strokeLinecap="round" />
+                <line x1="-21" y1="1.7" x2={mult > 3 ? -38 : -28} y2="1.7" stroke="#f97316" strokeWidth={mult > 3 ? 1.8 : 1.0} opacity={0.18} strokeLinecap="round" />
 
-                {/* Swept main wing */}
-                <path d="M 3,-1.5 L -7,-12.5 L 1,-11 L 7,-1.5 Z" fill="#ef4444" />
+                {/* Flammes réacteurs */}
+                <ellipse cx="-22" cy="-1.7" rx={mult > 10 ? 12 : mult > 3 ? 8 : mult > 1.5 ? 5 : 3} ry="1.0" fill="url(#thrustGrad)" opacity={0.92}
+                  style={{ animation: 'rocketThrust 0.12s ease-in-out infinite alternate' }} />
+                <ellipse cx="-22" cy="1.7" rx={mult > 10 ? 12 : mult > 3 ? 8 : mult > 1.5 ? 5 : 3} ry="1.0" fill="url(#thrustGrad)" opacity={0.92}
+                  style={{ animation: 'rocketThrust 0.12s ease-in-out infinite alternate', animationDelay: '0.06s' }} />
 
-                {/* Fuselage — slim flat dart shape */}
-                <path d="M 18,0 L 2,-2.4 L -14,-1 L -14,1 L 2,2.4 Z" fill="#ef4444" />
+                {/* Dérive verticale */}
+                <path d="M -10,-3 L -18,-10 L -14,-3 Z" fill="#E50539" />
 
-                {/* Nose highlight */}
-                <circle cx="17.3" cy="0" r="1.5" fill="#fff" opacity={0.85} />
+                {/* Aile delta */}
+                <path d="M 8,-3 L -14,-14 L -18,-14 L -16,-3 Z" fill="#E50539" />
 
-                {/* Spinning propeller blur */}
-                <g style={{ transformOrigin: '18px 0px', animation: 'propSpin 0.09s linear infinite' }}>
-                  <line x1="18" y1="-5" x2="18" y2="5" stroke="#fff" strokeWidth="1.1" opacity={0.55} />
-                </g>
+                {/* Fuselage principal */}
+                <path d="M 22,0 C 18,-2 10,-3 2,-3 L -12,-3 L -16,-2 L -16,2 L -12,3 C 10,3 18,2 22,0 Z" fill="url(#jetBodyGrad)" />
+
+                {/* Tubes réacteurs */}
+                <rect x="-19" y="-2.5" width="3" height="1.6" rx="0.8" fill="#0f0f0f" />
+                <rect x="-19" y="0.9" width="3" height="1.6" rx="0.8" fill="#0f0f0f" />
+
+                {/* Reflet dorsal */}
+                <line x1="-12" y1="-2.8" x2="16" y2="-1.2" stroke="white" strokeWidth="0.6" opacity={0.20} strokeLinecap="round" />
+
+                {/* Cockpit — verre bombé */}
+                <ellipse cx="14" cy="-1.5" rx="4" ry="1.8" fill="white" opacity={0.75} transform="rotate(-8, 14, -1.5)" />
+                <ellipse cx="13.5" cy="-2" rx="3" ry="1.2" fill="#dbeafe" opacity={0.35} transform="rotate(-8, 13.5, -2)" />
               </g>
             </g>
           )}
@@ -1180,12 +1189,18 @@ const CrashGame: React.FC<{ onBack: () => void; onResult: OnResult }> = ({ onBac
                   <circle key={i} cx={tipX} cy={tipY} r={size} fill={color}
                     style={{ '--shard-tx': `${tx}px`, '--shard-ty': `${ty}px`, animation: `shardFly ${duration}s cubic-bezier(0,0.9,0.57,1) ${delay}s forwards` } as React.CSSProperties} />
                 ))}
-                <circle cx={tipX} cy={tipY} r="16" fill="#f97316" opacity="0.12" />
-                <circle cx={tipX} cy={tipY} r="8"  fill="#fde68a" opacity="0.20" />
-                <text x={tipX} y={tipY + 8} textAnchor="middle" fontSize="24"
-                  style={{ animation: 'shardFly 0.6s ease-out 0.1s forwards', '--shard-tx': '0px', '--shard-ty': '-8px' } as React.CSSProperties}>
-                  💥
-                </text>
+                {/* Boule de feu */}
+                <circle cx={tipX} cy={tipY} r="14" fill="#f97316" opacity="0.55"
+                  style={{ animation: 'shardFly 0.5s ease-out 0.05s forwards', '--shard-tx': '0px', '--shard-ty': '-4px' } as React.CSSProperties} />
+                <circle cx={tipX} cy={tipY} r="8" fill="#fde68a" opacity="0.85"
+                  style={{ animation: 'shardFly 0.5s ease-out 0.05s forwards', '--shard-tx': '0px', '--shard-ty': '-4px' } as React.CSSProperties} />
+                <circle cx={tipX} cy={tipY} r="4" fill="#ffffff" opacity="0.70"
+                  style={{ animation: 'shardFly 0.4s ease-out forwards', '--shard-tx': '0px', '--shard-ty': '-2px' } as React.CSSProperties} />
+                {/* Fumée post-explosion */}
+                {[0, 1, 2].map(i => (
+                  <circle key={`smoke-${i}`} cx={tipX + (i - 1) * 7} cy={tipY} r={4 + i} fill="#374151" opacity="0.22"
+                    style={{ animation: `smokeRise 1.2s ease-out ${i * 0.08}s forwards` } as React.CSSProperties} />
+                ))}
               </g>
             );
           })()}
@@ -1217,8 +1232,8 @@ const CrashGame: React.FC<{ onBack: () => void; onResult: OnResult }> = ({ onBac
                   <path d="M50 50 C 60 80, 56 92, 50 94 C 44 92, 40 80, 50 50 Z"/>
                   <path d="M50 50 C 20 60, 8 56, 6 50 C 8 44, 20 40, 50 50 Z"/>
                 </g>
-                <circle cx="50" cy="50" r="8" fill="#fbbf24"/>
-                <circle cx="50" cy="50" r="4" fill="#7f1d1d"/>
+                <circle cx="50" cy="50" r="8" fill="#ffffff" opacity={0.90}/>
+                <circle cx="50" cy="50" r="4" fill="#C8000E"/>
               </svg>
               <p style={{ fontSize: 13, fontWeight: 800, color: '#f8fafc', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 10 }}>Waiting for next round</p>
               {/* Barre qui se vide */}
@@ -1323,6 +1338,23 @@ const CrashGame: React.FC<{ onBack: () => void; onResult: OnResult }> = ({ onBac
         </div>
       </div>
 
+      {/* Historique des rounds — en bas, l'utilisateur descend pour le voir */}
+      <div style={{ flexShrink: 0, background: '#0d1021', borderTop: '1px solid #1e2847' }} className="px-3 py-2">
+        <div className="flex gap-1 overflow-x-auto no-scrollbar items-center">
+          {history.slice(0, 20).map((h, i) => (
+            <span key={`${roundId}-${i}`} style={{
+              flexShrink: 0, fontSize: 10, fontWeight: 700,
+              padding: '2px 6px', borderRadius: 20,
+              animation: i === 0 ? 'chipIn 0.3s ease' : undefined,
+              background: h < 2 ? 'rgba(239,68,68,0.16)' : h < 10 ? 'rgba(79,111,240,0.16)' : 'rgba(34,197,94,0.16)',
+              color: h < 2 ? '#f87171' : h < 10 ? '#818cf8' : '#4ade80',
+            }}>
+              {h.toFixed(2)}×
+            </span>
+          ))}
+        </div>
+      </div>
+
       {/* ── BOTTOM TABS: All Bets | My Bets | Top ── */}
       <div style={{ flexShrink: 0, background: '#0d1021', borderTop: '1px solid #1e2847' }}>
         <div style={{ display: 'flex' }}>
@@ -1378,16 +1410,9 @@ const CrashGame: React.FC<{ onBack: () => void; onResult: OnResult }> = ({ onBac
                     {cashedOut !== null ? `×${cashedOut.toFixed(2)} 🏆` : isCrashed ? 'Flew away' : 'In flight…'}
                   </span>
                 </div>
-              ) : history.length === 0 ? (
+              ) : (
                 <p className="px-3 py-2 text-center" style={{ fontSize: 11, color: '#5b6987' }}>No bets yet</p>
-              ) : null}
-              {history.slice(0, 15).map((h, i) => (
-                <div key={i} className="grid grid-cols-3 px-3 py-1 items-center" style={{ borderBottom: i < 14 ? '1px solid rgba(30,40,71,0.3)' : 'none' }}>
-                  <span style={{ fontSize: 10, color: '#5b6987' }}>Past</span>
-                  <span style={{ fontSize: 10, color: '#5b6987' }}>—</span>
-                  <span style={{ fontSize: 10, fontWeight: 700, color: h < 2 ? '#f87171' : h < 10 ? '#cbd5e1' : '#34d399' }}>{h.toFixed(2)}×</span>
-                </div>
-              ))}
+              )}
             </>
           )}
           {betTab === 'top' && (
