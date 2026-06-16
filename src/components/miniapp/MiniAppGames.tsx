@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useAppStore } from '../../store/appStore';
 import { ArrowLeft, RotateCcw, Trophy, Zap } from 'lucide-react';
-import { haptic } from '../../lib/haptics';
 import { CountUp } from '../ui/CountUp';
 import { ConfettiEffect } from '../ui/ConfettiEffect';
 
@@ -331,7 +330,7 @@ const BetQuickButtons: React.FC<{ setBet: React.Dispatch<React.SetStateAction<nu
   return (
     <div className="grid grid-cols-4 gap-2">
       {labels.map(l => (
-        <button key={l} onClick={() => { haptic.selection(); handlers[l](); }}
+        <button key={l} onClick={() => { snd.tick(); handlers[l](); }}
           className="tap-scale py-3 rounded-xl text-sm font-bold bg-white/5 border border-white/10 text-slate-400 hover:bg-white/10 hover:text-white transition-all">
           {l}
         </button>
@@ -406,7 +405,6 @@ const DiceGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResul
     if (!canRoll) return;
     setRolling(true);
     snd.spin();
-    haptic.impact('medium');
     const used = effBet;
     const { roll: r, win } = rollDice(target, dir, streak, demoMode);
     rollTimerRef.current = setTimeout(() => {
@@ -425,9 +423,8 @@ const DiceGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResul
         setBigWin(true);
         bigWinTimerRef.current = setTimeout(() => { if (mountedRef.current) setBigWin(false); }, 2600);
         snd.win();
-        haptic.impact('heavy'); haptic.success();
-      } else if (win) { snd.win(); haptic.success(); }
-      else { snd.lose(); haptic.error(); }
+      } else if (win) { snd.win(); }
+      else { snd.lose(); }
     }, 750);
   };
 
@@ -722,7 +719,6 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
     recordGameResult('Aviator', myBetRef.current, win);
     if (!demoMode) dheRecord(win - myBetRef.current);
     snd.cashout();
-    haptic.success();
     onResultRef.current(true);
     setCashFlash(true);
     setTimeout(() => setCashFlash(false), 450);
@@ -841,7 +837,6 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
             if (!demoMode) dheRecord(-myBetRef.current);
             onResultRef.current(false);
             setToast({ id: Date.now(), text: `−${myBetRef.current.toFixed(2)} TON`, win: false });
-            haptic.impact('heavy'); haptic.error();
           }
           setPhase('crashed');
         } else {
@@ -872,7 +867,6 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
     if (effBet < 0.01) return;
     placeGameBet(effBet, 0);
     snd.bet();
-    haptic.impact('light');
     myBetRef.current = effBet;
     setMyBet(effBet);
   };
@@ -1511,7 +1505,7 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
 
   const startGame = () => {
     if (effBet < 0.01 || bal < 0.01) return;
-    haptic.impact('medium');
+    snd.bet();
     const effM = effectiveMines(mineCount, streak, demoMode);
     effMinesRef.current = effM;
     const arr = Array.from({ length: GRID_SIZE }, (_, i) => i);
@@ -1557,7 +1551,6 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
       recordGameResult('Mines', activeBetRef.current, 0);
       if (!demoMode) dheRecord(-activeBetRef.current);
       snd.boom();
-      haptic.impact('heavy'); haptic.error();
       onResult(false);
       const entry: MinesFeedEntry = { username: 'Vous', bet: activeBetRef.current, payout: 0, profit: -activeBetRef.current, mines: mineCount };
       if (!demoMode) setFeed(f => [entry, ...f.slice(0, 9)]);
@@ -1565,7 +1558,6 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
     } else {
       setRevealed(new Set([...revealed, idx]));
       snd.reveal();
-      haptic.impact('light');
       const ns = safeCount + 1;
       setSafeCount(ns);
       if (ns === GRID_SIZE - effMinesRef.current) {
@@ -1574,7 +1566,6 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
         placeGameBet(activeBetRef.current, win);
         recordGameResult('Mines', activeBetRef.current, win);
         snd.win();
-        haptic.success();
         onResult(true);
         const finalMult = minesMult(effMinesRef.current, ns);
         if (finalMult >= 5) { setBigWin(true); if (minesBigWinTimer.current) clearTimeout(minesBigWinTimer.current); minesBigWinTimer.current = setTimeout(() => { if (minesMountedRef.current) setBigWin(false); }, 2600); }
@@ -1601,7 +1592,6 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
     recordGameResult('Mines', activeBetRef.current, curWin);
     if (!demoMode) dheRecord(curWin - activeBetRef.current);
     snd.win();
-    haptic.success();
     onResult(true);
     if (curMult >= 5) { setBigWin(true); if (minesBigWinTimer.current) clearTimeout(minesBigWinTimer.current); minesBigWinTimer.current = setTimeout(() => { if (minesMountedRef.current) setBigWin(false); }, 2600); }
     setPhase('won');
@@ -2026,7 +2016,7 @@ const TowerGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
 
   const start = () => {
     if (effBet < 0.01 || bal < 0.01) return;
-    haptic.impact('medium');
+    snd.bet();
     diffRef.current = diff;
     activeBetRef.current = effBet;
     setFloor(0);
@@ -2040,7 +2030,6 @@ const TowerGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
     const safe = towerStep(diffRef.current, floor + 1, streak, demoMode);
     if (safe) {
       snd.reveal();
-      haptic.impact('light');
       const nf = floor + 1;
       setPicks(p => [...p, cellIdx]);
       setFloor(nf);
@@ -2050,7 +2039,6 @@ const TowerGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
         recordGameResult('Tower', activeBetRef.current, win);
         if (!demoMode) dheRecord(win - activeBetRef.current);
         snd.win();
-        haptic.success();
         onResult(true);
         setBigWin(true);
         if (towerBigWinTimer.current) clearTimeout(towerBigWinTimer.current);
@@ -2064,7 +2052,6 @@ const TowerGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
       recordGameResult('Tower', activeBetRef.current, 0);
       if (!demoMode) dheRecord(-activeBetRef.current);
       snd.boom();
-      haptic.impact('heavy'); haptic.error();
       onResult(false);
     }
   };
@@ -2075,7 +2062,6 @@ const TowerGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
     recordGameResult('Tower', activeBetRef.current, curWin);
     if (!demoMode) dheRecord(curWin - activeBetRef.current);
     snd.win();
-    haptic.success();
     onResult(true);
     if (curMult >= 5) {
       setBigWin(true);
@@ -2464,7 +2450,6 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
   // loop always calls into fresh closures (current rows/risk/balance/etc.).
   apiRef.current.contact = (pt) => {
     snd.tick();
-    if (physBalls.current.length <= 3) haptic.tick();
     flashes.current.push({ x: pt.x, y: pt.y, t: 0 });
   };
 
@@ -2482,9 +2467,9 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
       setBigWin(true);
       if (plinkoBigWinTimer.current) clearTimeout(plinkoBigWinTimer.current);
       plinkoBigWinTimer.current = setTimeout(() => { if (mountedRef.current) setBigWin(false); }, 2600);
-      snd.win(); haptic.success();
-    } else if (b.mult >= 1) { snd.win(); haptic.success(); }
-    else                    { snd.lose(); haptic.error(); }
+      snd.win();
+    } else if (b.mult >= 1) { snd.win(); }
+    else                    { snd.lose(); }
     onResult(b.mult >= 1);
     setActiveBalls(prev => prev.filter(x => x.id !== b.id));
 
@@ -2639,7 +2624,7 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
   const dropMulti = (count: number) => {
     const snapBet = Math.min(bet, bal);
     if (snapBet < 0.01 || bal < snapBet) return;
-    haptic.impact('light');
+    snd.bet();
     sessionGainRef.current = 0;
     setSessionGain(0);
     setLastWin(null);
@@ -3126,7 +3111,7 @@ export const MiniAppGames: React.FC = () => {
 
       {/* Demo + Sound controls */}
       <div className="flex gap-2">
-        <button onClick={() => { haptic.selection(); toggleDemoMode(); }} style={{
+        <button onClick={() => { snd.tick(); toggleDemoMode(); }} style={{
           flex: 1, padding: '10px 12px', borderRadius: 12, fontWeight: 700, fontSize: 13, cursor: 'pointer',
           background: demoMode ? 'linear-gradient(135deg,#d97706,#f59e0b)' : 'rgba(255,255,255,0.05)',
           border: demoMode ? '1px solid #f59e0b' : '1px solid #1e2847',
@@ -3136,7 +3121,7 @@ export const MiniAppGames: React.FC = () => {
           <span>🎮</span>
           <span>{demoMode ? `Mode Démo · ${demoBalance.toFixed(2)} TON` : 'Mode Démo'}</span>
         </button>
-        <button onClick={() => { haptic.selection(); toggleMute(); }} style={{
+        <button onClick={toggleMute} style={{
           width: 46, borderRadius: 12, fontWeight: 700, fontSize: 18, cursor: 'pointer',
           background: 'rgba(255,255,255,0.05)', border: '1px solid #1e2847',
           color: muted ? '#475569' : '#94a3b8',
@@ -3152,7 +3137,7 @@ export const MiniAppGames: React.FC = () => {
           <button
             key={game.id}
             data-game={game.id}
-            onClick={() => { haptic.impact('light'); setActiveGame(game.id); }}
+            onClick={() => { snd.tick(); setActiveGame(game.id); }}
             className="game-card-hub relative overflow-hidden rounded-2xl text-left"
             style={{
               background: `linear-gradient(135deg,${game.accentFrom}22,${game.accentTo}11)`,
@@ -3186,7 +3171,7 @@ export const MiniAppGames: React.FC = () => {
         <button
           key={game.id}
           data-game={game.id}
-          onClick={() => { haptic.impact('light'); setActiveGame(game.id); }}
+          onClick={() => { snd.tick(); setActiveGame(game.id); }}
           className="game-card-hub relative overflow-hidden rounded-2xl text-left w-full"
           style={{
             background: `linear-gradient(135deg,${game.accentFrom}22,${game.accentTo}11)`,
