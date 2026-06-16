@@ -570,31 +570,6 @@ const DiceGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResul
   );
 };
 
-// ══════════════════════════════════════════════════════════════════
-// CRASH — tours continus multijoueur (style Aviator)
-// Le serveur tourne en boucle : MISE (7s) → VOL → CRASH (3s) → MISE…
-// ══════════════════════════════════════════════════════════════════
-
-const BET_MS   = 5000;  // fenêtre de mise
-const PAUSE_MS = 1800;  // pause après crash
-const TICK_MS  = 50;
-const GROWTH   = 0.13;  // mult = e^(0.13·t) → ×2 à ~5.3s, ×10 à ~17.7s
-
-// Distribution du point de crash — fixe, identique pour tous les joueurs,
-// sans ajustement caché selon le streak ou les gains.
-function rollCrashPoint(demo = false): number {
-  const r = Math.random();
-  if (demo) {
-    if (r < 0.10) return 1.00;
-    if (r < 0.28) return +(1.1 + Math.random() * 0.5).toFixed(2);
-    return Math.min(50, Math.max(1.5, +(0.975 / (1 - r)).toFixed(2)));
-  }
-  if (r < 0.06) return 1.00;
-  return Math.min(80, Math.max(1.01, +(0.962 / (1 - r)).toFixed(2)));
-}
-
-const CRASH_INIT_HIST = [2.43, 1.18, 5.67, 1.00, 12.41, 1.23, 3.14, 1.87, 47.20, 1.55, 2.08, 6.91];
-
 const ALL_FAKE_NAMES = [
   'Marco T.','Léa R.','Yusuf K.','Chen W.','Amira S.','Dmytro P.',
   'Fatou D.','Nicolás V.','Sofia M.','Jamal B.','Elena G.','Pierre L.',
@@ -624,814 +599,275 @@ function randomFakeBet(): number {
   return +(5.00 + Math.random() * 10.00).toFixed(2);                 //  6%: 5.00–15.00
 }
 
-type CrashPhase = 'betting' | 'flying' | 'crashed';
+// ══════════════════════════════════════════════════════════════════
+// CHICKEN ROAD — traversez la route, évitez les voitures, encaissez
+// ══════════════════════════════════════════════════════════════════
 
-type FakePlayer = {
-  name: string;
-  bet: number;
-  joinAt: number;               // seconde d'arrivée pendant la phase de mise
-  target: number | null;        // null = ne sort jamais (perd)
-  joined: boolean;
-  cashedAt: number | null;
-  cashPoint: { t: number; m: number } | null;
-};
+type ChickenDiff = 'easy' | 'medium' | 'hard';
+type ChickenPhase = 'waiting' | 'playing' | 'won' | 'lost';
 
-function makeFakeRoster(): FakePlayer[] {
-  const pool = [...ALL_FAKE_NAMES].sort(() => Math.random() - 0.5);
-  const n = 16; // 16 joueurs par tour — assez pour forcer le scroll de l'historique
-  return pool.slice(0, n).map(name => ({
-    name,
-    bet: randomFakeBet(),
-    joinAt: 0.3 + Math.random() * 5.8,
-    target: Math.random() < 0.28
-      ? null
-      : Math.min(30, +(1.05 - 0.9 * Math.log(1 - Math.random())).toFixed(2)),
-    joined: false,
-    cashedAt: null,
-    cashPoint: null,
-  }));
+const CHICKEN_STEPS = 7;
+const CHICKEN_LANES: Record<ChickenDiff, number> = { easy: 4, medium: 3, hard: 2 };
+const CHICKEN_RTP = 0.95;
+const CHICKEN_LABEL: Record<ChickenDiff, string> = { easy: 'Facile', medium: 'Moyen', hard: 'Difficile' };
+
+function chickenSafeFrac(diff: ChickenDiff): number {
+  const lanes = CHICKEN_LANES[diff];
+  return (lanes - 1) / lanes; // 1 voiture par ligne
+}
+function chickenMult(diff: ChickenDiff, step: number): number {
+  if (step <= 0) return 1;
+  return +(CHICKEN_RTP / Math.pow(chickenSafeFrac(diff), step)).toFixed(4);
+}
+function chickenStepRoll(diff: ChickenDiff): boolean {
+  const lanes = CHICKEN_LANES[diff];
+  return Math.random() < (lanes - 1) / lanes;
 }
 
-// Géométrie du graphique
-const VB_W = 320, VB_H = 248;
-const PX0 = 34, PY0 = 12, PW = 274, PH = 204;
-
-
-const CrashGame: React.FC<{ onBack: () => void; onResult: OnResult }> = ({ onBack, onResult }) => {
+const ChickenRoadGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResult }> = ({ onBack, streak, onResult }) => {
   const { currentUser, placeGameBet, recordGameResult, demoMode, demoBalance } = useAppStore();
   const bal = demoMode ? demoBalance : currentUser.balanceMain;
+  const [bet, setBet]           = useState(0.01);
+  const [diff, setDiff]         = useState<ChickenDiff>('medium');
+  const [phase, setPhase]       = useState<ChickenPhase>('waiting');
+  const [step, setStep]         = useState(0);
+  const [picks, setPicks]       = useState<number[]>([]);
+  const [carLane, setCarLane]   = useState<number | null>(null);
+  const [bigWin, setBigWin]     = useState(false);
+  const activeBetRef            = useRef(0);
+  const diffRef                 = useRef<ChickenDiff>('medium');
+  const mountedRef              = useRef(true);
+  const bigWinTimer             = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const session                 = useSessionStats();
 
-  // mise
-  const [bet, setBet]           = useState(0.05);
-  const [autoCash, setAutoCash] = useState(() => localStorage.getItem('tc_crash_auto') ?? '');
-
-  // état du tour (rendu)
-  const [phase, setPhase]         = useState<CrashPhase>('betting');
-  const [countdown, setCountdown] = useState(BET_MS / 1000);
-  const [mult, setMult]           = useState(1.0);
-  const [lastCrash, setLastCrash] = useState<number | null>(null);
-  const [history, setHistory]     = useState<number[]>(CRASH_INIT_HIST);
-  const [fakes, setFakes]         = useState<FakePlayer[]>([]);
-  const [roundId, setRoundId]     = useState(() => 18200 + Math.floor(Math.random() * 600));
-  const [myBet, setMyBet]         = useState<number | null>(null);
-  const [cashedOut, setCashedOut] = useState<number | null>(null);
-  const [queuedBet, setQueuedBet] = useState<number | null>(null);
-  const [toast, setToast]         = useState<{ id: number; text: string; win: boolean } | null>(null);
-  const [bigWin, setBigWin]       = useState(false);
-  const [cashFlash, setCashFlash] = useState(false);
-  const [betTab, setBetTab]       = useState<'all' | 'my' | 'top'>('all');
-
-  const crashMountedRef           = useRef(true);
-  const crashBigWinTimer          = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const session                   = useSessionStats();
-
-  // refs moteur (évitent les fermetures périmées dans l'interval)
-  const phaseRef      = useRef<CrashPhase>('betting');
-  const cdRef         = useRef(BET_MS);
-  const pauseRef      = useRef(PAUSE_MS);
-  const tRef          = useRef(0);
-  const multRef       = useRef(1.0);
-  const crashAtRef    = useRef(2.0);
-  const myBetRef      = useRef<number | null>(null);
-  const queuedRef     = useRef<number | null>(null);
-  const cashedRef     = useRef<number | null>(null);
-  const samplesRef    = useRef<Array<[number, number]>>([]);
-  const fakesRef      = useRef<FakePlayer[]>([]);
-  const autoRef       = useRef('');
-  const myCashRef     = useRef<{ t: number; m: number } | null>(null);
-  const onResultRef   = useRef(onResult);
-
-  useEffect(() => { autoRef.current = autoCash; }, [autoCash]);
-  useEffect(() => { onResultRef.current = onResult; }, [onResult]);
   useEffect(() => {
-    crashMountedRef.current = true;
-    return () => { crashMountedRef.current = false; if (crashBigWinTimer.current) clearTimeout(crashBigWinTimer.current); };
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; if (bigWinTimer.current) clearTimeout(bigWinTimer.current); };
   }, []);
 
-  const doCashout = (m: number) => {
-    if (phaseRef.current !== 'flying') return;
-    if (myBetRef.current === null || cashedRef.current !== null) return;
-    cashedRef.current = m;
-    myCashRef.current = { t: tRef.current, m };
-    const win = +(myBetRef.current * m).toFixed(6);
-    placeGameBet(0, win);
-    recordGameResult('Aviator', myBetRef.current, win);
-    session.record(myBetRef.current, win);
-    snd.cashout();
-    onResultRef.current(true);
-    setCashFlash(true);
-    setTimeout(() => setCashFlash(false), 450);
-    setCashedOut(m);
-    setToast({ id: Date.now(), text: `+${win.toFixed(4)} TON`, win: true });
-    if (m >= 3) {
-      setBigWin(true);
-      if (crashBigWinTimer.current) clearTimeout(crashBigWinTimer.current);
-      crashBigWinTimer.current = setTimeout(() => { if (crashMountedRef.current) setBigWin(false); }, 2600);
-    }
-  };
+  const effBet       = Math.min(bet, bal);
+  const activeDiff   = phase === 'waiting' ? diff : diffRef.current;
+  const lanesPerStep = CHICKEN_LANES[activeDiff];
+  const curMult       = chickenMult(activeDiff, step);
+  const curWin         = +(activeBetRef.current * curMult).toFixed(6);
+  const nextMult       = chickenMult(activeDiff, step + 1);
+  const maxMult         = chickenMult(activeDiff, CHICKEN_STEPS);
 
-  // ── Moteur de tours continus ──
-  useEffect(() => {
-    const beginBetting = () => {
-      phaseRef.current = 'betting';
-      cdRef.current    = BET_MS;
-      tRef.current     = 0;
-      multRef.current  = 1;
-      cashedRef.current = null;
-      myCashRef.current = null;
-      samplesRef.current = [];
-      // mise en file d'attente → devient la mise active du tour
-      myBetRef.current = queuedRef.current;
-      queuedRef.current = null;
-      fakesRef.current = makeFakeRoster();
-      setFakes([...fakesRef.current]);
-      setPhase('betting');
-      setCountdown(BET_MS / 1000);
-      setMult(1);
-      setMyBet(myBetRef.current);
-      setQueuedBet(null);
-      setCashedOut(null);
-      setRoundId(r => r + 1);
-    };
-
-    beginBetting();
-
-    const id = setInterval(() => {
-      const ph = phaseRef.current;
-
-      if (ph === 'betting') {
-        cdRef.current -= TICK_MS;
-        const elapsed = (BET_MS - cdRef.current) / 1000;
-        let changed = false;
-        fakesRef.current.forEach(f => {
-          if (!f.joined && f.joinAt <= elapsed) { f.joined = true; changed = true; }
-        });
-        if (changed) setFakes([...fakesRef.current]);
-        setCountdown(Math.max(0, cdRef.current / 1000));
-        if (cdRef.current <= 0) {
-          crashAtRef.current = rollCrashPoint(demoMode);
-          phaseRef.current = 'flying';
-          tRef.current = 0;
-          setPhase('flying');
-        }
-        return;
-      }
-
-      if (ph === 'flying') {
-        tRef.current += TICK_MS / 1000;
-        const m = Math.exp(GROWTH * tRef.current);
-        multRef.current = m;
-        samplesRef.current.push([tRef.current, Math.min(m, crashAtRef.current)]);
-
-        // encaissements des autres joueurs
-        let changed = false;
-        fakesRef.current.forEach(f => {
-          if (f.joined && f.cashedAt === null && f.target !== null && m >= f.target && f.target < crashAtRef.current) {
-            f.cashedAt = f.target;
-            f.cashPoint = { t: tRef.current, m: f.target };
-            changed = true;
-          }
-        });
-        if (changed) setFakes([...fakesRef.current]);
-
-        // encaissement auto du joueur
-        const ac = parseFloat(autoRef.current);
-        if (myBetRef.current !== null && cashedRef.current === null &&
-            !isNaN(ac) && ac >= 1.01 && m >= ac && ac < crashAtRef.current) {
-          doCashout(ac);
-        }
-
-        if (m >= crashAtRef.current) {
-          const cp = crashAtRef.current;
-          phaseRef.current = 'crashed';
-          pauseRef.current = PAUSE_MS;
-          setLastCrash(cp);
-          setHistory(h => [cp, ...h.slice(0, 19)]);
-          setMult(cp);
-          snd.crash();
-          if (myBetRef.current !== null && cashedRef.current === null) {
-            recordGameResult('Aviator', myBetRef.current, 0);
-            session.record(myBetRef.current, 0);
-            onResultRef.current(false);
-            setToast({ id: Date.now(), text: `−${myBetRef.current.toFixed(2)} TON`, win: false });
-          }
-          setPhase('crashed');
-        } else {
-          setMult(m);
-        }
-        return;
-      }
-
-      // crashed → pause puis nouveau tour
-      pauseRef.current -= TICK_MS;
-      if (pauseRef.current <= 0) beginBetting();
-    }, TICK_MS);
-
-    return () => {
-      clearInterval(id);
-      // Refund any unresolved bets on unmount (including mid-flight)
-      if (myBetRef.current !== null && cashedRef.current === null) placeGameBet(0, myBetRef.current);
-      if (queuedRef.current !== null) placeGameBet(0, queuedRef.current);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // ── Actions du joueur ──
-  const effBet = Math.min(bet, bal);
-
-  const placeBet = () => {
-    if (phaseRef.current !== 'betting' || myBetRef.current !== null) return;
-    if (effBet < 0.01) return;
-    placeGameBet(effBet, 0);
+  const start = () => {
+    if (effBet < 0.01 || bal < 0.01) return;
     snd.bet();
-    myBetRef.current = effBet;
-    setMyBet(effBet);
-  };
-  const cancelBet = () => {
-    if (phaseRef.current !== 'betting' || myBetRef.current === null) return;
-    placeGameBet(0, myBetRef.current);
-    myBetRef.current = null;
-    setMyBet(null);
-  };
-  const queueBet = () => {
-    if (phaseRef.current === 'betting' || queuedRef.current !== null) return;
-    if (effBet < 0.01) return;
-    placeGameBet(effBet, 0);
-    queuedRef.current = effBet;
-    setQueuedBet(effBet);
-  };
-  const cancelQueued = () => {
-    if (queuedRef.current === null) return;
-    placeGameBet(0, queuedRef.current);
-    queuedRef.current = null;
-    setQueuedBet(null);
+    diffRef.current = diff;
+    activeBetRef.current = effBet;
+    setStep(0);
+    setPicks([]);
+    setCarLane(null);
+    setPhase('playing');
   };
 
-  // ── Géométrie du graphique (échelle dynamique) ──
-  const samples  = samplesRef.current;
-  const elapsedS = samples.length ? samples[samples.length - 1][0] : 0;
-  const curM     = phase === 'crashed' ? (lastCrash ?? mult) : mult;
-  const maxT     = Math.max(8, elapsedS * 1.12);
-  const maxM     = Math.max(2.2, curM * 1.3);
-  const xOf = (tt: number) => PX0 + (tt / maxT) * PW;
-  const yOf = (mm: number) => PY0 + PH - ((Math.min(mm, maxM) - 1) / (maxM - 1)) * PH;
-
-  let curvePath = '';
-  if (samples.length > 0) {
-    const step = Math.max(1, Math.floor(samples.length / 120));
-    curvePath = `M${PX0},${PY0 + PH}`;
-    for (let i = 0; i < samples.length; i += step) {
-      curvePath += ` L${xOf(samples[i][0]).toFixed(1)},${yOf(samples[i][1]).toFixed(1)}`;
+  const pickLane = (laneIdx: number) => {
+    if (phase !== 'playing') return;
+    const safe = chickenStepRoll(diffRef.current);
+    if (safe) {
+      snd.reveal();
+      const ns = step + 1;
+      setPicks(p => [...p, laneIdx]);
+      setStep(ns);
+      if (ns >= CHICKEN_STEPS) {
+        const win = +(activeBetRef.current * chickenMult(diffRef.current, ns)).toFixed(6);
+        placeGameBet(activeBetRef.current, win);
+        recordGameResult('Chicken Road', activeBetRef.current, win);
+        session.record(activeBetRef.current, win);
+        snd.win();
+        onResult(true);
+        setBigWin(true);
+        if (bigWinTimer.current) clearTimeout(bigWinTimer.current);
+        bigWinTimer.current = setTimeout(() => { if (mountedRef.current) setBigWin(false); }, 2600);
+        setPhase('won');
+      }
+    } else {
+      setCarLane(laneIdx);
+      setPhase('lost');
+      placeGameBet(activeBetRef.current, 0);
+      recordGameResult('Chicken Road', activeBetRef.current, 0);
+      session.record(activeBetRef.current, 0);
+      snd.boom();
+      onResult(false);
     }
-    curvePath += ` L${xOf(elapsedS).toFixed(1)},${yOf(Math.min(curM, crashAtRef.current)).toFixed(1)}`;
-  }
-  const fillPath = curvePath
-    ? `${curvePath} L${xOf(elapsedS).toFixed(1)},${PY0 + PH} L${PX0},${PY0 + PH} Z`
-    : '';
+  };
 
-  // angle de l'avion — moyenne sur les 6 derniers samples pour éviter les saccades
-  let planeAngle = -22;
-  if (samples.length >= 2) {
-    const lookback = Math.min(6, samples.length - 1);
-    const a = samples[samples.length - 1 - lookback];
-    const b = samples[samples.length - 1];
-    planeAngle = Math.atan2(yOf(b[1]) - yOf(a[1]), xOf(b[0]) - xOf(a[0])) * 180 / Math.PI;
-  }
-  const tipX = samples.length ? xOf(elapsedS) : PX0;
-  const tipY = samples.length ? yOf(Math.min(curM, crashAtRef.current)) : PY0 + PH;
-  const isCrashed = phase === 'crashed';
-
-
-
-  // pot du tour
-  const joinedFakes = fakes.filter(f => f.joined);
-
-  // main button state
-  const mainBtn = (() => {
-    if (phase === 'betting') {
-      if (myBet !== null) return { label: `CANCEL BET · ${myBet.toFixed(2)} TON`, onClick: cancelBet, kind: 'cancel' as const, disabled: false };
-      return { label: `BET · ${effBet.toFixed(2)} TON`, onClick: placeBet, kind: 'bet' as const, disabled: effBet < 0.01 };
+  const cashout = () => {
+    if (phase !== 'playing' || step === 0) return;
+    placeGameBet(activeBetRef.current, curWin);
+    recordGameResult('Chicken Road', activeBetRef.current, curWin);
+    session.record(activeBetRef.current, curWin);
+    snd.win();
+    onResult(true);
+    if (curMult >= 5) {
+      setBigWin(true);
+      if (bigWinTimer.current) clearTimeout(bigWinTimer.current);
+      bigWinTimer.current = setTimeout(() => { if (mountedRef.current) setBigWin(false); }, 2600);
     }
-    if (phase === 'flying' && myBet !== null && cashedOut === null) {
-      return { label: `CASH OUT · ${(myBet * mult).toFixed(4)} TON`, onClick: () => doCashout(multRef.current), kind: 'cash' as const, disabled: false };
-    }
-    if (cashedOut !== null) {
-      return { label: `CASHED OUT ×${cashedOut.toFixed(2)}`, onClick: () => {}, kind: 'queued' as const, disabled: true };
-    }
-    if (queuedBet !== null) {
-      return { label: `BET NEXT ROUND ✓ · tap to cancel`, onClick: cancelQueued, kind: 'queued' as const, disabled: false };
-    }
-    return { label: `BET NEXT ROUND · ${effBet.toFixed(2)} TON`, onClick: queueBet, kind: 'next' as const, disabled: effBet < 0.01 };
-  })();
+    setPhase('won');
+  };
+
+  const reset = () => { setPhase('waiting'); setStep(0); setPicks([]); setCarLane(null); };
+
+  // Le tour repart automatiquement — pas de bouton "Rejouer" bloquant.
+  useEffect(() => {
+    if (phase !== 'lost' && phase !== 'won') return;
+    const id = setTimeout(() => { if (mountedRef.current) reset(); }, 2200);
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase]);
 
   return (
-    <div className="flex flex-col" style={{ position: 'fixed', inset: 0, zIndex: 50, background: '#0a0e1f', overflowY: 'auto', overflowX: 'hidden' }}>
-      <style>{`
-        @keyframes crashShake {
-          0%,100%{transform:translate(0,0) rotate(0deg)}
-          8%     {transform:translate(-8px,6px) rotate(-0.6deg)}
-          16%    {transform:translate(8px,-6px) rotate(0.6deg)}
-          25%    {transform:translate(-7px,-5px) rotate(-0.4deg)}
-          33%    {transform:translate(7px,5px) rotate(0.4deg)}
-          41%    {transform:translate(-5px,3px) rotate(-0.2deg)}
-          50%    {transform:translate(5px,-3px) rotate(0.2deg)}
-          62%    {transform:translate(-3px,2px)}
-          75%    {transform:translate(2px,-1px)}
-          88%    {transform:translate(-1px,0)}
-        }
-        @keyframes crashRedFlash {
-          0%  {background:rgba(239,68,68,0)}
-          12% {background:rgba(239,68,68,0.28)}
-          28% {background:rgba(239,68,68,0.18)}
-          100%{background:rgba(239,68,68,0)}
-        }
-        @keyframes shardFly {
-          0%  {transform:translate(0,0) scale(1);opacity:1}
-          60% {opacity:0.7}
-          100%{transform:translate(var(--shard-tx),var(--shard-ty)) scale(0.3);opacity:0}
-        }
-        @keyframes shockRing {
-          0%  {r:8;opacity:0.7;stroke-width:3}
-          100%{r:32;opacity:0;stroke-width:0.5}
-        }
-        @keyframes cashGreenFlash {
-          0%  {opacity:1}
-          35% {opacity:0.65}
-          100%{opacity:0}
-        }
-        @keyframes winLabelRise {
-          0%  {opacity:0;transform:translate(-50%,8px) scale(0.85)}
-          18% {opacity:1;transform:translate(-50%,0px) scale(1.05)}
-          65% {opacity:1;transform:translate(-50%,-4px) scale(1)}
-          100%{opacity:0;transform:translate(-50%,-18px) scale(0.95)}
-        }
-        @keyframes crashFloatUp { 0%{opacity:0;transform:translate(-50%,10px)} 15%{opacity:1} 75%{opacity:1} 100%{opacity:0;transform:translate(-50%,-34px)} }
-        @keyframes crashPulse   { 0%,100%{box-shadow:0 4px 18px rgba(34,197,94,0.35)} 50%{box-shadow:0 6px 40px rgba(34,197,94,0.80)} }
-        @keyframes crashBlink   { 0%,100%{opacity:1} 50%{opacity:0.22} }
-        @keyframes starDrift    { from{transform:translateX(0)} to{transform:translateX(-${VB_W}px)} }
-        @keyframes chipIn       { from{opacity:0;transform:scale(0.5)} to{opacity:1;transform:scale(1)} }
-        @keyframes multGlow     { 0%,100%{text-shadow:0 0 20px rgba(34,197,94,0.4)} 50%{text-shadow:0 0 45px rgba(34,197,94,0.95),0 0 80px rgba(34,197,94,0.3)} }
-        @keyframes rocketThrust { 0%,100%{opacity:0.82} 50%{opacity:0.40} }
-        @keyframes rocketWobble { 0%{transform:rotate(-4deg) scale(1)} 100%{transform:rotate(4deg) scale(1.05)} }
-        @keyframes smokeRise    { 0%{transform:translate(0,0) scale(1);opacity:0.22} 100%{transform:translate(0,-28px) scale(2.5);opacity:0} }
-        @keyframes propSpin     { from{transform:scaleX(1)} 50%{transform:scaleX(0.12)} to{transform:scaleX(1)} }
-        @keyframes propSpinSlow { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
-      `}</style>
-
+    <div className="space-y-5 pb-4">
       <BigWinEffect show={bigWin} />
-      {/* Header: back + logo + history chips + mute + balance */}
-      <div style={{ flexShrink: 0, background: '#0d1021', borderBottom: '1px solid #1e2847' }} className="px-3 pt-2 pb-2">
-        <div className="flex items-center gap-2">
-          <button onClick={onBack} style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid #1e2847' }}
-            className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-white transition-colors flex-shrink-0">
-            <ArrowLeft className="w-4 h-4" />
-          </button>
-          <svg viewBox="0 0 108 28" width="68" height="18" style={{ flexShrink: 0, display: 'block' }} aria-label="Aviator">
-            <g fill="#E50539">
-              <path d="M35.8316259,8.46081696 L32.6511471,21.1003182 C32.3861297,22.1108319 31.7898404,22.9804878 30.8579701,23.7052459 C29.9260998,24.430004 28.9406334,24.794403 27.9091122,24.794403 L32.0257706,8.46081696 L26.9360349,8.46081696 L26.4100399,10.9372758 L22.330818,27.2708618 L27.2796958,27.2708618 C29.6942095,27.2708618 31.9886035,26.3764279 34.1669177,24.5916 C36.3452319,22.8067721 37.7284938,20.7068319 38.324783,18.2923182 L40.1634763,10.9372758 L40.7845436,8.46081696 L35.8316259,8.46081696 Z"/>
-              <path d="M49.5521237,0.741321696 C49.1378993,0.248453865 48.5871262,0.000134663342 47.8995352,0.000134663342 C47.2081736,0.000134663342 46.5784878,0.248453865 46.0029367,0.741321696 C45.4314254,1.23418953 45.0877646,1.8264389 44.9757247,2.5137606 C44.855605,3.2304389 45.004812,3.83076808 45.4190364,4.32363591 C45.8289516,4.81650374 46.3797247,5.06509227 47.0673157,5.06509227 C47.7589466,5.06509227 48.392403,4.81219451 48.9682234,4.30720698 C49.5397347,3.8016808 49.8877047,3.20539152 49.999206,2.5137606 C50.1112459,1.8264389 49.9620389,1.23418953 49.5521237,0.741321696 M44.9094703,22.9473067 C44.9180888,22.8977506 44.9345177,22.8355362 44.9592958,22.7609327 C44.9840738,22.6863292 45.0007721,22.640813 45.004812,22.6117257 L48.5456499,8.46076309 L40.3416898,8.46076309 L39.7163132,10.9372219 L43.0002135,10.9372219 L40.0518943,22.6117257 C40.010418,22.7154165 39.9772908,22.8603142 39.9441636,23.0590773 C39.7327421,24.3389177 40.0599741,25.3534713 40.9212808,26.1073167 C41.7828569,26.8568529 43.0624279,27.2336409 44.7648419,27.2336409 L45.5017197,27.2336409 L46.1311362,24.757182 C45.1456698,24.6122843 44.7354853,24.0076459 44.9094703,22.9473067"/>
-              <path d="M58.5553377,21.9865915 C58.3565746,22.7485167 57.9175721,23.4029805 57.2385995,23.9454045 C56.5593576,24.4880978 55.8345995,24.7571551 55.072405,24.7571551 C53.6436269,24.7571551 53.0432978,24.0695641 53.2668389,22.6863022 C53.2711481,22.6658334 53.2875771,22.603619 53.3166643,22.5042374 C53.3454823,22.4048559 53.3621805,22.3302524 53.3702603,22.2806963 L55.7432978,12.7842374 C56.0664898,11.5544918 56.7454623,10.937195 57.7810234,10.937195 L61.3302105,10.937195 L58.5553377,21.9865915 Z M63.1645945,23.3905915 C63.1729436,23.3407661 63.1896419,23.29121 63.21038,23.2413845 C63.2311182,23.1918284 63.2435072,23.1460429 63.251587,23.0964868 L66.9085047,8.46073616 L58.3732728,8.46073616 C56.5965247,8.46073616 54.9442055,8.96195312 53.4157766,9.96007781 C51.8835771,10.9579332 50.9352778,12.2086863 50.5665696,13.7080279 L48.5043352,21.9865915 C48.458819,22.1107511 48.4216519,22.2680379 48.3922953,22.4670703 C48.1647142,23.8460229 48.5662803,24.9850055 49.6015721,25.8834793 C50.6368638,26.7822224 51.9913077,27.233614 53.6686743,27.233614 L54.4432579,27.233614 C55.8965446,27.233614 57.2466793,26.7286264 58.4974324,25.7178434 C59.122809,26.7286264 60.2949187,27.233614 62.0178015,27.233614 L63.7568439,27.233614 L64.3824898,24.7571551 C63.4298813,24.7073297 63.024006,24.2518983 63.1645945,23.3905915 Z"/>
-              <path d="M87.1846564,13.3020988 L87.118402,13.7079741 L85.0602075,21.9865377 C84.8407062,22.8728918 84.4803471,23.5561736 83.9834394,24.0366524 C83.4865317,24.5168618 82.9688858,24.7571012 82.4264618,24.7571012 C81.933594,24.7571012 81.5565367,24.5376 81.2958284,24.0902484 C81.0348509,23.647206 80.9645566,23.0840439 81.0760579,22.392413 C81.084407,22.3425875 81.1011052,22.2763332 81.1301925,22.18961 C81.1549706,22.1023481 81.1716688,22.0363631 81.1797486,21.9865377 L83.2379431,13.7079741 C83.4450554,12.8962234 83.7887162,12.2377197 84.2651551,11.7324628 C84.7413247,11.2274753 85.2753995,10.9745776 85.8676489,10.9745776 C86.3605167,10.9745776 86.7332648,11.1776499 86.9858933,11.5835252 C87.2385217,11.9934404 87.3090853,12.5649516 87.1846564,13.3020988 M90.9533446,9.81081696 C89.9304419,8.91234314 88.5846165,8.46068229 86.9072499,8.46068229 L86.1326663,8.46068229 C84.3066314,8.46068229 82.6416539,8.96620848 81.1342324,9.97672219 C79.6265416,10.9872359 78.6909007,12.2336798 78.3265017,13.7079741 L76.2265616,21.9865377 C76.1853546,22.1106973 76.1438783,22.2682534 76.114791,22.4670165 C75.8829007,23.8707471 76.2844668,25.0140389 77.3240678,25.9044329 C78.3596289,26.7905177 79.7302324,27.2338294 81.4280678,27.2338294 L82.1654843,27.2338294 C83.9670105,27.2338294 85.6236389,26.7202234 87.1474893,25.7013606 C88.671609,24.6784579 89.6115591,23.4400938 89.9759581,21.9865377 L92.071589,13.7079741 L92.1502324,13.2318045 C92.3740429,11.8485426 91.9762474,10.7098294 90.9533446,9.81081696"/>
-              <path d="M106.1978,8.46081696 C104.20182,8.46081696 102.474628,8.99085187 101.021072,10.051191 L101.39382,8.46081696 L96.4656808,8.46081696 L91.7360349,27.2336948 L96.6892219,27.2336948 L99.2610224,16.963191 C99.5882544,15.7040888 100.23006,14.5279392 101.186708,13.4347421 C102.143357,12.3372359 103.220125,11.5793506 104.425362,11.1610863 L103.837152,13.6003781 L106.537421,13.6003781 L107.858469,8.46081696 L106.1978,8.46081696 Z"/>
-              <path d="M12.664387,13.9475132 L12.6724668,13.8917626 L14.9436988,5.02902943 C15.11122,4.28784239 15.4618833,3.67404688 15.9956888,3.19572269 C16.5300329,2.71793716 17.1354793,2.47850574 17.7969456,2.47850574 C18.4188209,2.47850574 18.8729057,2.68588728 19.1758983,3.10819152 C19.470811,3.52268529 19.5742324,4.05649077 19.470811,4.69452569 L19.4150603,5.02902943 L17.1435591,13.8917626 L17.1276688,13.9475132 L12.664387,13.9475132 Z M23.0014145,1.40254564 C21.8697037,0.470136658 20.3474693,0.00016159601 18.4266314,0.00016159601 C16.3307312,0.00016159601 14.489614,0.526156608 12.8876589,1.57033616 C11.2857037,2.61424638 10.2733047,4.00100948 9.8429207,5.73035611 L7.78661147,13.8917626 C6.04918504,13.8917626 4.43915012,13.8995731 3.18785835,13.8995731 C1.4189207,13.8995731 0.000107730673,15.3423561 0.000107730673,17.1118324 L6.97378354,17.1118324 L4.43133965,27.2333985 L9.34089576,27.2333985 L11.8914195,17.1118324 L16.3625117,17.1118324 L14.7764469,23.391992 C14.7287761,23.5115731 14.6967262,23.6710145 14.6649456,23.8703162 C14.489614,24.930386 14.6967262,25.7588349 15.2943621,26.3489297 C15.8841875,26.9384858 16.784816,27.2333985 17.9881676,27.2333985 L19.9491352,27.2333985 L20.5785516,24.754785 C19.8691451,24.7071142 19.5742324,24.324401 19.6940828,23.6149945 L24.1810653,5.73035611 C24.1888758,5.67487481 24.2050354,5.57899451 24.2448958,5.43544339 C24.2847561,5.2840818 24.3006464,5.1882015 24.3084569,5.1327202 C24.5635092,3.58651571 24.1250454,2.34303441 23.0014145,1.40254564 Z"/>
-              <path d="M76.0941067,8.46081696 L77.216391,4.10418853 L72.263204,4.10418853 L71.1783561,8.46081696 L68.7474135,8.46081696 L68.1177277,10.9372758 L70.5529796,10.9372758 L67.5960419,22.649216 C67.5876928,22.6990414 67.5672239,22.7860339 67.5338274,22.9101935 C67.5007002,23.0343531 67.4842713,23.1173057 67.4759222,23.1709017 C67.26881,24.4256948 67.5130893,25.4157397 68.2047202,26.1445377 C68.9006603,26.8692958 69.9483411,27.2336948 71.3520718,27.2336948 L73.0916529,27.2336948 L73.7251092,24.7197995 C72.7065157,24.6247272 72.2839421,24.0448668 72.4581965,22.984797 C72.4662763,22.9349716 72.4827052,22.8727571 72.5074833,22.7984229 C72.5284908,22.7235501 72.545189,22.6780339 72.5492289,22.649216 L75.5018574,10.9372758 L77.6098773,10.9372758 L78.2395631,8.46081696 L76.0941067,8.46081696 Z"/>
-            </g>
-          </svg>
-          <div style={{ flex: 1 }} />
-          <MuteButton />
-          <GameBalanceChip bal={bal} demo={demoMode} />
+      <div className="flex items-center gap-3">
+        <button onClick={onBack} className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center text-slate-400 hover:text-white transition-colors">
+          <ArrowLeft className="w-4 h-4" />
+        </button>
+        <div className="flex-1">
+          <div className="flex items-center gap-2">
+            <span className="text-lg">🐔</span>
+            <h2 className="text-base font-bold text-white">Chicken Road</h2>
+            <StreakChip streak={streak} />
+          </div>
+          <p className="text-[11px] text-slate-500">Traversez la route · évitez les voitures · encaissez</p>
         </div>
-        {session.wagered > 0 && (
-          <div className="mt-1.5"><SessionStatsBar totalWon={session.totalWon} best={session.best} wagered={session.wagered} /></div>
-        )}
+        <MuteButton />
+        <GameBalanceChip bal={bal} demo={demoMode} />
       </div>
       {demoMode && <DemoModeBanner />}
 
-      {/* Graphique — flex-grow pendant le vol, hauteur fixe sinon */}
-      <div className="mx-4 mt-1 relative" style={{
-        flex: '1 1 0%',
-        minHeight: 0,
-        borderRadius: 16,
-        border: isCrashed
-          ? '1px solid rgba(239,68,68,0.55)'
-          : phase === 'flying'
-            ? '1px solid rgba(239,68,68,0.35)'
-            : '1px solid rgba(255,255,255,0.07)',
-        background: 'radial-gradient(130% 130% at 50% 100%, #2a0a0e 0%, #160608 28%, #0b0b0d 60%)',
-        overflow: 'hidden',
-        animation: isCrashed ? 'crashShake 0.55s cubic-bezier(0.36,0.07,0.19,0.97) both' : undefined,
-        transition: 'border-color 0.25s, flex 0.3s',
-      }}>
-        {isCrashed && (
-          <div className="absolute inset-0 pointer-events-none"
-            style={{ borderRadius: 16, zIndex: 10, animation: 'crashRedFlash 0.38s ease-out forwards' }} />
-        )}
-        <svg width="100%" height="100%" viewBox={`0 0 ${VB_W} ${VB_H}`} preserveAspectRatio="xMidYMid meet" style={{ display: 'block' }}>
-          <defs>
-            <linearGradient id="avFillG" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#22c55e" stopOpacity="0.42" />
-              <stop offset="100%" stopColor="#22c55e" stopOpacity="0.02" />
-            </linearGradient>
-            <linearGradient id="avFillR" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#ef4444" stopOpacity="0.42" />
-              <stop offset="100%" stopColor="#ef4444" stopOpacity="0.02" />
-            </linearGradient>
-            <linearGradient id="jetBodyGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#FF2A3D" stopOpacity="1" />
-              <stop offset="45%" stopColor="#C8000E" stopOpacity="1" />
-              <stop offset="100%" stopColor="#7A000A" stopOpacity="1" />
-            </linearGradient>
-            <linearGradient id="thrustGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stopColor="#ffffff" stopOpacity="1" />
-              <stop offset="25%" stopColor="#fde68a" stopOpacity="1" />
-              <stop offset="60%" stopColor="#f97316" stopOpacity="1" />
-              <stop offset="100%" stopColor="#f97316" stopOpacity="0" />
-            </linearGradient>
-          </defs>
+      <SessionStatsBar totalWon={session.totalWon} best={session.best} wagered={session.wagered} />
 
-          {/* étoiles en dérive (2 couches) */}
-          <g style={{ animation: 'starDrift 70s linear infinite' }}>
-            {Array.from({ length: 36 }, (_, i) => (
-              <circle key={i}
-                cx={(i * 53 + 17) % (VB_W * 2)} cy={(i * 37 + 11) % (PH + 20)}
-                r={i % 6 === 0 ? 1.4 : 0.8}
-                fill="#fff" opacity={0.10 + (i % 4) * 0.07} />
-            ))}
-          </g>
-          <g style={{ animation: 'starDrift 130s linear infinite' }}>
-            {Array.from({ length: 24 }, (_, i) => (
-              <circle key={i}
-                cx={(i * 79 + 41) % (VB_W * 2)} cy={(i * 53 + 29) % (PH + 20)}
-                r={0.6} fill="#93c5fd" opacity={0.12} />
-            ))}
-          </g>
+      {/* Live gain bar */}
+      {phase === 'playing' && (
+        <div className="glass-card p-3 flex items-center justify-between">
+          <div>
+            <p className="text-[10px] text-slate-500 uppercase font-semibold">Gain actuel</p>
+            <p className="text-lg font-black text-emerald-400">{step > 0 ? `${curWin.toFixed(4)} TON` : '—'}</p>
+          </div>
+          <div className="text-center">
+            <p className="text-[10px] text-slate-500 uppercase font-semibold">Ligne</p>
+            <p className="text-lg font-black text-white">{step}/{CHICKEN_STEPS}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-[10px] text-slate-500 uppercase font-semibold">Prochain</p>
+            <p className="text-lg font-black text-amber-400">{nextMult.toFixed(2)}×</p>
+          </div>
+        </div>
+      )}
 
-          {/* Sunburst rays */}
-          <g opacity="0.055">
-            {Array.from({ length: 28 }, (_, i) => {
-              const angle = (i * (360 / 28)) * Math.PI / 180;
-              const cx = VB_W * 0.76;
-              const cy = VB_H * 0.38;
-              const len = VB_W * 2;
-              return (
-                <line key={i}
-                  x1={cx} y1={cy}
-                  x2={cx + Math.cos(angle) * len}
-                  y2={cy + Math.sin(angle) * len}
-                  stroke="white" strokeWidth="10" />
-              );
-            })}
-          </g>
-
-          {/* courbe */}
-          {fillPath && phase !== 'betting' && (
-            <path d={fillPath} fill={isCrashed ? 'url(#avFillR)' : 'url(#avFillG)'} />
-          )}
-          {curvePath && phase !== 'betting' && (
-            <path d={curvePath} fill="none"
-              stroke={isCrashed ? '#f87171' : '#ef4444'}
-              strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
-              style={{ filter: isCrashed ? 'none' : 'drop-shadow(0 0 4px rgba(239,68,68,0.55))' }} />
-          )}
-
-          {/* ligne cible d'encaissement auto */}
-          {(() => {
-            const acv = parseFloat(autoCash);
-            if (!isNaN(acv) && acv >= 1.01 && acv <= maxM && phase !== 'betting') {
-              const y = yOf(acv);
-              return (
-                <g>
-                  <line x1={PX0} y1={y} x2={PX0 + PW} y2={y}
-                    stroke="#f59e0b" strokeWidth="1.2" strokeDasharray="5,4" opacity="0.6" />
-                  <text x={PX0 + PW - 2} y={y - 4} textAnchor="end" fontSize="9" fontWeight="700" fill="#f59e0b" opacity="0.9">
-                    AUTO ×{acv.toFixed(2)}
-                  </text>
-                </g>
-              );
-            }
-            return null;
-          })()}
-
-          {/* marqueurs d'encaissement des autres joueurs */}
-          {phase !== 'betting' && fakes.filter(f => f.cashPoint).map((f, i) => (
-            <circle key={i} cx={xOf(f.cashPoint!.t)} cy={yOf(f.cashPoint!.m)} r="2.2"
-              fill="#4ade80" opacity="0.55" />
-          ))}
-
-          {/* marqueur d'encaissement du joueur */}
-          {myCashRef.current && phase !== 'betting' && (
-            <g>
-              <circle cx={xOf(myCashRef.current.t)} cy={yOf(myCashRef.current.m)} r="3.5"
-                fill="#22c55e" stroke="#dcfce7" strokeWidth="1" />
-              <text x={xOf(myCashRef.current.t)} y={yOf(myCashRef.current.m) - 7}
-                textAnchor="middle" fontSize="9" fontWeight="800" fill="#4ade80">
-                You ×{myCashRef.current.m.toFixed(2)}
-              </text>
-            </g>
-          )}
-
-          {/* Jet supersonique — identité visuelle reprenant le rouge du logo AVIATOR */}
-          {phase === 'flying' && (
-            <g transform={`translate(${tipX},${tipY}) rotate(${planeAngle}) scale(1.8) translate(-18,0)`}>
-              <g style={{ animation: mult > 10 ? 'rocketWobble 0.14s ease-in-out infinite alternate' : mult > 3 ? 'rocketWobble 0.25s ease-in-out infinite alternate' : mult > 1.5 ? 'rocketWobble 0.45s ease-in-out infinite alternate' : undefined, transformOrigin: '0px 0px' }}>
-
-                {/* Traînée de chaleur */}
-                <line x1="-21" y1="-1.7" x2={mult > 3 ? -38 : -28} y2="-1.7" stroke="#f97316" strokeWidth={mult > 3 ? 1.8 : 1.0} opacity={0.18} strokeLinecap="round" />
-                <line x1="-21" y1="1.7" x2={mult > 3 ? -38 : -28} y2="1.7" stroke="#f97316" strokeWidth={mult > 3 ? 1.8 : 1.0} opacity={0.18} strokeLinecap="round" />
-
-                {/* Flammes réacteurs */}
-                <ellipse cx="-22" cy="-1.7" rx={mult > 10 ? 12 : mult > 3 ? 8 : mult > 1.5 ? 5 : 3} ry="1.0" fill="url(#thrustGrad)" opacity={0.92}
-                  style={{ animation: 'rocketThrust 0.12s ease-in-out infinite alternate' }} />
-                <ellipse cx="-22" cy="1.7" rx={mult > 10 ? 12 : mult > 3 ? 8 : mult > 1.5 ? 5 : 3} ry="1.0" fill="url(#thrustGrad)" opacity={0.92}
-                  style={{ animation: 'rocketThrust 0.12s ease-in-out infinite alternate', animationDelay: '0.06s' }} />
-
-                {/* Dérive verticale */}
-                <path d="M -10,-3 L -18,-10 L -14,-3 Z" fill="#E50539" />
-
-                {/* Aile delta */}
-                <path d="M 8,-3 L -14,-14 L -18,-14 L -16,-3 Z" fill="#E50539" />
-
-                {/* Fuselage principal */}
-                <path d="M 22,0 C 18,-2 10,-3 2,-3 L -12,-3 L -16,-2 L -16,2 L -12,3 C 10,3 18,2 22,0 Z" fill="url(#jetBodyGrad)" />
-
-                {/* Tubes réacteurs */}
-                <rect x="-19" y="-2.5" width="3" height="1.6" rx="0.8" fill="#0f0f0f" />
-                <rect x="-19" y="0.9" width="3" height="1.6" rx="0.8" fill="#0f0f0f" />
-
-                {/* Reflet dorsal */}
-                <line x1="-12" y1="-2.8" x2="16" y2="-1.2" stroke="white" strokeWidth="0.6" opacity={0.20} strokeLinecap="round" />
-
-                {/* Cockpit — verre bombé */}
-                <ellipse cx="14" cy="-1.5" rx="4" ry="1.8" fill="white" opacity={0.75} transform="rotate(-8, 14, -1.5)" />
-                <ellipse cx="13.5" cy="-2" rx="3" ry="1.2" fill="#dbeafe" opacity={0.35} transform="rotate(-8, 13.5, -2)" />
-              </g>
-            </g>
-          )}
-          {isCrashed && (() => {
-            const shards = Array.from({ length: 12 }, (_, i) => {
-              const angle    = (i * 30) * Math.PI / 180;
-              const dist     = 18 + (i % 4) * 7;
-              const size     = 2.2 + (i % 3) * 1.2;
-              const color    = (['#ef4444','#f97316','#fbbf24','#fde68a'] as const)[i % 4];
-              const tx       = (Math.cos(angle) * dist).toFixed(1);
-              const ty       = (Math.sin(angle) * dist).toFixed(1);
-              const delay    = (i * 0.022).toFixed(3);
-              const duration = (0.42 + (i % 3) * 0.08).toFixed(2);
-              return { size, color, tx, ty, delay, duration, i };
-            });
-            return (
-              <g>
-                <circle cx={tipX} cy={tipY} r={8} fill="none" stroke="rgba(249,115,22,0.7)" strokeWidth={3}
-                  style={{ animation: 'shockRing 0.45s cubic-bezier(0,0.9,0.57,1) forwards', transformOrigin: `${tipX}px ${tipY}px` }} />
-                <circle cx={tipX} cy={tipY} r={8} fill="none" stroke="rgba(239,68,68,0.45)" strokeWidth={2}
-                  style={{ animation: 'shockRing 0.60s cubic-bezier(0,0.9,0.57,1) 0.06s forwards', transformOrigin: `${tipX}px ${tipY}px` }} />
-                {shards.map(({ size, color, tx, ty, delay, duration, i }) => (
-                  <circle key={i} cx={tipX} cy={tipY} r={size} fill={color}
-                    style={{ '--shard-tx': `${tx}px`, '--shard-ty': `${ty}px`, animation: `shardFly ${duration}s cubic-bezier(0,0.9,0.57,1) ${delay}s forwards` } as React.CSSProperties} />
-                ))}
-                {/* Boule de feu */}
-                <circle cx={tipX} cy={tipY} r="14" fill="#f97316" opacity="0.55"
-                  style={{ animation: 'shardFly 0.5s ease-out 0.05s forwards', '--shard-tx': '0px', '--shard-ty': '-4px' } as React.CSSProperties} />
-                <circle cx={tipX} cy={tipY} r="8" fill="#fde68a" opacity="0.85"
-                  style={{ animation: 'shardFly 0.5s ease-out 0.05s forwards', '--shard-tx': '0px', '--shard-ty': '-4px' } as React.CSSProperties} />
-                <circle cx={tipX} cy={tipY} r="4" fill="#ffffff" opacity="0.70"
-                  style={{ animation: 'shardFly 0.4s ease-out forwards', '--shard-tx': '0px', '--shard-ty': '-2px' } as React.CSSProperties} />
-                {/* Fumée post-explosion */}
-                {[0, 1, 2].map(i => (
-                  <circle key={`smoke-${i}`} cx={tipX + (i - 1) * 7} cy={tipY} r={4 + i} fill="#374151" opacity="0.22"
-                    style={{ animation: `smokeRise 1.2s ease-out ${i * 0.08}s forwards` } as React.CSSProperties} />
-                ))}
-              </g>
-            );
-          })()}
-        </svg>
-
-        {/* Flash vert au cashout */}
-        {cashFlash && (
-          <>
-            <div className="absolute inset-0 pointer-events-none rounded-2xl"
-              style={{ background: 'radial-gradient(ellipse at 50% 60%, rgba(34,197,94,0.50), rgba(34,197,94,0.22))', animation: 'cashGreenFlash 0.30s ease-out forwards', zIndex: 20 }} />
-            <div className="absolute inset-0 pointer-events-none rounded-2xl"
-              style={{ border: '2px solid rgba(34,197,94,0.90)', animation: 'cashGreenFlash 0.30s ease-out forwards', zIndex: 21 }} />
-            <div className="absolute pointer-events-none"
-              style={{ bottom: '38%', left: '50%', zIndex: 22, whiteSpace: 'nowrap', fontSize: 15, fontWeight: 800, letterSpacing: '0.04em', color: '#4ade80', textShadow: '0 0 18px rgba(34,197,94,0.90), 0 0 6px rgba(34,197,94,0.60)', animation: 'winLabelRise 0.55s ease-out forwards' }}>
-              ✓ CASHED OUT
-            </div>
-          </>
-        )}
-
-        {/* superposition centrale */}
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          {phase === 'betting' ? (
-            <div className="flex flex-col items-center" style={{ width: '70%', maxWidth: 280 }}>
-              {/* Hélice rouge qui tourne */}
-              <svg width="68" height="68" viewBox="0 0 100 100" style={{ marginBottom: 14, animation: 'propSpinSlow 1.2s linear infinite', transformOrigin: '50px 50px' }}>
-                <g fill="#ef4444">
-                  <path d="M50 50 C 40 20, 44 8, 50 6 C 56 8, 60 20, 50 50 Z"/>
-                  <path d="M50 50 C 80 40, 92 44, 94 50 C 92 56, 80 60, 50 50 Z"/>
-                  <path d="M50 50 C 60 80, 56 92, 50 94 C 44 92, 40 80, 50 50 Z"/>
-                  <path d="M50 50 C 20 60, 8 56, 6 50 C 8 44, 20 40, 50 50 Z"/>
-                </g>
-                <circle cx="50" cy="50" r="8" fill="#ffffff" opacity={0.90}/>
-                <circle cx="50" cy="50" r="4" fill="#C8000E"/>
-              </svg>
-              <p style={{ fontSize: 13, fontWeight: 800, color: '#f8fafc', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 10 }}>Waiting for next round</p>
-              {/* Barre qui se vide */}
-              <div style={{ width: '100%', height: 6, borderRadius: 99, background: 'rgba(255,255,255,0.10)', overflow: 'hidden' }}>
-                <div style={{
-                  height: '100%', borderRadius: 99,
-                  width: `${Math.max(0, Math.min(100, (countdown / (BET_MS / 1000)) * 100))}%`,
-                  background: 'linear-gradient(90deg,#f87171,#ef4444)',
-                  transition: 'width 0.05s linear',
-                }} />
-              </div>
-              {myBet !== null && (
-                <p style={{ fontSize: 11, fontWeight: 700, color: '#22c55e', marginTop: 12 }}>✓ Bet placed · {myBet.toFixed(2)} TON</p>
-              )}
-            </div>
+      {(phase === 'won' || phase === 'lost') && (
+        <div className="glass-card p-4 text-center">
+          {phase === 'won' ? (
+            <p className="text-emerald-400 font-bold text-sm">
+              {step >= CHICKEN_STEPS ? '🏆 Traversée complète !' : '🎉 Encaissé'} +{curWin.toFixed(4)} TON
+            </p>
           ) : (
-            <div className="text-center">
-              {isCrashed && (
-                <p style={{ fontSize: 15, fontWeight: 800, letterSpacing: '0.14em', color: '#f87171', textTransform: 'uppercase', marginBottom: 2 }}>Flew away!</p>
-              )}
-              <p style={{
-                fontSize: 60, fontWeight: 900, lineHeight: 1.0, fontVariantNumeric: 'tabular-nums',
-                color: isCrashed ? '#f87171' : cashedOut !== null ? '#22c55e' : '#ffffff',
-                textShadow: isCrashed ? '0 0 30px rgba(255,45,75,0.55)' : cashedOut !== null ? '0 0 28px rgba(34,197,94,0.35)' : '0 0 30px rgba(239,68,68,0.35)',
-              }}>
-                {curM.toFixed(2)}×
-              </p>
-              {!isCrashed && (
-                <p style={{
-                  fontSize: 12, fontWeight: 700, marginTop: 4,
-                  color: cashedOut !== null ? '#22c55e' : '#94a3b8',
-                }}>
-                  {cashedOut !== null
-                    ? `✓ Cashed out @×${cashedOut.toFixed(2)}`
-                    : myBet !== null ? 'Cash out before it flies away!' : 'Watching (no bet)'}
-                </p>
-              )}
+            <p className="text-red-400 font-bold text-sm">🚗 Percuté ! Perdu −{activeBetRef.current.toFixed(4)} TON</p>
+          )}
+        </div>
+      )}
+
+      {/* Route — lignes à traverser */}
+      <div className="glass-card p-4 space-y-2">
+        {Array.from({ length: CHICKEN_STEPS }, (_, i) => CHICKEN_STEPS - i).map(s => {
+          const isCleared = s <= step;
+          const isCurrent = phase === 'playing' && s === step + 1;
+          const isBusted  = phase === 'lost' && s === step + 1;
+          const isLocked  = !isCleared && !isCurrent && !isBusted;
+          const pickIdx   = s <= step ? picks[s - 1] : null;
+
+          return (
+            <div key={s} className="flex items-center gap-2">
+              <span className="w-9 text-right" style={isCurrent
+                ? { background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.18)', borderRadius: 8, padding: '2px 4px', fontSize: 12, fontWeight: 800, color: '#fbbf24', transition: 'background 0.15s' }
+                : { fontSize: 10, fontWeight: 700, color: isCleared ? '#4ade80' : '#475569' }}>
+                {chickenMult(activeDiff, s).toFixed(2)}×
+              </span>
+              <div className="flex-1 grid gap-1.5" style={{ gridTemplateColumns: `repeat(${lanesPerStep}, 1fr)` }}>
+                {Array.from({ length: lanesPerStep }, (_, c) => {
+                  const cleared = s <= step && pickIdx === c;
+                  const busted  = isBusted && c === carLane;
+                  return (
+                    <button
+                      key={c}
+                      disabled={!isCurrent}
+                      onClick={() => pickLane(c)}
+                      style={{
+                        height: 30, borderRadius: 8,
+                        background: cleared ? 'linear-gradient(135deg,#fbbf24,#f59e0b)'
+                          : busted ? 'linear-gradient(135deg,#ef4444,#b91c1c)'
+                          : isCurrent ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.03)',
+                        border: isCurrent ? '1px solid #3a4f8e' : '1px solid #1e2847',
+                        opacity: isLocked ? 0.35 : 1,
+                        cursor: isCurrent ? 'pointer' : 'default',
+                        fontSize: 14,
+                        transition: 'background 0.15s',
+                      }}
+                      className={isCurrent ? 'tap-scale' : undefined}
+                    >
+                      {cleared ? '🐔' : busted ? '🚗' : ''}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          )}
-        </div>
-
-        {/* toast résultat */}
-        {toast && (
-          <div key={toast.id} style={{
-            position: 'absolute', left: '50%', bottom: 26,
-            animation: 'crashFloatUp 1.8s ease forwards',
-            fontSize: 17, fontWeight: 900,
-            color: toast.win ? '#4ade80' : '#f87171',
-            textShadow: '0 2px 8px rgba(0,0,0,0.6)',
-            pointerEvents: 'none',
-          }}>
-            {toast.text}
-          </div>
-        )}
+          );
+        })}
       </div>
 
-      {/* ── BET PANEL 1 ── */}
-      <div style={{ flexShrink: 0, background: '#0d1021', borderTop: '1px solid #16203f' }} className="px-3 pt-2 pb-2">
-        {/* Bet row */}
-        <div className="flex gap-2 items-center">
-          <div style={{ background: '#16203f', borderRadius: 10, display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', opacity: myBet !== null ? 0.5 : 1 }}>
-            <button onClick={() => setBet(b => +Math.max(0.01, b - 0.5).toFixed(2))} disabled={myBet !== null}
-              style={{ width: 26, height: 26, borderRadius: '50%', background: '#0d1021', color: '#94a3b8', fontSize: 20, fontWeight: 700, border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: myBet !== null ? 'not-allowed' : 'pointer' }}>−</button>
-            <span style={{ fontSize: 17, fontWeight: 800, color: '#fff', minWidth: 48, textAlign: 'center' as const }}>{effBet.toFixed(2)}</span>
-            <button onClick={() => setBet(b => +Math.min(50, b + 0.5).toFixed(2))} disabled={myBet !== null}
-              style={{ width: 26, height: 26, borderRadius: '50%', background: '#0d1021', color: '#94a3b8', fontSize: 20, fontWeight: 700, border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: myBet !== null ? 'not-allowed' : 'pointer' }}>+</button>
-          </div>
-          <button onClick={mainBtn.onClick} disabled={mainBtn.disabled}
-            className="flex-1 rounded-xl font-black uppercase active:scale-[0.97] transition-all"
-            style={{
-              padding: '10px 8px', fontSize: 12, lineHeight: 1.2,
-              background: mainBtn.kind === 'cash' ? '#ef4444' : mainBtn.kind === 'cancel' ? 'rgba(239,68,68,0.18)' : mainBtn.kind === 'queued' ? 'rgba(16,185,129,0.18)' : mainBtn.disabled ? 'rgba(255,255,255,0.06)' : '#10b981',
-              color: mainBtn.kind === 'cash' ? '#fff' : mainBtn.kind === 'cancel' ? '#f87171' : mainBtn.kind === 'queued' ? '#34d399' : mainBtn.disabled ? '#5b6987' : '#fff',
-              border: mainBtn.kind === 'cancel' ? '1px solid rgba(239,68,68,0.4)' : mainBtn.kind === 'queued' ? '1px solid rgba(16,185,129,0.4)' : mainBtn.kind === 'next' ? '1px solid #1e2847' : 'none',
-              animation: mainBtn.kind === 'cash' ? 'avBetPulse 1.1s ease-in-out infinite' : mainBtn.kind === 'bet' ? 'avGreenPulse 2.5s ease-in-out infinite' : undefined,
-              boxShadow: mainBtn.kind === 'cash' || mainBtn.kind === 'bet' ? '0 4px 16px rgba(239,68,68,0.25)' : undefined,
-            }}>
-            {bal < 0.01 && mainBtn.kind === 'bet' ? (demoMode ? 'Demo empty' : 'No balance') : mainBtn.label}
+      {/* Controls */}
+      <div className="glass-card p-4 space-y-3">
+        {phase === 'waiting' ? (
+          <>
+            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Difficulté</p>
+            <div className="grid grid-cols-3 gap-2">
+              {(['easy', 'medium', 'hard'] as const).map(d => (
+                <button key={d} onClick={() => setDiff(d)}
+                  style={{
+                    padding: '8px 0', borderRadius: 10, fontWeight: 700, fontSize: 12,
+                    background: diff === d ? 'linear-gradient(135deg,#fbbf24,#f59e0b)' : 'rgba(255,255,255,0.05)',
+                    color: diff === d ? '#3b1d00' : '#94a3b8',
+                    border: diff === d ? 'none' : '1px solid #1e2847',
+                  }}>
+                  {CHICKEN_LABEL[d]}
+                </button>
+              ))}
+            </div>
+            <p className="text-[10px] text-slate-500">{CHICKEN_LANES[diff]} voies/ligne · ×{maxMult.toFixed(2)} à la traversée complète</p>
+            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest pt-1">Montant de la mise</p>
+            <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-xl px-4 py-3">
+              <input type="number" value={bet} min={0.01} max={50} step={0.01}
+                onChange={e => { const v = +e.target.value; if (!isNaN(v)) setBet(Math.max(0.01, Math.min(50, v))); }}
+                className="flex-1 bg-transparent text-2xl font-bold text-white outline-none" />
+              <span className="text-base font-bold text-slate-500">TON</span>
+            </div>
+            <BetQuickButtons setBet={setBet} maxBal={bal} />
+            <button onClick={start} disabled={effBet < 0.01 || bal < 0.01}
+              className={`w-full py-4 rounded-xl font-bold text-base transition-all flex items-center justify-center gap-2 ${
+                effBet >= 0.01 && bal >= 0.01
+                  ? 'bg-gradient-to-r from-amber-500 to-yellow-500 text-amber-950 hover:from-amber-400 hover:to-yellow-400 active:scale-[0.98] shadow-lg shadow-amber-500/25'
+                  : 'bg-white/5 text-slate-600 cursor-not-allowed'
+              }`}>
+              {bal < 0.01 ? (demoMode ? '🎮 Démo épuisé' : '💸 Solde insuffisant') : <><Zap className="w-4 h-4" /> Traverser ({effBet.toFixed(2)} TON)</>}
+            </button>
+          </>
+        ) : phase === 'playing' ? (
+          <button onClick={cashout} disabled={step === 0}
+            className={`w-full py-4 rounded-xl font-bold text-base transition-all ${
+              step > 0
+                ? 'bg-gradient-to-r from-amber-500 to-yellow-500 text-amber-950 active:scale-[0.98] shadow-lg shadow-amber-500/25'
+                : 'bg-white/5 text-slate-600 cursor-not-allowed'
+            }`}>
+            {step > 0 ? `💰 Encaisser ${curWin.toFixed(4)} TON` : 'Choisissez une voie pour avancer'}
           </button>
-        </div>
-        {/* Auto cashout row (always visible) */}
-        <div className="flex items-center gap-2 mt-1.5">
-          <span style={{ fontSize: 10, color: '#5b6987', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.06em', whiteSpace: 'nowrap' as const }}>Auto ×</span>
-          <div style={{ flex: 1, background: '#16203f', borderRadius: 8, display: 'flex', alignItems: 'center', padding: '4px 10px' }}>
-            <input type="number" value={autoCash} placeholder="—" min={1.01} step={0.01}
-              onChange={e => { setAutoCash(e.target.value); localStorage.setItem('tc_crash_auto', e.target.value); }}
-              style={{ flex: 1, background: 'transparent', color: '#f8fafc', fontSize: 13, fontWeight: 700, outline: 'none', border: 'none', width: '100%' }} />
-            {autoCash && (
-              <button onClick={() => { setAutoCash(''); localStorage.removeItem('tc_crash_auto'); }}
-                style={{ color: '#5b6987', fontSize: 12, background: 'none', border: 'none', cursor: 'pointer', padding: '0 2px' }}>✕</button>
-            )}
-          </div>
-        </div>
-        {/* Quick amounts */}
-        <div className="grid grid-cols-4 gap-1.5 mt-1.5">
-          {[0.10, 0.50, 1.00, 5.00].map(v => (
-            <button key={v} onClick={() => setBet(v)} disabled={myBet !== null}
-              style={{ padding: '5px 0', borderRadius: 8, border: 'none', background: '#16203f', color: '#94a3b8', fontSize: 11, fontWeight: 700, cursor: myBet !== null ? 'not-allowed' : 'pointer', opacity: myBet !== null ? 0.45 : 1 }}>
-              {v.toFixed(2)}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Historique des rounds — en bas, l'utilisateur descend pour le voir */}
-      <div style={{ flexShrink: 0, background: '#0d1021', borderTop: '1px solid #1e2847' }} className="px-3 py-2">
-        <div className="flex gap-1 overflow-x-auto no-scrollbar items-center">
-          {history.slice(0, 20).map((h, i) => (
-            <span key={`${roundId}-${i}`} style={{
-              flexShrink: 0, fontSize: 10, fontWeight: 700,
-              padding: '2px 6px', borderRadius: 20,
-              animation: i === 0 ? 'chipIn 0.3s ease' : undefined,
-              background: h < 2 ? 'rgba(239,68,68,0.16)' : h < 10 ? 'rgba(79,111,240,0.16)' : 'rgba(34,197,94,0.16)',
-              color: h < 2 ? '#f87171' : h < 10 ? '#818cf8' : '#4ade80',
-            }}>
-              {h.toFixed(2)}×
-            </span>
-          ))}
-        </div>
-      </div>
-
-      {/* ── BOTTOM TABS: All Bets | My Bets | Top ── */}
-      <div style={{ flexShrink: 0, background: '#0d1021', borderTop: '1px solid #1e2847' }}>
-        <div style={{ display: 'flex' }}>
-          {(['all', 'my', 'top'] as const).map(tab => (
-            <button key={tab} onClick={() => setBetTab(tab)}
-              style={{ flex: 1, padding: '8px 0', fontSize: 11, fontWeight: 700, border: 'none', color: betTab === tab ? '#fff' : '#5b6987', borderBottom: betTab === tab ? '2px solid #ef4444' : '2px solid transparent', background: 'none', textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>
-              {tab === 'all' ? 'All Bets' : tab === 'my' ? 'My Bets' : 'Top'}
-            </button>
-          ))}
-        </div>
-        <div style={{ maxHeight: 240, overflowY: 'auto', overflowX: 'hidden' }}>
-          {betTab === 'all' && (
-            <>
-              <div className="grid grid-cols-4 px-3 py-1" style={{ borderBottom: '1px solid rgba(30,40,71,0.8)' }}>
-                {['USER','BET','×','PROFIT'].map(h => (
-                  <span key={h} style={{ fontSize: 9, fontWeight: 700, color: '#5b6987', letterSpacing: '0.06em' }}>{h}</span>
-                ))}
-              </div>
-              {(myBet !== null || queuedBet !== null) && (
-                <div className="grid grid-cols-4 px-3 py-1 items-center" style={{ background: 'rgba(16,185,129,0.06)', borderBottom: '1px solid rgba(30,40,71,0.5)' }}>
-                  <span style={{ fontSize: 11, fontWeight: 800, color: '#34d399' }}>You</span>
-                  <span style={{ fontSize: 10, color: '#cbd5e1' }}>{(myBet ?? queuedBet ?? 0).toFixed(2)}</span>
-                  <span style={{ fontSize: 10, fontWeight: 700, color: cashedOut !== null ? '#34d399' : '#5b6987' }}>{cashedOut !== null ? `×${cashedOut.toFixed(2)}` : '—'}</span>
-                  <span style={{ fontSize: 10, fontWeight: 700, color: cashedOut !== null ? '#34d399' : isCrashed ? '#f87171' : '#5b6987' }}>
-                    {cashedOut !== null ? `+${((myBet??0)*cashedOut-(myBet??0)).toFixed(2)}` : myBet !== null && isCrashed ? `-${myBet.toFixed(2)}` : '—'}
-                  </span>
-                </div>
-              )}
-              {joinedFakes.length === 0 && <p className="px-3 py-2 text-center" style={{ fontSize: 11, color: '#5b6987' }}>Players joining…</p>}
-              {joinedFakes.slice(0, 20).map((f, i) => (
-                <div key={f.name} className="grid grid-cols-4 px-3 py-1 items-center"
-                  style={{ borderBottom: i < Math.min(joinedFakes.length, 20) - 1 ? '1px solid rgba(30,40,71,0.4)' : 'none' }}>
-                  <span style={{ fontSize: 10, color: '#94a3b8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{f.name}</span>
-                  <span style={{ fontSize: 10, color: '#cbd5e1' }}>{f.bet.toFixed(2)}</span>
-                  <span style={{ fontSize: 10, fontWeight: 700, color: f.cashedAt !== null ? '#34d399' : isCrashed ? '#f87171' : '#5b6987' }}>{f.cashedAt !== null ? `×${f.cashedAt.toFixed(2)}` : isCrashed ? '×' : '—'}</span>
-                  <span style={{ fontSize: 10, fontWeight: 700, color: f.cashedAt !== null ? '#34d399' : isCrashed ? '#f87171' : '#5b6987' }}>{f.cashedAt !== null ? `+${(f.bet*f.cashedAt-f.bet).toFixed(2)}` : isCrashed ? `-${f.bet.toFixed(2)}` : '—'}</span>
-                </div>
-              ))}
-            </>
-          )}
-          {betTab === 'my' && (
-            <>
-              <div className="grid grid-cols-3 px-3 py-1" style={{ borderBottom: '1px solid rgba(30,40,71,0.8)' }}>
-                {['ROUND','BET','RESULT'].map(h => (
-                  <span key={h} style={{ fontSize: 9, fontWeight: 700, color: '#5b6987', letterSpacing: '0.06em' }}>{h}</span>
-                ))}
-              </div>
-              {myBet !== null ? (
-                <div className="grid grid-cols-3 px-3 py-1 items-center" style={{ background: 'rgba(16,185,129,0.05)', borderBottom: '1px solid rgba(30,40,71,0.5)' }}>
-                  <span style={{ fontSize: 10, color: '#5b6987' }}>#{roundId}</span>
-                  <span style={{ fontSize: 10, color: '#cbd5e1' }}>{myBet.toFixed(2)}</span>
-                  <span style={{ fontSize: 10, fontWeight: 700, color: cashedOut !== null ? '#34d399' : isCrashed ? '#f87171' : '#94a3b8' }}>
-                    {cashedOut !== null ? `×${cashedOut.toFixed(2)} 🏆` : isCrashed ? 'Flew away' : 'In flight…'}
-                  </span>
-                </div>
-              ) : (
-                <p className="px-3 py-2 text-center" style={{ fontSize: 11, color: '#5b6987' }}>No bets yet</p>
-              )}
-            </>
-          )}
-          {betTab === 'top' && (
-            <>
-              <div className="grid grid-cols-2 px-3 py-1" style={{ borderBottom: '1px solid rgba(30,40,71,0.8)' }}>
-                {['MULTIPLIER','ROUND'].map(h => (
-                  <span key={h} style={{ fontSize: 9, fontWeight: 700, color: '#5b6987', letterSpacing: '0.06em' }}>{h}</span>
-                ))}
-              </div>
-              {history.length === 0 && <p className="px-3 py-2 text-center" style={{ fontSize: 11, color: '#5b6987' }}>No history yet</p>}
-              {[...history].sort((a, b) => b - a).slice(0, 15).map((h, i) => (
-                <div key={i} className="grid grid-cols-2 px-3 py-1 items-center" style={{ borderBottom: i < 14 ? '1px solid rgba(30,40,71,0.3)' : 'none' }}>
-                  <span style={{ fontSize: 12, fontWeight: 800, color: h >= 10 ? '#34d399' : h >= 3 ? '#f59e0b' : '#cbd5e1' }}>{h.toFixed(2)}×</span>
-                  <span style={{ fontSize: 10, color: '#5b6987' }}>Round #{roundId - i}</span>
-                </div>
-              ))}
-            </>
-          )}
-        </div>
+        ) : (
+          <p className="text-center text-[11px] text-slate-500">Nouvelle partie dans un instant…</p>
+        )}
       </div>
     </div>
   );
@@ -2867,11 +2303,11 @@ function formatFeedTime(ts: number): string {
 
 const _NOW = Date.now();
 const FEED_DATA: FeedEntry[] = [
-  { username: 'Léa R.',      bet: 0.05, win: 0.00, mult: 0,    game: 'Crash',    createdAt: _NOW -  1 * 60000 },
+  { username: 'Léa R.',      bet: 0.05, win: 0.00, mult: 0,    game: 'Chicken Road',    createdAt: _NOW -  1 * 60000 },
   { username: 'Yusuf K.',    bet: 0.10, win: 2.80, mult: 2.80, game: 'Plinko',   createdAt: _NOW -  3 * 60000 },
   { username: 'Marco T.',    bet: 1.0,  win: 0.00, mult: 0,    game: 'Tower',    createdAt: _NOW -  6 * 60000 },
   { username: 'Chen W.',     bet: 0.02, win: 0.04, mult: 2,    game: 'Tower',    createdAt: _NOW -  9 * 60000 },
-  { username: 'Amira S.',    bet: 0.50, win: 1.28, mult: 2.56, game: 'Crash',    createdAt: _NOW - 14 * 60000 },
+  { username: 'Amira S.',    bet: 0.50, win: 1.28, mult: 2.56, game: 'Chicken Road',    createdAt: _NOW - 14 * 60000 },
   { username: 'Priya S.',    bet: 0.05, win: 0.00, mult: 0,    game: 'Mines',    createdAt: _NOW - 19 * 60000 },
   { username: 'Fatou D.',    bet: 0.10, win: 0.19, mult: 2,    game: 'Tower',    createdAt: _NOW - 25 * 60000 },
   { username: 'Nicolás V.',  bet: 0.03, win: 1.08, mult: 36,   game: 'Tower',    createdAt: _NOW - 33 * 60000 },
@@ -2883,7 +2319,7 @@ const FEED_DATA: FeedEntry[] = [
 // GAMES HUB
 // ══════════════════════════════════════════════════════════════════
 
-type ActiveGame = 'dice' | 'crash' | 'mines' | 'tower' | 'plinko' | null;
+type ActiveGame = 'dice' | 'chicken' | 'mines' | 'tower' | 'plinko' | null;
 
 const CATALOG = [
   {
@@ -2899,16 +2335,16 @@ const CATALOG = [
     pattern: 'dice',
   },
   {
-    id: 'crash' as ActiveGame,
-    title: 'Aviator',
-    desc: 'Encaisse avant que le pilote s\'envole !',
-    stats: 'jusqu\'à ×100 · multijoueur',
-    emoji: '✈️',
+    id: 'chicken' as ActiveGame,
+    title: 'Chicken Road',
+    desc: 'Traversez la route, évitez les voitures',
+    stats: 'jusqu\'à ×40 · encaissez à tout moment',
+    emoji: '🐔',
     badge: 'HOT',
-    accentFrom: '#ef4444', accentTo: '#f97316',
-    glow: 'rgba(239,68,68,0.4)',
-    badgeColor: '#ef4444',
-    pattern: 'crash',
+    accentFrom: '#fbbf24', accentTo: '#f59e0b',
+    glow: 'rgba(251,191,36,0.4)',
+    badgeColor: '#f59e0b',
+    pattern: 'chicken',
   },
   {
     id: 'mines' as ActiveGame,
@@ -2947,41 +2383,6 @@ const CATALOG = [
     pattern: 'plinko',
   },
 ] as const;
-
-// Petit avion rouge à hélice — icône de la carte Aviator (au lieu d'un emoji)
-const AviatorMiniIcon: React.FC = () => (
-  <svg width="36" height="36" viewBox="0 0 60 60" aria-label="Aviator" style={{ display: 'block' }}>
-    <defs>
-      <radialGradient id="avBg" cx="50%" cy="45%" r="58%">
-        <stop offset="0%" stopColor="#c0000e"/>
-        <stop offset="100%" stopColor="#7a000a"/>
-      </radialGradient>
-    </defs>
-    {/* Red circle background */}
-    <circle cx="30" cy="30" r="29" fill="url(#avBg)"/>
-    <circle cx="30" cy="30" r="29" fill="none" stroke="#ff3344" strokeWidth="1" opacity="0.5"/>
-    {/* Propeller plane in white, rotated -20° */}
-    <g transform="rotate(-20 30 28) translate(4 8)" fill="#fff">
-      {/* Tail fin */}
-      <path d="M4 18 L0 9 L4 10 L9 18 Z" opacity="0.85"/>
-      {/* Horizontal stabiliser */}
-      <path d="M5 20 L-1 24 L2 20 L-1 16 Z" opacity="0.85"/>
-      {/* Upper wing */}
-      <path d="M18 15 L11 6 L15 7 L23 15 Z" opacity="0.9"/>
-      {/* Lower wing */}
-      <path d="M17 19 L10 28 L14 28 L22 20 Z" opacity="0.8"/>
-      {/* Fuselage */}
-      <path d="M28 18 C 25 14, 15 12, 5 15 C 2 16, 2 22, 5 23 C 15 26, 25 24, 28 20 Z" opacity="0.95"/>
-      {/* Cockpit */}
-      <ellipse cx="17" cy="16" rx="3" ry="2" fill="#cb011a" opacity="0.9" transform="rotate(-8 17 16)"/>
-      {/* Propeller */}
-      <ellipse cx="30" cy="19" rx="1.2" ry="7" opacity="0.75"/>
-      {/* Nose */}
-      <path d="M28 17 L32 19 L28 21 Z" fill="#fbbf24"/>
-      <circle cx="30" cy="19" r="1.5" fill="#fbbf24"/>
-    </g>
-  </svg>
-);
 
 export const MiniAppGames: React.FC = () => {
   const { currentUser, demoMode, demoBalance, toggleDemoMode, gameHistory } = useAppStore();
@@ -3027,7 +2428,7 @@ export const MiniAppGames: React.FC = () => {
 
   // Live feed auto-rotation — new fake entry every 8–18 seconds
   useEffect(() => {
-    const GAME_NAMES = ['Aviator', 'Plinko', 'Tower', 'Mines', 'Dice'];
+    const GAME_NAMES = ['Chicken Road', 'Plinko', 'Tower', 'Mines', 'Dice'];
     const scheduleNext = () => {
       const ms = 8000 + Math.floor(Math.random() * 10000);
       return setTimeout(() => {
@@ -3052,7 +2453,7 @@ export const MiniAppGames: React.FC = () => {
   if (activeGame === 'dice')     return <DiceGame     onBack={() => setActiveGame(null)} streak={streak} onResult={handleResult} />;
   if (activeGame === 'tower')    return <TowerGame    onBack={() => setActiveGame(null)} streak={streak} onResult={handleResult} />;
   if (activeGame === 'plinko')   return <PlinkoGame   onBack={() => setActiveGame(null)} streak={streak} onResult={handleResult} />;
-  if (activeGame === 'crash')   return <CrashGame   onBack={() => setActiveGame(null)} onResult={handleResult} />;
+  if (activeGame === 'chicken') return <ChickenRoadGame onBack={() => setActiveGame(null)} streak={streak} onResult={handleResult} />;
   if (activeGame === 'mines')   return <MinesGame   onBack={() => setActiveGame(null)} streak={streak} onResult={handleResult} />;
 
   return (
@@ -3133,7 +2534,7 @@ export const MiniAppGames: React.FC = () => {
                 className="game-icon-wrap w-11 h-11 rounded-xl flex items-center justify-center mb-2.5"
                 style={{ background: `linear-gradient(135deg,${game.accentFrom}33,${game.accentTo}22)`, boxShadow: `0 4px 12px ${game.glow}` }}
               >
-                {game.id === 'crash' ? <AviatorMiniIcon /> : <span className="text-2xl">{game.emoji}</span>}
+                <span className="text-2xl">{game.emoji}</span>
               </div>
               <p className="text-white font-bold text-sm leading-tight">{game.title}</p>
               <p className="text-slate-400 text-[11px] mt-0.5 leading-tight">{game.desc}</p>
