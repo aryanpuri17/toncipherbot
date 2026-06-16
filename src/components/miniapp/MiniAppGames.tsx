@@ -192,47 +192,6 @@ const snd = {
   },
 };
 
-// ══════════════════════════════════════════════════════════════════
-// DAILY HOUSE ENGINE
-// Tracks net wins per calendar day (resets at midnight).
-// When a player wins too much in a day, house edge increases silently.
-// 0.1% jackpot chance allows occasional huge wins for engagement.
-// Never applied in demo mode.
-// ══════════════════════════════════════════════════════════════════
-
-const _DHE_KEY = 'tc_dhe';
-type _DHERec = { day: number; net: number };
-
-function _dheDay(): number {
-  const d = new Date();
-  return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
-}
-function _dheGet(): _DHERec {
-  try {
-    const r = JSON.parse(localStorage.getItem(_DHE_KEY) ?? 'null') as _DHERec | null;
-    if (r && r.day === _dheDay()) return r;
-  } catch {}
-  return { day: _dheDay(), net: 0 };
-}
-function dheRecord(profit: number) {
-  if (typeof window === 'undefined') return;
-  const r = _dheGet();
-  r.net = +(r.net + profit).toFixed(6);
-  try { localStorage.setItem(_DHE_KEY, JSON.stringify(r)); } catch {}
-}
-// Returns 0 (normal) → 1.0 (max house pressure). Driven by net daily profit.
-// Thresholds generous — players can have good sessions, house wins over time.
-function dhePressure(): number {
-  if (typeof window === 'undefined') return 0;
-  const { net } = _dheGet();
-  if (net <= 1.0) return 0;    // Free ride up to 1 TON net today
-  if (net <  3.0) return 0.30; // Light pressure 1–3 TON
-  if (net <  6.0) return 0.55; // Moderate pressure 3–6 TON
-  return 0.80;                  // High (not max) pressure above 6 TON
-}
-// 0.3% jackpot roll — bypass all pressure, let the player win big
-function dheJackpot(): boolean { return Math.random() < 0.003; }
-
 type OnResult = (won: boolean) => void;
 
 // ══════════════════════════════════════════════════════════════════
@@ -299,6 +258,18 @@ const GameBalanceChip: React.FC<{ bal: number; demo: boolean }> = ({ bal, demo }
     </p>
     <p style={{ fontSize: 14, fontWeight: 700, color: demo ? '#fbbf24' : '#f8fafc', marginTop: 1 }}>
       <CountUp value={bal} decimals={3} suffix=" TON" />
+    </p>
+  </div>
+);
+
+const DemoModeBanner: React.FC = () => (
+  <div style={{
+    height: 20, flexShrink: 0, pointerEvents: 'none',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    background: 'rgba(245,158,11,0.12)', borderBottom: '1px solid rgba(245,158,11,0.25)',
+  }}>
+    <p style={{ fontSize: 9, fontWeight: 700, color: '#f59e0b', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+      🎮 Mode démo — gains non crédités
     </p>
   </div>
 );
@@ -382,7 +353,7 @@ const BetQuickButtons: React.FC<{ setBet: React.Dispatch<React.SetStateAction<nu
 // ══════════════════════════════════════════════════════════════════
 // DICE — prédire si le tirage (0.00–100.00) sera plus haut ou plus bas
 // que le seuil choisi. Multiplicateur = 99 / chance de gagner (1% edge
-// mathématique) + légère pression maison alignée sur les autres jeux.
+// mathématique fixe, identique pour tous, sans ajustement caché).
 // ══════════════════════════════════════════════════════════════════
 
 type DiceDir = 'under' | 'over';
@@ -395,18 +366,9 @@ function diceMultiplier(target: number, dir: DiceDir): number {
   return +(99 / wc).toFixed(4);
 }
 
-function rollDice(target: number, dir: DiceDir, streak: number, demo = false): { roll: number; win: boolean } {
-  let roll = +(Math.random() * 100).toFixed(2);
-  let win = dir === 'under' ? roll < target : roll > target;
-  if (win && !demo && !dheJackpot()) {
-    const pressure = Math.max(dhePressure(), streak >= 2 ? 0.30 : streak >= 1 ? 0.15 : 0);
-    if (pressure > 0 && Math.random() < pressure * 0.5) {
-      win = false;
-      roll = dir === 'under'
-        ? +(target + Math.random() * (100 - target)).toFixed(2)
-        : +(Math.random() * target).toFixed(2);
-    }
-  }
+function rollDice(target: number, dir: DiceDir): { roll: number; win: boolean } {
+  const roll = +(Math.random() * 100).toFixed(2);
+  const win = dir === 'under' ? roll < target : roll > target;
   return { roll, win };
 }
 
@@ -447,14 +409,13 @@ const DiceGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResul
     setRolling(true);
     snd.spin();
     const used = effBet;
-    const { roll: r, win } = rollDice(target, dir, streak, demoMode);
+    const { roll: r, win } = rollDice(target, dir);
     rollTimerRef.current = setTimeout(() => {
       if (!mountedRef.current) return;
       setRolling(false);
       const winAmt = win ? +(used * multiplier).toFixed(6) : 0;
       placeGameBet(used, winAmt);
       recordGameResult('Dice', used, winAmt);
-      if (!demoMode) dheRecord(winAmt - used);
       session.record(used, winAmt);
       setLastRoll(r);
       setLastWin(win);
@@ -491,6 +452,7 @@ const DiceGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResul
         <MuteButton />
         <GameBalanceChip bal={bal} demo={demoMode} />
       </div>
+      {demoMode && <DemoModeBanner />}
 
       <SessionStatsBar totalWon={session.totalWon} best={session.best} wagered={session.wagered} />
 
@@ -621,20 +583,15 @@ const GROWTH   = 0.13;  // mult = e^(0.13·t) → ×2 à ~5.3s, ×10 à ~17.7s
 // Distribution du point de crash.
 // Spectateur (le joueur ne mise pas) : généreuse → l'historique donne envie.
 // Joueur misé : resserrée selon la série de victoires.
-function rollCrashPoint(playerStreak: number | null, demo = false): number {
+function rollCrashPoint(demo = false): number {
   const r = Math.random();
   if (demo) {
     if (r < 0.10) return 1.00;
     if (r < 0.28) return +(1.1 + Math.random() * 0.5).toFixed(2);
     return Math.min(50, Math.max(1.5, +(0.975 / (1 - r)).toFixed(2)));
   }
-  if (playerStreak === null) {
-    if (r < 0.06) return 1.00;
-    return Math.min(80, Math.max(1.01, +(0.962 / (1 - r)).toFixed(2)));
-  }
-  const he = playerStreak >= 2 ? 0.52 : playerStreak >= 1 ? 0.66 : 0.80;
-  if (r < (1 - he)) return 1.00;
-  return Math.min(40, Math.max(1.01, +(he / (1 - r)).toFixed(2)));
+  if (r < 0.06) return 1.00;
+  return Math.min(80, Math.max(1.01, +(0.962 / (1 - r)).toFixed(2)));
 }
 
 const CRASH_INIT_HIST = [2.43, 1.18, 5.67, 1.00, 12.41, 1.23, 3.14, 1.87, 47.20, 1.55, 2.08, 6.91];
@@ -701,7 +658,7 @@ const VB_W = 320, VB_H = 248;
 const PX0 = 34, PY0 = 12, PW = 274, PH = 204;
 
 
-const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResult }> = ({ onBack, streak, onResult }) => {
+const CrashGame: React.FC<{ onBack: () => void; onResult: OnResult }> = ({ onBack, onResult }) => {
   const { currentUser, placeGameBet, recordGameResult, demoMode, demoBalance } = useAppStore();
   const bal = demoMode ? demoBalance : currentUser.balanceMain;
 
@@ -741,12 +698,10 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
   const cashedRef     = useRef<number | null>(null);
   const samplesRef    = useRef<Array<[number, number]>>([]);
   const fakesRef      = useRef<FakePlayer[]>([]);
-  const streakRef     = useRef(streak);
   const autoRef       = useRef('');
   const myCashRef     = useRef<{ t: number; m: number } | null>(null);
   const onResultRef   = useRef(onResult);
 
-  useEffect(() => { streakRef.current = streak; }, [streak]);
   useEffect(() => { autoRef.current = autoCash; }, [autoCash]);
   useEffect(() => { onResultRef.current = onResult; }, [onResult]);
   useEffect(() => {
@@ -762,7 +717,6 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
     const win = +(myBetRef.current * m).toFixed(6);
     placeGameBet(0, win);
     recordGameResult('Aviator', myBetRef.current, win);
-    if (!demoMode) dheRecord(win - myBetRef.current);
     session.record(myBetRef.current, win);
     snd.cashout();
     onResultRef.current(true);
@@ -816,29 +770,7 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
         if (changed) setFakes([...fakesRef.current]);
         setCountdown(Math.max(0, cdRef.current / 1000));
         if (cdRef.current <= 0) {
-          crashAtRef.current = rollCrashPoint(myBetRef.current !== null ? streakRef.current : null, demoMode);
-          // Daily house engine: when player is up a lot today, bias crash downward
-          if (!demoMode && myBetRef.current !== null && !dheJackpot()) {
-            const p = dhePressure();
-            if (p > 0) {
-              const ac = parseFloat(autoRef.current);
-              if (!isNaN(ac) && ac >= 1.01) {
-                // Anticipate auto-cashout: crash just before their target.
-                // Miss by 4–15% — subtle enough not to feel rigged.
-                const missRatio = p >= 0.7 ? (0.85 + Math.random() * 0.09)  // miss 6–15%
-                                : p >= 0.4 ? (0.90 + Math.random() * 0.06)  // miss 4–10%
-                                :             (0.94 + Math.random() * 0.04); // miss 2–6%
-                const miss = ac * missRatio;
-                if (miss >= 1.01) crashAtRef.current = Math.min(crashAtRef.current, miss);
-              } else {
-                // No auto-cashout: moderate downward bias (players can still win)
-                const cap = p >= 0.7 ? 1.50 + Math.random() * 1.00   // 1.50–2.50×
-                          : p >= 0.4 ? 1.80 + Math.random() * 1.70   // 1.80–3.50×
-                          :             2.50 + Math.random() * 3.50;  // 2.50–6.00×
-                crashAtRef.current = Math.min(crashAtRef.current, cap);
-              }
-            }
-          }
+          crashAtRef.current = rollCrashPoint(demoMode);
           phaseRef.current = 'flying';
           tRef.current = 0;
           setPhase('flying');
@@ -880,7 +812,6 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
           snd.crash();
           if (myBetRef.current !== null && cashedRef.current === null) {
             recordGameResult('Aviator', myBetRef.current, 0);
-            if (!demoMode) dheRecord(-myBetRef.current);
             session.record(myBetRef.current, 0);
             onResultRef.current(false);
             setToast({ id: Date.now(), text: `−${myBetRef.current.toFixed(2)} TON`, win: false });
@@ -1087,6 +1018,7 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
           <div className="mt-1.5"><SessionStatsBar totalWon={session.totalWon} best={session.best} wagered={session.wagered} /></div>
         )}
       </div>
+      {demoMode && <DemoModeBanner />}
 
       {/* Graphique — flex-grow pendant le vol, hauteur fixe sinon */}
       <div className="mx-4 mt-1 relative" style={{
@@ -1110,8 +1042,8 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
         <svg width="100%" height="100%" viewBox={`0 0 ${VB_W} ${VB_H}`} preserveAspectRatio="xMidYMid meet" style={{ display: 'block' }}>
           <defs>
             <linearGradient id="avFillG" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#ef4444" stopOpacity="0.42" />
-              <stop offset="100%" stopColor="#ef4444" stopOpacity="0.02" />
+              <stop offset="0%" stopColor="#22c55e" stopOpacity="0.42" />
+              <stop offset="100%" stopColor="#22c55e" stopOpacity="0.02" />
             </linearGradient>
             <linearGradient id="avFillR" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="#ef4444" stopOpacity="0.42" />
@@ -1493,18 +1425,6 @@ function minesMult(n: number, k: number): number {
   return +(0.93 / p).toFixed(2); // 93% RTP
 }
 
-// Real mode: always +1 hidden mine minimum; more with win streak.
-// Demo: no hidden mines — displayed odds are accurate.
-function effectiveMines(selected: number, streak: number, demo = false): number {
-  if (demo) return selected;
-  // Streak bonus: +1 always (house math), +1 extra on winning streaks
-  const streakExtra = streak >= 3 ? 2 : 1;
-  // Daily pressure: max +1 extra mine — subtle, not overwhelming
-  const p = dhePressure();
-  const pressureExtra = p >= 0.5 ? 1 : 0;
-  return Math.min(GRID_SIZE - 2, selected + streakExtra + pressureExtra);
-}
-
 type MinesPhase = 'waiting' | 'playing' | 'won' | 'lost';
 
 type MinesFeedEntry = { username: string; bet: number; payout: number; profit: number; mines: number };
@@ -1544,10 +1464,7 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
   }, []);
 
   const effBet   = Math.min(bet, bal);
-  // Use effective mines for honest multiplier display — matches actual placement
-  const effMinesCalc = phase === 'waiting'
-    ? (demoMode ? mineCount : effectiveMines(mineCount, streak))
-    : (effMinesRef.current || mineCount);
+  const effMinesCalc = phase === 'waiting' ? mineCount : (effMinesRef.current || mineCount);
   const curMult  = minesMult(effMinesCalc, safeCount);
   const curWin   = +(activeBetRef.current * curMult).toFixed(6);
   const nextMult = minesMult(effMinesCalc, safeCount + 1);
@@ -1557,7 +1474,7 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
   const startGame = () => {
     if (effBet < 0.01 || bal < 0.01) return;
     snd.bet();
-    const effM = effectiveMines(mineCount, streak, demoMode);
+    const effM = mineCount;
     effMinesRef.current = effM;
     const arr = Array.from({ length: GRID_SIZE }, (_, i) => i);
     for (let i = arr.length - 1; i > 0; i--) {
@@ -1574,33 +1491,13 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
   const revealTile = (idx: number) => {
     if (phase !== 'playing' || revealed.has(idx)) return;
 
-    // Greed trap (real mode only): house gradually increases mine probability
-    // on deep runs. Daily pressure tightens the threshold slightly.
-    // Designed to feel like natural variance, not obvious cheating.
-    let isMine = minePos.has(idx);
-    if (!isMine && !demoMode && !dheJackpot()) {
-      const p = dhePressure();
-      // Trap activates after 5 safe tiles normally, 4 under moderate pressure
-      const trapAfter = p >= 0.5 ? 4 : 5;
-      const baseRate  = p >= 0.7 ? 0.10 : 0.07;
-      const stepRate  = p >= 0.7 ? 0.07 : 0.05;
-      if (safeCount >= trapAfter) {
-        const greedP = Math.min(0.38, baseRate + (safeCount - trapAfter) * stepRate);
-        if (Math.random() < greedP) isMine = true;
-      }
-    }
+    const isMine = minePos.has(idx);
 
     if (isMine) {
-      // Build display mine set: the hit tile + up to mineCount-1 others from minePos
-      const others = [...minePos].filter(m => m !== idx && !revealed.has(m));
-      others.sort(() => Math.random() - 0.5);
-      const displayMines = new Set([idx, ...others.slice(0, mineCount - 1)]);
-      setMinePos(displayMines);
       setRevealed(new Set([...revealed, idx]));
       setPhase('lost');
       placeGameBet(activeBetRef.current, 0);
       recordGameResult('Mines', activeBetRef.current, 0);
-      if (!demoMode) dheRecord(-activeBetRef.current);
       session.record(activeBetRef.current, 0);
       snd.boom();
       onResult(false);
@@ -1614,7 +1511,6 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
       setSafeCount(ns);
       if (ns === GRID_SIZE - effMinesRef.current) {
         const win = +(activeBetRef.current * minesMult(effMinesRef.current, ns)).toFixed(6);
-        trimMinesForDisplay();
         placeGameBet(activeBetRef.current, win);
         recordGameResult('Mines', activeBetRef.current, win);
         session.record(activeBetRef.current, win);
@@ -1630,20 +1526,10 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
     }
   };
 
-  // On win, only ever display the number of mines the player selected —
-  // extra hidden mines must never appear on the final board.
-  const trimMinesForDisplay = () => {
-    const arr = [...minePos];
-    arr.sort(() => Math.random() - 0.5);
-    setMinePos(new Set(arr.slice(0, mineCount)));
-  };
-
   const cashout = () => {
     if (phase !== 'playing' || safeCount === 0) return;
-    trimMinesForDisplay();
     placeGameBet(activeBetRef.current, curWin);
     recordGameResult('Mines', activeBetRef.current, curWin);
-    if (!demoMode) dheRecord(curWin - activeBetRef.current);
     session.record(activeBetRef.current, curWin);
     snd.win();
     onResult(true);
@@ -1729,6 +1615,7 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
           <GameBalanceChip bal={bal} demo={demoMode} />
         </div>
       </div>
+      {demoMode && <DemoModeBanner />}
 
       <div className="px-4 pt-4 space-y-4">
         <SessionStatsBar totalWon={session.totalWon} best={session.best} wagered={session.wagered} />
@@ -2025,20 +1912,9 @@ function towerMult(diff: TowerDiff, floor: number): number {
   return +(TOWER_RTP / Math.pow(towerSafeFrac(diff), floor)).toFixed(4);
 }
 
-// Mode réel : la maison resserre légèrement les chances sur les ascensions
-// profondes (greed trap), même logique que Mines. Le mode démo reste honnête.
-function towerStep(diff: TowerDiff, floor: number, streak: number, demo = false): boolean {
+function towerStep(diff: TowerDiff): boolean {
   const cells = TOWER_CELLS[diff];
-  let safe = Math.random() < (cells - 1) / cells;
-  if (safe && !demo && !dheJackpot()) {
-    const p = Math.max(dhePressure(), streak >= 2 ? 0.30 : streak >= 1 ? 0.15 : 0);
-    const trapAfter = diff === 'hard' ? 2 : 3;
-    if (p > 0 && floor >= trapAfter) {
-      const greedP = Math.min(0.35, p * 0.5 + (floor - trapAfter) * 0.05);
-      if (Math.random() < greedP) safe = false;
-    }
-  }
-  return safe;
+  return Math.random() < (cells - 1) / cells;
 }
 
 const TowerGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResult }> = ({ onBack, streak, onResult }) => {
@@ -2083,7 +1959,7 @@ const TowerGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
 
   const pickCell = (cellIdx: number) => {
     if (phase !== 'playing') return;
-    const safe = towerStep(diffRef.current, floor + 1, streak, demoMode);
+    const safe = towerStep(diffRef.current);
     if (safe) {
       snd.reveal();
       const nf = floor + 1;
@@ -2093,7 +1969,6 @@ const TowerGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
         const win = +(activeBetRef.current * towerMult(diffRef.current, nf)).toFixed(6);
         placeGameBet(activeBetRef.current, win);
         recordGameResult('Tower', activeBetRef.current, win);
-        if (!demoMode) dheRecord(win - activeBetRef.current);
         session.record(activeBetRef.current, win);
         snd.win();
         onResult(true);
@@ -2107,7 +1982,6 @@ const TowerGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
       setPhase('lost');
       placeGameBet(activeBetRef.current, 0);
       recordGameResult('Tower', activeBetRef.current, 0);
-      if (!demoMode) dheRecord(-activeBetRef.current);
       session.record(activeBetRef.current, 0);
       snd.boom();
       onResult(false);
@@ -2118,7 +1992,6 @@ const TowerGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
     if (phase !== 'playing' || floor === 0) return;
     placeGameBet(activeBetRef.current, curWin);
     recordGameResult('Tower', activeBetRef.current, curWin);
-    if (!demoMode) dheRecord(curWin - activeBetRef.current);
     session.record(activeBetRef.current, curWin);
     snd.win();
     onResult(true);
@@ -2157,6 +2030,7 @@ const TowerGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
         <MuteButton />
         <GameBalanceChip bal={bal} demo={demoMode} />
       </div>
+      {demoMode && <DemoModeBanner />}
 
       <SessionStatsBar totalWon={session.totalWon} best={session.best} wagered={session.wagered} />
 
@@ -2201,7 +2075,9 @@ const TowerGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
 
           return (
             <div key={f} className="flex items-center gap-2">
-              <span className="text-[10px] font-bold w-9 text-right" style={{ color: isCurrent ? '#fbbf24' : isCleared ? '#4ade80' : '#475569' }}>
+              <span className="w-9 text-right" style={isCurrent
+                ? { background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.18)', borderRadius: 8, padding: '2px 4px', fontSize: 12, fontWeight: 800, color: '#fbbf24', transition: 'background 0.15s' }
+                : { fontSize: 10, fontWeight: 700, color: isCleared ? '#4ade80' : '#475569' }}>
                 {towerMult(activeDiff, f).toFixed(2)}×
               </span>
               <div className="flex-1 grid gap-1.5" style={{ gridTemplateColumns: `repeat(${cellsPerFloor}, 1fr)` }}>
@@ -2328,14 +2204,14 @@ type ActiveBall = {
   trail: { x: number; y: number }[];
 };
 
-function rollPlinko(rows: PlinkoRows, risk: PlinkoRisk, streak: number, demo = false): { slot: number; path: boolean[] } {
+function rollPlinko(rows: PlinkoRows, risk: PlinkoRisk, demo = false): { slot: number; path: boolean[] } {
   const slots = rows + 1;
   const center = rows / 2;
   const spreadFactor = risk === 'low' ? 0.45 : risk === 'medium' ? 0.70 : 1.0;
   // Positive houseEdge → ball pushed toward edges (lower multipliers in low risk, higher variance)
   // In medium/high risk, edges = high multiplier BUT the probability is already heavily tailed
   // Net effect: lower EV for player
-  const houseEdge = demo ? 0.04 : streak >= 2 ? 0.24 : streak >= 1 ? 0.16 : 0.10;
+  const houseEdge = demo ? 0.04 : 0.10;
   const path: boolean[] = [];
   let pos = 0;
   for (let r = 0; r < rows; r++) {
@@ -2546,7 +2422,7 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
           const st2 = useAppStore.getState();
           const bal2 = st2.demoMode ? st2.demoBalance : st2.currentUser.balanceMain;
           if (bal2 < b.bet) { setAutoPlay(false); autoPlayRef.current = false; return; }
-          const { slot: s2, path: p2 } = rollPlinko(rows, risk, streak, demoMode);
+          const { slot: s2, path: p2 } = rollPlinko(rows, risk, demoMode);
           const m2  = PLINKO_MULTS[risk][rows][s2];
           const w2  = +(b.bet * m2).toFixed(6);
           st2.placeGameBet(b.bet, 0);
@@ -2698,7 +2574,7 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
         const st = useAppStore.getState();
         const curBal = st.demoMode ? st.demoBalance : st.currentUser.balanceMain;
         if (curBal < snapBet) return;
-        const { slot, path } = rollPlinko(rows, risk, streak, demoMode);
+        const { slot, path } = rollPlinko(rows, risk, demoMode);
         const m   = mults[slot];
         const win = +(snapBet * m).toFixed(6);
         placeGameBet(snapBet, 0);
@@ -2732,6 +2608,7 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
           <GameBalanceChip bal={bal} demo={demoMode} />
         </div>
       </div>
+      {demoMode && <DemoModeBanner />}
 
       <div className="px-4 pt-4 space-y-4">
         <SessionStatsBar totalWon={session.totalWon} best={session.best} wagered={session.wagered} />
@@ -2871,6 +2748,9 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
                 );
               })}
             </div>
+            <p style={{ fontSize: 10, color: '#475569', marginTop: 6 }}>
+              Avantage maison : {((demoMode ? 0.04 : 0.10) * 100).toFixed(0)}% (biais de trajectoire par rebond)
+            </p>
           </div>
 
           {/* Ball count */}
@@ -3147,7 +3027,7 @@ export const MiniAppGames: React.FC = () => {
   if (activeGame === 'dice')     return <DiceGame     onBack={() => setActiveGame(null)} streak={streak} onResult={handleResult} />;
   if (activeGame === 'tower')    return <TowerGame    onBack={() => setActiveGame(null)} streak={streak} onResult={handleResult} />;
   if (activeGame === 'plinko')   return <PlinkoGame   onBack={() => setActiveGame(null)} streak={streak} onResult={handleResult} />;
-  if (activeGame === 'crash')   return <CrashGame   onBack={() => setActiveGame(null)} streak={streak} onResult={handleResult} />;
+  if (activeGame === 'crash')   return <CrashGame   onBack={() => setActiveGame(null)} onResult={handleResult} />;
   if (activeGame === 'mines')   return <MinesGame   onBack={() => setActiveGame(null)} streak={streak} onResult={handleResult} />;
 
   return (
@@ -3232,6 +3112,7 @@ export const MiniAppGames: React.FC = () => {
               </div>
               <p className="text-white font-bold text-sm leading-tight">{game.title}</p>
               <p className="text-slate-400 text-[11px] mt-0.5 leading-tight">{game.desc}</p>
+              <p className="text-[10px] mt-0.5 truncate" style={{ color: '#475569' }}>{game.stats}</p>
               <div className="mt-2.5 h-0.5 rounded-full w-2/3" style={{ background: `linear-gradient(90deg,${game.accentFrom},transparent)` }} />
             </div>
           </button>
