@@ -323,7 +323,7 @@ body {
 .game-card-hub[data-game="dice"]   { animation: glowGold   3s   ease-in-out infinite; }
 .game-card-hub[data-game="crash"]  { animation: glowRed    2s   ease-in-out infinite; }
 .game-card-hub[data-game="mines"]  { animation: glowPurple 3.5s ease-in-out infinite; }
-.game-card-hub[data-game="slots"]  { animation: glowGreen 2.5s ease-in-out infinite; }
+.game-card-hub[data-game="tower"]  { animation: glowGreen 2.5s ease-in-out infinite; }
 .game-card-hub[data-game="plinko"] { animation: glowAmber  3s   ease-in-out infinite; }
 
 @keyframes glowGold   { 0%,100%{box-shadow:0 0 18px rgba(245,158,11,.25)} 50%{box-shadow:0 0 32px rgba(245,158,11,.55)} }
@@ -346,7 +346,7 @@ body {
 .game-bg-dice     { background-image: radial-gradient(circle at 80% 80%, rgba(245,158,11,.3) 0%,transparent 60%), radial-gradient(circle at 80% 80%,rgba(251,191,36,.15) 0%,transparent 80%); }
 .game-bg-crash    { background-image: linear-gradient(145deg,rgba(239,68,68,.2) 0%,transparent 50%), radial-gradient(ellipse at 100% 0%,rgba(249,115,22,.25) 0%,transparent 60%); }
 .game-bg-mines    { background-image: radial-gradient(circle,rgba(139,92,246,.4) 1px,transparent 1px); background-size: 18px 18px; }
-.game-bg-slots    { background-image: radial-gradient(ellipse at 20% 50%,rgba(16,185,129,.3) 0%,transparent 60%), radial-gradient(circle at 80% 20%,rgba(52,211,153,.2) 0%,transparent 40%); }
+.game-bg-tower    { background-image: radial-gradient(ellipse at 20% 50%,rgba(16,185,129,.3) 0%,transparent 60%), radial-gradient(circle at 80% 20%,rgba(52,211,153,.2) 0%,transparent 40%); }
 .game-bg-plinko   { background-image: radial-gradient(ellipse at 50% 0%,rgba(251,191,36,.25) 0%,transparent 55%); }
 
 /* ── BALANCE CARD TON ────────────────────────────────────────────────── */
