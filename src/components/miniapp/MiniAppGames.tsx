@@ -580,9 +580,8 @@ const PAUSE_MS = 1800;  // pause après crash
 const TICK_MS  = 50;
 const GROWTH   = 0.13;  // mult = e^(0.13·t) → ×2 à ~5.3s, ×10 à ~17.7s
 
-// Distribution du point de crash.
-// Spectateur (le joueur ne mise pas) : généreuse → l'historique donne envie.
-// Joueur misé : resserrée selon la série de victoires.
+// Distribution du point de crash — fixe, identique pour tous les joueurs,
+// sans ajustement caché selon le streak ou les gains.
 function rollCrashPoint(demo = false): number {
   const r = Math.random();
   if (demo) {
