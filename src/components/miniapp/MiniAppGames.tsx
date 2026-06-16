@@ -316,6 +316,43 @@ const StreakChip: React.FC<{ streak: number }> = ({ streak }) =>
   ) : null;
 
 // ══════════════════════════════════════════════════════════════════
+// SHARED SESSION STATS (profit / meilleur gain / misé — remis à zéro
+// à chaque ouverture du jeu, puisque chaque composant de jeu est
+// démonté quand on retourne au hub)
+// ══════════════════════════════════════════════════════════════════
+
+function useSessionStats() {
+  const [profit, setProfit]   = useState(0);
+  const [best, setBest]       = useState(0);
+  const [wagered, setWagered] = useState(0);
+  const record = (betAmt: number, winAmt: number) => {
+    const p = +(winAmt - betAmt).toFixed(6);
+    setProfit(v => +(v + p).toFixed(6));
+    setWagered(v => +(v + betAmt).toFixed(6));
+    if (p > 0) setBest(v => Math.max(v, p));
+  };
+  return { profit, best, wagered, record };
+}
+
+const SessionStatsBar: React.FC<{ profit: number; best: number; wagered: number }> = ({ profit, best, wagered }) => {
+  if (wagered === 0) return null;
+  return (
+    <div className="grid grid-cols-3 px-1" style={{ gap: 8 }}>
+      {[
+        { label: 'Profit session', value: `${profit > 0 ? '+' : ''}${profit.toFixed(4)}`, color: profit > 0 ? '#4ade80' : profit < 0 ? '#f87171' : '#94a3b8' },
+        { label: 'Meilleur gain', value: best > 0 ? `+${best.toFixed(4)}` : '—', color: best > 0 ? '#fbbf24' : '#475569' },
+        { label: 'Misé', value: wagered.toFixed(4), color: '#94a3b8' },
+      ].map(s => (
+        <div key={s.label} className="text-center">
+          <p style={{ fontSize: 9, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{s.label}</p>
+          <p style={{ fontSize: 12, fontWeight: 800, color: s.color }}>{s.value}</p>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+// ══════════════════════════════════════════════════════════════════
 // SHARED BET QUICK BUTTONS (MIN / ½ / 2× / MAX)
 // ══════════════════════════════════════════════════════════════════
 
@@ -385,6 +422,7 @@ const DiceGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResul
   const mountedRef             = useRef(true);
   const rollTimerRef           = useRef<ReturnType<typeof setTimeout> | null>(null);
   const bigWinTimerRef         = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const session                = useSessionStats();
 
   useEffect(() => {
     mountedRef.current = true;
@@ -414,6 +452,7 @@ const DiceGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResul
       placeGameBet(used, winAmt);
       recordGameResult('Dice', used, winAmt);
       if (!demoMode) dheRecord(winAmt - used);
+      session.record(used, winAmt);
       setLastRoll(r);
       setLastWin(win);
       setPayout(winAmt);
@@ -449,6 +488,8 @@ const DiceGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResul
         <MuteButton />
         <GameBalanceChip bal={bal} demo={demoMode} />
       </div>
+
+      <SessionStatsBar profit={session.profit} best={session.best} wagered={session.wagered} />
 
       {hist.length > 0 && (
         <div className="flex gap-1.5 flex-wrap">
@@ -683,6 +724,7 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
 
   const crashMountedRef           = useRef(true);
   const crashBigWinTimer          = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const session                   = useSessionStats();
 
   // refs moteur (évitent les fermetures périmées dans l'interval)
   const phaseRef      = useRef<CrashPhase>('betting');
@@ -718,6 +760,7 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
     placeGameBet(0, win);
     recordGameResult('Aviator', myBetRef.current, win);
     if (!demoMode) dheRecord(win - myBetRef.current);
+    session.record(myBetRef.current, win);
     snd.cashout();
     onResultRef.current(true);
     setCashFlash(true);
@@ -835,6 +878,7 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
           if (myBetRef.current !== null && cashedRef.current === null) {
             recordGameResult('Aviator', myBetRef.current, 0);
             if (!demoMode) dheRecord(-myBetRef.current);
+            session.record(myBetRef.current, 0);
             onResultRef.current(false);
             setToast({ id: Date.now(), text: `−${myBetRef.current.toFixed(2)} TON`, win: false });
           }
@@ -1036,6 +1080,9 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
           <MuteButton />
           <GameBalanceChip bal={bal} demo={demoMode} />
         </div>
+        {session.wagered > 0 && (
+          <div className="mt-1.5"><SessionStatsBar profit={session.profit} best={session.best} wagered={session.wagered} /></div>
+        )}
       </div>
 
       {/* Graphique — flex-grow pendant le vol, hauteur fixe sinon */}
@@ -1486,6 +1533,7 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
   const [bigWin, setBigWin]       = useState(false);
   const minesMountedRef           = useRef(true);
   const minesBigWinTimer          = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const session                   = useSessionStats();
 
   useEffect(() => {
     minesMountedRef.current = true;
@@ -1550,6 +1598,7 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
       placeGameBet(activeBetRef.current, 0);
       recordGameResult('Mines', activeBetRef.current, 0);
       if (!demoMode) dheRecord(-activeBetRef.current);
+      session.record(activeBetRef.current, 0);
       snd.boom();
       onResult(false);
       const entry: MinesFeedEntry = { username: 'Vous', bet: activeBetRef.current, payout: 0, profit: -activeBetRef.current, mines: mineCount };
@@ -1565,6 +1614,7 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
         trimMinesForDisplay();
         placeGameBet(activeBetRef.current, win);
         recordGameResult('Mines', activeBetRef.current, win);
+        session.record(activeBetRef.current, win);
         snd.win();
         onResult(true);
         const finalMult = minesMult(effMinesRef.current, ns);
@@ -1591,6 +1641,7 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
     placeGameBet(activeBetRef.current, curWin);
     recordGameResult('Mines', activeBetRef.current, curWin);
     if (!demoMode) dheRecord(curWin - activeBetRef.current);
+    session.record(activeBetRef.current, curWin);
     snd.win();
     onResult(true);
     if (curMult >= 5) { setBigWin(true); if (minesBigWinTimer.current) clearTimeout(minesBigWinTimer.current); minesBigWinTimer.current = setTimeout(() => { if (minesMountedRef.current) setBigWin(false); }, 2600); }
@@ -1677,6 +1728,7 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
       </div>
 
       <div className="px-4 pt-4 space-y-4">
+        <SessionStatsBar profit={session.profit} best={session.best} wagered={session.wagered} />
         {/* Live gain bar */}
         {phase === 'playing' && (
           <div style={{ background: '#0d1021', border: '1px solid #1e2847', borderRadius: 14 }} className="p-3 flex items-center justify-between">
@@ -2000,6 +2052,7 @@ const TowerGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
   const diffRef                 = useRef<TowerDiff>('medium');
   const towerMountedRef         = useRef(true);
   const towerBigWinTimer        = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const session                 = useSessionStats();
 
   useEffect(() => {
     towerMountedRef.current = true;
@@ -2038,6 +2091,7 @@ const TowerGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
         placeGameBet(activeBetRef.current, win);
         recordGameResult('Tower', activeBetRef.current, win);
         if (!demoMode) dheRecord(win - activeBetRef.current);
+        session.record(activeBetRef.current, win);
         snd.win();
         onResult(true);
         setBigWin(true);
@@ -2051,6 +2105,7 @@ const TowerGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
       placeGameBet(activeBetRef.current, 0);
       recordGameResult('Tower', activeBetRef.current, 0);
       if (!demoMode) dheRecord(-activeBetRef.current);
+      session.record(activeBetRef.current, 0);
       snd.boom();
       onResult(false);
     }
@@ -2061,6 +2116,7 @@ const TowerGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
     placeGameBet(activeBetRef.current, curWin);
     recordGameResult('Tower', activeBetRef.current, curWin);
     if (!demoMode) dheRecord(curWin - activeBetRef.current);
+    session.record(activeBetRef.current, curWin);
     snd.win();
     onResult(true);
     if (curMult >= 5) {
@@ -2098,6 +2154,8 @@ const TowerGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
         <MuteButton />
         <GameBalanceChip bal={bal} demo={demoMode} />
       </div>
+
+      <SessionStatsBar profit={session.profit} best={session.best} wagered={session.wagered} />
 
       {/* Live gain bar */}
       {phase === 'playing' && (
@@ -2355,6 +2413,7 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
 
   const autoPlayRef       = useRef(false);
   const sessionGainRef    = useRef(0);
+  const session           = useSessionStats();
   const nextBallId        = useRef(0);
   const ballTimers        = useRef(new Map<number, ReturnType<typeof setTimeout>>());
   const pendingWins       = useRef(new Map<number, number>());
@@ -2460,6 +2519,7 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
     recordGameResult('Plinko', b.bet, b.win);
     sessionGainRef.current = +(sessionGainRef.current + b.win - b.bet).toFixed(4);
     setSessionGain(sessionGainRef.current);
+    session.record(b.bet, b.win);
     setHist(h => [{ slot: b.slot, mult: b.mult }, ...h.slice(0, 7)]);
     setLastWin({ mult: b.mult, win: b.win });
     setFinalSlot(b.slot);
@@ -2671,6 +2731,7 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
       </div>
 
       <div className="px-4 pt-4 space-y-4">
+        <SessionStatsBar profit={session.profit} best={session.best} wagered={session.wagered} />
         {/* Board */}
         <div style={{ background: '#080c1e', border: '1px solid #1e2847', borderRadius: 16, overflow: 'visible', position: 'relative', padding: '12px 0' }} className="flex justify-center">
           <div style={{ position: 'relative', width: BOARD_W, height: BOARD_H + 44 }}>
