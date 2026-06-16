@@ -1166,10 +1166,10 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
         </div>
       </div>
 
-      {/* Graphique — hauteur fixe, le reste du contenu pousse la page vers le bas (scroll obligatoire) */}
+      {/* Graphique — flex-grow pendant le vol, hauteur fixe sinon */}
       <div className="mx-4 mt-1 relative" style={{
-        height: 320,
-        flexShrink: 0,
+        flex: '1 1 0%',
+        minHeight: 0,
         borderRadius: 16,
         border: isCrashed
           ? '1px solid rgba(239,68,68,0.55)'
@@ -1470,7 +1470,7 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
       </div>
 
       {/* ── BOTTOM TABS: All Bets | My Bets | Top ── */}
-      <div style={{ flexShrink: 0, background: '#0d1021', borderTop: '1px solid #1e2847', paddingBottom: 24 }}>
+      <div style={{ flexShrink: 0, background: '#0d1021', borderTop: '1px solid #1e2847' }}>
         <div style={{ display: 'flex' }}>
           {(['all', 'my', 'top'] as const).map(tab => (
             <button key={tab} onClick={() => setBetTab(tab)}
@@ -1479,7 +1479,7 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
             </button>
           ))}
         </div>
-        <div>
+        <div style={{ maxHeight: 240, overflowY: 'auto', overflowX: 'hidden' }}>
           {betTab === 'all' && (
             <>
               <div className="grid grid-cols-4 px-3 py-1" style={{ borderBottom: '1px solid rgba(30,40,71,0.8)' }}>
@@ -1733,6 +1733,14 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
   };
 
   const reset = () => { setPhase('waiting'); setRevealed(new Set()); setMinePos(new Set()); setSafeCount(0); };
+
+  // Round auto-continues — no "replay" prompt blocking the player.
+  useEffect(() => {
+    if (phase !== 'lost' && phase !== 'won') return;
+    const id = setTimeout(() => { if (minesMountedRef.current) reset(); }, 2200);
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase]);
 
   const displayFeed = feedTab === 'all' ? feed : myFeed;
 
@@ -2019,11 +2027,6 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
             <p className="text-sm" style={{ color: '#64748b' }}>
               {phase === 'won' ? `${safeCount} cases sûres · ×${curMult.toFixed(2)}` : 'Mine ! Dommage…'}
             </p>
-            <button onClick={reset}
-              style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid #1e2847' }}
-              className="w-full py-2.5 rounded-xl font-bold text-sm text-white hover:opacity-90 transition-all flex items-center justify-center gap-2">
-              <RotateCcw className="w-4 h-4" /> Rejouer
-            </button>
           </div>
         )}
 
@@ -2228,6 +2231,14 @@ const RouletteGame: React.FC<{ onBack: () => void; streak: number; onResult: OnR
 
   const reset = () => { setPhase('idle'); setResult(null); };
 
+  // Round auto-continues — no "replay" prompt blocking the player.
+  useEffect(() => {
+    if (phase !== 'result') return;
+    const id = setTimeout(() => { if (mountedRef.current) reset(); }, 2200);
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase]);
+
   const rColor = (n: number) => n === 0 ? '#10b981' : R_RED.has(n) ? '#ef4444' : '#1e293b';
 
   const SVG_R = 120, CX2 = 130, CY2 = 130;
@@ -2419,12 +2430,7 @@ const RouletteGame: React.FC<{ onBack: () => void; streak: number; onResult: OnR
             </div>
           </div>
 
-          {phase === 'result' ? (
-            <button onClick={reset}
-              style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid #1e2847', width: '100%', padding: '12px', borderRadius: 12, color: '#f8fafc', fontWeight: 700, fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-              <RotateCcw className="w-4 h-4" /> Rejouer
-            </button>
-          ) : (
+          {phase !== 'result' && (
             <button onClick={spin} disabled={!canSpin}
               style={canSpin ? { background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', boxShadow: '0 4px 16px rgba(124,58,237,0.35)', width: '100%', padding: '14px', borderRadius: 12, color: '#fff', fontWeight: 900, fontSize: 14, cursor: 'pointer', letterSpacing: '0.05em' } : { background: 'rgba(255,255,255,0.05)', width: '100%', padding: '14px', borderRadius: 12, color: '#475569', fontWeight: 700, fontSize: 14, cursor: 'not-allowed' }}>
               {phase === 'spinning' ? '🎰 La roue tourne…' : bal < 0.01 ? (demoMode ? '🎮 Démo épuisé' : '💸 Solde insuffisant') : `🎰 LANCER · ${effBet.toFixed(2)} TON`}
