@@ -997,20 +997,7 @@ const CrashGame: React.FC<{ onBack: () => void; onResult: OnResult }> = ({ onBac
               <path d="M76.0941067,8.46081696 L77.216391,4.10418853 L72.263204,4.10418853 L71.1783561,8.46081696 L68.7474135,8.46081696 L68.1177277,10.9372758 L70.5529796,10.9372758 L67.5960419,22.649216 C67.5876928,22.6990414 67.5672239,22.7860339 67.5338274,22.9101935 C67.5007002,23.0343531 67.4842713,23.1173057 67.4759222,23.1709017 C67.26881,24.4256948 67.5130893,25.4157397 68.2047202,26.1445377 C68.9006603,26.8692958 69.9483411,27.2336948 71.3520718,27.2336948 L73.0916529,27.2336948 L73.7251092,24.7197995 C72.7065157,24.6247272 72.2839421,24.0448668 72.4581965,22.984797 C72.4662763,22.9349716 72.4827052,22.8727571 72.5074833,22.7984229 C72.5284908,22.7235501 72.545189,22.6780339 72.5492289,22.649216 L75.5018574,10.9372758 L77.6098773,10.9372758 L78.2395631,8.46081696 L76.0941067,8.46081696 Z"/>
             </g>
           </svg>
-          {/* History chips — fill middle space */}
-          <div className="flex gap-1 overflow-x-auto no-scrollbar items-center" style={{ flex: 1, minWidth: 0 }}>
-            {history.slice(0, 12).map((h, i) => (
-              <span key={`${roundId}-${i}`} style={{
-                flexShrink: 0, fontSize: 10, fontWeight: 700,
-                padding: '2px 6px', borderRadius: 20,
-                animation: i === 0 ? 'chipIn 0.3s ease' : undefined,
-                background: h < 2 ? 'rgba(239,68,68,0.16)' : h < 10 ? 'rgba(79,111,240,0.16)' : 'rgba(34,197,94,0.16)',
-                color: h < 2 ? '#f87171' : h < 10 ? '#818cf8' : '#4ade80',
-              }}>
-                {h.toFixed(2)}×
-              </span>
-            ))}
-          </div>
+          <div style={{ flex: 1 }} />
           <MuteButton />
           <GameBalanceChip bal={bal} demo={demoMode} />
         </div>
@@ -1319,6 +1306,23 @@ const CrashGame: React.FC<{ onBack: () => void; onResult: OnResult }> = ({ onBac
               style={{ padding: '5px 0', borderRadius: 8, border: 'none', background: '#16203f', color: '#94a3b8', fontSize: 11, fontWeight: 700, cursor: myBet !== null ? 'not-allowed' : 'pointer', opacity: myBet !== null ? 0.45 : 1 }}>
               {v.toFixed(2)}
             </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Historique des rounds — en bas, l'utilisateur descend pour le voir */}
+      <div style={{ flexShrink: 0, background: '#0d1021', borderTop: '1px solid #1e2847' }} className="px-3 py-2">
+        <div className="flex gap-1 overflow-x-auto no-scrollbar items-center">
+          {history.slice(0, 20).map((h, i) => (
+            <span key={`${roundId}-${i}`} style={{
+              flexShrink: 0, fontSize: 10, fontWeight: 700,
+              padding: '2px 6px', borderRadius: 20,
+              animation: i === 0 ? 'chipIn 0.3s ease' : undefined,
+              background: h < 2 ? 'rgba(239,68,68,0.16)' : h < 10 ? 'rgba(79,111,240,0.16)' : 'rgba(34,197,94,0.16)',
+              color: h < 2 ? '#f87171' : h < 10 ? '#818cf8' : '#4ade80',
+            }}>
+              {h.toFixed(2)}×
+            </span>
           ))}
         </div>
       </div>
