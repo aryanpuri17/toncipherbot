@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useAppStore } from '../../store/appStore';
 import { ArrowLeft, RotateCcw, Trophy, Zap } from 'lucide-react';
-import { haptic } from '../../lib/haptics';
 import { CountUp } from '../ui/CountUp';
 import { ConfettiEffect } from '../ui/ConfettiEffect';
 
@@ -317,6 +316,43 @@ const StreakChip: React.FC<{ streak: number }> = ({ streak }) =>
   ) : null;
 
 // ══════════════════════════════════════════════════════════════════
+// SHARED SESSION STATS (profit / meilleur gain / misé — remis à zéro
+// à chaque ouverture du jeu, puisque chaque composant de jeu est
+// démonté quand on retourne au hub)
+// ══════════════════════════════════════════════════════════════════
+
+function useSessionStats() {
+  const [profit, setProfit]   = useState(0);
+  const [best, setBest]       = useState(0);
+  const [wagered, setWagered] = useState(0);
+  const record = (betAmt: number, winAmt: number) => {
+    const p = +(winAmt - betAmt).toFixed(6);
+    setProfit(v => +(v + p).toFixed(6));
+    setWagered(v => +(v + betAmt).toFixed(6));
+    if (p > 0) setBest(v => Math.max(v, p));
+  };
+  return { profit, best, wagered, record };
+}
+
+const SessionStatsBar: React.FC<{ profit: number; best: number; wagered: number }> = ({ profit, best, wagered }) => {
+  if (wagered === 0) return null;
+  return (
+    <div className="grid grid-cols-3 px-1" style={{ gap: 8 }}>
+      {[
+        { label: 'Profit session', value: `${profit > 0 ? '+' : ''}${profit.toFixed(4)}`, color: profit > 0 ? '#4ade80' : profit < 0 ? '#f87171' : '#94a3b8' },
+        { label: 'Meilleur gain', value: best > 0 ? `+${best.toFixed(4)}` : '—', color: best > 0 ? '#fbbf24' : '#475569' },
+        { label: 'Misé', value: wagered.toFixed(4), color: '#94a3b8' },
+      ].map(s => (
+        <div key={s.label} className="text-center">
+          <p style={{ fontSize: 9, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{s.label}</p>
+          <p style={{ fontSize: 12, fontWeight: 800, color: s.color }}>{s.value}</p>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+// ══════════════════════════════════════════════════════════════════
 // SHARED BET QUICK BUTTONS (MIN / ½ / 2× / MAX)
 // ══════════════════════════════════════════════════════════════════
 
@@ -331,7 +367,7 @@ const BetQuickButtons: React.FC<{ setBet: React.Dispatch<React.SetStateAction<nu
   return (
     <div className="grid grid-cols-4 gap-2">
       {labels.map(l => (
-        <button key={l} onClick={() => { haptic.selection(); handlers[l](); }}
+        <button key={l} onClick={() => { snd.tick(); handlers[l](); }}
           className="tap-scale py-3 rounded-xl text-sm font-bold bg-white/5 border border-white/10 text-slate-400 hover:bg-white/10 hover:text-white transition-all">
           {l}
         </button>
@@ -386,6 +422,7 @@ const DiceGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResul
   const mountedRef             = useRef(true);
   const rollTimerRef           = useRef<ReturnType<typeof setTimeout> | null>(null);
   const bigWinTimerRef         = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const session                = useSessionStats();
 
   useEffect(() => {
     mountedRef.current = true;
@@ -406,7 +443,6 @@ const DiceGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResul
     if (!canRoll) return;
     setRolling(true);
     snd.spin();
-    haptic.impact('medium');
     const used = effBet;
     const { roll: r, win } = rollDice(target, dir, streak, demoMode);
     rollTimerRef.current = setTimeout(() => {
@@ -416,6 +452,7 @@ const DiceGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResul
       placeGameBet(used, winAmt);
       recordGameResult('Dice', used, winAmt);
       if (!demoMode) dheRecord(winAmt - used);
+      session.record(used, winAmt);
       setLastRoll(r);
       setLastWin(win);
       setPayout(winAmt);
@@ -425,9 +462,8 @@ const DiceGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResul
         setBigWin(true);
         bigWinTimerRef.current = setTimeout(() => { if (mountedRef.current) setBigWin(false); }, 2600);
         snd.win();
-        haptic.impact('heavy'); haptic.success();
-      } else if (win) { snd.win(); haptic.success(); }
-      else { snd.lose(); haptic.error(); }
+      } else if (win) { snd.win(); }
+      else { snd.lose(); }
     }, 750);
   };
 
@@ -452,6 +488,8 @@ const DiceGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResul
         <MuteButton />
         <GameBalanceChip bal={bal} demo={demoMode} />
       </div>
+
+      <SessionStatsBar profit={session.profit} best={session.best} wagered={session.wagered} />
 
       {hist.length > 0 && (
         <div className="flex gap-1.5 flex-wrap">
@@ -686,6 +724,7 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
 
   const crashMountedRef           = useRef(true);
   const crashBigWinTimer          = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const session                   = useSessionStats();
 
   // refs moteur (évitent les fermetures périmées dans l'interval)
   const phaseRef      = useRef<CrashPhase>('betting');
@@ -721,8 +760,8 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
     placeGameBet(0, win);
     recordGameResult('Aviator', myBetRef.current, win);
     if (!demoMode) dheRecord(win - myBetRef.current);
+    session.record(myBetRef.current, win);
     snd.cashout();
-    haptic.success();
     onResultRef.current(true);
     setCashFlash(true);
     setTimeout(() => setCashFlash(false), 450);
@@ -839,9 +878,9 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
           if (myBetRef.current !== null && cashedRef.current === null) {
             recordGameResult('Aviator', myBetRef.current, 0);
             if (!demoMode) dheRecord(-myBetRef.current);
+            session.record(myBetRef.current, 0);
             onResultRef.current(false);
             setToast({ id: Date.now(), text: `−${myBetRef.current.toFixed(2)} TON`, win: false });
-            haptic.impact('heavy'); haptic.error();
           }
           setPhase('crashed');
         } else {
@@ -872,7 +911,6 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
     if (effBet < 0.01) return;
     placeGameBet(effBet, 0);
     snd.bet();
-    haptic.impact('light');
     myBetRef.current = effBet;
     setMyBet(effBet);
   };
@@ -1042,6 +1080,9 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
           <MuteButton />
           <GameBalanceChip bal={bal} demo={demoMode} />
         </div>
+        {session.wagered > 0 && (
+          <div className="mt-1.5"><SessionStatsBar profit={session.profit} best={session.best} wagered={session.wagered} /></div>
+        )}
       </div>
 
       {/* Graphique — flex-grow pendant le vol, hauteur fixe sinon */}
@@ -1492,6 +1533,7 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
   const [bigWin, setBigWin]       = useState(false);
   const minesMountedRef           = useRef(true);
   const minesBigWinTimer          = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const session                   = useSessionStats();
 
   useEffect(() => {
     minesMountedRef.current = true;
@@ -1511,7 +1553,7 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
 
   const startGame = () => {
     if (effBet < 0.01 || bal < 0.01) return;
-    haptic.impact('medium');
+    snd.bet();
     const effM = effectiveMines(mineCount, streak, demoMode);
     effMinesRef.current = effM;
     const arr = Array.from({ length: GRID_SIZE }, (_, i) => i);
@@ -1556,8 +1598,8 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
       placeGameBet(activeBetRef.current, 0);
       recordGameResult('Mines', activeBetRef.current, 0);
       if (!demoMode) dheRecord(-activeBetRef.current);
+      session.record(activeBetRef.current, 0);
       snd.boom();
-      haptic.impact('heavy'); haptic.error();
       onResult(false);
       const entry: MinesFeedEntry = { username: 'Vous', bet: activeBetRef.current, payout: 0, profit: -activeBetRef.current, mines: mineCount };
       if (!demoMode) setFeed(f => [entry, ...f.slice(0, 9)]);
@@ -1565,7 +1607,6 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
     } else {
       setRevealed(new Set([...revealed, idx]));
       snd.reveal();
-      haptic.impact('light');
       const ns = safeCount + 1;
       setSafeCount(ns);
       if (ns === GRID_SIZE - effMinesRef.current) {
@@ -1573,8 +1614,8 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
         trimMinesForDisplay();
         placeGameBet(activeBetRef.current, win);
         recordGameResult('Mines', activeBetRef.current, win);
+        session.record(activeBetRef.current, win);
         snd.win();
-        haptic.success();
         onResult(true);
         const finalMult = minesMult(effMinesRef.current, ns);
         if (finalMult >= 5) { setBigWin(true); if (minesBigWinTimer.current) clearTimeout(minesBigWinTimer.current); minesBigWinTimer.current = setTimeout(() => { if (minesMountedRef.current) setBigWin(false); }, 2600); }
@@ -1600,8 +1641,8 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
     placeGameBet(activeBetRef.current, curWin);
     recordGameResult('Mines', activeBetRef.current, curWin);
     if (!demoMode) dheRecord(curWin - activeBetRef.current);
+    session.record(activeBetRef.current, curWin);
     snd.win();
-    haptic.success();
     onResult(true);
     if (curMult >= 5) { setBigWin(true); if (minesBigWinTimer.current) clearTimeout(minesBigWinTimer.current); minesBigWinTimer.current = setTimeout(() => { if (minesMountedRef.current) setBigWin(false); }, 2600); }
     setPhase('won');
@@ -1687,6 +1728,7 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
       </div>
 
       <div className="px-4 pt-4 space-y-4">
+        <SessionStatsBar profit={session.profit} best={session.best} wagered={session.wagered} />
         {/* Live gain bar */}
         {phase === 'playing' && (
           <div style={{ background: '#0d1021', border: '1px solid #1e2847', borderRadius: 14 }} className="p-3 flex items-center justify-between">
@@ -2010,6 +2052,7 @@ const TowerGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
   const diffRef                 = useRef<TowerDiff>('medium');
   const towerMountedRef         = useRef(true);
   const towerBigWinTimer        = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const session                 = useSessionStats();
 
   useEffect(() => {
     towerMountedRef.current = true;
@@ -2026,7 +2069,7 @@ const TowerGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
 
   const start = () => {
     if (effBet < 0.01 || bal < 0.01) return;
-    haptic.impact('medium');
+    snd.bet();
     diffRef.current = diff;
     activeBetRef.current = effBet;
     setFloor(0);
@@ -2040,7 +2083,6 @@ const TowerGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
     const safe = towerStep(diffRef.current, floor + 1, streak, demoMode);
     if (safe) {
       snd.reveal();
-      haptic.impact('light');
       const nf = floor + 1;
       setPicks(p => [...p, cellIdx]);
       setFloor(nf);
@@ -2049,8 +2091,8 @@ const TowerGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
         placeGameBet(activeBetRef.current, win);
         recordGameResult('Tower', activeBetRef.current, win);
         if (!demoMode) dheRecord(win - activeBetRef.current);
+        session.record(activeBetRef.current, win);
         snd.win();
-        haptic.success();
         onResult(true);
         setBigWin(true);
         if (towerBigWinTimer.current) clearTimeout(towerBigWinTimer.current);
@@ -2063,8 +2105,8 @@ const TowerGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
       placeGameBet(activeBetRef.current, 0);
       recordGameResult('Tower', activeBetRef.current, 0);
       if (!demoMode) dheRecord(-activeBetRef.current);
+      session.record(activeBetRef.current, 0);
       snd.boom();
-      haptic.impact('heavy'); haptic.error();
       onResult(false);
     }
   };
@@ -2074,8 +2116,8 @@ const TowerGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
     placeGameBet(activeBetRef.current, curWin);
     recordGameResult('Tower', activeBetRef.current, curWin);
     if (!demoMode) dheRecord(curWin - activeBetRef.current);
+    session.record(activeBetRef.current, curWin);
     snd.win();
-    haptic.success();
     onResult(true);
     if (curMult >= 5) {
       setBigWin(true);
@@ -2112,6 +2154,8 @@ const TowerGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
         <MuteButton />
         <GameBalanceChip bal={bal} demo={demoMode} />
       </div>
+
+      <SessionStatsBar profit={session.profit} best={session.best} wagered={session.wagered} />
 
       {/* Live gain bar */}
       {phase === 'playing' && (
@@ -2369,6 +2413,7 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
 
   const autoPlayRef       = useRef(false);
   const sessionGainRef    = useRef(0);
+  const session           = useSessionStats();
   const nextBallId        = useRef(0);
   const ballTimers        = useRef(new Map<number, ReturnType<typeof setTimeout>>());
   const pendingWins       = useRef(new Map<number, number>());
@@ -2464,7 +2509,6 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
   // loop always calls into fresh closures (current rows/risk/balance/etc.).
   apiRef.current.contact = (pt) => {
     snd.tick();
-    if (physBalls.current.length <= 3) haptic.tick();
     flashes.current.push({ x: pt.x, y: pt.y, t: 0 });
   };
 
@@ -2475,6 +2519,7 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
     recordGameResult('Plinko', b.bet, b.win);
     sessionGainRef.current = +(sessionGainRef.current + b.win - b.bet).toFixed(4);
     setSessionGain(sessionGainRef.current);
+    session.record(b.bet, b.win);
     setHist(h => [{ slot: b.slot, mult: b.mult }, ...h.slice(0, 7)]);
     setLastWin({ mult: b.mult, win: b.win });
     setFinalSlot(b.slot);
@@ -2482,9 +2527,9 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
       setBigWin(true);
       if (plinkoBigWinTimer.current) clearTimeout(plinkoBigWinTimer.current);
       plinkoBigWinTimer.current = setTimeout(() => { if (mountedRef.current) setBigWin(false); }, 2600);
-      snd.win(); haptic.success();
-    } else if (b.mult >= 1) { snd.win(); haptic.success(); }
-    else                    { snd.lose(); haptic.error(); }
+      snd.win();
+    } else if (b.mult >= 1) { snd.win(); }
+    else                    { snd.lose(); }
     onResult(b.mult >= 1);
     setActiveBalls(prev => prev.filter(x => x.id !== b.id));
 
@@ -2639,7 +2684,7 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
   const dropMulti = (count: number) => {
     const snapBet = Math.min(bet, bal);
     if (snapBet < 0.01 || bal < snapBet) return;
-    haptic.impact('light');
+    snd.bet();
     sessionGainRef.current = 0;
     setSessionGain(0);
     setLastWin(null);
@@ -2686,6 +2731,7 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
       </div>
 
       <div className="px-4 pt-4 space-y-4">
+        <SessionStatsBar profit={session.profit} best={session.best} wagered={session.wagered} />
         {/* Board */}
         <div style={{ background: '#080c1e', border: '1px solid #1e2847', borderRadius: 16, overflow: 'visible', position: 'relative', padding: '12px 0' }} className="flex justify-center">
           <div style={{ position: 'relative', width: BOARD_W, height: BOARD_H + 44 }}>
@@ -3126,7 +3172,7 @@ export const MiniAppGames: React.FC = () => {
 
       {/* Demo + Sound controls */}
       <div className="flex gap-2">
-        <button onClick={() => { haptic.selection(); toggleDemoMode(); }} style={{
+        <button onClick={() => { snd.tick(); toggleDemoMode(); }} style={{
           flex: 1, padding: '10px 12px', borderRadius: 12, fontWeight: 700, fontSize: 13, cursor: 'pointer',
           background: demoMode ? 'linear-gradient(135deg,#d97706,#f59e0b)' : 'rgba(255,255,255,0.05)',
           border: demoMode ? '1px solid #f59e0b' : '1px solid #1e2847',
@@ -3136,7 +3182,7 @@ export const MiniAppGames: React.FC = () => {
           <span>🎮</span>
           <span>{demoMode ? `Mode Démo · ${demoBalance.toFixed(2)} TON` : 'Mode Démo'}</span>
         </button>
-        <button onClick={() => { haptic.selection(); toggleMute(); }} style={{
+        <button onClick={toggleMute} style={{
           width: 46, borderRadius: 12, fontWeight: 700, fontSize: 18, cursor: 'pointer',
           background: 'rgba(255,255,255,0.05)', border: '1px solid #1e2847',
           color: muted ? '#475569' : '#94a3b8',
@@ -3152,7 +3198,7 @@ export const MiniAppGames: React.FC = () => {
           <button
             key={game.id}
             data-game={game.id}
-            onClick={() => { haptic.impact('light'); setActiveGame(game.id); }}
+            onClick={() => { snd.tick(); setActiveGame(game.id); }}
             className="game-card-hub relative overflow-hidden rounded-2xl text-left"
             style={{
               background: `linear-gradient(135deg,${game.accentFrom}22,${game.accentTo}11)`,
@@ -3186,7 +3232,7 @@ export const MiniAppGames: React.FC = () => {
         <button
           key={game.id}
           data-game={game.id}
-          onClick={() => { haptic.impact('light'); setActiveGame(game.id); }}
+          onClick={() => { snd.tick(); setActiveGame(game.id); }}
           className="game-card-hub relative overflow-hidden rounded-2xl text-left w-full"
           style={{
             background: `linear-gradient(135deg,${game.accentFrom}22,${game.accentTo}11)`,
