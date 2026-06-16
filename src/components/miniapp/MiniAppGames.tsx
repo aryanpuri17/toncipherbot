@@ -1960,130 +1960,140 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
 };
 
 // ══════════════════════════════════════════════════════════════════
-// JACKPOT — machine à sous 3 rouleaux, alignez les symboles
+// TOWER — grimpez les étages, évitez le piège, encaissez quand vous voulez
 // ══════════════════════════════════════════════════════════════════
 
-type SlotSymbol = { id: string; icon: string; weight: number; mult3: number; mult2: number };
+type TowerDiff = 'easy' | 'medium' | 'hard';
+type TowerPhase = 'waiting' | 'playing' | 'won' | 'lost';
 
-const SLOT_SYMBOLS: SlotSymbol[] = [
-  { id: 'cherry', icon: '🍒', weight: 36, mult3: 3,   mult2: 1.5 },
-  { id: 'lemon',  icon: '🍋', weight: 26, mult3: 5,   mult2: 0   },
-  { id: 'grape',  icon: '🍇', weight: 18, mult3: 8,   mult2: 0   },
-  { id: 'bell',   icon: '🔔', weight: 12, mult3: 15,  mult2: 0   },
-  { id: 'gem',    icon: '💎', weight: 6,  mult3: 40,  mult2: 0   },
-  { id: 'seven',  icon: '7️⃣', weight: 2,  mult3: 100, mult2: 0   },
-];
+const TOWER_FLOORS = 7;
+const TOWER_CELLS: Record<TowerDiff, number> = { easy: 4, medium: 3, hard: 2 };
+const TOWER_RTP = 0.95;
+const TOWER_LABEL: Record<TowerDiff, string> = { easy: 'Facile', medium: 'Moyen', hard: 'Difficile' };
 
-function pickSlotSymbol(): SlotSymbol {
-  const total = SLOT_SYMBOLS.reduce((s, sym) => s + sym.weight, 0);
-  let r = Math.random() * total;
-  for (const sym of SLOT_SYMBOLS) { r -= sym.weight; if (r <= 0) return sym; }
-  return SLOT_SYMBOLS[0];
+function towerSafeFrac(diff: TowerDiff): number {
+  const cells = TOWER_CELLS[diff];
+  return (cells - 1) / cells; // 1 piège par étage
+}
+function towerMult(diff: TowerDiff, floor: number): number {
+  if (floor <= 0) return 1;
+  return +(TOWER_RTP / Math.pow(towerSafeFrac(diff), floor)).toFixed(4);
 }
 
-function rollSlots(streak: number, demo = false): { reels: SlotSymbol[]; mult: number } {
-  if (!demo && dheJackpot()) {
-    const sym = SLOT_SYMBOLS[SLOT_SYMBOLS.length - 1];
-    return { reels: [sym, sym, sym], mult: sym.mult3 };
-  }
-  const reels = [pickSlotSymbol(), pickSlotSymbol(), pickSlotSymbol()];
-  const allMatch = reels[0].id === reels[1].id && reels[1].id === reels[2].id;
-  if (allMatch && !demo) {
-    const pressure = Math.max(dhePressure(), streak >= 2 ? 0.35 : streak >= 1 ? 0.18 : 0);
-    if (pressure > 0 && Math.random() < pressure * 0.6) {
-      let third = pickSlotSymbol();
-      while (third.id === reels[0].id) third = pickSlotSymbol();
-      reels[2] = third;
+// Mode réel : la maison resserre légèrement les chances sur les ascensions
+// profondes (greed trap), même logique que Mines. Le mode démo reste honnête.
+function towerStep(diff: TowerDiff, floor: number, streak: number, demo = false): boolean {
+  const cells = TOWER_CELLS[diff];
+  let safe = Math.random() < (cells - 1) / cells;
+  if (safe && !demo && !dheJackpot()) {
+    const p = Math.max(dhePressure(), streak >= 2 ? 0.30 : streak >= 1 ? 0.15 : 0);
+    const trapAfter = diff === 'hard' ? 2 : 3;
+    if (p > 0 && floor >= trapAfter) {
+      const greedP = Math.min(0.35, p * 0.5 + (floor - trapAfter) * 0.05);
+      if (Math.random() < greedP) safe = false;
     }
   }
-  const cherryCount = reels.filter(r => r.id === 'cherry').length;
-  let mult = 0;
-  if (reels[0].id === reels[1].id && reels[1].id === reels[2].id) mult = reels[0].mult3;
-  else if (cherryCount === 2) mult = 1.5;
-  return { reels, mult };
+  return safe;
 }
 
-const SlotsGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResult }> = ({ onBack, streak, onResult }) => {
+const TowerGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResult }> = ({ onBack, streak, onResult }) => {
   const { currentUser, placeGameBet, recordGameResult, demoMode, demoBalance } = useAppStore();
   const bal = demoMode ? demoBalance : currentUser.balanceMain;
   const [bet, setBet]           = useState(0.01);
-  const [spinning, setSpinning] = useState(false);
-  const [reels, setReels]       = useState<SlotSymbol[]>([SLOT_SYMBOLS[0], SLOT_SYMBOLS[0], SLOT_SYMBOLS[0]]);
-  const [stopped, setStopped]   = useState<[boolean, boolean, boolean]>([true, true, true]);
-  const [result, setResult]     = useState<{ mult: number; win: number } | null>(null);
-  const [hist, setHist]         = useState<number[]>([]);
+  const [diff, setDiff]         = useState<TowerDiff>('medium');
+  const [phase, setPhase]       = useState<TowerPhase>('waiting');
+  const [floor, setFloor]       = useState(0);
+  const [picks, setPicks]       = useState<number[]>([]);
+  const [trapCell, setTrapCell] = useState<number | null>(null);
   const [bigWin, setBigWin]     = useState(false);
-  const mountedRef              = useRef(true);
-  const bigWinTimerRef          = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const reelTimers               = useRef<ReturnType<typeof setInterval>[]>([]);
-  const stopTimers               = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const activeBetRef            = useRef(0);
+  const diffRef                 = useRef<TowerDiff>('medium');
+  const towerMountedRef         = useRef(true);
+  const towerBigWinTimer        = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-      if (bigWinTimerRef.current) clearTimeout(bigWinTimerRef.current);
-      reelTimers.current.forEach(clearInterval);
-      stopTimers.current.forEach(clearTimeout);
-    };
+    towerMountedRef.current = true;
+    return () => { towerMountedRef.current = false; if (towerBigWinTimer.current) clearTimeout(towerBigWinTimer.current); };
   }, []);
 
-  const effBet  = Math.min(bet, bal);
-  const canSpin = !spinning && effBet >= 0.01 && bal >= 0.01;
+  const effBet       = Math.min(bet, bal);
+  const activeDiff   = phase === 'waiting' ? diff : diffRef.current;
+  const cellsPerFloor = TOWER_CELLS[activeDiff];
+  const curMult       = towerMult(activeDiff, floor);
+  const curWin         = +(activeBetRef.current * curMult).toFixed(6);
+  const nextMult       = towerMult(activeDiff, floor + 1);
+  const maxMult         = towerMult(activeDiff, TOWER_FLOORS);
 
-  const spin = () => {
-    if (!canSpin) return;
-    const used = effBet;
-    const { reels: finalReels, mult } = rollSlots(streak, demoMode);
-    setSpinning(true);
-    setResult(null);
-    setStopped([false, false, false]);
-    snd.spin();
+  const start = () => {
+    if (effBet < 0.01 || bal < 0.01) return;
     haptic.impact('medium');
-
-    reelTimers.current.forEach(clearInterval);
-    stopTimers.current.forEach(clearTimeout);
-    reelTimers.current = [];
-    stopTimers.current = [];
-
-    const stopDelays = [650, 1000, 1450];
-    for (let i = 0; i < 3; i++) {
-      const interval = setInterval(() => {
-        if (!mountedRef.current) return;
-        setReels(prev => { const next = [...prev] as SlotSymbol[]; next[i] = pickSlotSymbol(); return next; });
-      }, 70);
-      reelTimers.current.push(interval);
-      const stopT = setTimeout(() => {
-        clearInterval(interval);
-        if (!mountedRef.current) return;
-        setReels(prev => { const next = [...prev] as SlotSymbol[]; next[i] = finalReels[i]; return next; });
-        setStopped(prev => { const next = [...prev] as [boolean, boolean, boolean]; next[i] = true; return next; });
-        snd.tick();
-        haptic.impact('light');
-      }, stopDelays[i]);
-      stopTimers.current.push(stopT);
-    }
-
-    const finalT = setTimeout(() => {
-      if (!mountedRef.current) return;
-      setSpinning(false);
-      const win = +(used * mult).toFixed(6);
-      placeGameBet(used, win);
-      recordGameResult('Jackpot', used, win);
-      if (!demoMode) dheRecord(win - used);
-      setResult({ mult, win });
-      setHist(h => [mult, ...h.slice(0, 11)]);
-      onResult(mult > 0);
-      if (mult >= 15) {
-        setBigWin(true);
-        bigWinTimerRef.current = setTimeout(() => { if (mountedRef.current) setBigWin(false); }, 2600);
-        snd.win();
-        haptic.impact('heavy'); haptic.success();
-      } else if (mult > 0) { snd.win(); haptic.success(); }
-      else { snd.lose(); haptic.error(); }
-    }, stopDelays[2] + 150);
-    stopTimers.current.push(finalT);
+    diffRef.current = diff;
+    activeBetRef.current = effBet;
+    setFloor(0);
+    setPicks([]);
+    setTrapCell(null);
+    setPhase('playing');
   };
+
+  const pickCell = (cellIdx: number) => {
+    if (phase !== 'playing') return;
+    const safe = towerStep(diffRef.current, floor + 1, streak, demoMode);
+    if (safe) {
+      snd.reveal();
+      haptic.impact('light');
+      const nf = floor + 1;
+      setPicks(p => [...p, cellIdx]);
+      setFloor(nf);
+      if (nf >= TOWER_FLOORS) {
+        const win = +(activeBetRef.current * towerMult(diffRef.current, nf)).toFixed(6);
+        placeGameBet(activeBetRef.current, win);
+        recordGameResult('Tower', activeBetRef.current, win);
+        if (!demoMode) dheRecord(win - activeBetRef.current);
+        snd.win();
+        haptic.success();
+        onResult(true);
+        setBigWin(true);
+        if (towerBigWinTimer.current) clearTimeout(towerBigWinTimer.current);
+        towerBigWinTimer.current = setTimeout(() => { if (towerMountedRef.current) setBigWin(false); }, 2600);
+        setPhase('won');
+      }
+    } else {
+      setTrapCell(cellIdx);
+      setPhase('lost');
+      placeGameBet(activeBetRef.current, 0);
+      recordGameResult('Tower', activeBetRef.current, 0);
+      if (!demoMode) dheRecord(-activeBetRef.current);
+      snd.boom();
+      haptic.impact('heavy'); haptic.error();
+      onResult(false);
+    }
+  };
+
+  const cashout = () => {
+    if (phase !== 'playing' || floor === 0) return;
+    placeGameBet(activeBetRef.current, curWin);
+    recordGameResult('Tower', activeBetRef.current, curWin);
+    if (!demoMode) dheRecord(curWin - activeBetRef.current);
+    snd.win();
+    haptic.success();
+    onResult(true);
+    if (curMult >= 5) {
+      setBigWin(true);
+      if (towerBigWinTimer.current) clearTimeout(towerBigWinTimer.current);
+      towerBigWinTimer.current = setTimeout(() => { if (towerMountedRef.current) setBigWin(false); }, 2600);
+    }
+    setPhase('won');
+  };
+
+  const reset = () => { setPhase('waiting'); setFloor(0); setPicks([]); setTrapCell(null); };
+
+  // Le tour repart automatiquement — pas de bouton "Rejouer" bloquant.
+  useEffect(() => {
+    if (phase !== 'lost' && phase !== 'won') return;
+    const id = setTimeout(() => { if (towerMountedRef.current) reset(); }, 2200);
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase]);
 
   return (
     <div className="space-y-5 pb-4">
@@ -2094,101 +2104,139 @@ const SlotsGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
         </button>
         <div className="flex-1">
           <div className="flex items-center gap-2">
-            <h2 className="text-base font-bold text-white">Jackpot</h2>
+            <h2 className="text-base font-bold text-white">Tower</h2>
             <StreakChip streak={streak} />
           </div>
-          <p className="text-[11px] text-slate-500">3 symboles alignés = jackpot · ×100 max</p>
+          <p className="text-[11px] text-slate-500">Grimpez les étages · évitez le piège · encaissez</p>
         </div>
         <MuteButton />
         <GameBalanceChip bal={bal} demo={demoMode} />
       </div>
 
-      {hist.length > 0 && (
-        <div className="flex gap-1.5 flex-wrap">
-          {hist.map((m, i) => (
-            <span key={i} className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-              m === 0 ? 'bg-red-500/20 text-red-400' :
-              m < 5   ? 'bg-amber-500/20 text-amber-400' :
-              m < 20  ? 'bg-emerald-500/20 text-emerald-400' :
-                        'bg-purple-500/20 text-purple-300'
-            }`}>{m === 0 ? 'PERDU' : `×${m}`}</span>
-          ))}
+      {/* Live gain bar */}
+      {phase === 'playing' && (
+        <div className="glass-card p-3 flex items-center justify-between">
+          <div>
+            <p className="text-[10px] text-slate-500 uppercase font-semibold">Gain actuel</p>
+            <p className="text-lg font-black text-emerald-400">{floor > 0 ? `${curWin.toFixed(4)} TON` : '—'}</p>
+          </div>
+          <div className="text-center">
+            <p className="text-[10px] text-slate-500 uppercase font-semibold">Étage</p>
+            <p className="text-lg font-black text-white">{floor}/{TOWER_FLOORS}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-[10px] text-slate-500 uppercase font-semibold">Prochain</p>
+            <p className="text-lg font-black text-amber-400">{nextMult.toFixed(2)}×</p>
+          </div>
         </div>
       )}
 
-      <div className="glass-card p-5 space-y-4">
-        {/* Reels */}
-        <div className="grid grid-cols-3 gap-3">
-          {reels.map((sym, i) => {
-            const allMatch = reels[0].id === reels[1].id && reels[1].id === reels[2].id;
-            const isWinningCell = !!result && !spinning && result.mult > 0 && (allMatch || sym.id === 'cherry');
-            return (
-              <div key={i} style={{
-                aspectRatio: '1', borderRadius: 16,
-                background: 'linear-gradient(160deg,#1e2a52,#161d3a)',
-                border: isWinningCell ? '2px solid #4ade80' : '1px solid #1e2847',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 44, boxShadow: stopped[i] ? 'none' : '0 0 18px rgba(99,102,241,0.25) inset',
-              }}>
-                {sym.icon}
+      {(phase === 'won' || phase === 'lost') && (
+        <div className="glass-card p-4 text-center">
+          {phase === 'won' ? (
+            <p className="text-emerald-400 font-bold text-sm">
+              {floor >= TOWER_FLOORS ? '🏆 Sommet atteint !' : '🎉 Encaissé'} +{curWin.toFixed(4)} TON
+            </p>
+          ) : (
+            <p className="text-red-400 font-bold text-sm">💥 Piège ! Perdu −{activeBetRef.current.toFixed(4)} TON</p>
+          )}
+        </div>
+      )}
+
+      {/* Tour — échelle des étages */}
+      <div className="glass-card p-4 space-y-2">
+        {Array.from({ length: TOWER_FLOORS }, (_, i) => TOWER_FLOORS - i).map(f => {
+          const isCleared = f <= floor;
+          const isCurrent = phase === 'playing' && f === floor + 1;
+          const isBusted  = phase === 'lost' && f === floor + 1;
+          const isLocked  = !isCleared && !isCurrent && !isBusted;
+          const pickIdx   = f <= floor ? picks[f - 1] : null;
+
+          return (
+            <div key={f} className="flex items-center gap-2">
+              <span className="text-[10px] font-bold w-9 text-right" style={{ color: isCurrent ? '#fbbf24' : isCleared ? '#4ade80' : '#475569' }}>
+                {towerMult(activeDiff, f).toFixed(2)}×
+              </span>
+              <div className="flex-1 grid gap-1.5" style={{ gridTemplateColumns: `repeat(${cellsPerFloor}, 1fr)` }}>
+                {Array.from({ length: cellsPerFloor }, (_, c) => {
+                  const cleared = f <= floor && pickIdx === c;
+                  const busted  = isBusted && c === trapCell;
+                  return (
+                    <button
+                      key={c}
+                      disabled={!isCurrent}
+                      onClick={() => pickCell(c)}
+                      style={{
+                        height: 30, borderRadius: 8,
+                        background: cleared ? 'linear-gradient(135deg,#22c55e,#16a34a)'
+                          : busted ? 'linear-gradient(135deg,#ef4444,#b91c1c)'
+                          : isCurrent ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.03)',
+                        border: isCurrent ? '1px solid #3a4f8e' : '1px solid #1e2847',
+                        opacity: isLocked ? 0.35 : 1,
+                        cursor: isCurrent ? 'pointer' : 'default',
+                        fontSize: 14,
+                        transition: 'background 0.15s',
+                      }}
+                      className={isCurrent ? 'tap-scale' : undefined}
+                    >
+                      {cleared ? '💎' : busted ? '💥' : ''}
+                    </button>
+                  );
+                })}
               </div>
-            );
-          })}
-        </div>
-
-        {result && !spinning && (
-          <div className={`w-full text-center px-4 py-3 rounded-xl font-semibold text-sm ${
-            result.mult >= 40 ? 'bg-purple-500/20 border border-purple-400/50 text-purple-300' :
-            result.mult >= 15 ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-400' :
-            result.mult > 0   ? 'bg-amber-500/15 border border-amber-500/30 text-amber-400' :
-                                'bg-red-500/15 border border-red-500/30 text-red-400'
-          }`}>
-            {result.mult === 0
-              ? '😔 Dommage… Bonne chance au prochain tour !'
-              : result.mult >= 100
-                ? `🏆 JACKPOT ×${result.mult} !! +${result.win.toFixed(4)} TON — Félicitations !`
-                : `🎉 ×${result.mult} — +${result.win.toFixed(4)} TON`}
-          </div>
-        )}
-      </div>
-
-      {/* Bet controls */}
-      <div className="glass-card p-4 space-y-3">
-        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Montant de la mise</p>
-        <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-xl px-4 py-3">
-          <input type="number" value={bet} min={0.01} max={50} step={0.01}
-            onChange={e => { const v = +e.target.value; if (!isNaN(v)) setBet(Math.max(0.01, Math.min(50, v))); }}
-            className="flex-1 bg-transparent text-2xl font-bold text-white outline-none" />
-          <span className="text-base font-bold text-slate-500">TON</span>
-        </div>
-        <BetQuickButtons setBet={setBet} maxBal={bal} />
-        <button onClick={spin} disabled={!canSpin}
-          className={`w-full py-4 rounded-xl font-bold text-base transition-all flex items-center justify-center gap-2 ${
-            canSpin
-              ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-emerald-950 hover:from-emerald-400 hover:to-teal-400 active:scale-[0.98] shadow-lg shadow-emerald-500/25'
-              : 'bg-white/5 text-slate-600 cursor-not-allowed'
-          }`}>
-          {spinning ? <><RotateCcw className="w-4 h-4 animate-spin" /> Les rouleaux tournent…</>
-            : bal < 0.01 ? (demoMode ? '🎮 Démo épuisé' : '💸 Solde insuffisant')
-            : <><Zap className="w-4 h-4" /> Lancer ({effBet.toFixed(2)} TON)</>}
-        </button>
-      </div>
-
-      {/* Pay table */}
-      <div className="glass-card p-4">
-        <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Table des gains · 3 symboles identiques</h3>
-        <div className="space-y-1.5">
-          {[...SLOT_SYMBOLS].reverse().map(sym => (
-            <div key={sym.id} className="flex items-center justify-between px-3 py-1.5 rounded-lg bg-white/5">
-              <span className="text-lg">{sym.icon}{sym.icon}{sym.icon}</span>
-              <span className="text-sm text-white font-mono">×{sym.mult3}</span>
             </div>
-          ))}
-          <div className="flex items-center justify-between px-3 py-1.5 rounded-lg bg-white/5">
-            <span className="text-lg">🍒🍒 + 1</span>
-            <span className="text-sm text-white font-mono">×1.5</span>
-          </div>
-        </div>
+          );
+        })}
+      </div>
+
+      {/* Controls */}
+      <div className="glass-card p-4 space-y-3">
+        {phase === 'waiting' ? (
+          <>
+            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Difficulté</p>
+            <div className="grid grid-cols-3 gap-2">
+              {(['easy', 'medium', 'hard'] as const).map(d => (
+                <button key={d} onClick={() => setDiff(d)}
+                  style={{
+                    padding: '8px 0', borderRadius: 10, fontWeight: 700, fontSize: 12,
+                    background: diff === d ? 'linear-gradient(135deg,#22c55e,#16a34a)' : 'rgba(255,255,255,0.05)',
+                    color: diff === d ? '#06210f' : '#94a3b8',
+                    border: diff === d ? 'none' : '1px solid #1e2847',
+                  }}>
+                  {TOWER_LABEL[d]}
+                </button>
+              ))}
+            </div>
+            <p className="text-[10px] text-slate-500">{TOWER_CELLS[diff]} cases/étage · ×{maxMult.toFixed(2)} au sommet</p>
+            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest pt-1">Montant de la mise</p>
+            <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-xl px-4 py-3">
+              <input type="number" value={bet} min={0.01} max={50} step={0.01}
+                onChange={e => { const v = +e.target.value; if (!isNaN(v)) setBet(Math.max(0.01, Math.min(50, v))); }}
+                className="flex-1 bg-transparent text-2xl font-bold text-white outline-none" />
+              <span className="text-base font-bold text-slate-500">TON</span>
+            </div>
+            <BetQuickButtons setBet={setBet} maxBal={bal} />
+            <button onClick={start} disabled={effBet < 0.01 || bal < 0.01}
+              className={`w-full py-4 rounded-xl font-bold text-base transition-all flex items-center justify-center gap-2 ${
+                effBet >= 0.01 && bal >= 0.01
+                  ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-emerald-950 hover:from-emerald-400 hover:to-teal-400 active:scale-[0.98] shadow-lg shadow-emerald-500/25'
+                  : 'bg-white/5 text-slate-600 cursor-not-allowed'
+              }`}>
+              {bal < 0.01 ? (demoMode ? '🎮 Démo épuisé' : '💸 Solde insuffisant') : <><Zap className="w-4 h-4" /> Grimper ({effBet.toFixed(2)} TON)</>}
+            </button>
+          </>
+        ) : phase === 'playing' ? (
+          <button onClick={cashout} disabled={floor === 0}
+            className={`w-full py-4 rounded-xl font-bold text-base transition-all ${
+              floor > 0
+                ? 'bg-gradient-to-r from-amber-500 to-yellow-500 text-amber-950 active:scale-[0.98] shadow-lg shadow-amber-500/25'
+                : 'bg-white/5 text-slate-600 cursor-not-allowed'
+            }`}>
+            {floor > 0 ? `💰 Encaisser ${curWin.toFixed(4)} TON` : 'Choisissez une case pour grimper'}
+          </button>
+        ) : (
+          <p className="text-center text-[11px] text-slate-500">Nouvelle partie dans un instant…</p>
+        )}
       </div>
     </div>
   );
@@ -2867,12 +2915,12 @@ const _NOW = Date.now();
 const FEED_DATA: FeedEntry[] = [
   { username: 'Léa R.',      bet: 0.05, win: 0.00, mult: 0,    game: 'Crash',    createdAt: _NOW -  1 * 60000 },
   { username: 'Yusuf K.',    bet: 0.10, win: 2.80, mult: 2.80, game: 'Plinko',   createdAt: _NOW -  3 * 60000 },
-  { username: 'Marco T.',    bet: 1.0,  win: 0.00, mult: 0,    game: 'Jackpot',  createdAt: _NOW -  6 * 60000 },
-  { username: 'Chen W.',     bet: 0.02, win: 0.04, mult: 2,    game: 'Jackpot',  createdAt: _NOW -  9 * 60000 },
+  { username: 'Marco T.',    bet: 1.0,  win: 0.00, mult: 0,    game: 'Tower',    createdAt: _NOW -  6 * 60000 },
+  { username: 'Chen W.',     bet: 0.02, win: 0.04, mult: 2,    game: 'Tower',    createdAt: _NOW -  9 * 60000 },
   { username: 'Amira S.',    bet: 0.50, win: 1.28, mult: 2.56, game: 'Crash',    createdAt: _NOW - 14 * 60000 },
   { username: 'Priya S.',    bet: 0.05, win: 0.00, mult: 0,    game: 'Mines',    createdAt: _NOW - 19 * 60000 },
-  { username: 'Fatou D.',    bet: 0.10, win: 0.19, mult: 2,    game: 'Jackpot',  createdAt: _NOW - 25 * 60000 },
-  { username: 'Nicolás V.',  bet: 0.03, win: 1.08, mult: 36,   game: 'Jackpot',  createdAt: _NOW - 33 * 60000 },
+  { username: 'Fatou D.',    bet: 0.10, win: 0.19, mult: 2,    game: 'Tower',    createdAt: _NOW - 25 * 60000 },
+  { username: 'Nicolás V.',  bet: 0.03, win: 1.08, mult: 36,   game: 'Tower',    createdAt: _NOW - 33 * 60000 },
   { username: 'Kwame O.',    bet: 0.20, win: 0.00, mult: 0,    game: 'Plinko',   createdAt: _NOW - 41 * 60000 },
   { username: 'Hana P.',     bet: 0.01, win: 0.02, mult: 2,    game: 'Dice',     createdAt: _NOW - 48 * 60000 },
 ];
@@ -2881,7 +2929,7 @@ const FEED_DATA: FeedEntry[] = [
 // GAMES HUB
 // ══════════════════════════════════════════════════════════════════
 
-type ActiveGame = 'dice' | 'crash' | 'mines' | 'slots' | 'plinko' | null;
+type ActiveGame = 'dice' | 'crash' | 'mines' | 'tower' | 'plinko' | null;
 
 const CATALOG = [
   {
@@ -2921,16 +2969,16 @@ const CATALOG = [
     pattern: 'mines',
   },
   {
-    id: 'slots' as ActiveGame,
-    title: 'Jackpot',
-    desc: '3 symboles alignés = jackpot TON',
-    stats: '×100 max · 3 symboles alignés',
-    emoji: '🎰',
-    badge: 'JACKPOT',
+    id: 'tower' as ActiveGame,
+    title: 'Tower',
+    desc: 'Grimpez les étages, évitez le piège',
+    stats: 'jusqu\'à ×40 · encaissez à tout moment',
+    emoji: '🗼',
+    badge: 'NOUVEAU',
     accentFrom: '#10b981', accentTo: '#34d399',
     glow: 'rgba(16,185,129,0.4)',
     badgeColor: '#10b981',
-    pattern: 'slots',
+    pattern: 'tower',
   },
   {
     id: 'plinko' as ActiveGame,
@@ -3018,7 +3066,7 @@ export const MiniAppGames: React.FC = () => {
 
   // Live feed auto-rotation — new fake entry every 8–18 seconds
   useEffect(() => {
-    const GAME_NAMES = ['Aviator', 'Plinko', 'Jackpot', 'Mines', 'Dice'];
+    const GAME_NAMES = ['Aviator', 'Plinko', 'Tower', 'Mines', 'Dice'];
     const scheduleNext = () => {
       const ms = 8000 + Math.floor(Math.random() * 10000);
       return setTimeout(() => {
@@ -3041,7 +3089,7 @@ export const MiniAppGames: React.FC = () => {
   }, []);
 
   if (activeGame === 'dice')     return <DiceGame     onBack={() => setActiveGame(null)} streak={streak} onResult={handleResult} />;
-  if (activeGame === 'slots')    return <SlotsGame    onBack={() => setActiveGame(null)} streak={streak} onResult={handleResult} />;
+  if (activeGame === 'tower')    return <TowerGame    onBack={() => setActiveGame(null)} streak={streak} onResult={handleResult} />;
   if (activeGame === 'plinko')   return <PlinkoGame   onBack={() => setActiveGame(null)} streak={streak} onResult={handleResult} />;
   if (activeGame === 'crash')   return <CrashGame   onBack={() => setActiveGame(null)} streak={streak} onResult={handleResult} />;
   if (activeGame === 'mines')   return <MinesGame   onBack={() => setActiveGame(null)} streak={streak} onResult={handleResult} />;

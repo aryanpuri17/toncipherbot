@@ -264,7 +264,7 @@ const MOCK_GAMES = [
   { icon: '🎲', name: 'Dice',    sub: '×2 à ×49',     grad: 'from-amber-600/30 to-amber-900/20 border-amber-500/30'      },
   { icon: '🚀', name: 'Crash',   sub: "jusqu'à ×100", grad: 'from-red-600/30 to-red-900/20 border-red-500/30'            },
   { icon: '💎', name: 'Mines',   sub: 'stratégie',    grad: 'from-violet-600/30 to-violet-900/20 border-violet-500/30'   },
-  { icon: '🎰', name: 'Jackpot', sub: 'gros lots',    grad: 'from-emerald-600/30 to-emerald-900/20 border-emerald-500/30' },
+  { icon: '🗼', name: 'Tower',   sub: 'encaisse quand tu veux', grad: 'from-emerald-600/30 to-emerald-900/20 border-emerald-500/30' },
 ];
 
 const Slide3: React.FC = () => (
