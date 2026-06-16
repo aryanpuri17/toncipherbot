@@ -2119,17 +2119,21 @@ const SlotsGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
       <div className="glass-card p-5 space-y-4">
         {/* Reels */}
         <div className="grid grid-cols-3 gap-3">
-          {reels.map((sym, i) => (
-            <div key={i} style={{
-              aspectRatio: '1', borderRadius: 16,
-              background: 'linear-gradient(160deg,#1e2a52,#161d3a)',
-              border: result && !spinning ? (result.mult > 0 ? '2px solid #4ade80' : '1px solid #1e2847') : '1px solid #1e2847',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 44, boxShadow: stopped[i] ? 'none' : '0 0 18px rgba(99,102,241,0.25) inset',
-            }}>
-              {sym.icon}
-            </div>
-          ))}
+          {reels.map((sym, i) => {
+            const allMatch = reels[0].id === reels[1].id && reels[1].id === reels[2].id;
+            const isWinningCell = !!result && !spinning && result.mult > 0 && (allMatch || sym.id === 'cherry');
+            return (
+              <div key={i} style={{
+                aspectRatio: '1', borderRadius: 16,
+                background: 'linear-gradient(160deg,#1e2a52,#161d3a)',
+                border: isWinningCell ? '2px solid #4ade80' : '1px solid #1e2847',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 44, boxShadow: stopped[i] ? 'none' : '0 0 18px rgba(99,102,241,0.25) inset',
+              }}>
+                {sym.icon}
+              </div>
+            );
+          })}
         </div>
 
         {result && !spinning && (
