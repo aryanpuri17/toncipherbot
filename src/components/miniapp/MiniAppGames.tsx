@@ -341,240 +341,102 @@ const BetQuickButtons: React.FC<{ setBet: React.Dispatch<React.SetStateAction<nu
 };
 
 // ══════════════════════════════════════════════════════════════════
-// ROUE DE LA FORTUNE
+// DICE — prédire si le tirage (0.00–100.00) sera plus haut ou plus bas
+// que le seuil choisi. Multiplicateur = 99 / chance de gagner (1% edge
+// mathématique) + légère pression maison alignée sur les autres jeux.
 // ══════════════════════════════════════════════════════════════════
 
-type Seg = { label: string; mult: number; fill: string; stroke: string; text: string };
+type DiceDir = 'under' | 'over';
 
-const SEGS: Seg[] = [
-  { label: 'PERDU', mult: 0,   fill: '#200808', stroke: '#991b1b', text: '#f87171' },
-  { label: '×0.4',  mult: 0.4, fill: '#1e1200', stroke: '#92400e', text: '#fb923c' },
-  { label: '×1',    mult: 1,   fill: '#1e1a00', stroke: '#a16207', text: '#fbbf24' },
-  { label: 'PERDU', mult: 0,   fill: '#200808', stroke: '#991b1b', text: '#f87171' },
-  { label: '×2',    mult: 2,   fill: '#001e08', stroke: '#166534', text: '#4ade80' },
-  { label: '×3',    mult: 3,   fill: '#00061e', stroke: '#1e3a8a', text: '#93c5fd' },
-  { label: 'PERDU', mult: 0,   fill: '#200808', stroke: '#991b1b', text: '#f87171' },
-  { label: '×5',    mult: 5,   fill: '#001818', stroke: '#134e4a', text: '#5eead4' },
-  { label: 'PERDU', mult: 0,   fill: '#200808', stroke: '#991b1b', text: '#f87171' },
-  { label: '×10',   mult: 10,  fill: '#0e001e', stroke: '#5b21b6', text: '#c4b5fd' },
-];
-
-const CX = 150, CY = 150, WRADIUS = 118;
-const SEG_DEG = 36;
-
-function pt(deg: number, r = WRADIUS) {
-  const rad = (deg - 90) * (Math.PI / 180);
-  return { x: CX + r * Math.cos(rad), y: CY + r * Math.sin(rad) };
+function diceWinChance(target: number, dir: DiceDir): number {
+  return dir === 'under' ? target : 100 - target;
 }
-function arcPath(i: number): string {
-  const s = pt(i * SEG_DEG - SEG_DEG / 2);
-  const e = pt(i * SEG_DEG + SEG_DEG / 2);
-  return `M${CX} ${CY} L${s.x.toFixed(2)} ${s.y.toFixed(2)} A${WRADIUS} ${WRADIUS} 0 0 1 ${e.x.toFixed(2)} ${e.y.toFixed(2)}Z`;
+function diceMultiplier(target: number, dir: DiceDir): number {
+  const wc = Math.max(2, Math.min(98, diceWinChance(target, dir)));
+  return +(99 / wc).toFixed(4);
 }
 
-function rollWheel(streak: number, demo = false): { mult: number; idx: number[] } {
-  if (demo) {
-    const r = Math.random();
-    if (r < 0.35) return { mult: 0,   idx: [0] };
-    if (r < 0.52) return { mult: 0.4, idx: [1] };
-    if (r < 0.68) return { mult: 1,   idx: [2] };
-    if (r < 0.83) return { mult: 2,   idx: [4] };
-    if (r < 0.93) return { mult: 3,   idx: [5] };
-    if (r < 0.99) return { mult: 5,   idx: [7] };
-    return { mult: 10, idx: [9] };
+function rollDice(target: number, dir: DiceDir, streak: number, demo = false): { roll: number; win: boolean } {
+  let roll = +(Math.random() * 100).toFixed(2);
+  let win = dir === 'under' ? roll < target : roll > target;
+  if (win && !demo && !dheJackpot()) {
+    const pressure = Math.max(dhePressure(), streak >= 2 ? 0.30 : streak >= 1 ? 0.15 : 0);
+    if (pressure > 0 && Math.random() < pressure * 0.5) {
+      win = false;
+      roll = dir === 'under'
+        ? +(target + Math.random() * (100 - target)).toFixed(2)
+        : +(Math.random() * target).toFixed(2);
+    }
   }
-  const bonus = Math.min(35, streak * 12);
-  const loseW = 58 + bonus;
-  const f = (100 - loseW) / 42;
-  const raw = [
-    { mult: 0,   weight: loseW,                                                idx: [0, 3, 6, 8] },
-    { mult: 0.4, weight: Math.max(1, Math.round(18 * f)),                      idx: [1] },
-    { mult: 1,   weight: Math.max(1, Math.round(13 * f)),                      idx: [2] },
-    { mult: 2,   weight: Math.max(1, Math.round(8  * f)),                      idx: [4] },
-    { mult: 3,   weight: Math.max(1, Math.round(3  * f)),                      idx: [5] },
-    { mult: 5,   weight: streak >= 1 ? 0 : Math.max(0, Math.round(0.6 * f)),  idx: [7] },
-    { mult: 10,  weight: streak >= 1 ? 0 : Math.max(0, Math.round(0.15 * f)), idx: [9] },
-  ];
-  const total = raw.reduce((s, r) => s + r.weight, 0);
-  let r = Math.random() * total;
-  for (const rule of raw) { r -= rule.weight; if (r <= 0) return rule; }
-  return raw[0];
+  return { roll, win };
 }
 
-const WheelSVG: React.FC<{ rotation: number; winIdx?: number | null }> = ({ rotation, winIdx }) => {
-  const studs = Array.from({ length: 20 }, (_, i) => pt(i * 18, WRADIUS + 14));
-  return (
-    <svg width="280" height="280" viewBox="0 0 300 300" style={{
-      transform: `rotate(${rotation}deg)`,
-      transition: 'transform 4.2s cubic-bezier(0.17, 0.67, 0.1, 0.99)',
-      display: 'block',
-    }}>
-      <defs>
-        <radialGradient id="wjGlow" cx="50%" cy="30%" r="70%">
-          <stop offset="0%" stopColor="#c4b5fd" stopOpacity="0.55" />
-          <stop offset="100%" stopColor="#5b21b6" stopOpacity="0" />
-        </radialGradient>
-        <radialGradient id="wHub" cx="45%" cy="38%" r="55%">
-          <stop offset="0%" stopColor="#fde68a" />
-          <stop offset="100%" stopColor="#78350f" />
-        </radialGradient>
-        <filter id="wSegGlow" x="-40%" y="-40%" width="180%" height="180%">
-          <feGaussianBlur stdDeviation="5" result="blur" />
-          <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
-        </filter>
-      </defs>
-      <circle cx={CX} cy={CY} r={WRADIUS + 22} fill="#1a0e00" />
-      <circle cx={CX} cy={CY} r={WRADIUS + 22} fill="none" stroke="#fbbf24" strokeWidth="3" />
-      <circle cx={CX} cy={CY} r={WRADIUS + 3}  fill="none" stroke="#92400e" strokeWidth="1.5" />
-      {studs.map((p, i) => (
-        <circle key={i} cx={p.x.toFixed(2)} cy={p.y.toFixed(2)} r={5}
-          fill="#fbbf24" stroke="#78350f" strokeWidth="1.5" />
-      ))}
-      {SEGS.map((seg, i) => {
-        const midDeg = i * SEG_DEG;
-        const tp = pt(midDeg, WRADIUS * 0.63);
-        const rot = midDeg - 90;
-        return (
-          <g key={i}>
-            <path d={arcPath(i)} fill={seg.fill} stroke={seg.stroke} strokeWidth="1.5" />
-            {seg.mult === 10 && <path d={arcPath(i)} fill="url(#wjGlow)" />}
-            <text x={tp.x.toFixed(2)} y={tp.y.toFixed(2)}
-              textAnchor="middle" dominantBaseline="middle"
-              fontSize={seg.label.length > 3 ? 9 : 11} fontWeight="900" fill={seg.text}
-              transform={`rotate(${rot},${tp.x.toFixed(2)},${tp.y.toFixed(2)})`}
-              style={{ userSelect: 'none', pointerEvents: 'none' }}>
-              {seg.label}
-            </text>
-          </g>
-        );
-      })}
-      {/* Winning segment glow — appears after spin stops */}
-      {winIdx != null && (
-        <path
-          d={arcPath(winIdx)}
-          fill={SEGS[winIdx].text + '30'}
-          stroke={SEGS[winIdx].text}
-          strokeWidth="2.5"
-          filter="url(#wSegGlow)"
-          style={{ animation: 'winSegPulse 1.2s ease-in-out infinite alternate' }}
-        />
-      )}
-      <circle cx={CX} cy={CY} r={27} fill="url(#wHub)" stroke="#fbbf24" strokeWidth="2.5" />
-      <circle cx={CX} cy={CY} r={18} fill="#1a0800" />
-      <circle cx={CX} cy={CY} r={9}  fill="#fbbf24" opacity="0.25" />
-    </svg>
-  );
-};
-
-const WheelGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResult }> = ({ onBack, streak, onResult }) => {
+const DiceGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResult }> = ({ onBack, streak, onResult }) => {
   const { currentUser, placeGameBet, recordGameResult, demoMode, demoBalance } = useAppStore();
   const bal = demoMode ? demoBalance : currentUser.balanceMain;
   const [bet, setBet]         = useState(0.01);
-  const [spinning, setSpin]   = useState(false);
-  const [rotation, setRot]    = useState(0);
-  const rotRef                = useRef(0);
-  const [result, setResult]   = useState<{ seg: Seg; win: number } | null>(null);
-  const [hist, setHist]       = useState<number[]>([]);
-  const [bigWin, setBigWin]   = useState(false);
-  const [winIdx, setWinIdx]   = useState<number | null>(null);
-  const mountedRef            = useRef(true);
-  const spinTimerRef          = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const bigWinTimerRef        = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const tickTimers            = useRef<ReturnType<typeof setTimeout>[]>([]);
-  const ptrRef                = useRef<HTMLDivElement | null>(null);
+  const [target, setTarget]   = useState(50);
+  const [dir, setDir]         = useState<DiceDir>('under');
+  const [rolling, setRolling] = useState(false);
+  const [lastRoll, setLastRoll] = useState<number | null>(null);
+  const [lastWin, setLastWin]   = useState<boolean | null>(null);
+  const [payout, setPayout]     = useState(0);
+  const [hist, setHist]         = useState<{ roll: number; win: boolean }[]>([]);
+  const [bigWin, setBigWin]     = useState(false);
+  const mountedRef             = useRef(true);
+  const rollTimerRef           = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const bigWinTimerRef         = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
-      if (spinTimerRef.current)  clearTimeout(spinTimerRef.current);
+      if (rollTimerRef.current)  clearTimeout(rollTimerRef.current);
       if (bigWinTimerRef.current) clearTimeout(bigWinTimerRef.current);
-      tickTimers.current.forEach(clearTimeout);
     };
   }, []);
 
-  const effBet  = Math.min(bet, bal);
-  const canSpin = !spinning && effBet >= 0.01 && bal >= 0.01;
+  const effBet      = Math.min(bet, bal);
+  const winChance    = diceWinChance(target, dir);
+  const multiplier   = diceMultiplier(target, dir);
+  const canRoll      = !rolling && effBet >= 0.01 && bal >= 0.01;
+  const potentialWin = +(effBet * multiplier).toFixed(4);
 
-  const spin = () => {
-    if (!canSpin) return;
-    const rule = rollWheel(streak, demoMode);
-    const idx = rule.idx[Math.floor(Math.random() * rule.idx.length)];
-    const target = (360 - idx * SEG_DEG + 360) % 360;
-    const cur = rotRef.current % 360;
-    let delta = target - cur;
-    if (delta < 0) delta += 360;
-    const newRot = rotRef.current + 5 * 360 + delta;
-    rotRef.current = newRot;
-    setRot(newRot);
-    setSpin(true);
-    setWinIdx(null);
+  const roll = () => {
+    if (!canRoll) return;
+    setRolling(true);
     snd.spin();
     haptic.impact('medium');
-    setResult(null);
-
-    // Schedule tick sounds — exponentially decelerating like a real wheel
-    tickTimers.current.forEach(clearTimeout);
-    tickTimers.current = [];
-    {
-      let elapsed = 0;
-      let interval = 55;
-      while (elapsed < 4050) {
-        elapsed += interval;
-        const t = elapsed;
-        tickTimers.current.push(setTimeout(() => {
-          if (!mountedRef.current) return;
-          snd.tick();
-          // Flash the pointer via direct DOM manipulation (no re-render)
-          const el = ptrRef.current;
-          if (el) {
-            el.style.animation = 'none';
-            void el.offsetHeight; // force reflow to restart animation
-            el.style.animation = 'ptrFlash 0.2s ease-out';
-          }
-        }, t));
-        interval = Math.min(370, interval * 1.052);
-      }
-    }
-
-    const used = Math.min(effBet, bal);
-    const win = +(used * rule.mult).toFixed(6);
-    spinTimerRef.current = setTimeout(() => {
+    const used = effBet;
+    const { roll: r, win } = rollDice(target, dir, streak, demoMode);
+    rollTimerRef.current = setTimeout(() => {
       if (!mountedRef.current) return;
-      setSpin(false);
-      setWinIdx(idx);
-      placeGameBet(used, win);
-      recordGameResult('Roue', used, win);
-      if (!demoMode) dheRecord(win - used);
-      setResult({ seg: SEGS[idx], win });
-      setHist(h => [rule.mult, ...h.slice(0, 7)]);
-      onResult(rule.mult > 0);
-      if (rule.mult >= 5) {
+      setRolling(false);
+      const winAmt = win ? +(used * multiplier).toFixed(6) : 0;
+      placeGameBet(used, winAmt);
+      recordGameResult('Dice', used, winAmt);
+      if (!demoMode) dheRecord(winAmt - used);
+      setLastRoll(r);
+      setLastWin(win);
+      setPayout(winAmt);
+      setHist(h => [{ roll: r, win }, ...h.slice(0, 11)]);
+      onResult(win);
+      if (win && multiplier >= 5) {
         setBigWin(true);
         bigWinTimerRef.current = setTimeout(() => { if (mountedRef.current) setBigWin(false); }, 2600);
         snd.win();
         haptic.impact('heavy'); haptic.success();
-      } else if (rule.mult >= 2) { snd.win(); haptic.success(); }
-      else if (rule.mult > 0) { snd.cashout(); haptic.success(); }
+      } else if (win) { snd.win(); haptic.success(); }
       else { snd.lose(); haptic.error(); }
-    }, 4300);
+    }, 750);
   };
 
-  const displayBet = Math.max(0.01, effBet);
-  const pf = (m: number) => (displayBet * m).toFixed(m < 1 ? 4 : 3);
+  // Zone basse (under) = de 0 à target ; zone haute (over) = de target à 100
+  const zoneLeft  = dir === 'under' ? 0 : target;
+  const zoneWidth = dir === 'under' ? target : 100 - target;
 
   return (
     <div className="space-y-5 pb-4">
-      <style>{`
-        @keyframes ptrFlash {
-          0%   { filter: brightness(3) drop-shadow(0 0 18px #fbbf24); transform: scaleY(1.25); }
-          100% { filter: brightness(1) drop-shadow(0 2px 8px rgba(251,191,36,0.8)); transform: scaleY(1); }
-        }
-        @keyframes winSegPulse {
-          0%   { opacity: 0.55; }
-          100% { opacity: 1; }
-        }
-      `}</style>
       <BigWinEffect show={bigWin} />
       <div className="flex items-center gap-3">
         <button onClick={onBack} className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center text-slate-400 hover:text-white transition-colors">
@@ -582,10 +444,10 @@ const WheelGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
         </button>
         <div className="flex-1">
           <div className="flex items-center gap-2">
-            <h2 className="text-base font-bold text-white">Roue de la Fortune</h2>
+            <h2 className="text-base font-bold text-white">Dice</h2>
             <StreakChip streak={streak} />
           </div>
-          <p className="text-[11px] text-slate-500">Faites tourner · Jackpot ×10 — jusqu'à ×10 la mise</p>
+          <p className="text-[11px] text-slate-500">Choisissez votre seuil · misez · lancez</p>
         </div>
         <MuteButton />
         <GameBalanceChip bal={bal} demo={demoMode} />
@@ -593,50 +455,91 @@ const WheelGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
 
       {hist.length > 0 && (
         <div className="flex gap-1.5 flex-wrap">
-          {hist.map((m, i) => (
-            <span key={i} className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-              m === 0 ? 'bg-red-500/20 text-red-400' :
-              m < 1   ? 'bg-orange-500/20 text-orange-400' :
-              m < 2   ? 'bg-amber-500/20 text-amber-400' :
-              m < 5   ? 'bg-emerald-500/20 text-emerald-400' :
-                        'bg-teal-500/20 text-teal-300'
-            }`}>{m === 0 ? 'PERDU' : `×${m}`}</span>
+          {hist.map((h, i) => (
+            <span key={i} className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${h.win ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>
+              {h.roll.toFixed(2)}
+            </span>
           ))}
         </div>
       )}
 
-      <div className="flex flex-col items-center gap-3">
-        <div className="relative">
-          {/* Pointer — inner div ref'd for direct animation on each tick */}
-          <div className="absolute z-10" style={{ top: '-6px', left: '50%', transform: 'translateX(-50%)' }}>
-            <div ref={ptrRef} style={{
-              width: 0, height: 0,
-              borderLeft: '13px solid transparent', borderRight: '13px solid transparent',
-              borderTop: '26px solid #fbbf24',
-              filter: 'drop-shadow(0 2px 8px rgba(251,191,36,0.8))',
-              transformOrigin: 'top center',
+      {/* Result display + track */}
+      <div className="glass-card p-4 space-y-4">
+        <div className="text-center">
+          <p className="text-4xl font-black" style={{
+            color: lastRoll == null ? '#f8fafc' : lastWin ? '#4ade80' : '#f87171',
+            transition: 'color 0.2s',
+          }}>
+            {rolling ? '··.··' : lastRoll != null ? lastRoll.toFixed(2) : '0.00'}
+          </p>
+          {lastRoll != null && !rolling && (
+            <p className="text-xs mt-1" style={{ color: lastWin ? '#4ade80' : '#f87171' }}>
+              {lastWin ? `🎉 Gagné +${payout.toFixed(4)} TON` : '😔 Perdu — réessayez'}
+            </p>
+          )}
+        </div>
+
+        {/* Track */}
+        <div className="relative" style={{ height: 14, borderRadius: 8, background: 'rgba(255,255,255,0.06)', overflow: 'hidden' }}>
+          <div style={{
+            position: 'absolute', top: 0, bottom: 0,
+            left: `${zoneLeft}%`, width: `${zoneWidth}%`,
+            background: 'linear-gradient(90deg,#22c55e,#4ade80)',
+          }} />
+          {lastRoll != null && (
+            <div style={{
+              position: 'absolute', top: -3, left: `${Math.min(99, Math.max(0, lastRoll))}%`,
+              width: 3, height: 20, borderRadius: 2, background: '#f8fafc',
+              boxShadow: '0 0 8px rgba(255,255,255,0.8)', transition: 'left 0.15s',
             }} />
+          )}
+        </div>
+        <div className="flex justify-between text-[10px] text-slate-500">
+          <span>0</span><span>25</span><span>50</span><span>75</span><span>100</span>
+        </div>
+
+        {/* Slider */}
+        <input type="range" min={2} max={98} step={1} value={target}
+          onChange={e => setTarget(+e.target.value)}
+          className="w-full" style={{ accentColor: '#22c55e' }} />
+
+        {/* Direction toggle */}
+        <div className="grid grid-cols-2 gap-2">
+          <button onClick={() => setDir('under')}
+            style={{
+              padding: '10px 0', borderRadius: 12, fontWeight: 800, fontSize: 13, cursor: 'pointer',
+              background: dir === 'under' ? 'linear-gradient(135deg,#22c55e,#16a34a)' : 'rgba(255,255,255,0.05)',
+              color: dir === 'under' ? '#06210f' : '#94a3b8',
+              border: dir === 'under' ? 'none' : '1px solid #1e2847',
+            }}>
+            Plus bas que {target}
+          </button>
+          <button onClick={() => setDir('over')}
+            style={{
+              padding: '10px 0', borderRadius: 12, fontWeight: 800, fontSize: 13, cursor: 'pointer',
+              background: dir === 'over' ? 'linear-gradient(135deg,#22c55e,#16a34a)' : 'rgba(255,255,255,0.05)',
+              color: dir === 'over' ? '#06210f' : '#94a3b8',
+              border: dir === 'over' ? 'none' : '1px solid #1e2847',
+            }}>
+            Plus haut que {target}
+          </button>
+        </div>
+
+        {/* Stats */}
+        <div className="grid grid-cols-3 gap-2">
+          <div style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid #1e2847', borderRadius: 10 }} className="px-2 py-2 text-center">
+            <p style={{ fontSize: 9, color: '#64748b', textTransform: 'uppercase', fontWeight: 600 }}>Chance</p>
+            <p style={{ fontSize: 14, fontWeight: 800, color: '#f8fafc' }}>{winChance.toFixed(0)}%</p>
           </div>
-          <div style={{ filter: 'drop-shadow(0 0 36px rgba(251,191,36,0.12))' }}>
-            <WheelSVG rotation={rotation} winIdx={winIdx} />
+          <div style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid #1e2847', borderRadius: 10 }} className="px-2 py-2 text-center">
+            <p style={{ fontSize: 9, color: '#64748b', textTransform: 'uppercase', fontWeight: 600 }}>Multiplicateur</p>
+            <p style={{ fontSize: 14, fontWeight: 800, color: '#f8fafc' }}>×{multiplier.toFixed(2)}</p>
+          </div>
+          <div style={{ background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.2)', borderRadius: 10 }} className="px-2 py-2 text-center">
+            <p style={{ fontSize: 9, color: '#64748b', textTransform: 'uppercase', fontWeight: 600 }}>Gain possible</p>
+            <p style={{ fontSize: 14, fontWeight: 800, color: '#4ade80' }}>{potentialWin.toFixed(4)}</p>
           </div>
         </div>
-        {result && !spinning && (
-          <div className={`w-full text-center px-4 py-3 rounded-xl font-semibold text-sm ${
-            result.seg.mult >= 10 ? 'bg-purple-500/20 border border-purple-400/50 text-purple-300' :
-            result.seg.mult >= 2  ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-400' :
-            result.seg.mult > 0   ? 'bg-amber-500/15 border border-amber-500/30 text-amber-400' :
-                                    'bg-red-500/15 border border-red-500/30 text-red-400'
-          }`}>
-            {result.seg.mult === 0   && '😔 Dommage… Bonne chance au prochain tour !'}
-            {result.seg.mult === 0.4 && `🟠 ×0.4 — Vous récupérez ${result.win.toFixed(4)} TON`}
-            {result.seg.mult === 1   && `🟡 ×1 — Mise récupérée : ${result.win.toFixed(4)} TON`}
-            {result.seg.mult === 2   && `🟢 ×2 — Vous doublez ! +${result.win.toFixed(4)} TON`}
-            {result.seg.mult === 3   && `🎉 ×3 — Excellent ! +${result.win.toFixed(4)} TON`}
-            {result.seg.mult === 5   && `💎 ×5 — Incroyable ! +${result.win.toFixed(4)} TON`}
-            {result.seg.mult === 10  && `🏆 JACKPOT ×10 !! +${result.win.toFixed(4)} TON — Félicitations !`}
-          </div>
-        )}
       </div>
 
       {/* Bet controls */}
@@ -649,41 +552,16 @@ const WheelGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
           <span className="text-base font-bold text-slate-500">TON</span>
         </div>
         <BetQuickButtons setBet={setBet} maxBal={bal} />
-        <button onClick={spin} disabled={!canSpin}
+        <button onClick={roll} disabled={!canRoll}
           className={`w-full py-4 rounded-xl font-bold text-base transition-all flex items-center justify-center gap-2 ${
-            canSpin
-              ? 'bg-gradient-to-r from-amber-500 to-yellow-500 text-amber-950 hover:from-amber-400 hover:to-yellow-400 active:scale-[0.98] shadow-lg shadow-amber-500/25'
+            canRoll
+              ? 'bg-gradient-to-r from-emerald-500 to-green-500 text-emerald-950 hover:from-emerald-400 hover:to-green-400 active:scale-[0.98] shadow-lg shadow-emerald-500/25'
               : 'bg-white/5 text-slate-600 cursor-not-allowed'
           }`}>
-          {spinning ? <><RotateCcw className="w-4 h-4 animate-spin" /> La roue tourne…</>
+          {rolling ? <><RotateCcw className="w-4 h-4 animate-spin" /> Lancement…</>
             : bal < 0.01 ? (demoMode ? '🎮 Démo épuisé' : '💸 Solde insuffisant')
-            : <><Zap className="w-4 h-4" /> Tourner ({effBet.toFixed(2)} TON)</>}
+            : <><Zap className="w-4 h-4" /> Lancer ({effBet.toFixed(2)} TON)</>}
         </button>
-      </div>
-
-      {/* Prize table */}
-      <div className="glass-card p-4">
-        <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">
-          Gains possibles · mise {displayBet.toFixed(2)} TON
-        </h3>
-        <div className="space-y-1.5">
-          {([
-            { label: '×10', val: pf(10),  color: 'text-purple-400', bg: 'bg-purple-500/10' },
-            { label: '×5',  val: pf(5),   color: 'text-teal-400',   bg: 'bg-teal-500/10'  },
-            { label: '×3',  val: pf(3),   color: 'text-blue-400',   bg: 'bg-blue-500/10'  },
-            { label: '×2',  val: pf(2),   color: 'text-emerald-400',bg: 'bg-emerald-500/10'},
-            { label: '×1',  val: pf(1),   color: 'text-amber-400',  bg: 'bg-amber-500/10' },
-            { label: '×0.4',val: pf(0.4), color: 'text-orange-400', bg: 'bg-orange-500/10'},
-            { label: 'PERDU',val: null,   color: 'text-red-400',    bg: 'bg-red-500/10'   },
-          ] as const).map(row => (
-            <div key={row.label} className={`flex items-center justify-between px-3 py-1.5 rounded-lg ${row.bg}`}>
-              <span className={`text-sm font-bold ${row.color}`}>{row.label}</span>
-              <span className="text-sm text-white font-mono">
-                {row.val != null ? `+${row.val} TON` : '—'}
-              </span>
-            </div>
-          ))}
-        </div>
       </div>
     </div>
   );
@@ -2082,360 +1960,230 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
 };
 
 // ══════════════════════════════════════════════════════════════════
-// ROULETTE EUROPÉENNE
+// JACKPOT — machine à sous 3 rouleaux, alignez les symboles
 // ══════════════════════════════════════════════════════════════════
 
-const R_RED = new Set([1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]);
-const R_WHEEL_SEQ = [0,32,15,19,4,21,2,25,17,34,6,27,13,36,11,30,8,23,10,5,24,16,33,1,20,14,31,9,22,18,29,7,28,12,35,3,26];
+type SlotSymbol = { id: string; icon: string; weight: number; mult3: number; mult2: number };
 
-function rollRoulette(streak: number, demo = false): number {
-  const zeroP = demo
-    ? 0.04
-    : streak >= 2 ? 0.22 : streak >= 1 ? 0.13 : 0.06;
-  if (Math.random() < zeroP) return 0;
-  return 1 + Math.floor(Math.random() * 36);
+const SLOT_SYMBOLS: SlotSymbol[] = [
+  { id: 'cherry', icon: '🍒', weight: 36, mult3: 3,   mult2: 1.5 },
+  { id: 'lemon',  icon: '🍋', weight: 26, mult3: 5,   mult2: 0   },
+  { id: 'grape',  icon: '🍇', weight: 18, mult3: 8,   mult2: 0   },
+  { id: 'bell',   icon: '🔔', weight: 12, mult3: 15,  mult2: 0   },
+  { id: 'gem',    icon: '💎', weight: 6,  mult3: 40,  mult2: 0   },
+  { id: 'seven',  icon: '7️⃣', weight: 2,  mult3: 100, mult2: 0   },
+];
+
+function pickSlotSymbol(): SlotSymbol {
+  const total = SLOT_SYMBOLS.reduce((s, sym) => s + sym.weight, 0);
+  let r = Math.random() * total;
+  for (const sym of SLOT_SYMBOLS) { r -= sym.weight; if (r <= 0) return sym; }
+  return SLOT_SYMBOLS[0];
 }
 
-type RoulettePhase = 'idle' | 'spinning' | 'result';
-type RouletteBetType = 'red' | 'black' | 'even' | 'odd' | 'low' | 'high' | 'dozen1' | 'dozen2' | 'dozen3' | `n${number}`;
-
-function roulettePayout(bet: RouletteBetType, result: number): number {
-  if (result === 0) return 0;
-  if (bet === 'red')   return R_RED.has(result) ? 1.9 : 0;
-  if (bet === 'black') return !R_RED.has(result) ? 1.9 : 0;
-  if (bet === 'even')  return result % 2 === 0 ? 1.9 : 0;
-  if (bet === 'odd')   return result % 2 !== 0 ? 1.9 : 0;
-  if (bet === 'low')   return result <= 18 ? 1.9 : 0;
-  if (bet === 'high')  return result >= 19 ? 1.9 : 0;
-  if (bet === 'dozen1') return result >= 1  && result <= 12 ? 2.8 : 0;
-  if (bet === 'dozen2') return result >= 13 && result <= 24 ? 2.8 : 0;
-  if (bet === 'dozen3') return result >= 25 && result <= 36 ? 2.8 : 0;
-  if (bet.startsWith('n')) return +bet.slice(1) === result ? 36 : 0;
-  return 0;
+function rollSlots(streak: number, demo = false): { reels: SlotSymbol[]; mult: number } {
+  if (!demo && dheJackpot()) {
+    const sym = SLOT_SYMBOLS[SLOT_SYMBOLS.length - 1];
+    return { reels: [sym, sym, sym], mult: sym.mult3 };
+  }
+  const reels = [pickSlotSymbol(), pickSlotSymbol(), pickSlotSymbol()];
+  const allMatch = reels[0].id === reels[1].id && reels[1].id === reels[2].id;
+  if (allMatch && !demo) {
+    const pressure = Math.max(dhePressure(), streak >= 2 ? 0.35 : streak >= 1 ? 0.18 : 0);
+    if (pressure > 0 && Math.random() < pressure * 0.6) {
+      let third = pickSlotSymbol();
+      while (third.id === reels[0].id) third = pickSlotSymbol();
+      reels[2] = third;
+    }
+  }
+  const cherryCount = reels.filter(r => r.id === 'cherry').length;
+  let mult = 0;
+  if (reels[0].id === reels[1].id && reels[1].id === reels[2].id) mult = reels[0].mult3;
+  else if (cherryCount === 2) mult = 1.5;
+  return { reels, mult };
 }
 
-const RouletteGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResult }> = ({ onBack, streak, onResult }) => {
+const SlotsGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResult }> = ({ onBack, streak, onResult }) => {
   const { currentUser, placeGameBet, recordGameResult, demoMode, demoBalance } = useAppStore();
   const bal = demoMode ? demoBalance : currentUser.balanceMain;
-  const [bet, setBet]             = useState(0.01);
-  const [selectedBet, setSelected]= useState<RouletteBetType>('red');
-  const [phase, setPhase]         = useState<RoulettePhase>('idle');
-  const [rotation, setRotation]   = useState(0);
-  const rotRef                    = useRef(0);
-  const [result, setResult]       = useState<number | null>(null);
-  const [payout, setPayout]       = useState(0);
-  const [hist, setHist]           = useState<number[]>([]);
-  const [ballAngle, setBallAngle] = useState(110);
-  const ballRef                   = useRef(110);
-  const [bigWin, setBigWin]       = useState(false);
-  const mountedRef                = useRef(true);
-  const spinTimerRef              = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const bigWinTimerRef            = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const rTickTimers               = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const [bet, setBet]           = useState(0.01);
+  const [spinning, setSpinning] = useState(false);
+  const [reels, setReels]       = useState<SlotSymbol[]>([SLOT_SYMBOLS[0], SLOT_SYMBOLS[0], SLOT_SYMBOLS[0]]);
+  const [stopped, setStopped]   = useState<[boolean, boolean, boolean]>([true, true, true]);
+  const [result, setResult]     = useState<{ mult: number; win: number } | null>(null);
+  const [hist, setHist]         = useState<number[]>([]);
+  const [bigWin, setBigWin]     = useState(false);
+  const mountedRef              = useRef(true);
+  const bigWinTimerRef          = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reelTimers               = useRef<ReturnType<typeof setInterval>[]>([]);
+  const stopTimers               = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   useEffect(() => {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
-      if (spinTimerRef.current)  clearTimeout(spinTimerRef.current);
       if (bigWinTimerRef.current) clearTimeout(bigWinTimerRef.current);
-      rTickTimers.current.forEach(clearTimeout);
+      reelTimers.current.forEach(clearInterval);
+      stopTimers.current.forEach(clearTimeout);
     };
   }, []);
 
   const effBet  = Math.min(bet, bal);
-  const canSpin = phase === 'idle' && effBet >= 0.01 && bal >= 0.01;
-
-  const NUM_SLOTS = 37;
-  const DEG_PER_SLOT = 360 / NUM_SLOTS;
+  const canSpin = !spinning && effBet >= 0.01 && bal >= 0.01;
 
   const spin = () => {
     if (!canSpin) return;
-    const n = rollRoulette(streak, demoMode);
-    const slotIndex = R_WHEEL_SEQ.indexOf(n);
-    const slotCenter = slotIndex * DEG_PER_SLOT + DEG_PER_SLOT / 2;
-    const cur = rotRef.current % 360;
-    let delta = (360 - slotCenter) - cur;
-    if (delta < 0) delta += 360;
-    const newRot = rotRef.current + 8 * 360 + delta + (Math.random() * DEG_PER_SLOT * 0.4 - DEG_PER_SLOT * 0.2);
-    rotRef.current = newRot;
-    setRotation(newRot);
-    // Ball counter-clockwise, settles near pointer (top)
-    const curBall = ballRef.current % 360;
-    const finalBall = ballRef.current - 14 * 360 - curBall + (Math.random() * DEG_PER_SLOT * 0.5 - DEG_PER_SLOT * 0.25);
-    ballRef.current = finalBall;
-    setBallAngle(finalBall);
-    setPhase('spinning');
+    const used = effBet;
+    const { reels: finalReels, mult } = rollSlots(streak, demoMode);
+    setSpinning(true);
+    setResult(null);
+    setStopped([false, false, false]);
     snd.spin();
     haptic.impact('medium');
-    setResult(null);
-    const used = effBet;
 
-    // Cliquetis bille — commence rapide (~30ms) ralentit jusqu'à ~360ms
-    rTickTimers.current.forEach(clearTimeout);
-    rTickTimers.current = [];
-    {
-      let elapsed = 0;
-      let interval = 28;
-      while (elapsed < 4600) {
-        elapsed += interval;
-        const t = elapsed;
-        rTickTimers.current.push(setTimeout(() => {
-          if (!mountedRef.current) return;
-          snd.tick();
-        }, t));
-        interval = Math.min(380, interval * 1.038);
-      }
+    reelTimers.current.forEach(clearInterval);
+    stopTimers.current.forEach(clearTimeout);
+    reelTimers.current = [];
+    stopTimers.current = [];
+
+    const stopDelays = [650, 1000, 1450];
+    for (let i = 0; i < 3; i++) {
+      const interval = setInterval(() => {
+        if (!mountedRef.current) return;
+        setReels(prev => { const next = [...prev] as SlotSymbol[]; next[i] = pickSlotSymbol(); return next; });
+      }, 70);
+      reelTimers.current.push(interval);
+      const stopT = setTimeout(() => {
+        clearInterval(interval);
+        if (!mountedRef.current) return;
+        setReels(prev => { const next = [...prev] as SlotSymbol[]; next[i] = finalReels[i]; return next; });
+        setStopped(prev => { const next = [...prev] as [boolean, boolean, boolean]; next[i] = true; return next; });
+        snd.tick();
+        haptic.impact('light');
+      }, stopDelays[i]);
+      stopTimers.current.push(stopT);
     }
 
-    // Rebonds finaux — la bille "hésite" entre 2 cases avant de se stabiliser
-    rTickTimers.current.push(setTimeout(() => {
+    const finalT = setTimeout(() => {
       if (!mountedRef.current) return;
-      ballRef.current = finalBall + DEG_PER_SLOT * 0.85;
-      setBallAngle(finalBall + DEG_PER_SLOT * 0.85);
-      snd.tick();
-    }, 4750));
-    rTickTimers.current.push(setTimeout(() => {
-      if (!mountedRef.current) return;
-      ballRef.current = finalBall - DEG_PER_SLOT * 0.35;
-      setBallAngle(finalBall - DEG_PER_SLOT * 0.35);
-      snd.tick();
-    }, 4950));
-    rTickTimers.current.push(setTimeout(() => {
-      if (!mountedRef.current) return;
-      ballRef.current = finalBall;
-      setBallAngle(finalBall);
-      haptic.impact('light');
-    }, 5080));
-
-    spinTimerRef.current = setTimeout(() => {
-      if (!mountedRef.current) return;
-      const mult = roulettePayout(selectedBet, n);
-      const win  = +(used * mult).toFixed(6);
+      setSpinning(false);
+      const win = +(used * mult).toFixed(6);
       placeGameBet(used, win);
-      recordGameResult('Roulette', used, win);
-      setResult(n);
-      setPayout(mult);
-      setHist(h => [n, ...h.slice(0, 11)]);
-      setPhase('result');
+      recordGameResult('Jackpot', used, win);
+      if (!demoMode) dheRecord(win - used);
+      setResult({ mult, win });
+      setHist(h => [mult, ...h.slice(0, 11)]);
       onResult(mult > 0);
-      if (mult >= 28) {
+      if (mult >= 15) {
         setBigWin(true);
         bigWinTimerRef.current = setTimeout(() => { if (mountedRef.current) setBigWin(false); }, 2600);
         snd.win();
         haptic.impact('heavy'); haptic.success();
       } else if (mult > 0) { snd.win(); haptic.success(); }
       else { snd.lose(); haptic.error(); }
-    }, 5200);
+    }, stopDelays[2] + 150);
+    stopTimers.current.push(finalT);
   };
 
-  const reset = () => { setPhase('idle'); setResult(null); };
-
-  // Round auto-continues — no "replay" prompt blocking the player.
-  useEffect(() => {
-    if (phase !== 'result') return;
-    const id = setTimeout(() => { if (mountedRef.current) reset(); }, 2200);
-    return () => clearTimeout(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase]);
-
-  const rColor = (n: number) => n === 0 ? '#10b981' : R_RED.has(n) ? '#ef4444' : '#1e293b';
-
-  const SVG_R = 120, CX2 = 130, CY2 = 130;
-  const segAngle = 360 / NUM_SLOTS;
-
-  function segPath2(i: number): string {
-    const a0 = (i * segAngle - segAngle / 2 - 90) * Math.PI / 180;
-    const a1 = (i * segAngle + segAngle / 2 - 90) * Math.PI / 180;
-    const x0 = CX2 + SVG_R * Math.cos(a0), y0 = CY2 + SVG_R * Math.sin(a0);
-    const x1 = CX2 + SVG_R * Math.cos(a1), y1 = CY2 + SVG_R * Math.sin(a1);
-    return `M${CX2} ${CY2} L${x0.toFixed(2)} ${y0.toFixed(2)} A${SVG_R} ${SVG_R} 0 0 1 ${x1.toFixed(2)} ${y1.toFixed(2)}Z`;
-  }
-  function textPos(i: number) {
-    const a = (i * segAngle - 90) * Math.PI / 180;
-    return { x: CX2 + (SVG_R * 0.72) * Math.cos(a), y: CY2 + (SVG_R * 0.72) * Math.sin(a) };
-  }
-
-  const BET_OPTS: { id: RouletteBetType; label: string; mult: string; color: string }[] = [
-    { id: 'red',    label: 'Rouge',    mult: '×1.9', color: '#ef4444' },
-    { id: 'black',  label: 'Noir',     mult: '×1.9', color: '#475569' },
-    { id: 'even',   label: 'Pair',     mult: '×1.9', color: '#6366f1' },
-    { id: 'odd',    label: 'Impair',   mult: '×1.9', color: '#8b5cf6' },
-    { id: 'low',    label: '1–18',     mult: '×1.9', color: '#0284c7' },
-    { id: 'high',   label: '19–36',    mult: '×1.9', color: '#0891b2' },
-    { id: 'dozen1', label: 'Douzaine 1', mult: '×2.8', color: '#d97706' },
-    { id: 'dozen2', label: 'Douzaine 2', mult: '×2.8', color: '#ca8a04' },
-    { id: 'dozen3', label: 'Douzaine 3', mult: '×2.8', color: '#b45309' },
-  ];
-
-  const payoutPreview = roulettePayout(selectedBet, result ?? 7);
-
   return (
-    <div className="pb-4" style={{ background: '#060a18', minHeight: '100%' }}>
+    <div className="space-y-5 pb-4">
       <BigWinEffect show={bigWin} />
-      <div style={{ background: '#0d1021', borderBottom: '1px solid #1e2847' }} className="px-4 pt-4 pb-3">
-        <div className="flex items-center gap-3">
-          <button onClick={onBack} style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid #1e2847' }}
-            className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-white transition-colors">
-            <ArrowLeft className="w-4 h-4" />
-          </button>
-          <div className="flex-1">
-            <div className="flex items-center gap-2">
-              <h2 className="text-base font-bold" style={{ color: '#f8fafc' }}>Roulette 🎰</h2>
-              <StreakChip streak={streak} />
-            </div>
-            <p className="text-[11px]" style={{ color: '#64748b' }}>Roulette européenne · 37 cases · Numéro ×36</p>
+      <div className="flex items-center gap-3">
+        <button onClick={onBack} className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center text-slate-400 hover:text-white transition-colors">
+          <ArrowLeft className="w-4 h-4" />
+        </button>
+        <div className="flex-1">
+          <div className="flex items-center gap-2">
+            <h2 className="text-base font-bold text-white">Jackpot</h2>
+            <StreakChip streak={streak} />
           </div>
-          <MuteButton />
-          <GameBalanceChip bal={bal} demo={demoMode} />
+          <p className="text-[11px] text-slate-500">3 symboles alignés = jackpot · ×100 max</p>
+        </div>
+        <MuteButton />
+        <GameBalanceChip bal={bal} demo={demoMode} />
+      </div>
+
+      {hist.length > 0 && (
+        <div className="flex gap-1.5 flex-wrap">
+          {hist.map((m, i) => (
+            <span key={i} className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+              m === 0 ? 'bg-red-500/20 text-red-400' :
+              m < 5   ? 'bg-amber-500/20 text-amber-400' :
+              m < 20  ? 'bg-emerald-500/20 text-emerald-400' :
+                        'bg-purple-500/20 text-purple-300'
+            }`}>{m === 0 ? 'PERDU' : `×${m}`}</span>
+          ))}
+        </div>
+      )}
+
+      <div className="glass-card p-5 space-y-4">
+        {/* Reels */}
+        <div className="grid grid-cols-3 gap-3">
+          {reels.map((sym, i) => (
+            <div key={i} style={{
+              aspectRatio: '1', borderRadius: 16,
+              background: 'linear-gradient(160deg,#1e2a52,#161d3a)',
+              border: result && !spinning ? (result.mult > 0 ? '2px solid #4ade80' : '1px solid #1e2847') : '1px solid #1e2847',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 44, boxShadow: stopped[i] ? 'none' : '0 0 18px rgba(99,102,241,0.25) inset',
+            }}>
+              {sym.icon}
+            </div>
+          ))}
         </div>
 
-        {/* History chips */}
-        {hist.length > 0 && (
-          <div className="flex gap-1.5 mt-3 overflow-x-auto no-scrollbar pb-0.5">
-            {hist.map((n, i) => (
-              <span key={i} style={{
-                flexShrink: 0, width: 28, height: 28, borderRadius: '50%',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                background: rColor(n), color: '#fff', fontSize: 10, fontWeight: 800,
-                border: '1px solid rgba(255,255,255,0.15)',
-              }}>{n}</span>
-            ))}
+        {result && !spinning && (
+          <div className={`w-full text-center px-4 py-3 rounded-xl font-semibold text-sm ${
+            result.mult >= 40 ? 'bg-purple-500/20 border border-purple-400/50 text-purple-300' :
+            result.mult >= 15 ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-400' :
+            result.mult > 0   ? 'bg-amber-500/15 border border-amber-500/30 text-amber-400' :
+                                'bg-red-500/15 border border-red-500/30 text-red-400'
+          }`}>
+            {result.mult === 0
+              ? '😔 Dommage… Bonne chance au prochain tour !'
+              : result.mult >= 100
+                ? `🏆 JACKPOT ×${result.mult} !! +${result.win.toFixed(4)} TON — Félicitations !`
+                : `🎉 ×${result.mult} — +${result.win.toFixed(4)} TON`}
           </div>
         )}
       </div>
 
-      <div className="px-4 pt-4 space-y-4">
-        {/* Wheel */}
-        <div className="flex flex-col items-center gap-3">
-          <div className="relative" style={{ maxWidth: 270, margin: '0 auto' }}>
-            {/* Pointer */}
-            <div style={{
-              position: 'absolute', top: -8, left: '50%', transform: 'translateX(-50%)',
-              width: 0, height: 0, zIndex: 20,
-              borderLeft: '10px solid transparent', borderRight: '10px solid transparent',
-              borderTop: '22px solid #fbbf24',
-              filter: 'drop-shadow(0 2px 6px rgba(251,191,36,0.7))',
-            }} />
-            {/* Rotating wheel */}
-            <svg width="100%" viewBox="-15 -15 290 290" style={{
-              display: 'block',
-              transform: `rotate(${rotation}deg)`,
-              transition: phase === 'spinning' ? 'transform 5.0s cubic-bezier(0.25,0.00,0.00,1.00)' : 'none',
-            }}>
-              <circle cx={CX2} cy={CY2} r={SVG_R + 20} fill="#1a0e00" stroke="#fbbf24" strokeWidth="2.5" />
-              {R_WHEEL_SEQ.map((n, i) => {
-                const tp = textPos(i);
-                const a = i * segAngle - 90;
-                const fill = n === 0 ? '#064e3b' : R_RED.has(n) ? '#7f1d1d' : '#0f172a';
-                const stroke = n === 0 ? '#10b981' : R_RED.has(n) ? '#ef4444' : '#334155';
-                return (
-                  <g key={i}>
-                    <path d={segPath2(i)} fill={fill} stroke={stroke} strokeWidth="1" />
-                    <text x={tp.x.toFixed(2)} y={tp.y.toFixed(2)} textAnchor="middle" dominantBaseline="middle"
-                      fontSize={8} fontWeight="700" fill="#e2e8f0"
-                      transform={`rotate(${a},${tp.x.toFixed(2)},${tp.y.toFixed(2)})`}
-                      style={{ userSelect: 'none', pointerEvents: 'none' }}>
-                      {n}
-                    </text>
-                  </g>
-                );
-              })}
-              <circle cx={CX2} cy={CY2} r={24} fill="#1a0800" stroke="#fbbf24" strokeWidth="2" />
-              <circle cx={CX2} cy={CY2} r={10} fill="#fbbf24" opacity="0.3" />
-            </svg>
-            {/* Ball overlay — not rotating with wheel */}
-            <svg width="100%" viewBox="-15 -15 290 290" style={{
-              position: 'absolute', top: 0, left: 0, pointerEvents: 'none',
-            }}>
-              <g style={{
-                transform: `rotate(${ballAngle}deg)`,
-                transformOrigin: `${CX2}px ${CY2}px`,
-                transition: phase === 'spinning' ? 'transform 5.0s cubic-bezier(0.28,0.02,0.0,0.98)' : 'none',
-              }}>
-                {/* Ball sits in the track between outer rim and segment starts */}
-                <circle cx={CX2} cy={CY2 - SVG_R - 9} r={6}
-                  fill="white" stroke="#94a3b8" strokeWidth="1.5"
-                  style={{ filter: 'drop-shadow(0 0 5px rgba(255,255,255,0.9))' }} />
-                {/* Shine */}
-                <circle cx={CX2 - 1} cy={CY2 - SVG_R - 12} r={2}
-                  fill="white" opacity="0.6" />
-              </g>
-            </svg>
-          </div>
-
-          {/* Result */}
-          {phase === 'result' && result !== null && (
-            <div style={{
-              background: payout > 0 ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)',
-              border: `1px solid ${payout > 0 ? 'rgba(34,197,94,0.35)' : 'rgba(239,68,68,0.35)'}`,
-              borderRadius: 14,
-            }} className="w-full p-3 text-center flex items-center justify-center gap-4">
-              <div style={{
-                width: 52, height: 52, borderRadius: '50%',
-                background: rColor(result), display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 22, fontWeight: 900, color: '#fff',
-                border: '3px solid rgba(255,255,255,0.3)',
-              }}>{result}</div>
-              <div>
-                <p style={{ fontSize: 20, fontWeight: 900, color: payout > 0 ? '#4ade80' : '#f87171' }}>
-                  {payout > 0 ? `+${(effBet * payout - effBet).toFixed(4)} TON` : `−${effBet.toFixed(4)} TON`}
-                </p>
-                <p style={{ fontSize: 12, color: '#94a3b8' }}>
-                  {result === 0 ? '🟢 Zéro' : R_RED.has(result) ? '🔴 Rouge' : '⚫ Noir'} · {result % 2 === 0 && result !== 0 ? 'Pair' : 'Impair'} · {result >= 1 && result <= 18 ? '1–18' : result >= 19 ? '19–36' : '—'}
-                </p>
-              </div>
-            </div>
-          )}
+      {/* Bet controls */}
+      <div className="glass-card p-4 space-y-3">
+        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Montant de la mise</p>
+        <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-xl px-4 py-3">
+          <input type="number" value={bet} min={0.01} max={50} step={0.01}
+            onChange={e => { const v = +e.target.value; if (!isNaN(v)) setBet(Math.max(0.01, Math.min(50, v))); }}
+            className="flex-1 bg-transparent text-2xl font-bold text-white outline-none" />
+          <span className="text-base font-bold text-slate-500">TON</span>
         </div>
+        <BetQuickButtons setBet={setBet} maxBal={bal} />
+        <button onClick={spin} disabled={!canSpin}
+          className={`w-full py-4 rounded-xl font-bold text-base transition-all flex items-center justify-center gap-2 ${
+            canSpin
+              ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-emerald-950 hover:from-emerald-400 hover:to-teal-400 active:scale-[0.98] shadow-lg shadow-emerald-500/25'
+              : 'bg-white/5 text-slate-600 cursor-not-allowed'
+          }`}>
+          {spinning ? <><RotateCcw className="w-4 h-4 animate-spin" /> Les rouleaux tournent…</>
+            : bal < 0.01 ? (demoMode ? '🎮 Démo épuisé' : '💸 Solde insuffisant')
+            : <><Zap className="w-4 h-4" /> Lancer ({effBet.toFixed(2)} TON)</>}
+        </button>
+      </div>
 
-        {/* Bet selection */}
-        <div style={{ background: '#0d1021', border: '1px solid #1e2847', borderRadius: 16 }} className="p-4 space-y-3">
-          <p style={{ fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Choisir votre pari</p>
-          <div className="grid grid-cols-3 gap-2">
-            {BET_OPTS.map(opt => (
-              <button key={opt.id} onClick={() => setSelected(opt.id)}
-                style={{
-                  padding: '10px 4px', borderRadius: 12, fontSize: 12, fontWeight: 700, cursor: 'pointer',
-                  background: selectedBet === opt.id ? opt.color : 'rgba(255,255,255,0.04)',
-                  border: selectedBet === opt.id ? `2px solid ${opt.color}` : '1px solid #1e2847',
-                  color: selectedBet === opt.id ? '#fff' : '#94a3b8',
-                  transition: 'all 0.15s',
-                }}>
-                <div>{opt.label}</div>
-                <div style={{ fontSize: 10, opacity: 0.75, marginTop: 2 }}>{opt.mult}</div>
-              </button>
-            ))}
-          </div>
-
-          <div>
-            <p style={{ fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>Montant</p>
-            <div style={{ background: '#080c1e', border: '1px solid #1e2847', borderRadius: 12 }} className="flex items-center px-3 py-2.5">
-              <input type="number" value={bet} min={0.01} max={50} step={0.01}
-                onChange={e => { const v = +e.target.value; if (!isNaN(v)) setBet(Math.max(0.01, Math.min(50, v))); }}
-                style={{ flex: 1, background: 'transparent', color: '#f8fafc', fontSize: 20, fontWeight: 700, outline: 'none', border: 'none' }} />
-              <span style={{ fontSize: 13, fontWeight: 700, color: '#64748b' }}>TON</span>
+      {/* Pay table */}
+      <div className="glass-card p-4">
+        <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Table des gains · 3 symboles identiques</h3>
+        <div className="space-y-1.5">
+          {[...SLOT_SYMBOLS].reverse().map(sym => (
+            <div key={sym.id} className="flex items-center justify-between px-3 py-1.5 rounded-lg bg-white/5">
+              <span className="text-lg">{sym.icon}{sym.icon}{sym.icon}</span>
+              <span className="text-sm text-white font-mono">×{sym.mult3}</span>
             </div>
+          ))}
+          <div className="flex items-center justify-between px-3 py-1.5 rounded-lg bg-white/5">
+            <span className="text-lg">🍒🍒 + 1</span>
+            <span className="text-sm text-white font-mono">×1.5</span>
           </div>
-          <BetQuickButtons setBet={setBet} maxBal={bal} />
-
-          <div className="grid grid-cols-2 gap-2">
-            <div style={{ background: '#080c1e', border: '1px solid #1e2847', borderRadius: 10 }} className="px-3 py-2">
-              <p style={{ fontSize: 10, color: '#64748b', fontWeight: 600, textTransform: 'uppercase', marginBottom: 2 }}>Gain si gagné</p>
-              <p style={{ fontSize: 14, fontWeight: 700, color: '#22c55e' }}>+{(effBet * payoutPreview - effBet).toFixed(4)} TON</p>
-            </div>
-            <div style={{ background: '#080c1e', border: '1px solid #1e2847', borderRadius: 10 }} className="px-3 py-2">
-              <p style={{ fontSize: 10, color: '#64748b', fontWeight: 600, textTransform: 'uppercase', marginBottom: 2 }}>Multiplicateur</p>
-              <p style={{ fontSize: 14, fontWeight: 700, color: '#f8fafc' }}>×{payoutPreview.toFixed(1)}</p>
-            </div>
-          </div>
-
-          {phase !== 'result' && (
-            <button onClick={spin} disabled={!canSpin}
-              style={canSpin ? { background: 'linear-gradient(135deg,#7c3aed,#6d28d9)', boxShadow: '0 4px 16px rgba(124,58,237,0.35)', width: '100%', padding: '14px', borderRadius: 12, color: '#fff', fontWeight: 900, fontSize: 14, cursor: 'pointer', letterSpacing: '0.05em' } : { background: 'rgba(255,255,255,0.05)', width: '100%', padding: '14px', borderRadius: 12, color: '#475569', fontWeight: 700, fontSize: 14, cursor: 'not-allowed' }}>
-              {phase === 'spinning' ? '🎰 La roue tourne…' : bal < 0.01 ? (demoMode ? '🎮 Démo épuisé' : '💸 Solde insuffisant') : `🎰 LANCER · ${effBet.toFixed(2)} TON`}
-            </button>
-          )}
         </div>
       </div>
     </div>
@@ -3115,34 +2863,34 @@ const _NOW = Date.now();
 const FEED_DATA: FeedEntry[] = [
   { username: 'Léa R.',      bet: 0.05, win: 0.00, mult: 0,    game: 'Crash',    createdAt: _NOW -  1 * 60000 },
   { username: 'Yusuf K.',    bet: 0.10, win: 2.80, mult: 2.80, game: 'Plinko',   createdAt: _NOW -  3 * 60000 },
-  { username: 'Marco T.',    bet: 1.0,  win: 0.00, mult: 0,    game: 'Roulette', createdAt: _NOW -  6 * 60000 },
-  { username: 'Chen W.',     bet: 0.02, win: 0.04, mult: 2,    game: 'Roulette', createdAt: _NOW -  9 * 60000 },
+  { username: 'Marco T.',    bet: 1.0,  win: 0.00, mult: 0,    game: 'Jackpot',  createdAt: _NOW -  6 * 60000 },
+  { username: 'Chen W.',     bet: 0.02, win: 0.04, mult: 2,    game: 'Jackpot',  createdAt: _NOW -  9 * 60000 },
   { username: 'Amira S.',    bet: 0.50, win: 1.28, mult: 2.56, game: 'Crash',    createdAt: _NOW - 14 * 60000 },
   { username: 'Priya S.',    bet: 0.05, win: 0.00, mult: 0,    game: 'Mines',    createdAt: _NOW - 19 * 60000 },
-  { username: 'Fatou D.',    bet: 0.10, win: 0.19, mult: 2,    game: 'Roulette', createdAt: _NOW - 25 * 60000 },
-  { username: 'Nicolás V.',  bet: 0.03, win: 1.08, mult: 36,   game: 'Roulette', createdAt: _NOW - 33 * 60000 },
+  { username: 'Fatou D.',    bet: 0.10, win: 0.19, mult: 2,    game: 'Jackpot',  createdAt: _NOW - 25 * 60000 },
+  { username: 'Nicolás V.',  bet: 0.03, win: 1.08, mult: 36,   game: 'Jackpot',  createdAt: _NOW - 33 * 60000 },
   { username: 'Kwame O.',    bet: 0.20, win: 0.00, mult: 0,    game: 'Plinko',   createdAt: _NOW - 41 * 60000 },
-  { username: 'Hana P.',     bet: 0.01, win: 0.02, mult: 2,    game: 'Roue',     createdAt: _NOW - 48 * 60000 },
+  { username: 'Hana P.',     bet: 0.01, win: 0.02, mult: 2,    game: 'Dice',     createdAt: _NOW - 48 * 60000 },
 ];
 
 // ══════════════════════════════════════════════════════════════════
 // GAMES HUB
 // ══════════════════════════════════════════════════════════════════
 
-type ActiveGame = 'wheel' | 'crash' | 'mines' | 'roulette' | 'plinko' | null;
+type ActiveGame = 'dice' | 'crash' | 'mines' | 'slots' | 'plinko' | null;
 
 const CATALOG = [
   {
-    id: 'wheel' as ActiveGame,
-    title: 'Roue de la Fortune',
-    desc: 'Tourne et gagne jusqu\'à ×10',
-    stats: '×10 max · classique',
-    emoji: '🎡',
+    id: 'dice' as ActiveGame,
+    title: 'Dice',
+    desc: 'Choisis ta chance, multiplie ta mise',
+    stats: 'jusqu\'à ×49 · équilibré',
+    emoji: '🎲',
     badge: 'POPULAIRE',
     accentFrom: '#f59e0b', accentTo: '#fbbf24',
     glow: 'rgba(245,158,11,0.4)',
     badgeColor: '#f59e0b',
-    pattern: 'wheel',
+    pattern: 'dice',
   },
   {
     id: 'crash' as ActiveGame,
@@ -3169,16 +2917,16 @@ const CATALOG = [
     pattern: 'mines',
   },
   {
-    id: 'roulette' as ActiveGame,
+    id: 'slots' as ActiveGame,
     title: 'Jackpot',
     desc: '3 symboles alignés = jackpot TON',
-    stats: '×36 numéro plein · ×2.8 douzaine',
+    stats: '×100 max · 3 symboles alignés',
     emoji: '🎰',
     badge: 'JACKPOT',
     accentFrom: '#10b981', accentTo: '#34d399',
     glow: 'rgba(16,185,129,0.4)',
     badgeColor: '#10b981',
-    pattern: 'roulette',
+    pattern: 'slots',
   },
   {
     id: 'plinko' as ActiveGame,
@@ -3266,7 +3014,7 @@ export const MiniAppGames: React.FC = () => {
 
   // Live feed auto-rotation — new fake entry every 8–18 seconds
   useEffect(() => {
-    const GAME_NAMES = ['Aviator', 'Plinko', 'Roulette', 'Mines', 'Roue'];
+    const GAME_NAMES = ['Aviator', 'Plinko', 'Jackpot', 'Mines', 'Dice'];
     const scheduleNext = () => {
       const ms = 8000 + Math.floor(Math.random() * 10000);
       return setTimeout(() => {
@@ -3288,8 +3036,8 @@ export const MiniAppGames: React.FC = () => {
     return () => clearTimeout(timerRef.current);
   }, []);
 
-  if (activeGame === 'wheel')    return <WheelGame    onBack={() => setActiveGame(null)} streak={streak} onResult={handleResult} />;
-  if (activeGame === 'roulette') return <RouletteGame onBack={() => setActiveGame(null)} streak={streak} onResult={handleResult} />;
+  if (activeGame === 'dice')     return <DiceGame     onBack={() => setActiveGame(null)} streak={streak} onResult={handleResult} />;
+  if (activeGame === 'slots')    return <SlotsGame    onBack={() => setActiveGame(null)} streak={streak} onResult={handleResult} />;
   if (activeGame === 'plinko')   return <PlinkoGame   onBack={() => setActiveGame(null)} streak={streak} onResult={handleResult} />;
   if (activeGame === 'crash')   return <CrashGame   onBack={() => setActiveGame(null)} streak={streak} onResult={handleResult} />;
   if (activeGame === 'mines')   return <MinesGame   onBack={() => setActiveGame(null)} streak={streak} onResult={handleResult} />;
