@@ -316,30 +316,33 @@ const StreakChip: React.FC<{ streak: number }> = ({ streak }) =>
   ) : null;
 
 // ══════════════════════════════════════════════════════════════════
-// SHARED SESSION STATS (profit / meilleur gain / misé — remis à zéro
-// à chaque ouverture du jeu, puisque chaque composant de jeu est
-// démonté quand on retourne au hub)
+// SHARED SESSION STATS (total gagné / meilleur gain / misé — remis à
+// zéro à chaque ouverture du jeu, puisque chaque composant de jeu est
+// démonté quand on retourne au hub). On n'affiche jamais de pertes —
+// uniquement les gains positifs.
 // ══════════════════════════════════════════════════════════════════
 
 function useSessionStats() {
-  const [profit, setProfit]   = useState(0);
-  const [best, setBest]       = useState(0);
-  const [wagered, setWagered] = useState(0);
+  const [totalWon, setTotalWon] = useState(0);
+  const [best, setBest]         = useState(0);
+  const [wagered, setWagered]   = useState(0);
   const record = (betAmt: number, winAmt: number) => {
     const p = +(winAmt - betAmt).toFixed(6);
-    setProfit(v => +(v + p).toFixed(6));
     setWagered(v => +(v + betAmt).toFixed(6));
-    if (p > 0) setBest(v => Math.max(v, p));
+    if (p > 0) {
+      setTotalWon(v => +(v + p).toFixed(6));
+      setBest(v => Math.max(v, p));
+    }
   };
-  return { profit, best, wagered, record };
+  return { totalWon, best, wagered, record };
 }
 
-const SessionStatsBar: React.FC<{ profit: number; best: number; wagered: number }> = ({ profit, best, wagered }) => {
+const SessionStatsBar: React.FC<{ totalWon: number; best: number; wagered: number }> = ({ totalWon, best, wagered }) => {
   if (wagered === 0) return null;
   return (
     <div className="grid grid-cols-3 px-1" style={{ gap: 8 }}>
       {[
-        { label: 'Profit session', value: `${profit > 0 ? '+' : ''}${profit.toFixed(4)}`, color: profit > 0 ? '#4ade80' : profit < 0 ? '#f87171' : '#94a3b8' },
+        { label: 'Total gagné', value: totalWon > 0 ? `+${totalWon.toFixed(4)}` : '—', color: totalWon > 0 ? '#4ade80' : '#475569' },
         { label: 'Meilleur gain', value: best > 0 ? `+${best.toFixed(4)}` : '—', color: best > 0 ? '#fbbf24' : '#475569' },
         { label: 'Misé', value: wagered.toFixed(4), color: '#94a3b8' },
       ].map(s => (
@@ -489,7 +492,7 @@ const DiceGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResul
         <GameBalanceChip bal={bal} demo={demoMode} />
       </div>
 
-      <SessionStatsBar profit={session.profit} best={session.best} wagered={session.wagered} />
+      <SessionStatsBar totalWon={session.totalWon} best={session.best} wagered={session.wagered} />
 
       {hist.length > 0 && (
         <div className="flex gap-1.5 flex-wrap">
@@ -1081,7 +1084,7 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
           <GameBalanceChip bal={bal} demo={demoMode} />
         </div>
         {session.wagered > 0 && (
-          <div className="mt-1.5"><SessionStatsBar profit={session.profit} best={session.best} wagered={session.wagered} /></div>
+          <div className="mt-1.5"><SessionStatsBar totalWon={session.totalWon} best={session.best} wagered={session.wagered} /></div>
         )}
       </div>
 
@@ -1728,7 +1731,7 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
       </div>
 
       <div className="px-4 pt-4 space-y-4">
-        <SessionStatsBar profit={session.profit} best={session.best} wagered={session.wagered} />
+        <SessionStatsBar totalWon={session.totalWon} best={session.best} wagered={session.wagered} />
         {/* Live gain bar */}
         {phase === 'playing' && (
           <div style={{ background: '#0d1021', border: '1px solid #1e2847', borderRadius: 14 }} className="p-3 flex items-center justify-between">
@@ -2155,7 +2158,7 @@ const TowerGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
         <GameBalanceChip bal={bal} demo={demoMode} />
       </div>
 
-      <SessionStatsBar profit={session.profit} best={session.best} wagered={session.wagered} />
+      <SessionStatsBar totalWon={session.totalWon} best={session.best} wagered={session.wagered} />
 
       {/* Live gain bar */}
       {phase === 'playing' && (
@@ -2731,7 +2734,7 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
       </div>
 
       <div className="px-4 pt-4 space-y-4">
-        <SessionStatsBar profit={session.profit} best={session.best} wagered={session.wagered} />
+        <SessionStatsBar totalWon={session.totalWon} best={session.best} wagered={session.wagered} />
         {/* Board */}
         <div style={{ background: '#080c1e', border: '1px solid #1e2847', borderRadius: 16, overflow: 'visible', position: 'relative', padding: '12px 0' }} className="flex justify-center">
           <div style={{ position: 'relative', width: BOARD_W, height: BOARD_H + 44 }}>
@@ -3103,6 +3106,13 @@ export const MiniAppGames: React.FC = () => {
   const toggleMute   = () => { _soundMuted = !_soundMuted; localStorage.setItem('tc_sound_muted', _soundMuted ? '1' : '0'); setMuted(_soundMuted); };
 
   const bal = demoMode ? demoBalance : currentUser.balanceMain;
+
+  // Le mode démo se réinitialise toujours en quittant l'onglet Jeux —
+  // impossible de l'oublier activé par erreur en revenant plus tard.
+  useEffect(() => {
+    return () => { if (useAppStore.getState().demoMode) toggleDemoMode(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Tick every 10s to refresh relative timestamps in live feed
   useEffect(() => {
