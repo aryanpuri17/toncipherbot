@@ -763,7 +763,7 @@ type FakePlayer = {
 
 function makeFakeRoster(): FakePlayer[] {
   const pool = [...ALL_FAKE_NAMES].sort(() => Math.random() - 0.5);
-  const n = 5; // 5 joueurs par tour — propre et lisible
+  const n = 16; // 16 joueurs par tour — assez pour forcer le scroll de l'historique
   return pool.slice(0, n).map(name => ({
     name,
     bet: randomFakeBet(),
@@ -806,16 +806,6 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
   const [cashFlash, setCashFlash] = useState(false);
   const [betTab, setBetTab]       = useState<'all' | 'my' | 'top'>('all');
 
-  // Second bet panel (permanently visible, like real Aviator)
-  const [bet2,       setBet2]       = useState(0.05);
-  const [autoCash2,  setAutoCash2]  = useState('');
-  const [myBet2,     setMyBet2]     = useState<number | null>(null);
-  const [queuedBet2, setQueuedBet2] = useState<number | null>(null);
-  const [cashedOut2, setCashedOut2] = useState<number | null>(null);
-  const myBet2Ref    = useRef<number | null>(null);
-  const queued2Ref   = useRef<number | null>(null);
-  const cashed2Ref   = useRef<number | null>(null);
-  const autoCash2Ref = useRef('');
   const crashMountedRef           = useRef(true);
   const crashBigWinTimer          = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -838,7 +828,6 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
 
   useEffect(() => { streakRef.current = streak; }, [streak]);
   useEffect(() => { autoRef.current = autoCash; }, [autoCash]);
-  useEffect(() => { autoCash2Ref.current = autoCash2; }, [autoCash2]);
   useEffect(() => { onResultRef.current = onResult; }, [onResult]);
   useEffect(() => {
     crashMountedRef.current = true;
@@ -868,20 +857,6 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
     }
   };
 
-  const doCashout2 = (m: number) => {
-    if (phaseRef.current !== 'flying') return;
-    if (myBet2Ref.current === null || cashed2Ref.current !== null) return;
-    cashed2Ref.current = m;
-    const win2 = +(myBet2Ref.current * m).toFixed(6);
-    placeGameBet(0, win2);
-    recordGameResult('Aviator', myBet2Ref.current, win2);
-    if (!demoMode) dheRecord(win2 - myBet2Ref.current);
-    snd.cashout();
-    haptic.success();
-    setCashedOut2(m);
-    setToast({ id: Date.now(), text: `+${win2.toFixed(4)} TON`, win: true });
-  };
-
   // ── Moteur de tours continus ──
   useEffect(() => {
     const beginBetting = () => {
@@ -891,13 +866,10 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
       multRef.current  = 1;
       cashedRef.current = null;
       myCashRef.current = null;
-      cashed2Ref.current = null;
       samplesRef.current = [];
       // mise en file d'attente → devient la mise active du tour
       myBetRef.current = queuedRef.current;
       queuedRef.current = null;
-      myBet2Ref.current = queued2Ref.current;
-      queued2Ref.current = null;
       fakesRef.current = makeFakeRoster();
       setFakes([...fakesRef.current]);
       setPhase('betting');
@@ -906,9 +878,6 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
       setMyBet(myBetRef.current);
       setQueuedBet(null);
       setCashedOut(null);
-      setMyBet2(myBet2Ref.current);
-      setQueuedBet2(null);
-      setCashedOut2(null);
       setRoundId(r => r + 1);
     };
 
@@ -980,12 +949,6 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
             !isNaN(ac) && ac >= 1.01 && m >= ac && ac < crashAtRef.current) {
           doCashout(ac);
         }
-        // encaissement auto bet 2
-        const ac2 = parseFloat(autoCash2Ref.current);
-        if (myBet2Ref.current !== null && cashed2Ref.current === null &&
-            !isNaN(ac2) && ac2 >= 1.01 && m >= ac2 && ac2 < crashAtRef.current) {
-          doCashout2(ac2);
-        }
 
         if (m >= crashAtRef.current) {
           const cp = crashAtRef.current;
@@ -1001,17 +964,6 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
             onResultRef.current(false);
             setToast({ id: Date.now(), text: `−${myBetRef.current.toFixed(2)} TON`, win: false });
             haptic.impact('heavy'); haptic.error();
-          }
-          if (myBet2Ref.current !== null && cashed2Ref.current === null) {
-            recordGameResult('Aviator', myBet2Ref.current, 0);
-            if (!demoMode) dheRecord(-myBet2Ref.current);
-            // Only fire loss callbacks if bet1 didn't already fire them (avoid duplicate streak reset)
-            const bet1AlreadyLost = myBetRef.current !== null && cashedRef.current === null;
-            if (!bet1AlreadyLost) {
-              onResultRef.current(false);
-              setToast({ id: Date.now(), text: `−${myBet2Ref.current.toFixed(2)} TON`, win: false });
-              haptic.impact('heavy'); haptic.error();
-            }
           }
           setPhase('crashed');
         } else {
@@ -1030,8 +982,6 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
       // Refund any unresolved bets on unmount (including mid-flight)
       if (myBetRef.current !== null && cashedRef.current === null) placeGameBet(0, myBetRef.current);
       if (queuedRef.current !== null) placeGameBet(0, queuedRef.current);
-      if (myBet2Ref.current !== null && cashed2Ref.current === null) placeGameBet(0, myBet2Ref.current);
-      if (queued2Ref.current !== null) placeGameBet(0, queued2Ref.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -1066,37 +1016,6 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
     placeGameBet(0, queuedRef.current);
     queuedRef.current = null;
     setQueuedBet(null);
-  };
-
-  // ── Actions panel 2 ──
-  const effBet2 = Math.min(bet2, bal);
-  const placeBet2 = () => {
-    if (phaseRef.current !== 'betting' || myBet2Ref.current !== null) return;
-    if (effBet2 < 0.01) return;
-    placeGameBet(effBet2, 0);
-    snd.bet();
-    haptic.impact('light');
-    myBet2Ref.current = effBet2;
-    setMyBet2(effBet2);
-  };
-  const cancelBet2 = () => {
-    if (phaseRef.current !== 'betting' || myBet2Ref.current === null) return;
-    placeGameBet(0, myBet2Ref.current);
-    myBet2Ref.current = null;
-    setMyBet2(null);
-  };
-  const queueBet2 = () => {
-    if (phaseRef.current === 'betting' || queued2Ref.current !== null) return;
-    if (effBet2 < 0.01) return;
-    placeGameBet(effBet2, 0);
-    queued2Ref.current = effBet2;
-    setQueuedBet2(effBet2);
-  };
-  const cancelQueued2 = () => {
-    if (queued2Ref.current === null) return;
-    placeGameBet(0, queued2Ref.current);
-    queued2Ref.current = null;
-    setQueuedBet2(null);
   };
 
   // ── Géométrie du graphique (échelle dynamique) ──
@@ -1156,24 +1075,8 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
     return { label: `BET NEXT ROUND · ${effBet.toFixed(2)} TON`, onClick: queueBet, kind: 'next' as const, disabled: effBet < 0.01 };
   })();
 
-  // Bouton panel 2
-  const mainBtn2 = (() => {
-    if (phase === 'betting') {
-      if (myBet2 !== null) return { label: `CANCEL BET 2 · ${myBet2.toFixed(2)} TON`, onClick: cancelBet2, kind: 'cancel' as const, disabled: false };
-      return { label: `BET 2 · ${effBet2.toFixed(2)} TON`, onClick: placeBet2, kind: 'bet' as const, disabled: effBet2 < 0.01 };
-    }
-    if (phase === 'flying' && myBet2 !== null && cashedOut2 === null) {
-      return { label: `CASH OUT BET 2 · ${(myBet2 * mult).toFixed(4)} TON`, onClick: () => doCashout2(multRef.current), kind: 'cash' as const, disabled: false };
-    }
-    if (queuedBet2 !== null) {
-      return { label: 'BET 2 PLACED ✓ · tap to cancel', onClick: cancelQueued2, kind: 'queued' as const, disabled: false };
-    }
-    return { label: `NEXT ROUND BET 2 · ${effBet2.toFixed(2)} TON`, onClick: queueBet2, kind: 'next' as const, disabled: effBet2 < 0.01 };
-  })();
-
-
   return (
-    <div className="flex flex-col" style={{ position: 'fixed', inset: 0, zIndex: 50, background: '#101112', overflow: 'hidden' }}>
+    <div className="flex flex-col" style={{ position: 'fixed', inset: 0, zIndex: 50, background: '#0a0e1f', overflowY: 'auto', overflowX: 'hidden' }}>
       <style>{`
         @keyframes crashShake {
           0%,100%{transform:translate(0,0) rotate(0deg)}
@@ -1188,10 +1091,10 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
           88%    {transform:translate(-1px,0)}
         }
         @keyframes crashRedFlash {
-          0%  {background:rgba(203,1,26,0)}
-          12% {background:rgba(203,1,26,0.28)}
-          28% {background:rgba(203,1,26,0.18)}
-          100%{background:rgba(203,1,26,0)}
+          0%  {background:rgba(239,68,68,0)}
+          12% {background:rgba(239,68,68,0.28)}
+          28% {background:rgba(239,68,68,0.18)}
+          100%{background:rgba(239,68,68,0)}
         }
         @keyframes shardFly {
           0%  {transform:translate(0,0) scale(1);opacity:1}
@@ -1263,15 +1166,15 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
         </div>
       </div>
 
-      {/* Graphique — flex-grow pendant le vol, hauteur fixe sinon */}
+      {/* Graphique — hauteur fixe, le reste du contenu pousse la page vers le bas (scroll obligatoire) */}
       <div className="mx-4 mt-1 relative" style={{
-        flex: '1 1 0%',
-        minHeight: 0,
+        height: 320,
+        flexShrink: 0,
         borderRadius: 16,
         border: isCrashed
-          ? '1px solid rgba(203,1,26,0.55)'
+          ? '1px solid rgba(239,68,68,0.55)'
           : phase === 'flying'
-            ? '1px solid rgba(203,1,26,0.35)'
+            ? '1px solid rgba(239,68,68,0.35)'
             : '1px solid rgba(255,255,255,0.07)',
         background: 'radial-gradient(130% 130% at 50% 100%, #2a0a0e 0%, #160608 28%, #0b0b0d 60%)',
         overflow: 'hidden',
@@ -1285,12 +1188,12 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
         <svg width="100%" height="100%" viewBox={`0 0 ${VB_W} ${VB_H}`} preserveAspectRatio="xMidYMid meet" style={{ display: 'block' }}>
           <defs>
             <linearGradient id="avFillG" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#cb011a" stopOpacity="0.42" />
-              <stop offset="100%" stopColor="#cb011a" stopOpacity="0.02" />
+              <stop offset="0%" stopColor="#ef4444" stopOpacity="0.42" />
+              <stop offset="100%" stopColor="#ef4444" stopOpacity="0.02" />
             </linearGradient>
             <linearGradient id="avFillR" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#cb011a" stopOpacity="0.42" />
-              <stop offset="100%" stopColor="#cb011a" stopOpacity="0.02" />
+              <stop offset="0%" stopColor="#ef4444" stopOpacity="0.42" />
+              <stop offset="100%" stopColor="#ef4444" stopOpacity="0.02" />
             </linearGradient>
           </defs>
 
@@ -1334,9 +1237,9 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
           )}
           {curvePath && phase !== 'betting' && (
             <path d={curvePath} fill="none"
-              stroke={isCrashed ? '#ff2d4b' : '#cb011a'}
+              stroke={isCrashed ? '#f87171' : '#ef4444'}
               strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
-              style={{ filter: isCrashed ? 'none' : 'drop-shadow(0 0 4px rgba(203,1,26,0.55))' }} />
+              style={{ filter: isCrashed ? 'none' : 'drop-shadow(0 0 4px rgba(239,68,68,0.55))' }} />
           )}
 
           {/* ligne cible d'encaissement auto */}
@@ -1380,16 +1283,16 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
             <g transform={`translate(${tipX},${tipY}) rotate(${planeAngle}) scale(1.5) translate(-18,0)`}>
               <g style={{ animation: mult > 10 ? 'rocketWobble 0.18s ease-in-out infinite alternate' : mult > 3 ? 'rocketWobble 0.3s ease-in-out infinite alternate' : mult > 1.5 ? 'rocketWobble 0.5s ease-in-out infinite alternate' : undefined, transformOrigin: '0px 0px' }}>
                 {/* Motion trail */}
-                <ellipse cx="-14" cy="0.5" rx={mult > 3 ? 13 : 9} ry="2" fill="#cb011a" opacity={0.16} />
+                <ellipse cx="-14" cy="0.5" rx={mult > 3 ? 13 : 9} ry="2" fill="#ef4444" opacity={0.16} />
 
                 {/* Tail fin */}
-                <path d="M -10,-0.5 L -17,-8.5 L -13,-0.5 Z" fill="#cb011a" />
+                <path d="M -10,-0.5 L -17,-8.5 L -13,-0.5 Z" fill="#ef4444" />
 
                 {/* Swept main wing */}
-                <path d="M 3,-1.5 L -7,-12.5 L 1,-11 L 7,-1.5 Z" fill="#cb011a" />
+                <path d="M 3,-1.5 L -7,-12.5 L 1,-11 L 7,-1.5 Z" fill="#ef4444" />
 
                 {/* Fuselage — slim flat dart shape */}
-                <path d="M 18,0 L 2,-2.4 L -14,-1 L -14,1 L 2,2.4 Z" fill="#cb011a" />
+                <path d="M 18,0 L 2,-2.4 L -14,-1 L -14,1 L 2,2.4 Z" fill="#ef4444" />
 
                 {/* Nose highlight */}
                 <circle cx="17.3" cy="0" r="1.5" fill="#fff" opacity={0.85} />
@@ -1454,7 +1357,7 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
             <div className="flex flex-col items-center" style={{ width: '70%', maxWidth: 280 }}>
               {/* Hélice rouge qui tourne */}
               <svg width="68" height="68" viewBox="0 0 100 100" style={{ marginBottom: 14, animation: 'propSpinSlow 1.2s linear infinite', transformOrigin: '50px 50px' }}>
-                <g fill="#cb011a">
+                <g fill="#ef4444">
                   <path d="M50 50 C 40 20, 44 8, 50 6 C 56 8, 60 20, 50 50 Z"/>
                   <path d="M50 50 C 80 40, 92 44, 94 50 C 92 56, 80 60, 50 50 Z"/>
                   <path d="M50 50 C 60 80, 56 92, 50 94 C 44 92, 40 80, 50 50 Z"/>
@@ -1469,7 +1372,7 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
                 <div style={{
                   height: '100%', borderRadius: 99,
                   width: `${Math.max(0, Math.min(100, (countdown / (BET_MS / 1000)) * 100))}%`,
-                  background: 'linear-gradient(90deg,#ff4d2e,#cb011a)',
+                  background: 'linear-gradient(90deg,#f87171,#ef4444)',
                   transition: 'width 0.05s linear',
                 }} />
               </div>
@@ -1480,19 +1383,19 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
           ) : (
             <div className="text-center">
               {isCrashed && (
-                <p style={{ fontSize: 15, fontWeight: 800, letterSpacing: '0.14em', color: '#ff2d4b', textTransform: 'uppercase', marginBottom: 2 }}>Flew away!</p>
+                <p style={{ fontSize: 15, fontWeight: 800, letterSpacing: '0.14em', color: '#f87171', textTransform: 'uppercase', marginBottom: 2 }}>Flew away!</p>
               )}
               <p style={{
                 fontSize: 60, fontWeight: 900, lineHeight: 1.0, fontVariantNumeric: 'tabular-nums',
-                color: isCrashed ? '#ff2d4b' : cashedOut !== null ? '#22c55e' : '#ffffff',
-                textShadow: isCrashed ? '0 0 30px rgba(255,45,75,0.55)' : cashedOut !== null ? '0 0 28px rgba(34,197,94,0.35)' : '0 0 30px rgba(203,1,26,0.35)',
+                color: isCrashed ? '#f87171' : cashedOut !== null ? '#22c55e' : '#ffffff',
+                textShadow: isCrashed ? '0 0 30px rgba(255,45,75,0.55)' : cashedOut !== null ? '0 0 28px rgba(34,197,94,0.35)' : '0 0 30px rgba(239,68,68,0.35)',
               }}>
                 {curM.toFixed(2)}×
               </p>
               {!isCrashed && (
                 <p style={{
                   fontSize: 12, fontWeight: 700, marginTop: 4,
-                  color: cashedOut !== null ? '#22c55e' : '#9ea0a3',
+                  color: cashedOut !== null ? '#22c55e' : '#94a3b8',
                 }}>
                   {cashedOut !== null
                     ? `✓ Cashed out @×${cashedOut.toFixed(2)}`
@@ -1519,39 +1422,39 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
       </div>
 
       {/* ── BET PANEL 1 ── */}
-      <div style={{ flexShrink: 0, background: '#1b1c1d', borderTop: '1px solid #252528' }} className="px-3 pt-2 pb-2">
+      <div style={{ flexShrink: 0, background: '#0d1021', borderTop: '1px solid #16203f' }} className="px-3 pt-2 pb-2">
         {/* Bet row */}
         <div className="flex gap-2 items-center">
-          <div style={{ background: '#252528', borderRadius: 10, display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', opacity: myBet !== null ? 0.5 : 1 }}>
+          <div style={{ background: '#16203f', borderRadius: 10, display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', opacity: myBet !== null ? 0.5 : 1 }}>
             <button onClick={() => setBet(b => +Math.max(0.01, b - 0.5).toFixed(2))} disabled={myBet !== null}
-              style={{ width: 26, height: 26, borderRadius: '50%', background: '#141516', color: '#9ea0a3', fontSize: 20, fontWeight: 700, border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: myBet !== null ? 'not-allowed' : 'pointer' }}>−</button>
+              style={{ width: 26, height: 26, borderRadius: '50%', background: '#0d1021', color: '#94a3b8', fontSize: 20, fontWeight: 700, border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: myBet !== null ? 'not-allowed' : 'pointer' }}>−</button>
             <span style={{ fontSize: 17, fontWeight: 800, color: '#fff', minWidth: 48, textAlign: 'center' as const }}>{effBet.toFixed(2)}</span>
             <button onClick={() => setBet(b => +Math.min(50, b + 0.5).toFixed(2))} disabled={myBet !== null}
-              style={{ width: 26, height: 26, borderRadius: '50%', background: '#141516', color: '#9ea0a3', fontSize: 20, fontWeight: 700, border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: myBet !== null ? 'not-allowed' : 'pointer' }}>+</button>
+              style={{ width: 26, height: 26, borderRadius: '50%', background: '#0d1021', color: '#94a3b8', fontSize: 20, fontWeight: 700, border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: myBet !== null ? 'not-allowed' : 'pointer' }}>+</button>
           </div>
           <button onClick={mainBtn.onClick} disabled={mainBtn.disabled}
             className="flex-1 rounded-xl font-black uppercase active:scale-[0.97] transition-all"
             style={{
               padding: '10px 8px', fontSize: 12, lineHeight: 1.2,
-              background: mainBtn.kind === 'cash' ? '#cb011a' : mainBtn.kind === 'cancel' ? 'rgba(203,1,26,0.18)' : mainBtn.kind === 'queued' ? 'rgba(40,169,9,0.18)' : mainBtn.disabled ? 'rgba(255,255,255,0.06)' : '#28a909',
-              color: mainBtn.kind === 'cash' ? '#fff' : mainBtn.kind === 'cancel' ? '#ff4d5e' : mainBtn.kind === 'queued' ? '#60ae05' : mainBtn.disabled ? '#4e4e4e' : '#fff',
-              border: mainBtn.kind === 'cancel' ? '1px solid rgba(203,1,26,0.4)' : mainBtn.kind === 'queued' ? '1px solid rgba(40,169,9,0.4)' : mainBtn.kind === 'next' ? '1px solid #2c2d31' : 'none',
+              background: mainBtn.kind === 'cash' ? '#ef4444' : mainBtn.kind === 'cancel' ? 'rgba(239,68,68,0.18)' : mainBtn.kind === 'queued' ? 'rgba(16,185,129,0.18)' : mainBtn.disabled ? 'rgba(255,255,255,0.06)' : '#10b981',
+              color: mainBtn.kind === 'cash' ? '#fff' : mainBtn.kind === 'cancel' ? '#f87171' : mainBtn.kind === 'queued' ? '#34d399' : mainBtn.disabled ? '#5b6987' : '#fff',
+              border: mainBtn.kind === 'cancel' ? '1px solid rgba(239,68,68,0.4)' : mainBtn.kind === 'queued' ? '1px solid rgba(16,185,129,0.4)' : mainBtn.kind === 'next' ? '1px solid #1e2847' : 'none',
               animation: mainBtn.kind === 'cash' ? 'avBetPulse 1.1s ease-in-out infinite' : mainBtn.kind === 'bet' ? 'avGreenPulse 2.5s ease-in-out infinite' : undefined,
-              boxShadow: mainBtn.kind === 'cash' || mainBtn.kind === 'bet' ? '0 4px 16px rgba(203,1,26,0.25)' : undefined,
+              boxShadow: mainBtn.kind === 'cash' || mainBtn.kind === 'bet' ? '0 4px 16px rgba(239,68,68,0.25)' : undefined,
             }}>
             {bal < 0.01 && mainBtn.kind === 'bet' ? (demoMode ? 'Demo empty' : 'No balance') : mainBtn.label}
           </button>
         </div>
         {/* Auto cashout row (always visible) */}
         <div className="flex items-center gap-2 mt-1.5">
-          <span style={{ fontSize: 10, color: '#4e4e4e', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.06em', whiteSpace: 'nowrap' as const }}>Auto ×</span>
-          <div style={{ flex: 1, background: '#252528', borderRadius: 8, display: 'flex', alignItems: 'center', padding: '4px 10px' }}>
+          <span style={{ fontSize: 10, color: '#5b6987', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.06em', whiteSpace: 'nowrap' as const }}>Auto ×</span>
+          <div style={{ flex: 1, background: '#16203f', borderRadius: 8, display: 'flex', alignItems: 'center', padding: '4px 10px' }}>
             <input type="number" value={autoCash} placeholder="—" min={1.01} step={0.01}
               onChange={e => { setAutoCash(e.target.value); localStorage.setItem('tc_crash_auto', e.target.value); }}
               style={{ flex: 1, background: 'transparent', color: '#f8fafc', fontSize: 13, fontWeight: 700, outline: 'none', border: 'none', width: '100%' }} />
             {autoCash && (
               <button onClick={() => { setAutoCash(''); localStorage.removeItem('tc_crash_auto'); }}
-                style={{ color: '#4e4e4e', fontSize: 12, background: 'none', border: 'none', cursor: 'pointer', padding: '0 2px' }}>✕</button>
+                style={{ color: '#5b6987', fontSize: 12, background: 'none', border: 'none', cursor: 'pointer', padding: '0 2px' }}>✕</button>
             )}
           </div>
         </div>
@@ -1559,54 +1462,7 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
         <div className="grid grid-cols-4 gap-1.5 mt-1.5">
           {[0.10, 0.50, 1.00, 5.00].map(v => (
             <button key={v} onClick={() => setBet(v)} disabled={myBet !== null}
-              style={{ padding: '5px 0', borderRadius: 8, border: 'none', background: '#252528', color: '#9ea0a3', fontSize: 11, fontWeight: 700, cursor: myBet !== null ? 'not-allowed' : 'pointer', opacity: myBet !== null ? 0.45 : 1 }}>
-              {v.toFixed(2)}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* ── BET PANEL 2 (permanently visible, no toggle) ── */}
-      <div style={{ flexShrink: 0, background: '#1b1c1d', borderTop: '1px solid #252528' }} className="px-3 pt-2 pb-2">
-        {/* Bet row */}
-        <div className="flex gap-2 items-center">
-          <div style={{ background: '#252528', borderRadius: 10, display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', opacity: myBet2 !== null ? 0.5 : 1 }}>
-            <button onClick={() => setBet2(b => +Math.max(0.01, b - 0.5).toFixed(2))} disabled={myBet2 !== null}
-              style={{ width: 26, height: 26, borderRadius: '50%', background: '#141516', color: '#9ea0a3', fontSize: 20, fontWeight: 700, border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: myBet2 !== null ? 'not-allowed' : 'pointer' }}>−</button>
-            <span style={{ fontSize: 17, fontWeight: 800, color: '#fff', minWidth: 48, textAlign: 'center' as const }}>{effBet2.toFixed(2)}</span>
-            <button onClick={() => setBet2(b => +Math.min(50, b + 0.5).toFixed(2))} disabled={myBet2 !== null}
-              style={{ width: 26, height: 26, borderRadius: '50%', background: '#141516', color: '#9ea0a3', fontSize: 20, fontWeight: 700, border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: myBet2 !== null ? 'not-allowed' : 'pointer' }}>+</button>
-          </div>
-          <button onClick={mainBtn2.onClick} disabled={mainBtn2.disabled}
-            className="flex-1 rounded-xl font-black uppercase active:scale-[0.97] transition-all"
-            style={{
-              padding: '10px 8px', fontSize: 12, lineHeight: 1.2,
-              background: mainBtn2.kind === 'cash' ? '#cb011a' : mainBtn2.kind === 'cancel' ? 'rgba(203,1,26,0.18)' : mainBtn2.kind === 'queued' ? 'rgba(40,169,9,0.18)' : mainBtn2.disabled ? 'rgba(255,255,255,0.06)' : '#28a909',
-              color: mainBtn2.kind === 'cash' ? '#fff' : mainBtn2.kind === 'cancel' ? '#ff4d5e' : mainBtn2.kind === 'queued' ? '#60ae05' : mainBtn2.disabled ? '#4e4e4e' : '#fff',
-              border: mainBtn2.kind === 'cancel' ? '1px solid rgba(203,1,26,0.4)' : mainBtn2.kind === 'queued' ? '1px solid rgba(40,169,9,0.4)' : mainBtn2.kind === 'next' ? '1px solid #2c2d31' : 'none',
-              animation: mainBtn2.kind === 'cash' ? 'avBetPulse 1.1s ease-in-out infinite' : mainBtn2.kind === 'bet' ? 'avGreenPulse 2.5s ease-in-out infinite' : undefined,
-            }}>
-            {mainBtn2.label}
-          </button>
-        </div>
-        {/* Auto cashout row */}
-        <div className="flex items-center gap-2 mt-1.5">
-          <span style={{ fontSize: 10, color: '#4e4e4e', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.06em', whiteSpace: 'nowrap' as const }}>Auto ×</span>
-          <div style={{ flex: 1, background: '#252528', borderRadius: 8, display: 'flex', alignItems: 'center', padding: '4px 10px' }}>
-            <input type="number" value={autoCash2} placeholder="—" min={1.01} step={0.01}
-              onChange={e => setAutoCash2(e.target.value)}
-              style={{ flex: 1, background: 'transparent', color: '#f8fafc', fontSize: 13, fontWeight: 700, outline: 'none', border: 'none', width: '100%' }} />
-            {autoCash2 && (
-              <button onClick={() => setAutoCash2('')}
-                style={{ color: '#4e4e4e', fontSize: 12, background: 'none', border: 'none', cursor: 'pointer', padding: '0 2px' }}>✕</button>
-            )}
-          </div>
-        </div>
-        {/* Quick amounts */}
-        <div className="grid grid-cols-4 gap-1.5 mt-1.5">
-          {[0.10, 0.50, 1.00, 5.00].map(v => (
-            <button key={v} onClick={() => setBet2(v)} disabled={myBet2 !== null}
-              style={{ padding: '5px 0', borderRadius: 8, border: 'none', background: '#252528', color: '#9ea0a3', fontSize: 11, fontWeight: 700, cursor: myBet2 !== null ? 'not-allowed' : 'pointer', opacity: myBet2 !== null ? 0.45 : 1 }}>
+              style={{ padding: '5px 0', borderRadius: 8, border: 'none', background: '#16203f', color: '#94a3b8', fontSize: 11, fontWeight: 700, cursor: myBet !== null ? 'not-allowed' : 'pointer', opacity: myBet !== null ? 0.45 : 1 }}>
               {v.toFixed(2)}
             </button>
           ))}
@@ -1614,84 +1470,84 @@ const CrashGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
       </div>
 
       {/* ── BOTTOM TABS: All Bets | My Bets | Top ── */}
-      <div style={{ flexShrink: 0, background: '#141516', borderTop: '1px solid #1e1f22' }}>
+      <div style={{ flexShrink: 0, background: '#0d1021', borderTop: '1px solid #1e2847', paddingBottom: 24 }}>
         <div style={{ display: 'flex' }}>
           {(['all', 'my', 'top'] as const).map(tab => (
             <button key={tab} onClick={() => setBetTab(tab)}
-              style={{ flex: 1, padding: '8px 0', fontSize: 11, fontWeight: 700, border: 'none', color: betTab === tab ? '#fff' : '#4e4e4e', borderBottom: betTab === tab ? '2px solid #cb011a' : '2px solid transparent', background: 'none', textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>
+              style={{ flex: 1, padding: '8px 0', fontSize: 11, fontWeight: 700, border: 'none', color: betTab === tab ? '#fff' : '#5b6987', borderBottom: betTab === tab ? '2px solid #ef4444' : '2px solid transparent', background: 'none', textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>
               {tab === 'all' ? 'All Bets' : tab === 'my' ? 'My Bets' : 'Top'}
             </button>
           ))}
         </div>
-        <div style={{ maxHeight: 200, overflowY: 'auto', overflowX: 'hidden' }}>
+        <div>
           {betTab === 'all' && (
             <>
-              <div className="grid grid-cols-4 px-3 py-1" style={{ borderBottom: '1px solid rgba(37,37,40,0.8)' }}>
+              <div className="grid grid-cols-4 px-3 py-1" style={{ borderBottom: '1px solid rgba(30,40,71,0.8)' }}>
                 {['USER','BET','×','PROFIT'].map(h => (
-                  <span key={h} style={{ fontSize: 9, fontWeight: 700, color: '#4e4e4e', letterSpacing: '0.06em' }}>{h}</span>
+                  <span key={h} style={{ fontSize: 9, fontWeight: 700, color: '#5b6987', letterSpacing: '0.06em' }}>{h}</span>
                 ))}
               </div>
               {(myBet !== null || queuedBet !== null) && (
-                <div className="grid grid-cols-4 px-3 py-1 items-center" style={{ background: 'rgba(40,169,9,0.06)', borderBottom: '1px solid rgba(37,37,40,0.5)' }}>
-                  <span style={{ fontSize: 11, fontWeight: 800, color: '#60ae05' }}>You</span>
-                  <span style={{ fontSize: 10, color: '#bbbfc5' }}>{(myBet ?? queuedBet ?? 0).toFixed(2)}</span>
-                  <span style={{ fontSize: 10, fontWeight: 700, color: cashedOut !== null ? '#60ae05' : '#4e4e4e' }}>{cashedOut !== null ? `×${cashedOut.toFixed(2)}` : '—'}</span>
-                  <span style={{ fontSize: 10, fontWeight: 700, color: cashedOut !== null ? '#60ae05' : isCrashed ? '#ff4d5e' : '#4e4e4e' }}>
+                <div className="grid grid-cols-4 px-3 py-1 items-center" style={{ background: 'rgba(16,185,129,0.06)', borderBottom: '1px solid rgba(30,40,71,0.5)' }}>
+                  <span style={{ fontSize: 11, fontWeight: 800, color: '#34d399' }}>You</span>
+                  <span style={{ fontSize: 10, color: '#cbd5e1' }}>{(myBet ?? queuedBet ?? 0).toFixed(2)}</span>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: cashedOut !== null ? '#34d399' : '#5b6987' }}>{cashedOut !== null ? `×${cashedOut.toFixed(2)}` : '—'}</span>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: cashedOut !== null ? '#34d399' : isCrashed ? '#f87171' : '#5b6987' }}>
                     {cashedOut !== null ? `+${((myBet??0)*cashedOut-(myBet??0)).toFixed(2)}` : myBet !== null && isCrashed ? `-${myBet.toFixed(2)}` : '—'}
                   </span>
                 </div>
               )}
-              {joinedFakes.length === 0 && <p className="px-3 py-2 text-center" style={{ fontSize: 11, color: '#4e4e4e' }}>Players joining…</p>}
-              {joinedFakes.slice(0, 8).map((f, i) => (
+              {joinedFakes.length === 0 && <p className="px-3 py-2 text-center" style={{ fontSize: 11, color: '#5b6987' }}>Players joining…</p>}
+              {joinedFakes.slice(0, 20).map((f, i) => (
                 <div key={f.name} className="grid grid-cols-4 px-3 py-1 items-center"
-                  style={{ borderBottom: i < Math.min(joinedFakes.length, 8) - 1 ? '1px solid rgba(37,37,40,0.4)' : 'none' }}>
-                  <span style={{ fontSize: 10, color: '#83878e', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{f.name}</span>
-                  <span style={{ fontSize: 10, color: '#bbbfc5' }}>{f.bet.toFixed(2)}</span>
-                  <span style={{ fontSize: 10, fontWeight: 700, color: f.cashedAt !== null ? '#60ae05' : isCrashed ? '#ff4d5e' : '#4e4e4e' }}>{f.cashedAt !== null ? `×${f.cashedAt.toFixed(2)}` : isCrashed ? '×' : '—'}</span>
-                  <span style={{ fontSize: 10, fontWeight: 700, color: f.cashedAt !== null ? '#60ae05' : isCrashed ? '#ff4d5e' : '#4e4e4e' }}>{f.cashedAt !== null ? `+${(f.bet*f.cashedAt-f.bet).toFixed(2)}` : isCrashed ? `-${f.bet.toFixed(2)}` : '—'}</span>
+                  style={{ borderBottom: i < Math.min(joinedFakes.length, 20) - 1 ? '1px solid rgba(30,40,71,0.4)' : 'none' }}>
+                  <span style={{ fontSize: 10, color: '#94a3b8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{f.name}</span>
+                  <span style={{ fontSize: 10, color: '#cbd5e1' }}>{f.bet.toFixed(2)}</span>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: f.cashedAt !== null ? '#34d399' : isCrashed ? '#f87171' : '#5b6987' }}>{f.cashedAt !== null ? `×${f.cashedAt.toFixed(2)}` : isCrashed ? '×' : '—'}</span>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: f.cashedAt !== null ? '#34d399' : isCrashed ? '#f87171' : '#5b6987' }}>{f.cashedAt !== null ? `+${(f.bet*f.cashedAt-f.bet).toFixed(2)}` : isCrashed ? `-${f.bet.toFixed(2)}` : '—'}</span>
                 </div>
               ))}
             </>
           )}
           {betTab === 'my' && (
             <>
-              <div className="grid grid-cols-3 px-3 py-1" style={{ borderBottom: '1px solid rgba(37,37,40,0.8)' }}>
+              <div className="grid grid-cols-3 px-3 py-1" style={{ borderBottom: '1px solid rgba(30,40,71,0.8)' }}>
                 {['ROUND','BET','RESULT'].map(h => (
-                  <span key={h} style={{ fontSize: 9, fontWeight: 700, color: '#4e4e4e', letterSpacing: '0.06em' }}>{h}</span>
+                  <span key={h} style={{ fontSize: 9, fontWeight: 700, color: '#5b6987', letterSpacing: '0.06em' }}>{h}</span>
                 ))}
               </div>
               {myBet !== null ? (
-                <div className="grid grid-cols-3 px-3 py-1 items-center" style={{ background: 'rgba(40,169,9,0.05)', borderBottom: '1px solid rgba(37,37,40,0.5)' }}>
-                  <span style={{ fontSize: 10, color: '#4e4e4e' }}>#{roundId}</span>
-                  <span style={{ fontSize: 10, color: '#bbbfc5' }}>{myBet.toFixed(2)}</span>
-                  <span style={{ fontSize: 10, fontWeight: 700, color: cashedOut !== null ? '#60ae05' : isCrashed ? '#ff4d5e' : '#9ea0a3' }}>
+                <div className="grid grid-cols-3 px-3 py-1 items-center" style={{ background: 'rgba(16,185,129,0.05)', borderBottom: '1px solid rgba(30,40,71,0.5)' }}>
+                  <span style={{ fontSize: 10, color: '#5b6987' }}>#{roundId}</span>
+                  <span style={{ fontSize: 10, color: '#cbd5e1' }}>{myBet.toFixed(2)}</span>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: cashedOut !== null ? '#34d399' : isCrashed ? '#f87171' : '#94a3b8' }}>
                     {cashedOut !== null ? `×${cashedOut.toFixed(2)} 🏆` : isCrashed ? 'Flew away' : 'In flight…'}
                   </span>
                 </div>
               ) : history.length === 0 ? (
-                <p className="px-3 py-2 text-center" style={{ fontSize: 11, color: '#4e4e4e' }}>No bets yet</p>
+                <p className="px-3 py-2 text-center" style={{ fontSize: 11, color: '#5b6987' }}>No bets yet</p>
               ) : null}
-              {history.slice(0, 5).map((h, i) => (
-                <div key={i} className="grid grid-cols-3 px-3 py-1 items-center" style={{ borderBottom: i < 4 ? '1px solid rgba(37,37,40,0.3)' : 'none' }}>
-                  <span style={{ fontSize: 10, color: '#4e4e4e' }}>Past</span>
-                  <span style={{ fontSize: 10, color: '#4e4e4e' }}>—</span>
-                  <span style={{ fontSize: 10, fontWeight: 700, color: h < 2 ? '#ff4d5e' : h < 10 ? '#bbbfc5' : '#60ae05' }}>{h.toFixed(2)}×</span>
+              {history.slice(0, 15).map((h, i) => (
+                <div key={i} className="grid grid-cols-3 px-3 py-1 items-center" style={{ borderBottom: i < 14 ? '1px solid rgba(30,40,71,0.3)' : 'none' }}>
+                  <span style={{ fontSize: 10, color: '#5b6987' }}>Past</span>
+                  <span style={{ fontSize: 10, color: '#5b6987' }}>—</span>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: h < 2 ? '#f87171' : h < 10 ? '#cbd5e1' : '#34d399' }}>{h.toFixed(2)}×</span>
                 </div>
               ))}
             </>
           )}
           {betTab === 'top' && (
             <>
-              <div className="grid grid-cols-2 px-3 py-1" style={{ borderBottom: '1px solid rgba(37,37,40,0.8)' }}>
+              <div className="grid grid-cols-2 px-3 py-1" style={{ borderBottom: '1px solid rgba(30,40,71,0.8)' }}>
                 {['MULTIPLIER','ROUND'].map(h => (
-                  <span key={h} style={{ fontSize: 9, fontWeight: 700, color: '#4e4e4e', letterSpacing: '0.06em' }}>{h}</span>
+                  <span key={h} style={{ fontSize: 9, fontWeight: 700, color: '#5b6987', letterSpacing: '0.06em' }}>{h}</span>
                 ))}
               </div>
-              {history.length === 0 && <p className="px-3 py-2 text-center" style={{ fontSize: 11, color: '#4e4e4e' }}>No history yet</p>}
-              {[...history].sort((a, b) => b - a).slice(0, 5).map((h, i) => (
-                <div key={i} className="grid grid-cols-2 px-3 py-1 items-center" style={{ borderBottom: i < 4 ? '1px solid rgba(37,37,40,0.3)' : 'none' }}>
-                  <span style={{ fontSize: 12, fontWeight: 800, color: h >= 10 ? '#60ae05' : h >= 3 ? '#f59e0b' : '#bbbfc5' }}>{h.toFixed(2)}×</span>
-                  <span style={{ fontSize: 10, color: '#4e4e4e' }}>Round #{roundId - i}</span>
+              {history.length === 0 && <p className="px-3 py-2 text-center" style={{ fontSize: 11, color: '#5b6987' }}>No history yet</p>}
+              {[...history].sort((a, b) => b - a).slice(0, 15).map((h, i) => (
+                <div key={i} className="grid grid-cols-2 px-3 py-1 items-center" style={{ borderBottom: i < 14 ? '1px solid rgba(30,40,71,0.3)' : 'none' }}>
+                  <span style={{ fontSize: 12, fontWeight: 800, color: h >= 10 ? '#34d399' : h >= 3 ? '#f59e0b' : '#cbd5e1' }}>{h.toFixed(2)}×</span>
+                  <span style={{ fontSize: 10, color: '#5b6987' }}>Round #{roundId - i}</span>
                 </div>
               ))}
             </>
