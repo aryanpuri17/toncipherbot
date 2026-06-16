@@ -262,6 +262,18 @@ const GameBalanceChip: React.FC<{ bal: number; demo: boolean }> = ({ bal, demo }
   </div>
 );
 
+const DemoModeBanner: React.FC = () => (
+  <div style={{
+    height: 20, flexShrink: 0, pointerEvents: 'none',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    background: 'rgba(245,158,11,0.12)', borderBottom: '1px solid rgba(245,158,11,0.25)',
+  }}>
+    <p style={{ fontSize: 9, fontWeight: 700, color: '#f59e0b', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+      🎮 Mode démo — gains non crédités
+    </p>
+  </div>
+);
+
 const StreakChip: React.FC<{ streak: number }> = ({ streak }) =>
   streak >= 2 ? (
     <span title={`${streak} victoires consécutives`} style={{
@@ -440,6 +452,7 @@ const DiceGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResul
         <MuteButton />
         <GameBalanceChip bal={bal} demo={demoMode} />
       </div>
+      {demoMode && <DemoModeBanner />}
 
       <SessionStatsBar totalWon={session.totalWon} best={session.best} wagered={session.wagered} />
 
@@ -1005,6 +1018,7 @@ const CrashGame: React.FC<{ onBack: () => void; onResult: OnResult }> = ({ onBac
           <div className="mt-1.5"><SessionStatsBar totalWon={session.totalWon} best={session.best} wagered={session.wagered} /></div>
         )}
       </div>
+      {demoMode && <DemoModeBanner />}
 
       {/* Graphique — flex-grow pendant le vol, hauteur fixe sinon */}
       <div className="mx-4 mt-1 relative" style={{
@@ -1028,8 +1042,8 @@ const CrashGame: React.FC<{ onBack: () => void; onResult: OnResult }> = ({ onBac
         <svg width="100%" height="100%" viewBox={`0 0 ${VB_W} ${VB_H}`} preserveAspectRatio="xMidYMid meet" style={{ display: 'block' }}>
           <defs>
             <linearGradient id="avFillG" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#ef4444" stopOpacity="0.42" />
-              <stop offset="100%" stopColor="#ef4444" stopOpacity="0.02" />
+              <stop offset="0%" stopColor="#22c55e" stopOpacity="0.42" />
+              <stop offset="100%" stopColor="#22c55e" stopOpacity="0.02" />
             </linearGradient>
             <linearGradient id="avFillR" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="#ef4444" stopOpacity="0.42" />
@@ -1497,7 +1511,6 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
       setSafeCount(ns);
       if (ns === GRID_SIZE - effMinesRef.current) {
         const win = +(activeBetRef.current * minesMult(effMinesRef.current, ns)).toFixed(6);
-        trimMinesForDisplay();
         placeGameBet(activeBetRef.current, win);
         recordGameResult('Mines', activeBetRef.current, win);
         session.record(activeBetRef.current, win);
@@ -1513,17 +1526,8 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
     }
   };
 
-  // On win, only ever display the number of mines the player selected —
-  // extra hidden mines must never appear on the final board.
-  const trimMinesForDisplay = () => {
-    const arr = [...minePos];
-    arr.sort(() => Math.random() - 0.5);
-    setMinePos(new Set(arr.slice(0, mineCount)));
-  };
-
   const cashout = () => {
     if (phase !== 'playing' || safeCount === 0) return;
-    trimMinesForDisplay();
     placeGameBet(activeBetRef.current, curWin);
     recordGameResult('Mines', activeBetRef.current, curWin);
     session.record(activeBetRef.current, curWin);
@@ -1611,6 +1615,7 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
           <GameBalanceChip bal={bal} demo={demoMode} />
         </div>
       </div>
+      {demoMode && <DemoModeBanner />}
 
       <div className="px-4 pt-4 space-y-4">
         <SessionStatsBar totalWon={session.totalWon} best={session.best} wagered={session.wagered} />
@@ -2025,6 +2030,7 @@ const TowerGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
         <MuteButton />
         <GameBalanceChip bal={bal} demo={demoMode} />
       </div>
+      {demoMode && <DemoModeBanner />}
 
       <SessionStatsBar totalWon={session.totalWon} best={session.best} wagered={session.wagered} />
 
@@ -2069,7 +2075,9 @@ const TowerGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
 
           return (
             <div key={f} className="flex items-center gap-2">
-              <span className="text-[10px] font-bold w-9 text-right" style={{ color: isCurrent ? '#fbbf24' : isCleared ? '#4ade80' : '#475569' }}>
+              <span className="w-9 text-right" style={isCurrent
+                ? { background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.18)', borderRadius: 8, padding: '2px 4px', fontSize: 12, fontWeight: 800, color: '#fbbf24', transition: 'background 0.15s' }
+                : { fontSize: 10, fontWeight: 700, color: isCleared ? '#4ade80' : '#475569' }}>
                 {towerMult(activeDiff, f).toFixed(2)}×
               </span>
               <div className="flex-1 grid gap-1.5" style={{ gridTemplateColumns: `repeat(${cellsPerFloor}, 1fr)` }}>
@@ -2600,6 +2608,7 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
           <GameBalanceChip bal={bal} demo={demoMode} />
         </div>
       </div>
+      {demoMode && <DemoModeBanner />}
 
       <div className="px-4 pt-4 space-y-4">
         <SessionStatsBar totalWon={session.totalWon} best={session.best} wagered={session.wagered} />
@@ -2739,6 +2748,9 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
                 );
               })}
             </div>
+            <p style={{ fontSize: 10, color: '#475569', marginTop: 6 }}>
+              Avantage maison : {((demoMode ? 0.04 : 0.10) * 100).toFixed(0)}% (biais de trajectoire par rebond)
+            </p>
           </div>
 
           {/* Ball count */}
@@ -3100,6 +3112,7 @@ export const MiniAppGames: React.FC = () => {
               </div>
               <p className="text-white font-bold text-sm leading-tight">{game.title}</p>
               <p className="text-slate-400 text-[11px] mt-0.5 leading-tight">{game.desc}</p>
+              <p className="text-[10px] mt-0.5 truncate" style={{ color: '#475569' }}>{game.stats}</p>
               <div className="mt-2.5 h-0.5 rounded-full w-2/3" style={{ background: `linear-gradient(90deg,${game.accentFrom},transparent)` }} />
             </div>
           </button>
