@@ -1,8 +1,10 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useAppStore } from '../../store/appStore';
 import { ArrowLeft, RotateCcw, Trophy, Zap } from 'lucide-react';
 import { CountUp } from '../ui/CountUp';
 import { ConfettiEffect } from '../ui/ConfettiEffect';
+import type { GameState as ChickenGameState } from './chicken/GameEngine';
+import { GameEngine, type Difficulty, DIFF_CONFIG, computeMultiplier } from './chicken/GameEngine';
 
 // ══════════════════════════════════════════════════════════════════
 // AUDIO ENGINE (Web Audio API — aucun fichier externe)
@@ -600,273 +602,372 @@ function randomFakeBet(): number {
 }
 
 // ══════════════════════════════════════════════════════════════════
-// CHICKEN ROAD — traversez la route, évitez les voitures, encaissez
+// CHICKEN ROAD 3D — Three.js voxel game, RTP-based multipliers
 // ══════════════════════════════════════════════════════════════════
 
-type ChickenDiff = 'easy' | 'medium' | 'hard';
-type ChickenPhase = 'waiting' | 'playing' | 'won' | 'lost';
-
-const CHICKEN_STEPS = 7;
-const CHICKEN_LANES: Record<ChickenDiff, number> = { easy: 4, medium: 3, hard: 2 };
-const CHICKEN_RTP = 0.95;
-const CHICKEN_LABEL: Record<ChickenDiff, string> = { easy: 'Facile', medium: 'Moyen', hard: 'Difficile' };
-
-function chickenSafeFrac(diff: ChickenDiff): number {
-  const lanes = CHICKEN_LANES[diff];
-  return (lanes - 1) / lanes; // 1 voiture par ligne
-}
-function chickenMult(diff: ChickenDiff, step: number): number {
-  if (step <= 0) return 1;
-  return +(CHICKEN_RTP / Math.pow(chickenSafeFrac(diff), step)).toFixed(4);
-}
-function chickenStepRoll(diff: ChickenDiff): boolean {
-  const lanes = CHICKEN_LANES[diff];
-  return Math.random() < (lanes - 1) / lanes;
-}
+const DIFF_LABELS: Record<Difficulty, string> = {
+  easy: '🟢 Facile', medium: '🟡 Moyen', hard: '🔴 Difficile', hardcore: '💀 Hardcore',
+};
+const DIFF_COLORS: Record<Difficulty, string> = {
+  easy: '#4CAF50', medium: '#FFD600', hard: '#FF3D00', hardcore: '#AA00FF',
+};
 
 const ChickenRoadGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResult }> = ({ onBack, streak, onResult }) => {
   const { currentUser, placeGameBet, recordGameResult, demoMode, demoBalance } = useAppStore();
   const bal = demoMode ? demoBalance : currentUser.balanceMain;
-  const [bet, setBet]           = useState(0.01);
-  const [diff, setDiff]         = useState<ChickenDiff>('medium');
-  const [phase, setPhase]       = useState<ChickenPhase>('waiting');
-  const [step, setStep]         = useState(0);
-  const [picks, setPicks]       = useState<number[]>([]);
-  const [carLane, setCarLane]   = useState<number | null>(null);
-  const [bigWin, setBigWin]     = useState(false);
-  const activeBetRef            = useRef(0);
-  const diffRef                 = useRef<ChickenDiff>('medium');
-  const mountedRef              = useRef(true);
-  const bigWinTimer             = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const session                 = useSessionStats();
+
+  const canvasRef    = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const engineRef    = useRef<GameEngine | null>(null);
+  const mountedRef   = useRef(true);
+  const bigWinTimer  = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const activeBetRef = useRef(0);
+  const multRef      = useRef(1.0);
+  const laneRef      = useRef(-1);
+  const session      = useSessionStats();
+
+  const [gameState,   setGameState]   = useState<ChickenGameState>('idle');
+  const [multiplier,  setMultiplier]  = useState(1.0);
+  const [currentLane, setCurrentLane] = useState(-1);
+  const [difficulty,  setDifficulty]  = useState<Difficulty>('medium');
+  const [bet,         setBet]         = useState(0.10);
+  const [autoCash,    setAutoCash]    = useState('');
+  const [bigWin,      setBigWin]      = useState(false);
+  const [history,     setHistory]     = useState<{ mult: number; won: boolean }[]>([]);
+  const [showResult,  setShowResult]  = useState(false);
 
   useEffect(() => {
     mountedRef.current = true;
-    return () => { mountedRef.current = false; if (bigWinTimer.current) clearTimeout(bigWinTimer.current); };
+    return () => {
+      mountedRef.current = false;
+      if (bigWinTimer.current) clearTimeout(bigWinTimer.current);
+    };
   }, []);
 
-  const effBet       = Math.min(bet, bal);
-  const activeDiff   = phase === 'waiting' ? diff : diffRef.current;
-  const lanesPerStep = CHICKEN_LANES[activeDiff];
-  const curMult       = chickenMult(activeDiff, step);
-  const curWin         = +(activeBetRef.current * curMult).toFixed(6);
-  const nextMult       = chickenMult(activeDiff, step + 1);
-  const maxMult         = chickenMult(activeDiff, CHICKEN_STEPS);
+  useEffect(() => {
+    const canvas    = canvasRef.current;
+    const container = containerRef.current;
+    if (!canvas || !container) return;
 
-  const start = () => {
+    const engine = new GameEngine(canvas, {
+      onStateChange: (s: ChickenGameState) => {
+        if (!mountedRef.current) return;
+        setGameState(s);
+        if (s === 'dead' || s === 'won' || s === 'cashed_out') setShowResult(true);
+      },
+      onMultiplierChange: (m: number) => {
+        if (!mountedRef.current) return;
+        multRef.current = m;
+        setMultiplier(m);
+      },
+      onRowChange: (row: number) => {
+        if (!mountedRef.current) return;
+        laneRef.current = row;
+        setCurrentLane(row);
+      },
+      onAutoCashout: () => { handleCashOut(); },
+    });
+    engineRef.current = engine;
+
+    const obs = new ResizeObserver(() => {
+      if (!container) return;
+      engine.resize(container.clientWidth, container.clientHeight);
+    });
+    obs.observe(container);
+    engine.resize(container.clientWidth, container.clientHeight);
+
+    return () => { obs.disconnect(); engine.dispose(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => { engineRef.current?.setDifficulty(difficulty); }, [difficulty]);
+  useEffect(() => {
+    const t = parseFloat(autoCash);
+    engineRef.current?.setAutoCashoutTarget(isNaN(t) || t < 1.01 ? 0 : t);
+  }, [autoCash]);
+
+  const effBet   = Math.min(bet, bal);
+  const isPlaying  = gameState === 'playing' || gameState === 'jumping';
+  const isFinished = gameState === 'dead' || gameState === 'won' || gameState === 'cashed_out';
+  const cfg        = DIFF_CONFIG[difficulty];
+
+  const handleStart = useCallback(() => {
     if (effBet < 0.01 || bal < 0.01) return;
-    snd.bet();
-    diffRef.current = diff;
     activeBetRef.current = effBet;
-    setStep(0);
-    setPicks([]);
-    setCarLane(null);
-    setPhase('playing');
-  };
+    setShowResult(false);
+    setMultiplier(1.0);
+    setCurrentLane(-1);
+    multRef.current = 1.0;
+    laneRef.current = -1;
+    snd.bet();
+    engineRef.current?.setDifficulty(difficulty);
+    engineRef.current?.startGame();
+  }, [effBet, bal, difficulty]);
 
-  const pickLane = (laneIdx: number) => {
-    if (phase !== 'playing') return;
-    const safe = chickenStepRoll(diffRef.current);
-    if (safe) {
-      snd.reveal();
-      const ns = step + 1;
-      setPicks(p => [...p, laneIdx]);
-      setStep(ns);
-      if (ns >= CHICKEN_STEPS) {
-        const win = +(activeBetRef.current * chickenMult(diffRef.current, ns)).toFixed(6);
-        placeGameBet(activeBetRef.current, win);
-        recordGameResult('Chicken Road', activeBetRef.current, win);
-        session.record(activeBetRef.current, win);
-        snd.win();
-        onResult(true);
-        setBigWin(true);
-        if (bigWinTimer.current) clearTimeout(bigWinTimer.current);
-        bigWinTimer.current = setTimeout(() => { if (mountedRef.current) setBigWin(false); }, 2600);
-        setPhase('won');
-      }
-    } else {
-      setCarLane(laneIdx);
-      setPhase('lost');
-      placeGameBet(activeBetRef.current, 0);
-      recordGameResult('Chicken Road', activeBetRef.current, 0);
-      session.record(activeBetRef.current, 0);
-      snd.boom();
-      onResult(false);
-    }
-  };
+  const handleJump = useCallback(() => {
+    if (gameState !== 'playing') return;
+    engineRef.current?.jump();
+  }, [gameState]);
 
-  const cashout = () => {
-    if (phase !== 'playing' || step === 0) return;
-    placeGameBet(activeBetRef.current, curWin);
-    recordGameResult('Chicken Road', activeBetRef.current, curWin);
-    session.record(activeBetRef.current, curWin);
-    snd.win();
+  const handleCashOut = useCallback(() => {
+    if ((gameState !== 'playing' && gameState !== 'jumping') || laneRef.current < 0) return;
+    const win = +(activeBetRef.current * multRef.current).toFixed(6);
+    placeGameBet(activeBetRef.current, win);
+    recordGameResult('Chicken Road', activeBetRef.current, win);
+    session.record(activeBetRef.current, win);
+    snd.cashout();
     onResult(true);
-    if (curMult >= 5) {
+    if (multRef.current >= 5) {
       setBigWin(true);
       if (bigWinTimer.current) clearTimeout(bigWinTimer.current);
       bigWinTimer.current = setTimeout(() => { if (mountedRef.current) setBigWin(false); }, 2600);
     }
-    setPhase('won');
-  };
+    setHistory(h => [{ mult: multRef.current, won: true }, ...h.slice(0, 19)]);
+    engineRef.current?.cashOut();
+  }, [gameState, placeGameBet, recordGameResult, session, onResult]);
 
-  const reset = () => { setPhase('waiting'); setStep(0); setPicks([]); setCarLane(null); };
-
-  // Le tour repart automatiquement — pas de bouton "Rejouer" bloquant.
   useEffect(() => {
-    if (phase !== 'lost' && phase !== 'won') return;
-    const id = setTimeout(() => { if (mountedRef.current) reset(); }, 2200);
-    return () => clearTimeout(id);
+    if (gameState === 'dead') {
+      placeGameBet(activeBetRef.current, 0);
+      recordGameResult('Chicken Road', activeBetRef.current, 0);
+      session.record(activeBetRef.current, 0);
+      onResult(false);
+      setHistory(h => [{ mult: 0, won: false }, ...h.slice(0, 19)]);
+    } else if (gameState === 'won') {
+      const win = +(activeBetRef.current * multRef.current).toFixed(6);
+      placeGameBet(activeBetRef.current, win);
+      recordGameResult('Chicken Road', activeBetRef.current, win);
+      session.record(activeBetRef.current, win);
+      snd.win();
+      onResult(true);
+      setBigWin(true);
+      if (bigWinTimer.current) clearTimeout(bigWinTimer.current);
+      bigWinTimer.current = setTimeout(() => { if (mountedRef.current) setBigWin(false); }, 2800);
+      setHistory(h => [{ mult: multRef.current, won: true }, ...h.slice(0, 19)]);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase]);
+  }, [gameState]);
+
+  useEffect(() => {
+    if (!isFinished) return;
+    const id = setTimeout(() => { if (mountedRef.current) setGameState('idle'); }, 3000);
+    return () => clearTimeout(id);
+  }, [isFinished]);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.code === 'Space') {
+        e.preventDefault();
+        if (gameState === 'idle') handleStart();
+        else if (gameState === 'playing') handleJump();
+      }
+      if (e.code === 'KeyC') handleCashOut();
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [gameState, handleStart, handleJump, handleCashOut]);
+
+  const fmtMult = (m: number) =>
+    m >= 100 ? `×${m.toFixed(0)}` : m >= 10 ? `×${m.toFixed(1)}` : `×${m.toFixed(2)}`;
+
+  const diffColor = DIFF_COLORS[difficulty];
+  const progress  = currentLane >= 0 ? ((currentLane + 1) / cfg.totalLanes) * 100 : 0;
+  const nextMult  = computeMultiplier(difficulty, currentLane + 1);
 
   return (
-    <div className="space-y-5 pb-4">
+    <div style={{ position: 'fixed', inset: 0, zIndex: 50, background: '#0a1a2e', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <BigWinEffect show={bigWin} />
-      <div className="flex items-center gap-3">
-        <button onClick={onBack} className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center text-slate-400 hover:text-white transition-colors">
+
+      {/* Header */}
+      <div style={{ flexShrink: 0, background: 'rgba(0,0,0,0.55)', borderBottom: '1px solid rgba(255,200,0,0.15)', padding: '10px 12px', display: 'flex', alignItems: 'center', gap: 8 }}>
+        <button onClick={onBack} className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center text-slate-400 hover:text-white transition-colors" style={{ flexShrink: 0 }}>
           <ArrowLeft className="w-4 h-4" />
         </button>
-        <div className="flex-1">
+        <span style={{ fontSize: 22 }}>🐔</span>
+        <div style={{ flex: 1, minWidth: 0 }}>
           <div className="flex items-center gap-2">
-            <span className="text-lg">🐔</span>
-            <h2 className="text-base font-bold text-white">Chicken Road</h2>
+            <h2 style={{ fontSize: 15, fontWeight: 900, color: '#FFD600', letterSpacing: '0.04em', textTransform: 'uppercase' }}>Chicken Road</h2>
             <StreakChip streak={streak} />
           </div>
-          <p className="text-[11px] text-slate-500">Traversez la route · évitez les voitures · encaissez</p>
+          <p style={{ fontSize: 10, color: '#90A4AE', marginTop: 1 }}>Traversez la route · évitez les voitures</p>
         </div>
         <MuteButton />
         <GameBalanceChip bal={bal} demo={demoMode} />
       </div>
-      {demoMode && <DemoModeBanner />}
 
+      {demoMode && <DemoModeBanner />}
       <SessionStatsBar totalWon={session.totalWon} best={session.best} wagered={session.wagered} />
 
-      {/* Live gain bar */}
-      {phase === 'playing' && (
-        <div className="glass-card p-3 flex items-center justify-between">
-          <div>
-            <p className="text-[10px] text-slate-500 uppercase font-semibold">Gain actuel</p>
-            <p className="text-lg font-black text-emerald-400">{step > 0 ? `${curWin.toFixed(4)} TON` : '—'}</p>
-          </div>
-          <div className="text-center">
-            <p className="text-[10px] text-slate-500 uppercase font-semibold">Ligne</p>
-            <p className="text-lg font-black text-white">{step}/{CHICKEN_STEPS}</p>
-          </div>
-          <div className="text-right">
-            <p className="text-[10px] text-slate-500 uppercase font-semibold">Prochain</p>
-            <p className="text-lg font-black text-amber-400">{nextMult.toFixed(2)}×</p>
-          </div>
-        </div>
-      )}
+      {/* 3D Canvas */}
+      <div ref={containerRef} style={{ flex: 1, minHeight: 0, position: 'relative', cursor: isPlaying ? 'pointer' : 'default' }}
+        onClick={isPlaying ? handleJump : undefined}>
+        <canvas ref={canvasRef} style={{ width: '100%', height: '100%', display: 'block' }} />
 
-      {(phase === 'won' || phase === 'lost') && (
-        <div className="glass-card p-4 text-center">
-          {phase === 'won' ? (
-            <p className="text-emerald-400 font-bold text-sm">
-              {step >= CHICKEN_STEPS ? '🏆 Traversée complète !' : '🎉 Encaissé'} +{curWin.toFixed(4)} TON
-            </p>
-          ) : (
-            <p className="text-red-400 font-bold text-sm">🚗 Percuté ! Perdu −{activeBetRef.current.toFixed(4)} TON</p>
-          )}
-        </div>
-      )}
-
-      {/* Route — lignes à traverser */}
-      <div className="glass-card p-4 space-y-2">
-        {Array.from({ length: CHICKEN_STEPS }, (_, i) => CHICKEN_STEPS - i).map(s => {
-          const isCleared = s <= step;
-          const isCurrent = phase === 'playing' && s === step + 1;
-          const isBusted  = phase === 'lost' && s === step + 1;
-          const isLocked  = !isCleared && !isCurrent && !isBusted;
-          const pickIdx   = s <= step ? picks[s - 1] : null;
-
-          return (
-            <div key={s} className="flex items-center gap-2">
-              <span className="w-9 text-right" style={isCurrent
-                ? { background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.18)', borderRadius: 8, padding: '2px 4px', fontSize: 12, fontWeight: 800, color: '#fbbf24', transition: 'background 0.15s' }
-                : { fontSize: 10, fontWeight: 700, color: isCleared ? '#4ade80' : '#475569' }}>
-                {chickenMult(activeDiff, s).toFixed(2)}×
-              </span>
-              <div className="flex-1 grid gap-1.5" style={{ gridTemplateColumns: `repeat(${lanesPerStep}, 1fr)` }}>
-                {Array.from({ length: lanesPerStep }, (_, c) => {
-                  const cleared = s <= step && pickIdx === c;
-                  const busted  = isBusted && c === carLane;
-                  return (
-                    <button
-                      key={c}
-                      disabled={!isCurrent}
-                      onClick={() => pickLane(c)}
-                      style={{
-                        height: 30, borderRadius: 8,
-                        background: cleared ? 'linear-gradient(135deg,#fbbf24,#f59e0b)'
-                          : busted ? 'linear-gradient(135deg,#ef4444,#b91c1c)'
-                          : isCurrent ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.03)',
-                        border: isCurrent ? '1px solid #3a4f8e' : '1px solid #1e2847',
-                        opacity: isLocked ? 0.35 : 1,
-                        cursor: isCurrent ? 'pointer' : 'default',
-                        fontSize: 14,
-                        transition: 'background 0.15s',
-                      }}
-                      className={isCurrent ? 'tap-scale' : undefined}
-                    >
-                      {cleared ? '🐔' : busted ? '🚗' : ''}
-                    </button>
-                  );
-                })}
+        {/* Multiplier HUD overlay */}
+        {isPlaying && (
+          <div style={{ position: 'absolute', top: 8, left: 8, right: 8, pointerEvents: 'none' }}>
+            <div style={{ background: 'rgba(0,0,0,0.5)', borderRadius: 20, padding: '4px 8px', display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+              <div style={{ flex: 1, height: 10, background: 'rgba(255,255,255,0.12)', borderRadius: 10, overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: `${progress}%`, background: `linear-gradient(90deg,#4CAF50,#FFD600,${diffColor})`, transition: 'width 0.3s', borderRadius: 10 }} />
               </div>
+              <span style={{ fontSize: 11, fontWeight: 700, color: '#fff', minWidth: 44, textAlign: 'right' }}>
+                {currentLane + 1}/{cfg.totalLanes}
+              </span>
             </div>
-          );
-        })}
+            {currentLane >= 0 && (
+              <div style={{ display: 'flex', gap: 6 }}>
+                <div style={{ background: 'linear-gradient(135deg,#FF6D00,#FFD600)', borderRadius: 12, padding: '5px 14px', boxShadow: '0 2px 12px rgba(255,165,0,0.5)' }}>
+                  <span style={{ fontSize: 20, fontWeight: 900, color: '#000' }}>{fmtMult(multiplier)}</span>
+                </div>
+                <div style={{ background: 'rgba(0,0,0,0.6)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 12, padding: '5px 12px' }}>
+                  <span style={{ fontSize: 11, color: '#90A4AE' }}>Prochain </span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: '#4CAF50' }}>{fmtMult(nextMult)}</span>
+                </div>
+                <div style={{ background: 'rgba(0,0,0,0.6)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 12, padding: '5px 12px' }}>
+                  <span style={{ fontSize: 11, color: '#90A4AE' }}>Gain </span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: '#FFD600' }}>
+                    {(activeBetRef.current * multiplier).toFixed(3)} TON
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Start hint */}
+        {gameState === 'idle' && (
+          <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', pointerEvents: 'none', textAlign: 'center' }}>
+            <div style={{ background: 'rgba(0,0,0,0.72)', backdropFilter: 'blur(6px)', borderRadius: 16, padding: '16px 24px', border: '1px solid rgba(255,200,0,0.25)' }}>
+              <p style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>🐔 Aide le poulet à traverser !</p>
+              <p style={{ fontSize: 12, color: '#FFD600', marginTop: 4 }}>Misez et cliquez pour démarrer</p>
+            </div>
+          </div>
+        )}
+
+        {/* Result overlay */}
+        {showResult && isFinished && (
+          <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.62)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10 }}>
+            <div style={{
+              margin: 16, padding: '24px 20px', borderRadius: 20,
+              background: gameState === 'dead' ? 'linear-gradient(160deg,#1a0000,#3d0000)' : 'linear-gradient(160deg,#001a04,#003d0e)',
+              border: `1px solid ${gameState === 'dead' ? '#FF1744' : '#00E676'}44`,
+              textAlign: 'center', minWidth: 230, maxWidth: 300,
+            }}>
+              <div style={{ fontSize: 48 }}>
+                {gameState === 'dead' ? '💥' : gameState === 'won' ? '🏆' : '💰'}
+              </div>
+              <h3 style={{ fontSize: 22, fontWeight: 900, color: gameState === 'dead' ? '#FF5252' : '#69F0AE', marginTop: 6 }}>
+                {gameState === 'dead' ? 'ÉCRASÉ !' : gameState === 'won' ? 'VICTOIRE !' : 'ENCAISSÉ !'}
+              </h3>
+              {gameState === 'dead' ? (
+                <p style={{ fontSize: 13, color: '#EF9A9A', marginTop: 6 }}>
+                  Voiture ! Perdu −{activeBetRef.current.toFixed(2)} TON
+                </p>
+              ) : (
+                <div style={{ marginTop: 8 }}>
+                  <p style={{ fontSize: 11, color: '#A5D6A7' }}>
+                    {gameState === 'won' ? `Toutes les ${cfg.totalLanes} voies !` : `${currentLane + 1} voie${currentLane > 0 ? 's' : ''} traversée${currentLane > 0 ? 's' : ''}`}
+                  </p>
+                  <p style={{ fontSize: 13, color: '#80CBC4', marginTop: 2 }}>{fmtMult(multiplier)}</p>
+                  <p style={{ fontSize: 26, fontWeight: 900, color: '#69F0AE', marginTop: 4 }}>
+                    +{(activeBetRef.current * multiplier - activeBetRef.current).toFixed(4)} TON
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
+      {/* History strip */}
+      {history.length > 0 && (
+        <div style={{ flexShrink: 0, background: 'rgba(0,0,0,0.55)', borderTop: '1px solid rgba(255,255,255,0.05)', padding: '5px 12px', display: 'flex', gap: 5, overflowX: 'auto' }} className="no-scrollbar">
+          {history.map((h, i) => (
+            <span key={i} style={{
+              flexShrink: 0, fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 20,
+              background: !h.won ? 'rgba(239,68,68,0.18)' : h.mult >= 10 ? 'rgba(34,197,94,0.18)' : 'rgba(255,214,0,0.15)',
+              color: !h.won ? '#EF5350' : h.mult >= 10 ? '#4CAF50' : '#FFD600',
+            }}>
+              {h.won ? fmtMult(h.mult) : '💥'}
+            </span>
+          ))}
+        </div>
+      )}
+
       {/* Controls */}
-      <div className="glass-card p-4 space-y-3">
-        {phase === 'waiting' ? (
-          <>
-            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Difficulté</p>
-            <div className="grid grid-cols-3 gap-2">
-              {(['easy', 'medium', 'hard'] as const).map(d => (
-                <button key={d} onClick={() => setDiff(d)}
-                  style={{
-                    padding: '8px 0', borderRadius: 10, fontWeight: 700, fontSize: 12,
-                    background: diff === d ? 'linear-gradient(135deg,#fbbf24,#f59e0b)' : 'rgba(255,255,255,0.05)',
-                    color: diff === d ? '#3b1d00' : '#94a3b8',
-                    border: diff === d ? 'none' : '1px solid #1e2847',
-                  }}>
-                  {CHICKEN_LABEL[d]}
-                </button>
-              ))}
+      <div style={{ flexShrink: 0, background: 'rgba(0,0,0,0.82)', borderTop: '1px solid rgba(255,200,0,0.12)', padding: '10px 12px' }}>
+        {gameState === 'idle' || isFinished ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {/* Difficulty */}
+            <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
+              {(['easy', 'medium', 'hard', 'hardcore'] as Difficulty[]).map(d => {
+                const active = difficulty === d;
+                const col = DIFF_COLORS[d];
+                return (
+                  <button key={d} onClick={() => setDifficulty(d)}
+                    style={{
+                      flex: 1, padding: '5px 0', borderRadius: 8, fontSize: 10, fontWeight: 700,
+                      background: active ? col : 'rgba(255,255,255,0.06)',
+                      color: active ? (d === 'medium' ? '#000' : '#fff') : '#64748b',
+                      border: active ? 'none' : '1px solid #1e2847',
+                    }}>
+                    {DIFF_LABELS[d]}
+                  </button>
+                );
+              })}
             </div>
-            <p className="text-[10px] text-slate-500">{CHICKEN_LANES[diff]} voies/ligne · ×{maxMult.toFixed(2)} à la traversée complète</p>
-            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest pt-1">Montant de la mise</p>
-            <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-xl px-4 py-3">
+            <p style={{ fontSize: 10, color: '#546E7A', textAlign: 'center' }}>
+              {cfg.totalLanes} voies · ×{computeMultiplier(difficulty, cfg.totalLanes).toFixed(2)} max · survie {Math.round(cfg.survivalProb * 100)}%/voie
+            </p>
+
+            {/* Auto-cashout */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,0.05)', border: '1px solid #1e2847', borderRadius: 10, padding: '6px 10px' }}>
+              <span style={{ fontSize: 10, color: '#546E7A', fontWeight: 700, flexShrink: 0 }}>AUTO ×</span>
+              <input type="number" value={autoCash} placeholder="ex: 2.00" min={1.01} step={0.01}
+                onChange={e => setAutoCash(e.target.value)}
+                style={{ flex: 1, background: 'transparent', color: '#fff', fontSize: 13, fontWeight: 600, outline: 'none', border: 'none' }} />
+              {autoCash && <button onClick={() => setAutoCash('')} style={{ color: '#546E7A', fontSize: 13 }}>✕</button>}
+            </div>
+
+            {/* Bet */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(255,255,255,0.05)', border: '1px solid #1e2847', borderRadius: 10, padding: '6px 12px' }}>
               <input type="number" value={bet} min={0.01} max={50} step={0.01}
                 onChange={e => { const v = +e.target.value; if (!isNaN(v)) setBet(Math.max(0.01, Math.min(50, v))); }}
-                className="flex-1 bg-transparent text-2xl font-bold text-white outline-none" />
-              <span className="text-base font-bold text-slate-500">TON</span>
+                style={{ flex: 1, background: 'transparent', color: '#fff', fontSize: 20, fontWeight: 700, outline: 'none', border: 'none' }} />
+              <span style={{ color: '#546E7A', fontWeight: 700 }}>TON</span>
             </div>
             <BetQuickButtons setBet={setBet} maxBal={bal} />
-            <button onClick={start} disabled={effBet < 0.01 || bal < 0.01}
-              className={`w-full py-4 rounded-xl font-bold text-base transition-all flex items-center justify-center gap-2 ${
+
+            <button onClick={handleStart} disabled={effBet < 0.01 || bal < 0.01}
+              className={`w-full py-3 rounded-xl font-black text-base uppercase tracking-wider transition-all active:scale-95 flex items-center justify-center gap-2 ${
                 effBet >= 0.01 && bal >= 0.01
-                  ? 'bg-gradient-to-r from-amber-500 to-yellow-500 text-amber-950 hover:from-amber-400 hover:to-yellow-400 active:scale-[0.98] shadow-lg shadow-amber-500/25'
+                  ? 'bg-gradient-to-r from-yellow-400 to-orange-500 text-black shadow-lg shadow-orange-500/30'
                   : 'bg-white/5 text-slate-600 cursor-not-allowed'
               }`}>
-              {bal < 0.01 ? (demoMode ? '🎮 Démo épuisé' : '💸 Solde insuffisant') : <><Zap className="w-4 h-4" /> Traverser ({effBet.toFixed(2)} TON)</>}
+              {bal < 0.01 ? (demoMode ? '🎮 Démo épuisé' : '💸 Solde insuffisant') : <>🐔 JOUER ({effBet.toFixed(2)} TON)</>}
             </button>
-          </>
-        ) : phase === 'playing' ? (
-          <button onClick={cashout} disabled={step === 0}
-            className={`w-full py-4 rounded-xl font-bold text-base transition-all ${
-              step > 0
-                ? 'bg-gradient-to-r from-amber-500 to-yellow-500 text-amber-950 active:scale-[0.98] shadow-lg shadow-amber-500/25'
-                : 'bg-white/5 text-slate-600 cursor-not-allowed'
-            }`}>
-            {step > 0 ? `💰 Encaisser ${curWin.toFixed(4)} TON` : 'Choisissez une voie pour avancer'}
-          </button>
+          </div>
         ) : (
-          <p className="text-center text-[11px] text-slate-500">Nouvelle partie dans un instant…</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: 11, color: '#546E7A' }}>Mise : <span style={{ color: '#fff', fontWeight: 700 }}>{activeBetRef.current.toFixed(2)} TON</span></span>
+              <span style={{ fontSize: 11, color: '#546E7A' }}>Potentiel : <span style={{ color: '#FFD600', fontWeight: 700 }}>{(activeBetRef.current * multiplier).toFixed(3)} TON</span></span>
+            </div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button onClick={handleJump} disabled={gameState === 'jumping'}
+                className="flex-1 py-3 rounded-xl font-black text-base uppercase transition-all active:scale-95 disabled:opacity-50"
+                style={{ background: 'linear-gradient(135deg,#1E88E5,#5E35B1)', color: '#fff', boxShadow: '0 4px 16px rgba(30,136,229,0.35)' }}>
+                🐔 GO !
+              </button>
+              <button onClick={handleCashOut} disabled={currentLane < 0 || gameState === 'jumping'}
+                className={`flex-1 py-3 rounded-xl font-black text-base uppercase transition-all active:scale-95 ${
+                  currentLane < 0 ? 'bg-white/5 text-slate-600 cursor-not-allowed' : ''
+                }`}
+                style={currentLane >= 0 ? { background: 'linear-gradient(135deg,#FFD600,#FF8F00)', color: '#000', boxShadow: '0 4px 16px rgba(255,200,0,0.35)' } : {}}>
+                💰 {(activeBetRef.current * multiplier).toFixed(3)}
+              </button>
+            </div>
+          </div>
         )}
       </div>
     </div>

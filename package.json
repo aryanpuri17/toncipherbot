@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@tonconnect/ui-react": "^2.4.4",
+    "@types/three": "^0.184.1",
     "clsx": "2.1.1",
     "lucide-react": "^1.17.0",
     "qrcode.react": "^4.2.0",
@@ -19,6 +20,7 @@
     "react-router-dom": "^7.16.0",
     "recharts": "^3.8.1",
     "tailwind-merge": "3.4.0",
+    "three": "^0.184.0",
     "zustand": "^5.0.14"
   },
   "devDependencies": {
