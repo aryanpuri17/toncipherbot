@@ -9,12 +9,14 @@
 
 | Agent | Rôle |
 |---|---|
-| **Claude Code** (ici) | Code, git, build, logique métier, corrections de bugs |
-| **Claude.ai** | Design, maquettes Canva, rédaction, idées visuelles, contenu |
+| **Claude Code** (ici) | Code, git, build, logique métier, intégration d'assets |
+| **Claude.ai** | Design, UX, briefs visuels, review de code |
+| **IA 3D** | Modèles 3D, animations, voxel art, Three.js/Babylon.js, sprites professionnels, effets visuels avancés, sons custom |
 
-**Règle de collaboration :**
-- Claude.ai produit des specs ou contenus → les coller ici → Claude Code implémente
+**Règles de collaboration :**
+- Claude.ai produit des specs/briefs → les coller ici → Claude Code implémente
 - Claude Code produit du code → pusher sur la branche → Claude.ai peut lire via GitHub
+- **Dès qu'un besoin touche à un sprite animé, effet visuel avancé, 3D, ou son thématique custom → Claude Code s'arrête et signale : "Ce point nécessite l'IA 3D."** Ne jamais tenter de le remplacer par un SVG approximatif ou un Canvas bancal. Aryan transmet à l'IA 3D, elle produit les assets, Claude Code intègre.
 
 ---
 
