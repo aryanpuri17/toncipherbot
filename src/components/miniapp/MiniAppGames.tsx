@@ -642,6 +642,7 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
   const autoCashR   = useRef('');
   const queuedBetR  = useRef<number|null>(null);
   const rafR        = useRef(0);
+  const resetTimerR = useRef<ReturnType<typeof setTimeout>>(0 as unknown as ReturnType<typeof setTimeout>);
   const fakeDataR   = useRef<{name:string; bet:number; cashTarget:number|null; cashedAt:number|null}[]>([]);
   const startFlightR = useRef<() => void>(() => {});
 
@@ -684,8 +685,12 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
 
     const qb = queuedBetR.current;
     if (qb !== null) {
-      setActiveBet(qb);
-      activeBetR.current = qb;
+      const state = useAppStore.getState();
+      const curBal = state.demoMode ? state.demoBalance : state.currentUser.balanceMain;
+      if (qb <= curBal) {
+        setActiveBet(qb);
+        activeBetR.current = qb;
+      }
       setQueuedBet(null);
       queuedBetR.current = null;
     }
@@ -725,6 +730,7 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
       setTEl(t);
 
       if (m >= crashR.current) {
+        cancelAnimationFrame(rafR.current);
         phaseR.current = 'crashed';
         setPhase('crashed');
         setCrashedAt(crashR.current);
@@ -739,7 +745,8 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
           activeBetR.current = null;
         }
         setHistory(h => [+(crashR.current).toFixed(2), ...h].slice(0, 20));
-        setTimeout(() => {
+        clearTimeout(resetTimerR.current);
+        resetTimerR.current = setTimeout(() => {
           setRoundId(r => r + 1);
           phaseR.current = 'waiting';
           setPhase('waiting');
@@ -766,7 +773,7 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
     return () => clearInterval(id);
   }, [phase, roundId]);
 
-  useEffect(() => () => { cancelAnimationFrame(rafR.current); }, []);
+  useEffect(() => () => { cancelAnimationFrame(rafR.current); clearTimeout(resetTimerR.current); }, []);
 
   // SVG graph
   const tMax = Math.max(10, tEl * 1.25);
@@ -850,7 +857,7 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
           {phase === 'flying' && tEl > 0.1 && (
             <circle cx={toX(tEl)} cy={toY(mult)} r="4" fill="#818cf8" stroke="#fff" strokeWidth="1.5" />
           )}
-          {phase === 'crashed' && crashedAt > 1 && (
+          {phase === 'crashed' && crashedAt >= 1 && (
             <circle cx={toX(tCur)} cy={toY(crashedAt)} r="5" fill="#ef4444" stroke="#fff" strokeWidth="1.5" />
           )}
         </svg>
