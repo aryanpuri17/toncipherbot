@@ -3,8 +3,6 @@ import { useAppStore } from '../../store/appStore';
 import { ArrowLeft, RotateCcw, Trophy, Zap } from 'lucide-react';
 import { CountUp } from '../ui/CountUp';
 import { ConfettiEffect } from '../ui/ConfettiEffect';
-import type { GameState as ChickenGameState } from './chicken/GameEngine';
-import { GameEngine, type Difficulty, DIFF_CONFIG, computeMultiplier } from './chicken/GameEngine';
 
 // ══════════════════════════════════════════════════════════════════
 // AUDIO ENGINE (Web Audio API — aucun fichier externe)
@@ -602,371 +600,338 @@ function randomFakeBet(): number {
 }
 
 // ══════════════════════════════════════════════════════════════════
-// CHICKEN ROAD 3D — Three.js voxel game, RTP-based multipliers
+// CRASH — courbe de multiplicateur animée
 // ══════════════════════════════════════════════════════════════════
 
-const DIFF_LABELS: Record<Difficulty, string> = {
-  easy: '🟢 Facile', medium: '🟡 Moyen', hard: '🔴 Difficile', hardcore: '💀 Hardcore',
-};
-const DIFF_COLORS: Record<Difficulty, string> = {
-  easy: '#4CAF50', medium: '#FFD600', hard: '#FF3D00', hardcore: '#AA00FF',
-};
+const _CRASH_RATE = 0.06;
+const _CRASH_NAMES = [
+  'AlexK','Maria','Yosef','Emma_','LucaB','Dani_','Sasha','KimLo',
+  'RajPK','LiuWW','OmarS','SofiT','BenAR','YukiM','CarloZ','NinaP',
+];
 
-const ChickenRoadGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResult }> = ({ onBack, streak, onResult }) => {
+function _genCrashPt(): number {
+  const r = Math.random();
+  if (r < 0.005) return 1.00;
+  return Math.max(1.01, +(0.95 / r).toFixed(2));
+}
+
+const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResult }> = ({ onBack, onResult }) => {
   const { currentUser, placeGameBet, recordGameResult, demoMode, demoBalance } = useAppStore();
   const bal = demoMode ? demoBalance : currentUser.balanceMain;
 
-  const canvasRef    = useRef<HTMLCanvasElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const engineRef    = useRef<GameEngine | null>(null);
-  const mountedRef   = useRef(true);
-  const bigWinTimer  = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const activeBetRef = useRef(0);
-  const multRef      = useRef(1.0);
-  const laneRef      = useRef(-1);
-  const session      = useSessionStats();
+  type CPhase = 'waiting' | 'flying' | 'crashed';
+  const [phase,     setPhase]     = useState<CPhase>('waiting');
+  const [countdown, setCountdown] = useState(5);
+  const [mult,      setMult]      = useState(1.0);
+  const [tEl,       setTEl]       = useState(0);
+  const [crashedAt, setCrashedAt] = useState(0);
+  const [history,   setHistory]   = useState<number[]>([]);
+  const [bet,       setBet]       = useState(0.10);
+  const [activeBet, setActiveBet] = useState<number|null>(null);
+  const [queuedBet, setQueuedBet] = useState<number|null>(null);
+  const [cashedOut, setCashedOut] = useState<number|null>(null);
+  const [autoCash,  setAutoCash]  = useState('');
+  const [roundId,   setRoundId]   = useState(1);
+  const [fakes,     setFakes]     = useState<{name:string; bet:number; cashedAt:number|null}[]>([]);
 
-  const [gameState,   setGameState]   = useState<ChickenGameState>('idle');
-  const [multiplier,  setMultiplier]  = useState(1.0);
-  const [currentLane, setCurrentLane] = useState(-1);
-  const [difficulty,  setDifficulty]  = useState<Difficulty>('medium');
-  const [bet,         setBet]         = useState(0.10);
-  const [autoCash,    setAutoCash]    = useState('');
-  const [bigWin,      setBigWin]      = useState(false);
-  const [history,     setHistory]     = useState<{ mult: number; won: boolean }[]>([]);
-  const [showResult,  setShowResult]  = useState(false);
+  const phaseR      = useRef<CPhase>('waiting');
+  const startR      = useRef(0);
+  const crashR      = useRef(0);
+  const activeBetR  = useRef<number|null>(null);
+  const cashedOutR  = useRef<number|null>(null);
+  const autoCashR   = useRef('');
+  const queuedBetR  = useRef<number|null>(null);
+  const rafR        = useRef(0);
+  const fakeDataR   = useRef<{name:string; bet:number; cashTarget:number|null; cashedAt:number|null}[]>([]);
+  const startFlightR = useRef<() => void>(() => {});
 
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-      if (bigWinTimer.current) clearTimeout(bigWinTimer.current);
-    };
-  }, []);
+  useEffect(() => { phaseR.current = phase; }, [phase]);
+  useEffect(() => { activeBetR.current = activeBet; }, [activeBet]);
+  useEffect(() => { cashedOutR.current = cashedOut; }, [cashedOut]);
+  useEffect(() => { autoCashR.current = autoCash; }, [autoCash]);
+  useEffect(() => { queuedBetR.current = queuedBet; }, [queuedBet]);
 
-  useEffect(() => {
-    const canvas    = canvasRef.current;
-    const container = containerRef.current;
-    if (!canvas || !container) return;
-
-    const engine = new GameEngine(canvas, {
-      onStateChange: (s: ChickenGameState) => {
-        if (!mountedRef.current) return;
-        setGameState(s);
-        if (s === 'dead' || s === 'won' || s === 'cashed_out') setShowResult(true);
-      },
-      onMultiplierChange: (m: number) => {
-        if (!mountedRef.current) return;
-        multRef.current = m;
-        setMultiplier(m);
-      },
-      onRowChange: (row: number) => {
-        if (!mountedRef.current) return;
-        laneRef.current = row;
-        setCurrentLane(row);
-      },
-      onAutoCashout: () => { handleCashOut(); },
-    });
-    engineRef.current = engine;
-
-    const obs = new ResizeObserver(() => {
-      if (!container) return;
-      engine.resize(container.clientWidth, container.clientHeight);
-    });
-    obs.observe(container);
-    engine.resize(container.clientWidth, container.clientHeight);
-
-    return () => { obs.disconnect(); engine.dispose(); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => { engineRef.current?.setDifficulty(difficulty); }, [difficulty]);
-  useEffect(() => {
-    const t = parseFloat(autoCash);
-    engineRef.current?.setAutoCashoutTarget(isNaN(t) || t < 1.01 ? 0 : t);
-  }, [autoCash]);
-
-  const effBet   = Math.min(bet, bal);
-  const isPlaying  = gameState === 'playing' || gameState === 'jumping';
-  const isFinished = gameState === 'dead' || gameState === 'won' || gameState === 'cashed_out';
-  const cfg        = DIFF_CONFIG[difficulty];
-
-  const handleStart = useCallback(() => {
-    if (effBet < 0.01 || bal < 0.01) return;
-    activeBetRef.current = effBet;
-    setShowResult(false);
-    setMultiplier(1.0);
-    setCurrentLane(-1);
-    multRef.current = 1.0;
-    laneRef.current = -1;
-    snd.bet();
-    engineRef.current?.setDifficulty(difficulty);
-    engineRef.current?.startGame();
-  }, [effBet, bal, difficulty]);
-
-  const handleJump = useCallback(() => {
-    if (gameState !== 'playing') return;
-    engineRef.current?.jump();
-  }, [gameState]);
-
-  const handleCashOut = useCallback(() => {
-    if ((gameState !== 'playing' && gameState !== 'jumping') || laneRef.current < 0) return;
-    const win = +(activeBetRef.current * multRef.current).toFixed(6);
-    placeGameBet(activeBetRef.current, win);
-    recordGameResult('Chicken Road', activeBetRef.current, win);
-    session.record(activeBetRef.current, win);
-    snd.cashout();
+  const doCashout = useCallback((m: number) => {
+    const ab = activeBetR.current;
+    if (ab === null || cashedOutR.current !== null) return;
+    const win = +(ab * m).toFixed(4);
+    placeGameBet(ab, win);
+    recordGameResult('Crash', ab, win);
     onResult(true);
-    if (multRef.current >= 5) {
-      setBigWin(true);
-      if (bigWinTimer.current) clearTimeout(bigWinTimer.current);
-      bigWinTimer.current = setTimeout(() => { if (mountedRef.current) setBigWin(false); }, 2600);
+    setCashedOut(m);
+    cashedOutR.current = m;
+  }, [placeGameBet, recordGameResult, onResult]);
+
+  const doCashoutR = useRef(doCashout);
+  useEffect(() => { doCashoutR.current = doCashout; }, [doCashout]);
+
+  const startFlight = useCallback(() => {
+    cancelAnimationFrame(rafR.current);
+    const cp = _genCrashPt();
+    crashR.current = cp;
+
+    const count = 5 + Math.floor(Math.random() * 8);
+    const fd = Array.from({ length: count }, (_, i) => ({
+      name: _CRASH_NAMES[i % _CRASH_NAMES.length],
+      bet: +(0.05 + Math.random() * 3).toFixed(2),
+      cashTarget: Math.random() < 0.60 && cp > 1.05
+        ? +(1.03 + Math.random() * (cp - 1.03) * 0.85).toFixed(2)
+        : null,
+      cashedAt: null as number|null,
+    }));
+    fakeDataR.current = fd;
+    setFakes(fd.map(f => ({ name: f.name, bet: f.bet, cashedAt: null })));
+
+    const qb = queuedBetR.current;
+    if (qb !== null) {
+      setActiveBet(qb);
+      activeBetR.current = qb;
+      setQueuedBet(null);
+      queuedBetR.current = null;
     }
-    setHistory(h => [{ mult: multRef.current, won: true }, ...h.slice(0, 19)]);
-    engineRef.current?.cashOut();
-  }, [gameState, placeGameBet, recordGameResult, session, onResult]);
+    setCashedOut(null);
+    cashedOutR.current = null;
+    setCrashedAt(0);
+    setMult(1.0);
+    setTEl(0);
+    phaseR.current = 'flying';
+    setPhase('flying');
+    startR.current = performance.now();
 
-  useEffect(() => {
-    if (gameState === 'dead') {
-      placeGameBet(activeBetRef.current, 0);
-      recordGameResult('Chicken Road', activeBetRef.current, 0);
-      session.record(activeBetRef.current, 0);
-      onResult(false);
-      setHistory(h => [{ mult: 0, won: false }, ...h.slice(0, 19)]);
-    } else if (gameState === 'won') {
-      const win = +(activeBetRef.current * multRef.current).toFixed(6);
-      placeGameBet(activeBetRef.current, win);
-      recordGameResult('Chicken Road', activeBetRef.current, win);
-      session.record(activeBetRef.current, win);
-      snd.win();
-      onResult(true);
-      setBigWin(true);
-      if (bigWinTimer.current) clearTimeout(bigWinTimer.current);
-      bigWinTimer.current = setTimeout(() => { if (mountedRef.current) setBigWin(false); }, 2800);
-      setHistory(h => [{ mult: multRef.current, won: true }, ...h.slice(0, 19)]);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gameState]);
+    let fc = 0;
+    const tick = (now: number) => {
+      if (phaseR.current !== 'flying') return;
+      const t = (now - startR.current) / 1000;
+      const m = Math.exp(_CRASH_RATE * t);
+      fc++;
 
-  useEffect(() => {
-    if (!isFinished) return;
-    const id = setTimeout(() => { if (mountedRef.current) setGameState('idle'); }, 3000);
-    return () => clearTimeout(id);
-  }, [isFinished]);
-
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.code === 'Space') {
-        e.preventDefault();
-        if (gameState === 'idle') handleStart();
-        else if (gameState === 'playing') handleJump();
+      const ac = parseFloat(autoCashR.current);
+      if (activeBetR.current !== null && cashedOutR.current === null && !isNaN(ac) && ac >= 1.01 && m >= ac) {
+        doCashoutR.current(m);
       }
-      if (e.code === 'KeyC') handleCashOut();
+
+      if (fc % 8 === 0) {
+        let changed = false;
+        fakeDataR.current.forEach(f => {
+          if (f.cashTarget !== null && f.cashedAt === null && m >= f.cashTarget) {
+            f.cashedAt = f.cashTarget;
+            changed = true;
+          }
+        });
+        if (changed) setFakes(fakeDataR.current.map(f => ({ name: f.name, bet: f.bet, cashedAt: f.cashedAt })));
+      }
+
+      setMult(m);
+      setTEl(t);
+
+      if (m >= crashR.current) {
+        phaseR.current = 'crashed';
+        setPhase('crashed');
+        setCrashedAt(crashR.current);
+        setMult(crashR.current);
+        setTEl(Math.log(Math.max(1.0001, crashR.current)) / _CRASH_RATE);
+        const ab = activeBetR.current;
+        if (ab !== null && cashedOutR.current === null) {
+          placeGameBet(ab, 0);
+          recordGameResult('Crash', ab, 0);
+          onResult(false);
+          setActiveBet(null);
+          activeBetR.current = null;
+        }
+        setHistory(h => [+(crashR.current).toFixed(2), ...h].slice(0, 20));
+        setTimeout(() => {
+          setRoundId(r => r + 1);
+          phaseR.current = 'waiting';
+          setPhase('waiting');
+        }, 3000);
+        return;
+      }
+
+      rafR.current = requestAnimationFrame(tick);
     };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [gameState, handleStart, handleJump, handleCashOut]);
+    rafR.current = requestAnimationFrame(tick);
+  }, [placeGameBet, recordGameResult, onResult]);
 
-  const fmtMult = (m: number) =>
-    m >= 100 ? `×${m.toFixed(0)}` : m >= 10 ? `×${m.toFixed(1)}` : `×${m.toFixed(2)}`;
+  useEffect(() => { startFlightR.current = startFlight; }, [startFlight]);
 
-  const diffColor = DIFF_COLORS[difficulty];
-  const progress  = currentLane >= 0 ? ((currentLane + 1) / cfg.totalLanes) * 100 : 0;
-  const nextMult  = computeMultiplier(difficulty, currentLane + 1);
+  useEffect(() => {
+    if (phase !== 'waiting') return;
+    let c = 5;
+    setCountdown(c);
+    const id = setInterval(() => {
+      c--;
+      setCountdown(c);
+      if (c <= 0) { clearInterval(id); startFlightR.current(); }
+    }, 1000);
+    return () => clearInterval(id);
+  }, [phase, roundId]);
+
+  useEffect(() => () => { cancelAnimationFrame(rafR.current); }, []);
+
+  // SVG graph
+  const tMax = Math.max(10, tEl * 1.25);
+  const mMax = Math.max(2.0, mult * 1.35);
+  const GW = 300, GH = 130, PL = 28, PB = 16;
+  const toX = (t: number) => PL + (t / tMax) * GW;
+  const toY = (m: number) => GH - Math.max(0, Math.min(GH, ((m - 1) / (mMax - 1)) * GH));
+  const tCur = phase === 'crashed' ? Math.log(Math.max(1.0001, crashedAt)) / _CRASH_RATE : tEl;
+  const pathD = tCur > 0.05
+    ? `M ${Array.from({ length: 61 }, (_, i) => {
+        const t = (i / 60) * tCur;
+        return `${toX(t).toFixed(1)},${toY(Math.exp(_CRASH_RATE * t)).toFixed(1)}`;
+      }).join(' L ')}`
+    : '';
+  const lineC = phase === 'crashed' ? '#ef4444' : '#818cf8';
+  const yTk = [1, ...Array.from({ length: 3 }, (_, i) => +(1 + (i + 1) * (mMax - 1) / 3).toFixed(1))];
+  const xTk = [Math.round(tMax * 0.25), Math.round(tMax * 0.5), Math.round(tMax * 0.75), Math.round(tMax)];
+
+  // Button logic
+  const isCrash = phase === 'crashed';
+  let btnLabel = '', btnBg = '#1e2847', btnColor = '#475569', btnDis = false, btnFn: () => void = () => {};
+  if (phase === 'waiting') {
+    if (queuedBet !== null) {
+      btnLabel = `Annuler (${queuedBet.toFixed(2)} TON)`; btnBg = '#334155'; btnColor = '#94a3b8';
+      btnFn = () => { setQueuedBet(null); queuedBetR.current = null; };
+    } else {
+      btnLabel = `Miser ${bet.toFixed(2)} TON`; btnBg = 'linear-gradient(135deg,#3b82f6,#6366f1)'; btnColor = '#fff';
+      if (bet > bal || bet < 0.01) btnDis = true;
+      btnFn = () => { setQueuedBet(bet); queuedBetR.current = bet; };
+    }
+  } else if (phase === 'flying') {
+    if (activeBet !== null && cashedOut === null) {
+      btnLabel = `💰 Encaisser ×${mult.toFixed(2)}`; btnBg = 'linear-gradient(135deg,#059669,#34d399)'; btnColor = '#fff';
+      btnFn = () => doCashout(mult);
+    } else if (cashedOut !== null) {
+      btnLabel = `✓ Encaissé ×${cashedOut.toFixed(2)}`; btnBg = '#064e3b'; btnColor = '#4ade80'; btnDis = true;
+    } else {
+      btnLabel = `Miser au prochain tour`; btnBg = '#1e293b'; btnColor = '#64748b';
+      btnFn = () => { setQueuedBet(bet); queuedBetR.current = bet; };
+    }
+  } else {
+    btnLabel = 'Prochain tour…'; btnDis = true;
+  }
 
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 50, background: '#0a1a2e', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      <BigWinEffect show={bigWin} />
-
+    <div style={{ position: 'fixed', inset: 0, zIndex: 50, background: '#080c1a', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       {/* Header */}
-      <div style={{ flexShrink: 0, background: 'rgba(0,0,0,0.55)', borderBottom: '1px solid rgba(255,200,0,0.15)', padding: '10px 12px', display: 'flex', alignItems: 'center', gap: 8 }}>
-        <button onClick={onBack} className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center text-slate-400 hover:text-white transition-colors" style={{ flexShrink: 0 }}>
-          <ArrowLeft className="w-4 h-4" />
-        </button>
-        <span style={{ fontSize: 22 }}>🐔</span>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div className="flex items-center gap-2">
-            <h2 style={{ fontSize: 15, fontWeight: 900, color: '#FFD600', letterSpacing: '0.04em', textTransform: 'uppercase' }}>Chicken Road</h2>
-            <StreakChip streak={streak} />
-          </div>
-          <p style={{ fontSize: 10, color: '#90A4AE', marginTop: 1 }}>Traversez la route · évitez les voitures</p>
-        </div>
-        <MuteButton />
-        <GameBalanceChip bal={bal} demo={demoMode} />
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 16px 10px', borderBottom: '1px solid #1e2847', flexShrink: 0 }}>
+        <button onClick={onBack} style={{ width: 34, height: 34, borderRadius: 10, border: 'none', background: 'rgba(255,255,255,.06)', color: '#94a3b8', fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>←</button>
+        <span style={{ flex: 1, textAlign: 'center', fontWeight: 900, fontSize: 15, color: '#f8fafc', letterSpacing: '0.08em', textTransform: 'uppercase' }}>CRASH</span>
+        <span style={{ fontSize: 11, color: '#334155', fontWeight: 700 }}>#{roundId}</span>
       </div>
 
-      {demoMode && <DemoModeBanner />}
-      <SessionStatsBar totalWon={session.totalWon} best={session.best} wagered={session.wagered} />
+      {/* History */}
+      <div style={{ display: 'flex', gap: 5, padding: '7px 14px', overflowX: 'auto', flexShrink: 0, borderBottom: '1px solid rgba(30,40,71,.5)' }}>
+        {history.length === 0 && <span style={{ fontSize: 11, color: '#334155' }}>Historique…</span>}
+        {history.slice(0, 10).map((h, i) => (
+          <span key={i} style={{ flexShrink: 0, padding: '2px 9px', borderRadius: 99, fontSize: 11, fontWeight: 800,
+            background: h < 1.5 ? 'rgba(239,68,68,.15)' : h < 5 ? 'rgba(129,140,248,.15)' : 'rgba(74,222,128,.15)',
+            color: h < 1.5 ? '#f87171' : h < 5 ? '#818cf8' : '#4ade80',
+          }}>{h.toFixed(2)}×</span>
+        ))}
+      </div>
 
-      {/* 3D Canvas */}
-      <div ref={containerRef} style={{ flex: 1, minHeight: 0, position: 'relative', cursor: isPlaying ? 'pointer' : 'default' }}
-        onClick={isPlaying ? handleJump : undefined}>
-        <canvas ref={canvasRef} style={{ width: '100%', height: '100%', display: 'block' }} />
+      {/* Graph */}
+      <div style={{ flex: '1 1 0%', minHeight: 0, position: 'relative', padding: '4px 6px 0' }}>
+        <svg width="100%" height="100%" viewBox={`0 0 ${PL + GW + 6} ${GH + PB}`} preserveAspectRatio="xMidYMid meet" style={{ display: 'block' }}>
+          {yTk.map((m, i) => (
+            <g key={i}>
+              <line x1={PL} y1={toY(m)} x2={PL + GW} y2={toY(m)} stroke="#1e2847" strokeWidth="0.5" />
+              <text x={PL - 3} y={toY(m) + 3.5} fontSize="7.5" fill="#334155" textAnchor="end">{m.toFixed(1)}×</text>
+            </g>
+          ))}
+          {xTk.map((t, i) => (
+            <text key={i} x={toX(t)} y={GH + PB - 2} fontSize="7.5" fill="#334155" textAnchor="middle">{t}s</text>
+          ))}
+          {pathD && phase !== 'crashed' && (
+            <path d={`${pathD} L ${toX(tCur).toFixed(1)},${GH} L ${PL},${GH} Z`} fill={`${lineC}12`} />
+          )}
+          {pathD && <path d={pathD} fill="none" stroke={lineC} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />}
+          {phase === 'flying' && tEl > 0.1 && (
+            <circle cx={toX(tEl)} cy={toY(mult)} r="4" fill="#818cf8" stroke="#fff" strokeWidth="1.5" />
+          )}
+          {phase === 'crashed' && crashedAt > 1 && (
+            <circle cx={toX(tCur)} cy={toY(crashedAt)} r="5" fill="#ef4444" stroke="#fff" strokeWidth="1.5" />
+          )}
+        </svg>
 
-        {/* Multiplier HUD overlay */}
-        {isPlaying && (
-          <div style={{ position: 'absolute', top: 8, left: 8, right: 8, pointerEvents: 'none' }}>
-            <div style={{ background: 'rgba(0,0,0,0.5)', borderRadius: 20, padding: '4px 8px', display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-              <div style={{ flex: 1, height: 10, background: 'rgba(255,255,255,0.12)', borderRadius: 10, overflow: 'hidden' }}>
-                <div style={{ height: '100%', width: `${progress}%`, background: `linear-gradient(90deg,#4CAF50,#FFD600,${diffColor})`, transition: 'width 0.3s', borderRadius: 10 }} />
+        {/* Center multiplier display */}
+        <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-55%)', textAlign: 'center', pointerEvents: 'none' }}>
+          {phase === 'waiting' && (
+            <>
+              <div style={{ fontSize: 10, color: '#475569', fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase' }}>PROCHAIN TOUR</div>
+              <div style={{ fontSize: 56, fontWeight: 900, color: '#f8fafc', lineHeight: 1 }}>{countdown}</div>
+            </>
+          )}
+          {phase === 'flying' && (
+            <div style={{ fontSize: 50, fontWeight: 900, color: '#818cf8', lineHeight: 1, textShadow: '0 0 40px rgba(129,140,248,.6)' }}>
+              {mult.toFixed(2)}<span style={{ fontSize: 28 }}>×</span>
+            </div>
+          )}
+          {phase === 'crashed' && (
+            <>
+              <div style={{ fontSize: 11, fontWeight: 900, color: '#ef4444', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 2 }}>CRASH !</div>
+              <div style={{ fontSize: 46, fontWeight: 900, color: '#ef4444', lineHeight: 1, textShadow: '0 0 30px rgba(239,68,68,.55)' }}>
+                {crashedAt.toFixed(2)}<span style={{ fontSize: 24 }}>×</span>
               </div>
-              <span style={{ fontSize: 11, fontWeight: 700, color: '#fff', minWidth: 44, textAlign: 'right' }}>
-                {currentLane + 1}/{cfg.totalLanes}
+            </>
+          )}
+          {cashedOut !== null && phase !== 'waiting' && (
+            <div style={{ marginTop: 8, fontSize: 13, fontWeight: 800, color: '#4ade80' }}>✓ Encaissé ×{cashedOut.toFixed(2)}</div>
+          )}
+        </div>
+      </div>
+
+      {/* Players list */}
+      <div style={{ margin: '4px 12px 4px', background: '#0d1021', border: '1px solid #1e2847', borderRadius: 12, flexShrink: 0, maxHeight: 84, overflow: 'hidden' }}>
+        <div style={{ overflowY: 'auto', maxHeight: 84 }}>
+          {fakes.map((f, i) => (
+            <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 58px 62px', padding: '4px 12px', alignItems: 'center', borderBottom: i < fakes.length - 1 ? '1px solid rgba(30,40,71,.25)' : 'none' }}>
+              <span style={{ fontSize: 11, color: '#64748b' }}>{f.name}</span>
+              <span style={{ fontSize: 11, color: '#94a3b8', textAlign: 'right' }}>{f.bet.toFixed(2)}</span>
+              <span style={{ fontSize: 11, fontWeight: 700, textAlign: 'right',
+                color: f.cashedAt ? '#4ade80' : isCrash ? '#f87171' : '#334155' }}>
+                {f.cashedAt ? `×${f.cashedAt.toFixed(2)}` : isCrash ? 'CRASH' : '…'}
               </span>
             </div>
-            {currentLane >= 0 && (
-              <div style={{ display: 'flex', gap: 6 }}>
-                <div style={{ background: 'linear-gradient(135deg,#FF6D00,#FFD600)', borderRadius: 12, padding: '5px 14px', boxShadow: '0 2px 12px rgba(255,165,0,0.5)' }}>
-                  <span style={{ fontSize: 20, fontWeight: 900, color: '#000' }}>{fmtMult(multiplier)}</span>
-                </div>
-                <div style={{ background: 'rgba(0,0,0,0.6)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 12, padding: '5px 12px' }}>
-                  <span style={{ fontSize: 11, color: '#90A4AE' }}>Prochain </span>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: '#4CAF50' }}>{fmtMult(nextMult)}</span>
-                </div>
-                <div style={{ background: 'rgba(0,0,0,0.6)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 12, padding: '5px 12px' }}>
-                  <span style={{ fontSize: 11, color: '#90A4AE' }}>Gain </span>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: '#FFD600' }}>
-                    {(activeBetRef.current * multiplier).toFixed(3)} TON
-                  </span>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Start hint */}
-        {gameState === 'idle' && (
-          <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', pointerEvents: 'none', textAlign: 'center' }}>
-            <div style={{ background: 'rgba(0,0,0,0.72)', backdropFilter: 'blur(6px)', borderRadius: 16, padding: '16px 24px', border: '1px solid rgba(255,200,0,0.25)' }}>
-              <p style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>🐔 Aide le poulet à traverser !</p>
-              <p style={{ fontSize: 12, color: '#FFD600', marginTop: 4 }}>Misez et cliquez pour démarrer</p>
-            </div>
-          </div>
-        )}
-
-        {/* Result overlay */}
-        {showResult && isFinished && (
-          <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.62)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10 }}>
-            <div style={{
-              margin: 16, padding: '24px 20px', borderRadius: 20,
-              background: gameState === 'dead' ? 'linear-gradient(160deg,#1a0000,#3d0000)' : 'linear-gradient(160deg,#001a04,#003d0e)',
-              border: `1px solid ${gameState === 'dead' ? '#FF1744' : '#00E676'}44`,
-              textAlign: 'center', minWidth: 230, maxWidth: 300,
-            }}>
-              <div style={{ fontSize: 48 }}>
-                {gameState === 'dead' ? '💥' : gameState === 'won' ? '🏆' : '💰'}
-              </div>
-              <h3 style={{ fontSize: 22, fontWeight: 900, color: gameState === 'dead' ? '#FF5252' : '#69F0AE', marginTop: 6 }}>
-                {gameState === 'dead' ? 'ÉCRASÉ !' : gameState === 'won' ? 'VICTOIRE !' : 'ENCAISSÉ !'}
-              </h3>
-              {gameState === 'dead' ? (
-                <p style={{ fontSize: 13, color: '#EF9A9A', marginTop: 6 }}>
-                  Voiture ! Perdu −{activeBetRef.current.toFixed(2)} TON
-                </p>
-              ) : (
-                <div style={{ marginTop: 8 }}>
-                  <p style={{ fontSize: 11, color: '#A5D6A7' }}>
-                    {gameState === 'won' ? `Toutes les ${cfg.totalLanes} voies !` : `${currentLane + 1} voie${currentLane > 0 ? 's' : ''} traversée${currentLane > 0 ? 's' : ''}`}
-                  </p>
-                  <p style={{ fontSize: 13, color: '#80CBC4', marginTop: 2 }}>{fmtMult(multiplier)}</p>
-                  <p style={{ fontSize: 26, fontWeight: 900, color: '#69F0AE', marginTop: 4 }}>
-                    +{(activeBetRef.current * multiplier - activeBetRef.current).toFixed(4)} TON
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* History strip */}
-      {history.length > 0 && (
-        <div style={{ flexShrink: 0, background: 'rgba(0,0,0,0.55)', borderTop: '1px solid rgba(255,255,255,0.05)', padding: '5px 12px', display: 'flex', gap: 5, overflowX: 'auto' }} className="no-scrollbar">
-          {history.map((h, i) => (
-            <span key={i} style={{
-              flexShrink: 0, fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 20,
-              background: !h.won ? 'rgba(239,68,68,0.18)' : h.mult >= 10 ? 'rgba(34,197,94,0.18)' : 'rgba(255,214,0,0.15)',
-              color: !h.won ? '#EF5350' : h.mult >= 10 ? '#4CAF50' : '#FFD600',
-            }}>
-              {h.won ? fmtMult(h.mult) : '💥'}
-            </span>
           ))}
         </div>
-      )}
+      </div>
 
-      {/* Controls */}
-      <div style={{ flexShrink: 0, background: 'rgba(0,0,0,0.82)', borderTop: '1px solid rgba(255,200,0,0.12)', padding: '10px 12px' }}>
-        {gameState === 'idle' || isFinished ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {/* Difficulty */}
-            <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
-              {(['easy', 'medium', 'hard', 'hardcore'] as Difficulty[]).map(d => {
-                const active = difficulty === d;
-                const col = DIFF_COLORS[d];
-                return (
-                  <button key={d} onClick={() => setDifficulty(d)}
-                    style={{
-                      flex: 1, padding: '5px 0', borderRadius: 8, fontSize: 10, fontWeight: 700,
-                      background: active ? col : 'rgba(255,255,255,0.06)',
-                      color: active ? (d === 'medium' ? '#000' : '#fff') : '#64748b',
-                      border: active ? 'none' : '1px solid #1e2847',
-                    }}>
-                    {DIFF_LABELS[d]}
-                  </button>
-                );
-              })}
-            </div>
-            <p style={{ fontSize: 10, color: '#546E7A', textAlign: 'center' }}>
-              {cfg.totalLanes} voies · ×{computeMultiplier(difficulty, cfg.totalLanes).toFixed(2)} max · survie {Math.round(cfg.survivalProb * 100)}%/voie
-            </p>
-
-            {/* Auto-cashout */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,0.05)', border: '1px solid #1e2847', borderRadius: 10, padding: '6px 10px' }}>
-              <span style={{ fontSize: 10, color: '#546E7A', fontWeight: 700, flexShrink: 0 }}>AUTO ×</span>
-              <input type="number" value={autoCash} placeholder="ex: 2.00" min={1.01} step={0.01}
-                onChange={e => setAutoCash(e.target.value)}
-                style={{ flex: 1, background: 'transparent', color: '#fff', fontSize: 13, fontWeight: 600, outline: 'none', border: 'none' }} />
-              {autoCash && <button onClick={() => setAutoCash('')} style={{ color: '#546E7A', fontSize: 13 }}>✕</button>}
-            </div>
-
-            {/* Bet */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(255,255,255,0.05)', border: '1px solid #1e2847', borderRadius: 10, padding: '6px 12px' }}>
-              <input type="number" value={bet} min={0.01} max={50} step={0.01}
-                onChange={e => { const v = +e.target.value; if (!isNaN(v)) setBet(Math.max(0.01, Math.min(50, v))); }}
-                style={{ flex: 1, background: 'transparent', color: '#fff', fontSize: 20, fontWeight: 700, outline: 'none', border: 'none' }} />
-              <span style={{ color: '#546E7A', fontWeight: 700 }}>TON</span>
-            </div>
-            <BetQuickButtons setBet={setBet} maxBal={bal} />
-
-            <button onClick={handleStart} disabled={effBet < 0.01 || bal < 0.01}
-              className={`w-full py-3 rounded-xl font-black text-base uppercase tracking-wider transition-all active:scale-95 flex items-center justify-center gap-2 ${
-                effBet >= 0.01 && bal >= 0.01
-                  ? 'bg-gradient-to-r from-yellow-400 to-orange-500 text-black shadow-lg shadow-orange-500/30'
-                  : 'bg-white/5 text-slate-600 cursor-not-allowed'
-              }`}>
-              {bal < 0.01 ? (demoMode ? '🎮 Démo épuisé' : '💸 Solde insuffisant') : <>🐔 JOUER ({effBet.toFixed(2)} TON)</>}
-            </button>
+      {/* Bet panel */}
+      <div style={{ flexShrink: 0, padding: '5px 12px 18px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <div style={{ display: 'flex', gap: 5 }}>
+          <div style={{ flex: 1, background: '#0d1021', border: '1px solid #1e2847', borderRadius: 10, display: 'flex', alignItems: 'center', padding: '8px 12px', opacity: activeBet !== null ? 0.55 : 1 }}>
+            <input type="number" value={bet} min={0.01} max={50} step={0.01} disabled={activeBet !== null}
+              onChange={e => { const v = +e.target.value; if (!isNaN(v)) setBet(Math.max(0.01, Math.min(50, v))); }}
+              style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: '#f8fafc', fontSize: 16, fontWeight: 700 }} />
+            <span style={{ fontSize: 11, color: '#475569' }}>TON</span>
           </div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: 11, color: '#546E7A' }}>Mise : <span style={{ color: '#fff', fontWeight: 700 }}>{activeBetRef.current.toFixed(2)} TON</span></span>
-              <span style={{ fontSize: 11, color: '#546E7A' }}>Potentiel : <span style={{ color: '#FFD600', fontWeight: 700 }}>{(activeBetRef.current * multiplier).toFixed(3)} TON</span></span>
-            </div>
-            <div style={{ display: 'flex', gap: 10 }}>
-              <button onClick={handleJump} disabled={gameState === 'jumping'}
-                className="flex-1 py-3 rounded-xl font-black text-base uppercase transition-all active:scale-95 disabled:opacity-50"
-                style={{ background: 'linear-gradient(135deg,#1E88E5,#5E35B1)', color: '#fff', boxShadow: '0 4px 16px rgba(30,136,229,0.35)' }}>
-                🐔 GO !
-              </button>
-              <button onClick={handleCashOut} disabled={currentLane < 0 || gameState === 'jumping'}
-                className={`flex-1 py-3 rounded-xl font-black text-base uppercase transition-all active:scale-95 ${
-                  currentLane < 0 ? 'bg-white/5 text-slate-600 cursor-not-allowed' : ''
-                }`}
-                style={currentLane >= 0 ? { background: 'linear-gradient(135deg,#FFD600,#FF8F00)', color: '#000', boxShadow: '0 4px 16px rgba(255,200,0,0.35)' } : {}}>
-                💰 {(activeBetRef.current * multiplier).toFixed(3)}
-              </button>
-            </div>
+          <div style={{ width: 82, background: '#0d1021', border: '1px solid #1e2847', borderRadius: 10, display: 'flex', alignItems: 'center', padding: '6px 8px', gap: 2 }}>
+            <span style={{ fontSize: 9, color: '#475569', fontWeight: 700, flexShrink: 0 }}>AUTO×</span>
+            <input type="number" value={autoCash} placeholder="2.00" min={1.01} step={0.01}
+              onChange={e => setAutoCash(e.target.value)}
+              style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', color: '#f8fafc', fontSize: 12, fontWeight: 700 }} />
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 4 }}>
+          {[0.10, 0.50, 1.00, 5.00].map(v => (
+            <button key={v} onClick={() => setBet(v)} disabled={activeBet !== null}
+              style={{ flex: 1, padding: '5px 0', borderRadius: 8, border: `1px solid ${bet === v ? 'rgba(59,130,246,.45)' : '#1e2847'}`,
+                background: bet === v ? 'rgba(59,130,246,.2)' : 'rgba(255,255,255,.03)',
+                color: bet === v ? '#60a5fa' : '#475569', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+              {v.toFixed(2)}
+            </button>
+          ))}
+        </div>
+        <button onClick={btnFn} disabled={btnDis}
+          style={{ border: 'none', borderRadius: 14, padding: '14px 0', fontSize: 14, fontWeight: 900, letterSpacing: '0.04em', textTransform: 'uppercase', width: '100%', cursor: btnDis ? 'not-allowed' : 'pointer', opacity: btnDis ? 0.65 : 1, background: btnBg, color: btnColor }}>
+          {btnLabel}
+        </button>
+        {queuedBet !== null && (
+          <div style={{ textAlign: 'center', fontSize: 11, color: '#475569' }}>
+            ✋ En attente : {queuedBet.toFixed(2)} TON ·{' '}
+            <span onClick={() => { setQueuedBet(null); queuedBetR.current = null; }} style={{ color: '#3b82f6', cursor: 'pointer' }}>Annuler</span>
           </div>
         )}
       </div>
@@ -2404,11 +2369,11 @@ function formatFeedTime(ts: number): string {
 
 const _NOW = Date.now();
 const FEED_DATA: FeedEntry[] = [
-  { username: 'Léa R.',      bet: 0.05, win: 0.00, mult: 0,    game: 'Chicken Road',    createdAt: _NOW -  1 * 60000 },
+  { username: 'Léa R.',      bet: 0.05, win: 0.00, mult: 0,    game: 'Crash',           createdAt: _NOW -  1 * 60000 },
   { username: 'Yusuf K.',    bet: 0.10, win: 2.80, mult: 2.80, game: 'Plinko',   createdAt: _NOW -  3 * 60000 },
   { username: 'Marco T.',    bet: 1.0,  win: 0.00, mult: 0,    game: 'Tower',    createdAt: _NOW -  6 * 60000 },
   { username: 'Chen W.',     bet: 0.02, win: 0.04, mult: 2,    game: 'Tower',    createdAt: _NOW -  9 * 60000 },
-  { username: 'Amira S.',    bet: 0.50, win: 1.28, mult: 2.56, game: 'Chicken Road',    createdAt: _NOW - 14 * 60000 },
+  { username: 'Amira S.',    bet: 0.50, win: 1.28, mult: 2.56, game: 'Crash',           createdAt: _NOW - 14 * 60000 },
   { username: 'Priya S.',    bet: 0.05, win: 0.00, mult: 0,    game: 'Mines',    createdAt: _NOW - 19 * 60000 },
   { username: 'Fatou D.',    bet: 0.10, win: 0.19, mult: 2,    game: 'Tower',    createdAt: _NOW - 25 * 60000 },
   { username: 'Nicolás V.',  bet: 0.03, win: 1.08, mult: 36,   game: 'Tower',    createdAt: _NOW - 33 * 60000 },
@@ -2420,7 +2385,7 @@ const FEED_DATA: FeedEntry[] = [
 // GAMES HUB
 // ══════════════════════════════════════════════════════════════════
 
-type ActiveGame = 'dice' | 'chicken' | 'mines' | 'tower' | 'plinko' | null;
+type ActiveGame = 'dice' | 'crash' | 'mines' | 'tower' | 'plinko' | null;
 
 const CATALOG = [
   {
@@ -2436,16 +2401,16 @@ const CATALOG = [
     pattern: 'dice',
   },
   {
-    id: 'chicken' as ActiveGame,
-    title: 'Chicken Road',
-    desc: 'Traversez la route, évitez les voitures',
-    stats: 'jusqu\'à ×40 · encaissez à tout moment',
-    emoji: '🐔',
+    id: 'crash' as ActiveGame,
+    title: 'Crash',
+    desc: 'Encaissez avant le crash · courbe infinie',
+    stats: 'jusqu\'à ×1000 · encaissez à tout moment',
+    emoji: '📈',
     badge: 'HOT',
-    accentFrom: '#fbbf24', accentTo: '#f59e0b',
-    glow: 'rgba(251,191,36,0.4)',
-    badgeColor: '#f59e0b',
-    pattern: 'chicken',
+    accentFrom: '#818cf8', accentTo: '#6366f1',
+    glow: 'rgba(129,140,248,0.4)',
+    badgeColor: '#818cf8',
+    pattern: 'crash',
   },
   {
     id: 'mines' as ActiveGame,
@@ -2529,7 +2494,7 @@ export const MiniAppGames: React.FC = () => {
 
   // Live feed auto-rotation — new fake entry every 8–18 seconds
   useEffect(() => {
-    const GAME_NAMES = ['Chicken Road', 'Plinko', 'Tower', 'Mines', 'Dice'];
+    const GAME_NAMES = ['Crash', 'Plinko', 'Tower', 'Mines', 'Dice'];
     const scheduleNext = () => {
       const ms = 8000 + Math.floor(Math.random() * 10000);
       return setTimeout(() => {
@@ -2554,7 +2519,7 @@ export const MiniAppGames: React.FC = () => {
   if (activeGame === 'dice')     return <DiceGame     onBack={() => setActiveGame(null)} streak={streak} onResult={handleResult} />;
   if (activeGame === 'tower')    return <TowerGame    onBack={() => setActiveGame(null)} streak={streak} onResult={handleResult} />;
   if (activeGame === 'plinko')   return <PlinkoGame   onBack={() => setActiveGame(null)} streak={streak} onResult={handleResult} />;
-  if (activeGame === 'chicken') return <ChickenRoadGame onBack={() => setActiveGame(null)} streak={streak} onResult={handleResult} />;
+  if (activeGame === 'crash') return <CrashLineGame onBack={() => setActiveGame(null)} streak={streak} onResult={handleResult} />;
   if (activeGame === 'mines')   return <MinesGame   onBack={() => setActiveGame(null)} streak={streak} onResult={handleResult} />;
 
   return (
