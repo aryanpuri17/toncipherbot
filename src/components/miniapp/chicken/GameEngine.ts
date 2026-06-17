@@ -1,556 +1,510 @@
+// GameEngine.ts — Chicken Road TonCipher
+// Livré par l'IA 3D, validé par Claude.ai
+// ✅ CORRECTION APPLIQUÉE : rotation des véhicules corrigée dans spawnInitialVehicles et spawnNewVehicle
+
 import * as THREE from 'three';
 import {
-  createChicken, createCar, createTruck, createTree, createBush,
-  createLampPost, createExplosionParticles, updateExplosion,
+  createScene,
+  updateScene,
+  updateMultiplierSigns,
+  resizeScene,
+  SceneElements,
+} from './scene';
+import {
+  createChicken,
+  animateChickenIdle,
+  animateChickenJump,
+  animateChickenVictory,
+  resetChickenTransform,
+  createGoldenEgg,
+  updateGoldenEgg,
+  createExplosionParticles,
+  updateExplosion,
+  spawnVehicle,
+  JUMP_DURATION,
 } from './voxelModels';
-import { playCluck, playStep, playHonk, playCrash, playFanfare, playCoin, playDanger } from './audio';
 
 export type Difficulty = 'easy' | 'medium' | 'hard' | 'hardcore';
-export type GameState = 'idle' | 'playing' | 'jumping' | 'dead' | 'won' | 'cashed_out';
+export type GameState =
+  | 'idle'
+  | 'playing'
+  | 'jumping'
+  | 'dead'
+  | 'won'
+  | 'cashed_out';
 
-interface Vehicle {
-  mesh: THREE.Group;
-  speed: number;
-  lane: number;
-  warningPlayed: boolean;
+interface DiffConfig {
+  totalLanes: number;
+  survivalProb: number;
+  label: string;
+}
+
+export const DIFF_CONFIG: Record<Difficulty, DiffConfig> = {
+  easy:     { totalLanes: 5, survivalProb: 0.88, label: 'Facile'    },
+  medium:   { totalLanes: 5, survivalProb: 0.72, label: 'Moyen'     },
+  hard:     { totalLanes: 5, survivalProb: 0.58, label: 'Difficile' },
+  hardcore: { totalLanes: 5, survivalProb: 0.42, label: 'Hardcore'  },
+};
+
+export function computeMultiplier(
+  difficulty: Difficulty,
+  lane: number
+): number {
+  const prob = DIFF_CONFIG[difficulty].survivalProb;
+  return Math.round((0.95 / Math.pow(prob, lane)) * 10000) / 10000;
 }
 
 interface GameCallbacks {
-  onStateChange:    (state: GameState) => void;
+  onStateChange:      (state: GameState) => void;
   onMultiplierChange: (mult: number) => void;
-  onRowChange:      (row: number) => void;
-  onAutoCashout?:   () => void; // triggered when auto-cashout target is reached
+  onRowChange:        (row: number) => void;
+  onAutoCashout:      () => void;
+  onGoldenEgg?:       () => void;
 }
 
-// ── RTP-based config ─────────────────────────────────────────────────────────
-// mult[n] = CHICKEN_RTP / survivalProb^n
-// Expected value of reaching lane n and cashing = mult[n] × survivalProb^n = CHICKEN_RTP ✓
-const CHICKEN_RTP = 0.97;
-
-export const DIFF_CONFIG: Record<Difficulty, {
-  totalLanes:   number;
-  survivalProb: number;  // per-lane survival probability
-  baseSpeed:    number;
-  carsPerLane:  number;
-}> = {
-  easy:     { totalLanes: 12, survivalProb: 0.86, baseSpeed: 2.5, carsPerLane: 2 },
-  medium:   { totalLanes: 10, survivalProb: 0.76, baseSpeed: 4.2, carsPerLane: 3 },
-  hard:     { totalLanes: 8,  survivalProb: 0.65, baseSpeed: 6.5, carsPerLane: 4 },
-  hardcore: { totalLanes: 6,  survivalProb: 0.52, baseSpeed: 10.0, carsPerLane: 5 },
-};
-
-export function computeMultiplier(difficulty: Difficulty, lane: number): number {
-  if (lane <= 0) return 1;
-  const p = DIFF_CONFIG[difficulty].survivalProb;
-  return Math.round(CHICKEN_RTP / Math.pow(p, lane) * 100) / 100;
+interface LaneConfig {
+  z: number;
+  direction: number;
+  baseSpeed: number;
+  vehicleType: string;
 }
 
-const LANE_WIDTH = 2.2;
-const ROAD_LENGTH = 18;
+interface Lane {
+  z: number;
+  direction: number;
+  baseSpeed: number;
+  vehicles: THREE.Group[];
+  safe: boolean;
+  hasGoldenEgg: boolean;
+  goldenEggMesh: THREE.Group | null;
+  spawnTimer: number;
+  spawnInterval: number;
+  laneIndex: number;
+}
 
-const COLORS = {
-  road:      0x263238,
-  lane:      0x37474F,
-  stripe:    0xFFCC00,
-  grass:     0x43A047,
-  grassDark: 0x388E3C,
-  sidewalk:  0x90A4AE,
-  barrier:   0x00E676,
-  barrierBg: 0x1B5E20,
-};
+const LANE_CONFIGS: LaneConfig[] = [
+  { z:  3.0, direction: -1, baseSpeed: 4.0, vehicleType: 'car'   },
+  { z:  1.0, direction:  1, baseSpeed: 3.2, vehicleType: 'car'   },
+  { z: -1.0, direction: -1, baseSpeed: 5.0, vehicleType: 'car'   },
+  { z: -3.0, direction:  1, baseSpeed: 2.8, vehicleType: 'truck' },
+  { z: -5.0, direction: -1, baseSpeed: 4.5, vehicleType: 'car'   },
+];
 
-// ── GameEngine class ──────────────────────────────────────────────────────────
+const CHICKEN_START_Z  = 5.5;
+const FINISH_Z         = -7.0;
+const VEHICLE_DESPAWN_X = 16;
+const VEHICLE_SPAWN_X   = 15;
+
 export class GameEngine {
-  private scene!: THREE.Scene;
-  private camera!: THREE.OrthographicCamera;
-  private renderer!: THREE.WebGLRenderer;
+  private callbacks:     GameCallbacks;
+  private sceneElements: SceneElements;
 
-  private chicken!: THREE.Group;
-  private chickenShadow!: THREE.Mesh;
-  private vehicles: Vehicle[] = [];
-  private barriers: THREE.Mesh[] = [];
-  private multiplierSigns: THREE.Group[] = [];
-  private explosion: THREE.Group | null = null;
-  private decorations: THREE.Group[] = [];
+  private chicken:        THREE.Group;
+  private lanes:          Lane[];
+  private explosionGroup: THREE.Group | null = null;
 
-  private state: GameState = 'idle';
-  private difficulty: Difficulty = 'medium';
-  private currentLane = -1;
-  private multiplier = 1.0;
-  private isJumping = false;
-  private jumpProgress = 0;
-  private jumpStartX = 0;
-  private jumpEndX = 0;
+  private state:              GameState  = 'idle';
+  private difficulty:         Difficulty = 'medium';
+  private currentRow          = 0;
+  private multiplier          = 1.0;
+  private autoCashoutTarget   = 0;
 
-  private animId = 0;
-  private clock = new THREE.Clock();
-  private callbacks: GameCallbacks;
+  private isJumping     = false;
+  private jumpStartZ    = 0;
+  private jumpTargetZ   = 0;
+  private jumpProgress  = 0;
+  private jumpElapsed   = 0;
+
+  private laneOutcomes: boolean[] = [];
+
+  private animFrameId = 0;
+  private clock: THREE.Clock;
+  private time  = 0;
+
   private disposed = false;
-  private canvas: HTMLCanvasElement;
-  private screenShake = 0;
-
-  // Auto-cashout target (multiplier value, 0 = disabled)
-  private autoCashoutTarget = 0;
 
   constructor(canvas: HTMLCanvasElement, callbacks: GameCallbacks) {
-    this.canvas = canvas;
     this.callbacks = callbacks;
-    this.init();
-  }
+    this.clock     = new THREE.Clock();
 
-  private init() {
-    // Scene
-    this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x87CEEB);
-    this.scene.fog = new THREE.Fog(0x87CEEB, 45, 80);
+    this.sceneElements = createScene(canvas);
 
-    // Camera — orthographic isometric
-    const aspect = (this.canvas.clientWidth || 390) / (this.canvas.clientHeight || 500);
-    const fs = 22;
-    this.camera = new THREE.OrthographicCamera(
-      -fs * aspect / 2, fs * aspect / 2, fs / 2, -fs / 2, 0.1, 100
-    );
-    this.camera.position.set(12, 16, 8);
-    this.camera.lookAt(0, 0, 0);
+    this.chicken = createChicken();
+    this.chicken.position.set(0, 0, CHICKEN_START_Z);
+    this.chicken.userData.baseY = 0;
+    this.chicken.rotation.y = Math.PI;
+    this.sceneElements.scene.add(this.chicken);
 
-    // Renderer
-    this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: true, powerPreference: 'high-performance' });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    this.renderer.setSize(this.canvas.clientWidth || 390, this.canvas.clientHeight || 500);
-    this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.2;
+    this.lanes = this.createLanes();
+    this.lanes.forEach((lane) => this.spawnInitialVehicles(lane));
 
+    this.updateSigns();
     this.animate();
+    this.resize(canvas.clientWidth, canvas.clientHeight);
   }
 
-  // ── World ──────────────────────────────────────────────────────────────────
+  // ─── CRÉATION DES LANES ────────────────────────────────────────
+  private createLanes(): Lane[] {
+    return LANE_CONFIGS.map((cfg, index) => ({
+      z:             cfg.z,
+      direction:     cfg.direction,
+      baseSpeed:     cfg.baseSpeed,
+      vehicles:      [],
+      safe:          true,
+      hasGoldenEgg:  false,
+      goldenEggMesh: null,
+      spawnTimer:    0,
+      spawnInterval: this.getSpawnInterval(cfg.baseSpeed),
+      laneIndex:     index,
+    }));
+  }
 
-  private buildWorld() {
-    this.scene.clear();
-    this.multiplierSigns = [];
-    this.barriers = [];
-    this.decorations = [];
-    this.vehicles = [];
+  private getSpawnInterval(baseSpeed: number): number {
+    return 2.5 / (baseSpeed / 3.5) + Math.random() * 0.5;
+  }
 
-    // Lights
-    const ambient = new THREE.AmbientLight(0xFFFFFF, 0.65);
-    this.scene.add(ambient);
-    const sun = new THREE.DirectionalLight(0xFFF8E1, 1.1);
-    sun.position.set(8, 18, 10); sun.castShadow = true;
-    sun.shadow.mapSize.width = 1024; sun.shadow.mapSize.height = 1024;
-    sun.shadow.camera.left = -25; sun.shadow.camera.right = 25;
-    sun.shadow.camera.top = 20; sun.shadow.camera.bottom = -20;
-    this.scene.add(sun);
-    const hemi = new THREE.HemisphereLight(0x87CEEB, 0x388E3C, 0.35);
-    this.scene.add(hemi);
+  // ─── SPAWN VÉHICULES ────────────────────────────────────────────
+  // ✅ CORRECTION : rotation corrigée pour que les véhicules regardent
+  //    dans leur direction de déplacement.
+  //    direction  1 (droite) → rotation.y = -PI/2
+  //    direction -1 (gauche) → rotation.y =  PI/2
+  private spawnInitialVehicles(lane: Lane): void {
+    const count   = 3 + Math.floor(Math.random() * 3);
+    const spacing = (VEHICLE_SPAWN_X * 2) / count;
 
-    const cfg = DIFF_CONFIG[this.difficulty];
-    const roadW = cfg.totalLanes * LANE_WIDTH;
+    for (let i = 0; i < count; i++) {
+      const vehicle = spawnVehicle(lane.laneIndex);
+      const x = -VEHICLE_SPAWN_X + i * spacing + (Math.random() - 0.5) * spacing * 0.5;
+      vehicle.position.set(x, 0, lane.z);
+      vehicle.userData.speed = lane.baseSpeed * (0.85 + Math.random() * 0.35);
 
-    // Grass background
-    const grassMesh = new THREE.Mesh(
-      new THREE.BoxGeometry(70, 0.1, 70),
-      new THREE.MeshLambertMaterial({ color: COLORS.grass })
-    );
-    grassMesh.position.set(roadW / 2, -0.1, 0);
-    grassMesh.receiveShadow = true;
-    this.scene.add(grassMesh);
-
-    // Start sidewalk
-    const startSW = new THREE.Mesh(
-      new THREE.BoxGeometry(3.2, 0.18, ROAD_LENGTH + 6),
-      new THREE.MeshLambertMaterial({ color: COLORS.sidewalk })
-    );
-    startSW.position.set(-2, 0.07, 0);
-    startSW.receiveShadow = true;
-    this.scene.add(startSW);
-
-    // End sidewalk
-    const endSW = new THREE.Mesh(
-      new THREE.BoxGeometry(3.2, 0.18, ROAD_LENGTH + 6),
-      new THREE.MeshLambertMaterial({ color: COLORS.sidewalk })
-    );
-    endSW.position.set(roadW + 2, 0.07, 0);
-    endSW.receiveShadow = true;
-    this.scene.add(endSW);
-
-    // Road surface
-    const road = new THREE.Mesh(
-      new THREE.BoxGeometry(roadW, 0.12, ROAD_LENGTH + 2),
-      new THREE.MeshLambertMaterial({ color: COLORS.road })
-    );
-    road.position.set(roadW / 2, 0.04, 0);
-    road.receiveShadow = true;
-    this.scene.add(road);
-
-    // Lane dividers + dashes + multiplier signs
-    for (let i = 0; i <= cfg.totalLanes; i++) {
-      const x = i * LANE_WIDTH;
-      const isEdge = i === 0 || i === cfg.totalLanes;
-      const stripe = new THREE.Mesh(
-        new THREE.BoxGeometry(0.12, 0.02, ROAD_LENGTH + 2),
-        new THREE.MeshLambertMaterial({ color: isEdge ? 0xFFFFFF : COLORS.stripe })
-      );
-      stripe.position.set(x, 0.1, 0);
-      this.scene.add(stripe);
-
-      if (i < cfg.totalLanes) {
-        // Center dashes
-        for (let z = -ROAD_LENGTH / 2 + 0.4; z < ROAD_LENGTH / 2; z += 1.5) {
-          const dash = new THREE.Mesh(
-            new THREE.BoxGeometry(0.07, 0.02, 0.6),
-            new THREE.MeshLambertMaterial({ color: 0x607D8B })
-          );
-          dash.position.set(x + LANE_WIDTH / 2, 0.08, z);
-          this.scene.add(dash);
-        }
-
-        // Multiplier sign
-        const mult = computeMultiplier(this.difficulty, i + 1);
-        const sign = this.createMultiplierSign(mult, i);
-        sign.position.set(x + LANE_WIDTH / 2, 0.01, -ROAD_LENGTH / 2 - 0.6);
-        this.scene.add(sign);
-        this.multiplierSigns.push(sign);
+      if (lane.direction === 1) {
+        vehicle.rotation.y = -Math.PI / 2;
+      } else {
+        vehicle.rotation.y = Math.PI / 2;
       }
+
+      this.sceneElements.scene.add(vehicle);
+      lane.vehicles.push(vehicle);
+    }
+  }
+
+  private spawnNewVehicle(lane: Lane): void {
+    const vehicle = spawnVehicle(lane.laneIndex);
+    const halfW   = ((vehicle.userData.width as number) || 2) / 2;
+    const startX  = lane.direction === 1
+      ? -VEHICLE_SPAWN_X - halfW
+      :  VEHICLE_SPAWN_X + halfW;
+
+    vehicle.position.set(startX, 0, lane.z);
+    vehicle.userData.speed = lane.baseSpeed * (0.85 + Math.random() * 0.35);
+
+    if (lane.direction === 1) {
+      vehicle.rotation.y = -Math.PI / 2;
+    } else {
+      vehicle.rotation.y = Math.PI / 2;
     }
 
-    // Decorations: trees, bushes, lamp posts on both sides
-    const addDecoration = (x: number, z: number, type: 'tree' | 'bush' | 'lamp') => {
-      const obj = type === 'tree' ? createTree() : type === 'bush' ? createBush() : createLampPost();
-      obj.position.set(x, 0, z);
-      this.scene.add(obj);
-      this.decorations.push(obj as THREE.Group);
-    };
+    this.sceneElements.scene.add(vehicle);
+    lane.vehicles.push(vehicle);
+  }
 
-    const zPositions = [-7, -5, -3, -1, 1, 3, 5, 7];
-    zPositions.forEach((z, i) => {
-      // Left of start sidewalk
-      addDecoration(-4.5 + (Math.random() - 0.5) * 0.5, z + (Math.random() - 0.5) * 0.4,
-        i % 3 === 0 ? 'tree' : i % 3 === 1 ? 'bush' : 'lamp');
-      // Right of end sidewalk
-      addDecoration(roadW + 4.5 + (Math.random() - 0.5) * 0.5, z + (Math.random() - 0.5) * 0.4,
-        i % 3 === 1 ? 'tree' : i % 3 === 2 ? 'bush' : 'lamp');
+  // ─── GOLDEN EGG ────────────────────────────────────────────────
+  private setupGoldenEggs(): void {
+    this.lanes.forEach((lane) => {
+      if (lane.goldenEggMesh) {
+        this.sceneElements.scene.remove(lane.goldenEggMesh);
+        lane.goldenEggMesh = null;
+      }
+      lane.hasGoldenEgg = false;
+
+      if (Math.random() < 0.08) {
+        lane.hasGoldenEgg = true;
+        const egg = createGoldenEgg();
+        egg.position.set(0, 0.5, lane.z);
+        this.sceneElements.scene.add(egg);
+        lane.goldenEggMesh = egg;
+      }
+    });
+  }
+
+  private collectGoldenEgg(lane: Lane): void {
+    if (lane.hasGoldenEgg && lane.goldenEggMesh) {
+      this.sceneElements.scene.remove(lane.goldenEggMesh);
+      lane.goldenEggMesh  = null;
+      lane.hasGoldenEgg   = false;
+      this.multiplier    *= 1.25;
+      this.callbacks.onMultiplierChange(this.multiplier);
+      if (this.callbacks.onGoldenEgg) {
+        this.callbacks.onGoldenEgg();
+      }
+    }
+  }
+
+  // ─── PANNEAUX ──────────────────────────────────────────────────
+  private updateSigns(): void {
+    const labels: string[] = [];
+    for (let i = 1; i <= 5; i++) {
+      const m = computeMultiplier(this.difficulty, i);
+      labels.push('×' + m.toFixed(2));
+    }
+    updateMultiplierSigns(this.sceneElements, labels);
+  }
+
+  // ─── API PUBLIQUE ───────────────────────────────────────────────
+  startGame(): void {
+    if (
+      this.state !== 'idle' &&
+      this.state !== 'dead' &&
+      this.state !== 'won' &&
+      this.state !== 'cashed_out'
+    ) return;
+
+    this.currentRow   = 0;
+    this.multiplier   = 1.0;
+    this.isJumping    = false;
+    this.jumpProgress = 0;
+    this.jumpElapsed  = 0;
+
+    if (this.explosionGroup) {
+      this.sceneElements.scene.remove(this.explosionGroup);
+      this.explosionGroup = null;
+    }
+
+    this.chicken.visible = true;
+    this.chicken.position.set(0, 0, CHICKEN_START_Z);
+    this.chicken.userData.baseY = 0;
+    resetChickenTransform(this.chicken);
+    this.chicken.rotation.y = Math.PI;
+
+    const config = DIFF_CONFIG[this.difficulty];
+    this.laneOutcomes = [];
+    for (let i = 0; i < config.totalLanes; i++) {
+      this.laneOutcomes.push(Math.random() < config.survivalProb);
+    }
+
+    this.lanes.forEach((lane) => {
+      lane.vehicles.forEach((v) => this.sceneElements.scene.remove(v));
+      lane.vehicles    = [];
+      lane.spawnTimer  = 0;
+      this.spawnInitialVehicles(lane);
     });
 
-    // Vehicles
-    this.createVehicles();
+    this.setupGoldenEggs();
+    this.updateSigns();
+
+    this.setState('playing');
+    this.callbacks.onMultiplierChange(this.multiplier);
+    this.callbacks.onRowChange(0);
   }
 
-  private createMultiplierSign(mult: number, _i: number): THREE.Group {
-    const group = new THREE.Group();
-    const color = mult < 1.5 ? 0x4CAF50 : mult < 3 ? 0xFFD600 : mult < 10 ? 0xFF6D00 : mult < 20 ? 0xFF1744 : 0xAA00FF;
-
-    const panel = new THREE.Mesh(
-      new THREE.BoxGeometry(LANE_WIDTH - 0.28, 0.64, 0.16),
-      new THREE.MeshLambertMaterial({ color })
-    );
-    panel.position.set(0, 0.36, 0);
-    group.add(panel);
-
-    const cvs = document.createElement('canvas');
-    cvs.width = 128; cvs.height = 48;
-    const ctx = cvs.getContext('2d')!;
-    ctx.clearRect(0, 0, 128, 48);
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 30px Arial';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    const label = mult >= 1000 ? `×${(mult / 1000).toFixed(1)}k`
-      : mult >= 100 ? `×${mult.toFixed(0)}`
-      : mult >= 10 ? `×${mult.toFixed(1)}`
-      : `×${mult.toFixed(2)}`;
-    ctx.fillText(label, 64, 26);
-    const tex = new THREE.CanvasTexture(cvs);
-    const text = new THREE.Mesh(
-      new THREE.PlaneGeometry(LANE_WIDTH - 0.38, 0.46),
-      new THREE.MeshBasicMaterial({ map: tex, transparent: true })
-    );
-    text.position.set(0, 0.36, 0.085);
-    group.add(text);
-
-    return group;
-  }
-
-  private createVehicles() {
-    this.vehicles = [];
-    const cfg = DIFF_CONFIG[this.difficulty];
-
-    for (let lane = 0; lane < cfg.totalLanes; lane++) {
-      const x = lane * LANE_WIDTH + LANE_WIDTH / 2;
-      const dir = lane % 2 === 0 ? 1 : -1;
-      const laneSpeed = cfg.baseSpeed * (0.7 + Math.random() * 0.6);
-
-      for (let i = 0; i < cfg.carsPerLane; i++) {
-        const isTruck = Math.random() < 0.28;
-        const mesh = isTruck ? createTruck() : createCar();
-        const spacing = (ROAD_LENGTH + 10) / cfg.carsPerLane;
-        const z = -ROAD_LENGTH / 2 - 5 + spacing * i + Math.random() * spacing * 0.4;
-        mesh.position.set(x, 0, z);
-        mesh.rotation.y = dir > 0 ? Math.PI / 2 : -Math.PI / 2;
-        const speed = laneSpeed * (0.82 + Math.random() * 0.36) * dir;
-        this.scene.add(mesh);
-        this.vehicles.push({ mesh, speed, lane, warningPlayed: false });
-      }
-    }
-  }
-
-  private addBarrier(x: number) {
-    const bar = new THREE.Mesh(
-      new THREE.BoxGeometry(0.14, 0.85, ROAD_LENGTH + 2),
-      new THREE.MeshLambertMaterial({ color: COLORS.barrier, transparent: true, opacity: 0.5 })
-    );
-    bar.position.set(x - LANE_WIDTH / 2 - 0.08, 0.42, 0);
-    this.scene.add(bar);
-    this.barriers.push(bar);
-  }
-
-  private getLaneX(lane: number): number {
-    if (lane < 0) return -1;
-    const cfg = DIFF_CONFIG[this.difficulty];
-    if (lane >= cfg.totalLanes) return cfg.totalLanes * LANE_WIDTH + 1;
-    return lane * LANE_WIDTH + LANE_WIDTH / 2;
-  }
-
-  private updateCamera() {
-    const cfg = DIFF_CONFIG[this.difficulty];
-    const roadW = cfg.totalLanes * LANE_WIDTH;
-    const cx = roadW / 2;
-    this.camera.position.set(cx + 10, 17, 10);
-    this.camera.lookAt(cx * 0.4, 0, 0);
-  }
-
-  // ── Public API ─────────────────────────────────────────────────────────────
-
-  setDifficulty(d: Difficulty) { this.difficulty = d; }
-  getDifficulty(): Difficulty { return this.difficulty; }
-  getState(): GameState { return this.state; }
-  getCurrentLane(): number { return this.currentLane; }
-  getMultiplier(): number { return this.multiplier; }
-
-  setAutoCashoutTarget(mult: number) { this.autoCashoutTarget = mult; }
-
-  startGame() {
-    this.currentLane = -1;
-    this.multiplier = 1.0;
-    this.isJumping = false;
-    this.jumpProgress = 0;
-    this.screenShake = 0;
-    this.autoCashoutTarget = 0;
-
-    if (this.explosion) { this.scene.remove(this.explosion); this.explosion = null; }
-
-    this.buildWorld();
-
-    if (this.chicken) this.scene.remove(this.chicken);
-    if (this.chickenShadow) this.scene.remove(this.chickenShadow);
-    this.chicken = createChicken();
-    this.chicken.position.set(-1, 0, 0);
-    this.chicken.rotation.y = Math.PI / 2;
-    this.scene.add(this.chicken);
-
-    const geo = new THREE.CircleGeometry(0.42, 16);
-    const mat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.28, depthWrite: false });
-    this.chickenShadow = new THREE.Mesh(geo, mat);
-    this.chickenShadow.rotation.x = -Math.PI / 2;
-    this.chickenShadow.position.set(-1, 0.015, 0);
-    this.chickenShadow.scale.set(1, 1.35, 1);
-    this.scene.add(this.chickenShadow);
-
-    this.updateCamera();
-    this.state = 'playing';
-    this.callbacks.onStateChange('playing');
-    this.callbacks.onMultiplierChange(1.0);
-    this.callbacks.onRowChange(-1);
-  }
-
-  jump() {
+  jump(): void {
     if (this.state !== 'playing' || this.isJumping) return;
-    const cfg = DIFF_CONFIG[this.difficulty];
-    const next = this.currentLane + 1;
-    if (next > cfg.totalLanes) return;
-    this.isJumping = true;
-    this.jumpStartX = this.getLaneX(this.currentLane);
-    this.jumpEndX = this.getLaneX(next);
+
+    const totalLanes = DIFF_CONFIG[this.difficulty].totalLanes;
+    if (this.currentRow >= totalLanes) return;
+
+    this.isJumping   = true;
+    this.jumpElapsed = 0;
     this.jumpProgress = 0;
-    this.state = 'jumping';
-    playCluck();
+
+    const targetLaneIndex = this.currentRow;
+    this.jumpStartZ = this.chicken.position.z;
+    this.jumpTargetZ = LANE_CONFIGS[targetLaneIndex].z;
+
+    this.setState('jumping');
   }
 
-  cashOut() {
-    if (this.state !== 'playing' || this.currentLane < 0) return;
-    this.state = 'cashed_out';
-    playCoin();
-    setTimeout(() => playFanfare(), 100);
-    this.callbacks.onStateChange('cashed_out');
+  cashOut(): void {
+    if (this.state !== 'playing') return;
+    if (this.currentRow === 0) return;
+    this.setState('cashed_out');
   }
 
-  resize(width: number, height: number) {
-    const aspect = width / height;
-    const fs = 22;
-    this.camera.left = -fs * aspect / 2;
-    this.camera.right = fs * aspect / 2;
-    this.camera.top = fs / 2;
-    this.camera.bottom = -fs / 2;
-    this.camera.updateProjectionMatrix();
-    this.renderer.setSize(width, height);
+  setDifficulty(d: Difficulty): void {
+    this.difficulty = d;
+    this.updateSigns();
   }
 
-  dispose() {
+  setAutoCashoutTarget(mult: number): void {
+    this.autoCashoutTarget = mult;
+  }
+
+  resize(width: number, height: number): void {
+    resizeScene(this.sceneElements, width, height);
+  }
+
+  dispose(): void {
     this.disposed = true;
-    cancelAnimationFrame(this.animId);
-    this.renderer.dispose();
+    cancelAnimationFrame(this.animFrameId);
+
+    this.lanes.forEach((lane) => {
+      lane.vehicles.forEach((v) => this.sceneElements.scene.remove(v));
+      if (lane.goldenEggMesh) this.sceneElements.scene.remove(lane.goldenEggMesh);
+    });
+
+    this.sceneElements.scene.remove(this.chicken);
+    if (this.explosionGroup) this.sceneElements.scene.remove(this.explosionGroup);
+
+    this.sceneElements.renderer.dispose();
+
+    this.sceneElements.scene.traverse((object) => {
+      if (object instanceof THREE.Mesh) {
+        object.geometry?.dispose();
+        if (Array.isArray(object.material)) {
+          object.material.forEach((m: THREE.Material) => m.dispose());
+        } else if (object.material) {
+          (object.material as THREE.Material).dispose();
+        }
+      }
+    });
   }
 
-  // ── Jump completion ────────────────────────────────────────────────────────
+  // ─── LOGIQUE INTERNE ────────────────────────────────────────────
+  private setState(state: GameState): void {
+    this.state = state;
+    this.callbacks.onStateChange(state);
+  }
 
-  private completeJump() {
-    this.isJumping = false;
-    const cfg = DIFF_CONFIG[this.difficulty];
-    const targetLane = this.currentLane + 1;
-
-    const survived = Math.random() < cfg.survivalProb;
+  private completeJump(): void {
+    this.currentRow++;
+    const laneIndex = this.currentRow - 1;
+    const survived  = this.laneOutcomes[laneIndex];
 
     if (!survived) {
-      this.state = 'dead';
-      playHonk();
-      setTimeout(() => playCrash(), 90);
-      this.screenShake = 1.0;
-      this.explosion = createExplosionParticles(this.chicken.position.clone());
-      this.scene.add(this.explosion);
-      this.chicken.visible = false;
-      this.chickenShadow.visible = false;
-      this.callbacks.onStateChange('dead');
+      this.die();
       return;
     }
 
-    // Survived
-    this.currentLane = targetLane;
-    playStep();
-    this.addBarrier(this.getLaneX(this.currentLane));
+    this.multiplier = computeMultiplier(this.difficulty, this.currentRow);
 
-    if (this.currentLane >= cfg.totalLanes) {
-      // Won — crossed all lanes
-      this.multiplier = computeMultiplier(this.difficulty, cfg.totalLanes);
-      this.callbacks.onMultiplierChange(this.multiplier);
-      this.state = 'won';
-      this.callbacks.onStateChange('won');
-      playFanfare();
-      return;
-    }
+    const lane = this.lanes[laneIndex];
+    this.collectGoldenEgg(lane);
 
-    this.multiplier = computeMultiplier(this.difficulty, this.currentLane);
     this.callbacks.onMultiplierChange(this.multiplier);
-    this.callbacks.onRowChange(this.currentLane);
-    this.state = 'playing';
+    this.callbacks.onRowChange(this.currentRow);
 
-    // Check auto-cashout
+    resetChickenTransform(this.chicken);
+    this.chicken.rotation.y = Math.PI;
+    this.isJumping = false;
+
     if (this.autoCashoutTarget > 0 && this.multiplier >= this.autoCashoutTarget) {
-      this.callbacks.onAutoCashout?.();
+      this.setState('cashed_out');
+      this.callbacks.onAutoCashout();
+      return;
     }
 
-    // Danger sound on last quarter of road
-    if (this.currentLane >= Math.floor(cfg.totalLanes * 0.75)) {
-      playDanger();
+    const totalLanes = DIFF_CONFIG[this.difficulty].totalLanes;
+    if (this.currentRow >= totalLanes) {
+      this.chicken.position.z = FINISH_Z;
+      this.setState('won');
+      return;
     }
+
+    this.setState('playing');
   }
 
-  // ── Animate loop ───────────────────────────────────────────────────────────
+  private die(): void {
+    this.setState('dead');
+    this.isJumping = false;
 
-  private animate = () => {
+    const pos = this.chicken.position.clone();
+    this.explosionGroup = createExplosionParticles(pos);
+    this.sceneElements.scene.add(this.explosionGroup);
+
+    this.chicken.visible = false;
+  }
+
+  // ─── BOUCLE RAF ─────────────────────────────────────────────────
+  private animate = (): void => {
     if (this.disposed) return;
-    this.animId = requestAnimationFrame(this.animate);
-    const delta = Math.min(this.clock.getDelta(), 0.05);
-    const time = this.clock.elapsedTime;
+    this.animFrameId = requestAnimationFrame(this.animate);
 
-    // Move vehicles
-    this.vehicles.forEach(v => {
-      v.mesh.position.z += v.speed * delta;
-      if (v.mesh.position.z > ROAD_LENGTH / 2 + 6) v.mesh.position.z = -ROAD_LENGTH / 2 - 6;
-      if (v.mesh.position.z < -ROAD_LENGTH / 2 - 6) v.mesh.position.z = ROAD_LENGTH / 2 + 6;
+    const delta = Math.min(this.clock.getDelta(), 0.05);
+    this.time  += delta;
+
+    updateScene(this.sceneElements, this.time, delta);
+    this.updateVehicles(delta);
+
+    this.lanes.forEach((lane) => {
+      if (lane.goldenEggMesh) updateGoldenEgg(lane.goldenEggMesh, this.time);
     });
 
-    // Screen shake
-    if (this.screenShake > 0) {
-      this.screenShake = Math.max(0, this.screenShake - delta * 4.5);
-      const cfg = DIFF_CONFIG[this.difficulty];
-      const cx = (cfg.totalLanes * LANE_WIDTH) / 2;
-      const sx = (Math.random() - 0.5) * this.screenShake * 0.45;
-      const sy = (Math.random() - 0.5) * this.screenShake * 0.25;
-      this.camera.position.set(cx + 10 + sx, 17 + sy, 10);
-    }
+    this.updateChicken(delta);
 
-    // Chicken animations
-    if (this.chicken?.visible) {
-      if (this.isJumping) {
-        const dur = 0.28;
-        this.jumpProgress += delta / dur;
-        if (this.jumpProgress >= 1) {
-          this.jumpProgress = 1;
-          this.chicken.position.x = this.jumpEndX;
-          this.chicken.position.y = 0;
-          this.chicken.scale.set(1.15, 1.15, 1.15);
-          this.chicken.rotation.z = 0;
-          this.chickenShadow.position.x = this.jumpEndX;
-          this.chickenShadow.scale.set(1, 1.35, 1);
-          (this.chickenShadow.material as THREE.MeshBasicMaterial).opacity = 0.28;
-          this.completeJump();
-        } else {
-          const t = this.jumpProgress;
-          const f = Math.min(Math.floor(t * 8), 7);
-          const jumpH = [0, 0.28, 0.65, 1.0, 1.0, 0.65, 0.28, 0.04];
-          const squash  = [1, 0.84, 0.88, 1.0, 1.06, 1.12, 0.91, 0.97];
-          const stretch = [1, 1.22, 1.18, 1.0, 0.90, 0.86, 1.12, 1.04];
-          const height = jumpH[f] * 1.6;
-          this.chicken.position.x = this.jumpStartX + (this.jumpEndX - this.jumpStartX) * t;
-          this.chicken.position.y = height;
-          this.chicken.scale.set(1.15 * squash[f], 1.15 * stretch[f], 1.15);
-          // Wing flap
-          const wing = Math.sin(t * Math.PI * 7) * 0.55;
-          this.chicken.children.forEach(c => {
-            if (c.position.x < -0.3 && c.position.y > 0.3 && c.position.y < 0.7) c.rotation.z = wing;
-            if (c.position.x > 0.3 && c.position.y > 0.3 && c.position.y < 0.7) c.rotation.z = -wing;
-          });
-          this.chickenShadow.position.x = this.chicken.position.x;
-          const ss = Math.max(0.35, 1 - height / 2.2);
-          this.chickenShadow.scale.set(ss, ss * 1.35, 1);
-          (this.chickenShadow.material as THREE.MeshBasicMaterial).opacity = 0.28 * ss;
-        }
-      } else if (this.state === 'playing' || this.state === 'idle') {
-        this.chicken.position.y = Math.sin(time * 3.2) * 0.03;
-        // Head bob
-        this.chicken.children.forEach(c => {
-          if (c.position.z > 0.2 && c.position.y > 0.8) c.rotation.y = Math.sin(time * 2.2) * 0.1;
-        });
-      } else if (this.state === 'won') {
-        this.chicken.position.y = Math.abs(Math.sin(time * 9)) * 0.45;
-        this.chicken.rotation.y = Math.PI / 2 + Math.sin(time * 5) * 0.35;
-      } else if (this.state === 'cashed_out') {
-        this.chicken.position.y = Math.sin(time * 3.5) * 0.09;
+    if (this.explosionGroup) {
+      const done = updateExplosion(this.explosionGroup, delta);
+      if (done) {
+        this.sceneElements.scene.remove(this.explosionGroup);
+        this.explosionGroup = null;
       }
     }
 
-    // Explosion
-    if (this.explosion) {
-      if (!updateExplosion(this.explosion, delta)) {
-        this.scene.remove(this.explosion);
-        this.explosion = null;
-      }
-    }
+    this.sceneElements.renderer.render(
+      this.sceneElements.scene,
+      this.sceneElements.camera
+    );
+  };
 
-    // Pulse next-lane multiplier sign
-    if (this.state === 'playing' && !this.isJumping) {
-      const nextIdx = this.currentLane + 1;
-      this.multiplierSigns.forEach((s, i) => {
-        if (i === nextIdx) {
-          s.scale.setScalar(1 + Math.sin(time * 5.5) * 0.1);
-        } else {
-          s.scale.setScalar(1);
+  private updateVehicles(delta: number): void {
+    this.lanes.forEach((lane) => {
+      lane.vehicles.forEach((vehicle) => {
+        vehicle.position.x += lane.direction * (vehicle.userData.speed as number) * delta;
+      });
+
+      lane.vehicles.forEach((vehicle) => {
+        const halfW = ((vehicle.userData.width as number) || 1.6) / 2;
+        if (lane.direction === 1 && vehicle.position.x > VEHICLE_DESPAWN_X + halfW) {
+          vehicle.position.x = -VEHICLE_SPAWN_X - halfW;
+        } else if (lane.direction === -1 && vehicle.position.x < -VEHICLE_DESPAWN_X - halfW) {
+          vehicle.position.x = VEHICLE_SPAWN_X + halfW;
         }
       });
-    }
 
-    this.renderer.render(this.scene, this.camera);
-  };
+      lane.spawnTimer += delta;
+      if (lane.spawnTimer >= lane.spawnInterval) {
+        lane.spawnTimer    = 0;
+        lane.spawnInterval = this.getSpawnInterval(lane.baseSpeed);
+        if (lane.vehicles.length < 8) {
+          this.spawnNewVehicle(lane);
+        }
+      }
+    });
+  }
+
+  private updateChicken(delta: number): void {
+    switch (this.state) {
+      case 'idle':
+      case 'playing':
+        animateChickenIdle(this.chicken, this.time);
+        break;
+
+      case 'jumping': {
+        this.jumpElapsed  += delta;
+        this.jumpProgress  = Math.min(1, this.jumpElapsed / JUMP_DURATION);
+
+        const z = this.jumpStartZ + (this.jumpTargetZ - this.jumpStartZ) * this.jumpProgress;
+        this.chicken.position.z = z;
+
+        animateChickenJump(this.chicken, this.jumpProgress, this.time);
+
+        if (this.jumpProgress >= 1) {
+          this.chicken.position.z = this.jumpTargetZ;
+          this.completeJump();
+        }
+        break;
+      }
+
+      case 'won':
+        animateChickenVictory(this.chicken, this.time, delta);
+        break;
+
+      case 'cashed_out':
+        animateChickenIdle(this.chicken, this.time);
+        break;
+
+      case 'dead':
+        break;
+    }
+  }
 }
