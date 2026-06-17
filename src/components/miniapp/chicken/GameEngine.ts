@@ -1,12 +1,13 @@
-// GameEngine.ts — Chicken Road TonCipher
-// Livré par l'IA 3D, validé par Claude.ai
-// ✅ CORRECTION APPLIQUÉE : rotation des véhicules corrigée dans spawnInitialVehicles et spawnNewVehicle
+// GameEngine.ts — Chicken Road TonCipher — Version 3
+// Vue du dessus, voies verticales, poulet avance vers la droite
+// ✅ CORRECTION : directions des voies alternées
 
 import * as THREE from 'three';
 import {
   createScene,
   updateScene,
-  updateMultiplierSigns,
+  updateMultiplierBadges,
+  setBadgeVisible,
   resizeScene,
   SceneElements,
 } from './scene';
@@ -63,18 +64,16 @@ interface GameCallbacks {
 }
 
 interface LaneConfig {
-  z: number;
+  x: number;
   direction: number;
   baseSpeed: number;
-  vehicleType: string;
 }
 
 interface Lane {
-  z: number;
+  x: number;
   direction: number;
   baseSpeed: number;
   vehicles: THREE.Group[];
-  safe: boolean;
   hasGoldenEgg: boolean;
   goldenEggMesh: THREE.Group | null;
   spawnTimer: number;
@@ -82,18 +81,20 @@ interface Lane {
   laneIndex: number;
 }
 
+// ✅ CORRECTION APPLIQUÉE : directions alternées comme dans le vrai jeu
+// -1 = descend (haut → bas), +1 = monte (bas → haut)
 const LANE_CONFIGS: LaneConfig[] = [
-  { z:  3.0, direction: -1, baseSpeed: 4.0, vehicleType: 'car'   },
-  { z:  1.0, direction:  1, baseSpeed: 3.2, vehicleType: 'car'   },
-  { z: -1.0, direction: -1, baseSpeed: 5.0, vehicleType: 'car'   },
-  { z: -3.0, direction:  1, baseSpeed: 2.8, vehicleType: 'truck' },
-  { z: -5.0, direction: -1, baseSpeed: 4.5, vehicleType: 'car'   },
+  { x: -4.0, direction: -1, baseSpeed: 4.0 },
+  { x: -2.0, direction:  1, baseSpeed: 3.2 },
+  { x:  0.0, direction: -1, baseSpeed: 5.0 },
+  { x:  2.0, direction:  1, baseSpeed: 2.8 },
+  { x:  4.0, direction: -1, baseSpeed: 4.5 },
 ];
 
-const CHICKEN_START_Z  = 5.5;
-const FINISH_Z         = -7.0;
-const VEHICLE_DESPAWN_X = 16;
-const VEHICLE_SPAWN_X   = 15;
+const CHICKEN_START_X   =  -6.0;
+const FINISH_X          =   6.0;
+const VEHICLE_SPAWN_Y   =   8.0;
+const VEHICLE_DESPAWN_Y =  -8.5;
 
 export class GameEngine {
   private callbacks:     GameCallbacks;
@@ -103,17 +104,17 @@ export class GameEngine {
   private lanes:          Lane[];
   private explosionGroup: THREE.Group | null = null;
 
-  private state:              GameState  = 'idle';
-  private difficulty:         Difficulty = 'medium';
-  private currentRow          = 0;
-  private multiplier          = 1.0;
-  private autoCashoutTarget   = 0;
+  private state:            GameState  = 'idle';
+  private difficulty:       Difficulty = 'medium';
+  private currentRow        = 0;
+  private multiplier        = 1.0;
+  private autoCashoutTarget = 0;
 
-  private isJumping     = false;
-  private jumpStartZ    = 0;
-  private jumpTargetZ   = 0;
-  private jumpProgress  = 0;
-  private jumpElapsed   = 0;
+  private isJumping    = false;
+  private jumpStartX   = 0;
+  private jumpTargetX  = 0;
+  private jumpProgress = 0;
+  private jumpElapsed  = 0;
 
   private laneOutcomes: boolean[] = [];
 
@@ -130,9 +131,8 @@ export class GameEngine {
     this.sceneElements = createScene(canvas);
 
     this.chicken = createChicken();
-    this.chicken.position.set(0, 0, CHICKEN_START_Z);
-    this.chicken.userData.baseY = 0;
-    this.chicken.rotation.y = Math.PI;
+    this.chicken.position.set(CHICKEN_START_X, 0, 0);
+    this.chicken.userData.baseZ = 0;
     this.sceneElements.scene.add(this.chicken);
 
     this.lanes = this.createLanes();
@@ -143,14 +143,12 @@ export class GameEngine {
     this.resize(canvas.clientWidth, canvas.clientHeight);
   }
 
-  // ─── CRÉATION DES LANES ────────────────────────────────────────
   private createLanes(): Lane[] {
     return LANE_CONFIGS.map((cfg, index) => ({
-      z:             cfg.z,
+      x:             cfg.x,
       direction:     cfg.direction,
       baseSpeed:     cfg.baseSpeed,
       vehicles:      [],
-      safe:          true,
       hasGoldenEgg:  false,
       goldenEggMesh: null,
       spawnTimer:    0,
@@ -160,28 +158,21 @@ export class GameEngine {
   }
 
   private getSpawnInterval(baseSpeed: number): number {
-    return 2.5 / (baseSpeed / 3.5) + Math.random() * 0.5;
+    return 2.5 / (baseSpeed / 3.5) + Math.random() * 0.6;
   }
 
-  // ─── SPAWN VÉHICULES ────────────────────────────────────────────
-  // ✅ CORRECTION : rotation corrigée pour que les véhicules regardent
-  //    dans leur direction de déplacement.
-  //    direction  1 (droite) → rotation.y = -PI/2
-  //    direction -1 (gauche) → rotation.y =  PI/2
   private spawnInitialVehicles(lane: Lane): void {
-    const count   = 3 + Math.floor(Math.random() * 3);
-    const spacing = (VEHICLE_SPAWN_X * 2) / count;
+    const count   = 2 + Math.floor(Math.random() * 2);
+    const spacing = 16 / count;
 
     for (let i = 0; i < count; i++) {
-      const vehicle = spawnVehicle(lane.laneIndex);
-      const x = -VEHICLE_SPAWN_X + i * spacing + (Math.random() - 0.5) * spacing * 0.5;
-      vehicle.position.set(x, 0, lane.z);
+      const vehicle  = spawnVehicle(lane.laneIndex);
+      const y        = VEHICLE_SPAWN_Y - i * spacing + (Math.random() - 0.5) * 1.5;
+      vehicle.position.set(lane.x, y, 0);
       vehicle.userData.speed = lane.baseSpeed * (0.85 + Math.random() * 0.35);
 
       if (lane.direction === 1) {
-        vehicle.rotation.y = -Math.PI / 2;
-      } else {
-        vehicle.rotation.y = Math.PI / 2;
+        vehicle.rotation.z = Math.PI;
       }
 
       this.sceneElements.scene.add(vehicle);
@@ -191,25 +182,24 @@ export class GameEngine {
 
   private spawnNewVehicle(lane: Lane): void {
     const vehicle = spawnVehicle(lane.laneIndex);
-    const halfW   = ((vehicle.userData.width as number) || 2) / 2;
-    const startX  = lane.direction === 1
-      ? -VEHICLE_SPAWN_X - halfW
-      :  VEHICLE_SPAWN_X + halfW;
+    const length  = (vehicle.userData.length as number) || 2;
 
-    vehicle.position.set(startX, 0, lane.z);
+    const startY =
+      lane.direction === -1
+        ? VEHICLE_SPAWN_Y + length
+        : VEHICLE_DESPAWN_Y - length;
+
+    vehicle.position.set(lane.x, startY, 0);
     vehicle.userData.speed = lane.baseSpeed * (0.85 + Math.random() * 0.35);
 
     if (lane.direction === 1) {
-      vehicle.rotation.y = -Math.PI / 2;
-    } else {
-      vehicle.rotation.y = Math.PI / 2;
+      vehicle.rotation.z = Math.PI;
     }
 
     this.sceneElements.scene.add(vehicle);
     lane.vehicles.push(vehicle);
   }
 
-  // ─── GOLDEN EGG ────────────────────────────────────────────────
   private setupGoldenEggs(): void {
     this.lanes.forEach((lane) => {
       if (lane.goldenEggMesh) {
@@ -221,7 +211,8 @@ export class GameEngine {
       if (Math.random() < 0.08) {
         lane.hasGoldenEgg = true;
         const egg = createGoldenEgg();
-        egg.position.set(0, 0.5, lane.z);
+        egg.position.set(lane.x, 4.5, 0.3);
+        egg.userData.baseZ = 0.3;
         this.sceneElements.scene.add(egg);
         lane.goldenEggMesh = egg;
       }
@@ -241,17 +232,15 @@ export class GameEngine {
     }
   }
 
-  // ─── PANNEAUX ──────────────────────────────────────────────────
   private updateSigns(): void {
     const labels: string[] = [];
     for (let i = 1; i <= 5; i++) {
       const m = computeMultiplier(this.difficulty, i);
       labels.push('×' + m.toFixed(2));
     }
-    updateMultiplierSigns(this.sceneElements, labels);
+    updateMultiplierBadges(this.sceneElements, labels);
   }
 
-  // ─── API PUBLIQUE ───────────────────────────────────────────────
   startGame(): void {
     if (
       this.state !== 'idle' &&
@@ -272,10 +261,13 @@ export class GameEngine {
     }
 
     this.chicken.visible = true;
-    this.chicken.position.set(0, 0, CHICKEN_START_Z);
-    this.chicken.userData.baseY = 0;
+    this.chicken.position.set(CHICKEN_START_X, 0, 0);
+    this.chicken.userData.baseZ = 0;
     resetChickenTransform(this.chicken);
-    this.chicken.rotation.y = Math.PI;
+
+    for (let i = 0; i < 5; i++) {
+      setBadgeVisible(this.sceneElements, i, true);
+    }
 
     const config = DIFF_CONFIG[this.difficulty];
     this.laneOutcomes = [];
@@ -285,8 +277,8 @@ export class GameEngine {
 
     this.lanes.forEach((lane) => {
       lane.vehicles.forEach((v) => this.sceneElements.scene.remove(v));
-      lane.vehicles    = [];
-      lane.spawnTimer  = 0;
+      lane.vehicles   = [];
+      lane.spawnTimer = 0;
       this.spawnInitialVehicles(lane);
     });
 
@@ -304,13 +296,13 @@ export class GameEngine {
     const totalLanes = DIFF_CONFIG[this.difficulty].totalLanes;
     if (this.currentRow >= totalLanes) return;
 
-    this.isJumping   = true;
-    this.jumpElapsed = 0;
+    this.isJumping    = true;
+    this.jumpElapsed  = 0;
     this.jumpProgress = 0;
 
     const targetLaneIndex = this.currentRow;
-    this.jumpStartZ = this.chicken.position.z;
-    this.jumpTargetZ = LANE_CONFIGS[targetLaneIndex].z;
+    this.jumpStartX  = this.chicken.position.x;
+    this.jumpTargetX = LANE_CONFIGS[targetLaneIndex].x;
 
     this.setState('jumping');
   }
@@ -360,7 +352,6 @@ export class GameEngine {
     });
   }
 
-  // ─── LOGIQUE INTERNE ────────────────────────────────────────────
   private setState(state: GameState): void {
     this.state = state;
     this.callbacks.onStateChange(state);
@@ -381,11 +372,12 @@ export class GameEngine {
     const lane = this.lanes[laneIndex];
     this.collectGoldenEgg(lane);
 
+    setBadgeVisible(this.sceneElements, laneIndex, false);
+
     this.callbacks.onMultiplierChange(this.multiplier);
     this.callbacks.onRowChange(this.currentRow);
 
     resetChickenTransform(this.chicken);
-    this.chicken.rotation.y = Math.PI;
     this.isJumping = false;
 
     if (this.autoCashoutTarget > 0 && this.multiplier >= this.autoCashoutTarget) {
@@ -396,7 +388,7 @@ export class GameEngine {
 
     const totalLanes = DIFF_CONFIG[this.difficulty].totalLanes;
     if (this.currentRow >= totalLanes) {
-      this.chicken.position.z = FINISH_Z;
+      this.chicken.position.x = FINISH_X;
       this.setState('won');
       return;
     }
@@ -409,13 +401,13 @@ export class GameEngine {
     this.isJumping = false;
 
     const pos = this.chicken.position.clone();
+    pos.z = 0.5;
     this.explosionGroup = createExplosionParticles(pos);
     this.sceneElements.scene.add(this.explosionGroup);
 
     this.chicken.visible = false;
   }
 
-  // ─── BOUCLE RAF ─────────────────────────────────────────────────
   private animate = (): void => {
     if (this.disposed) return;
     this.animFrameId = requestAnimationFrame(this.animate);
@@ -449,15 +441,16 @@ export class GameEngine {
   private updateVehicles(delta: number): void {
     this.lanes.forEach((lane) => {
       lane.vehicles.forEach((vehicle) => {
-        vehicle.position.x += lane.direction * (vehicle.userData.speed as number) * delta;
+        vehicle.position.y +=
+          lane.direction * (vehicle.userData.speed as number) * delta;
       });
 
       lane.vehicles.forEach((vehicle) => {
-        const halfW = ((vehicle.userData.width as number) || 1.6) / 2;
-        if (lane.direction === 1 && vehicle.position.x > VEHICLE_DESPAWN_X + halfW) {
-          vehicle.position.x = -VEHICLE_SPAWN_X - halfW;
-        } else if (lane.direction === -1 && vehicle.position.x < -VEHICLE_DESPAWN_X - halfW) {
-          vehicle.position.x = VEHICLE_SPAWN_X + halfW;
+        const length = ((vehicle.userData.length as number) || 2) / 2;
+        if (lane.direction === -1 && vehicle.position.y < VEHICLE_DESPAWN_Y - length) {
+          vehicle.position.y = VEHICLE_SPAWN_Y + length;
+        } else if (lane.direction === 1 && vehicle.position.y > VEHICLE_SPAWN_Y + length) {
+          vehicle.position.y = VEHICLE_DESPAWN_Y - length;
         }
       });
 
@@ -465,7 +458,7 @@ export class GameEngine {
       if (lane.spawnTimer >= lane.spawnInterval) {
         lane.spawnTimer    = 0;
         lane.spawnInterval = this.getSpawnInterval(lane.baseSpeed);
-        if (lane.vehicles.length < 8) {
+        if (lane.vehicles.length < 5) {
           this.spawnNewVehicle(lane);
         }
       }
@@ -483,13 +476,13 @@ export class GameEngine {
         this.jumpElapsed  += delta;
         this.jumpProgress  = Math.min(1, this.jumpElapsed / JUMP_DURATION);
 
-        const z = this.jumpStartZ + (this.jumpTargetZ - this.jumpStartZ) * this.jumpProgress;
-        this.chicken.position.z = z;
+        const x = this.jumpStartX + (this.jumpTargetX - this.jumpStartX) * this.jumpProgress;
+        this.chicken.position.x = x;
 
         animateChickenJump(this.chicken, this.jumpProgress, this.time);
 
         if (this.jumpProgress >= 1) {
-          this.chicken.position.z = this.jumpTargetZ;
+          this.chicken.position.x = this.jumpTargetX;
           this.completeJump();
         }
         break;

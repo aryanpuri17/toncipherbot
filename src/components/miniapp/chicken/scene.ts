@@ -349,8 +349,9 @@ export function createScene(canvas: HTMLCanvasElement): SceneElements {
     0.1,
     100
   );
-  camera.position.set(0, 20, 10);
-  camera.lookAt(0, 0, -3);
+  // Vue du dessus — plan X/Y, Z = haut
+  camera.position.set(0, 0, 20);
+  camera.lookAt(0, 0, 0);
 
   const sun = new THREE.DirectionalLight(0xfff5e0, 1.8);
   sun.position.set(5, 10, 5);
@@ -583,6 +584,23 @@ export function updateMultiplierSigns(
       texture.needsUpdate = true;
     }
   });
+}
+
+export function updateMultiplierBadges(
+  elements: SceneElements,
+  multipliers: string[]
+): void {
+  updateMultiplierSigns(elements, multipliers);
+}
+
+export function setBadgeVisible(
+  elements: SceneElements,
+  index: number,
+  visible: boolean
+): void {
+  if (index >= 0 && index < elements.multiplierSigns.length) {
+    elements.multiplierSigns[index].visible = visible;
+  }
 }
 
 export function resizeScene(
