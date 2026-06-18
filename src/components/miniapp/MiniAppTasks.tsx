@@ -3,6 +3,7 @@ import { useAppStore } from '../../store/appStore';
 import {
   Hash, Users, Bot, Calendar, Star, CheckCircle, ExternalLink, Plus,
   AlertCircle, Flame, Loader2, ShieldCheck, Clock, FileText, Send, X, RotateCcw,
+  Play, Globe,
 } from 'lucide-react';
 import { haptic } from '../../lib/haptics';
 
@@ -143,6 +144,8 @@ const typeConfig: Record<string, { icon: React.ReactNode; color: string; label: 
   start_bot:    { icon: <Bot className="w-4 h-4" />,      color: 'bg-cyan-500/20 text-cyan-400',     label: 'Bot' },
   daily:        { icon: <Calendar className="w-4 h-4" />, color: 'bg-amber-500/20 text-amber-400',   label: 'Quotidien' },
   special:      { icon: <Star className="w-4 h-4" />,     color: 'bg-pink-500/20 text-pink-400',     label: 'Spécial' },
+  watch_video:  { icon: <Play className="w-4 h-4" />,     color: 'bg-red-500/20 text-red-400',       label: 'Vidéo' },
+  social:       { icon: <Globe className="w-4 h-4" />,    color: 'bg-orange-500/20 text-orange-400', label: 'Social' },
 };
 
 const SECTIONS: { type: string; label: string; icon: string; creatable: boolean; groupBefore?: string; color: string }[] = [
@@ -157,6 +160,8 @@ type TaskPhase = 'idle' | 'too_early' | 'ready' | 'verifying' | 'not_subscribed'
 
 const REQUIRED_MS         = 30_000; // bots: 30s
 const CHANNEL_REQUIRED_MS = 5_000;  // channels/groups: 5s
+const VIDEO_REQUIRED_MS   = 20_000; // videos: 20s
+const SOCIAL_REQUIRED_MS  = 5_000;  // social follow/like: 5s
 const departKey = (id: string) => `tc_task_depart_${id}`;
 
 type DepartEntry = { ts: number; ms: number };
@@ -181,6 +186,8 @@ const COLORS: Record<string, { glow: string; bg: string }> = {
   start_bot:    { glow: '#06b6d4', bg: 'rgba(6,182,212,0.12)' },
   daily:        { glow: '#f59e0b', bg: 'rgba(245,158,11,0.12)' },
   special:      { glow: '#ec4899', bg: 'rgba(236,72,153,0.12)' },
+  watch_video:  { glow: '#ef4444', bg: 'rgba(239,68,68,0.12)' },
+  social:       { glow: '#f97316', bg: 'rgba(249,115,22,0.12)' },
 };
 
 const getColors = (type: string) => COLORS[type] ?? { glow: '#8b5cf6', bg: 'rgba(139,92,246,0.12)' };
@@ -415,7 +422,7 @@ export const MiniAppTasks: React.FC = () => {
 
   const handleJoin = (card: CardTask) => {
     if (!card.targetUrl) return;
-    const waitMs  = card.type === 'start_bot' ? REQUIRED_MS : CHANNEL_REQUIRED_MS;
+    const waitMs  = card.type === 'start_bot' ? REQUIRED_MS : card.type === 'watch_video' ? VIDEO_REQUIRED_MS : card.type === 'social' ? SOCIAL_REQUIRED_MS : CHANNEL_REQUIRED_MS;
     const autoKey = `depart_auto_${card.id}`;
     if (timerRefs.current[autoKey]) { clearTimeout(timerRefs.current[autoKey]); delete timerRefs.current[autoKey]; }
     localStorage.setItem(departKey(card.id), JSON.stringify({ ts: Date.now(), ms: waitMs }));
@@ -450,7 +457,7 @@ export const MiniAppTasks: React.FC = () => {
 
     if (card.targetUrl) openUrl(card.targetUrl);
 
-    const waitMs  = card.type === 'start_bot' ? REQUIRED_MS : CHANNEL_REQUIRED_MS;
+    const waitMs  = card.type === 'start_bot' ? REQUIRED_MS : card.type === 'watch_video' ? VIDEO_REQUIRED_MS : card.type === 'social' ? SOCIAL_REQUIRED_MS : CHANNEL_REQUIRED_MS;
     const autoKey = `depart_auto_${card.id}`;
     if (timerRefs.current[autoKey]) { clearTimeout(timerRefs.current[autoKey]); delete timerRefs.current[autoKey]; }
     localStorage.setItem(departKey(card.id), JSON.stringify({ ts: Date.now(), ms: waitMs }));
@@ -537,7 +544,7 @@ export const MiniAppTasks: React.FC = () => {
 
   // ── Filter state ─────────────────────────────────────────────────────────────
 
-  const [activeFilter, setActiveFilter] = React.useState<'all' | 'daily' | 'special' | 'channel' | 'bot'>('all');
+  const [activeFilter, setActiveFilter] = React.useState<'all' | 'daily' | 'special' | 'channel' | 'bot' | 'video' | 'social'>('all');
 
   // ── Card renderer ────────────────────────────────────────────────────────────
 
@@ -562,8 +569,20 @@ export const MiniAppTasks: React.FC = () => {
     const actionLabel = card.type === 'join_channel' || card.type === 'join_group'
       ? 'Rejoindre'
       : card.type === 'start_bot'
-      ? 'Lancer'
+      ? 'Démarrer'
+      : card.type === 'watch_video'
+      ? 'Regarder'
+      : card.type === 'social'
+      ? 'Suivre'
       : 'Faire';
+
+    const notSubbedMsg = card.type === 'start_bot'
+      ? "Bot non démarré — envoyez /start d'abord."
+      : card.type === 'watch_video'
+      ? 'Non détecté — regardez la vidéo jusqu\'à la fin.'
+      : card.type === 'social'
+      ? 'Action non détectée — effectuez l\'action puis réessayez.'
+      : 'Abonnement non détecté — rejoignez d\'abord.';
 
     const isBot     = card.type === 'start_bot';
     const notSubbed = phase === 'not_subscribed';
@@ -771,7 +790,7 @@ export const MiniAppTasks: React.FC = () => {
               }}>
                 <AlertCircle style={{ width: 13, height: 13, color: '#f87171', flexShrink: 0 }} />
                 <p style={{ fontSize: 10, color: '#f87171', margin: 0 }}>
-                  {isBot ? "Bot non démarré — envoyez /start d'abord." : "Abonnement non détecté — rejoignez d'abord."}
+                  {notSubbedMsg}
                 </p>
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
@@ -854,6 +873,8 @@ export const MiniAppTasks: React.FC = () => {
       case 'special': return allCards.filter(c => c.type === 'special');
       case 'channel': return allCards.filter(c => c.type === 'join_channel' || c.type === 'join_group');
       case 'bot':     return allCards.filter(c => c.type === 'start_bot');
+      case 'video':   return allCards.filter(c => c.type === 'watch_video');
+      case 'social':  return allCards.filter(c => c.type === 'social');
       default:        return allCards;
     }
   };
@@ -905,12 +926,16 @@ export const MiniAppTasks: React.FC = () => {
         {/* Filter tabs */}
         <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 2 }}>
           {([
-            { key: 'all',     label: 'Toutes',       count: allCards.length },
-            { key: 'daily',   label: '📅 Quotidien', count: allCards.filter(c => c.type === 'daily').length },
-            { key: 'special', label: '⭐ Spécial',   count: allCards.filter(c => c.type === 'special').length + promoTasks.length },
-            { key: 'channel', label: '📢 Canaux',    count: allCards.filter(c => c.type === 'join_channel' || c.type === 'join_group').length },
-            { key: 'bot',     label: '🤖 Bots',      count: allCards.filter(c => c.type === 'start_bot').length },
-          ] as { key: typeof activeFilter; label: string; count: number }[]).map(f => (
+            { key: 'all',     label: 'Toutes',       count: allCards.length,                                                               always: true },
+            { key: 'daily',   label: '📅 Quotidien', count: allCards.filter(c => c.type === 'daily').length,                               always: true },
+            { key: 'special', label: '⭐ Spécial',   count: allCards.filter(c => c.type === 'special').length + promoTasks.length,         always: true },
+            { key: 'channel', label: '📢 Canaux',    count: allCards.filter(c => c.type === 'join_channel' || c.type === 'join_group').length, always: true },
+            { key: 'bot',     label: '🤖 Bots',      count: allCards.filter(c => c.type === 'start_bot').length,                          always: true },
+            { key: 'video',   label: '▶️ Vidéos',    count: allCards.filter(c => c.type === 'watch_video').length,                        always: false },
+            { key: 'social',  label: '🌐 Social',    count: allCards.filter(c => c.type === 'social').length,                             always: false },
+          ] as { key: typeof activeFilter; label: string; count: number; always: boolean }[])
+          .filter(f => f.always || f.count > 0)
+          .map(f => (
             <button
               key={f.key}
               onClick={() => setActiveFilter(f.key)}
