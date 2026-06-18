@@ -35,7 +35,6 @@ export const MiniAppCreateTask: React.FC = () => {
   const workerReward = parseFloat((priceFixed * (1 - feeRate)).toFixed(6));
   const platformFee  = totalCost * feeRate;
   const currentTypeConf = TASK_TYPES.find(t => t.value === type)!;
-  const needsAdmin      = currentTypeConf.isTelegram && (type === 'join_channel' || type === 'join_group');
 
   const handleSubmit = async () => {
     setError('');
@@ -180,13 +179,31 @@ export const MiniAppCreateTask: React.FC = () => {
           })}
         </div>
 
-        {needsAdmin && (
+        {type === 'join_channel' && (
           <div className="flex items-start gap-2.5 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
             <Info className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
             <p className="text-xs text-amber-300 leading-relaxed">
               Pour vérifier les abonnements, ajoutez{' '}
               <span className="font-semibold text-amber-200">@{botName}</span>{' '}
-              comme administrateur de votre {type === 'join_channel' ? 'canal' : 'groupe'}.
+              comme administrateur de votre canal.
+            </p>
+          </div>
+        )}
+        {type === 'join_group' && (
+          <div className="flex items-start gap-2.5 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
+            <Info className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
+            <p className="text-xs text-amber-300 leading-relaxed">
+              Pour vérifier les membres, ajoutez{' '}
+              <span className="font-semibold text-amber-200">@{botName}</span>{' '}
+              comme administrateur de votre groupe.
+            </p>
+          </div>
+        )}
+        {type === 'start_bot' && (
+          <div className="flex items-start gap-2.5 p-3 rounded-xl bg-cyan-500/10 border border-cyan-500/20">
+            <Info className="w-4 h-4 text-cyan-400 flex-shrink-0 mt-0.5" />
+            <p className="text-xs text-cyan-300 leading-relaxed">
+              Entrez le lien de votre bot Telegram. Les utilisateurs appuieront sur Start et devront rester 30 secondes.
             </p>
           </div>
         )}
@@ -194,7 +211,7 @@ export const MiniAppCreateTask: React.FC = () => {
           <div className="flex items-start gap-2.5 p-3 rounded-xl bg-red-500/10 border border-red-500/20">
             <Info className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
             <p className="text-xs text-red-300 leading-relaxed">
-              Les utilisateurs devront regarder la vidéo pendant au moins <span className="font-semibold">20 secondes</span> avant de valider.
+              Entrez le lien direct de votre vidéo YouTube. Les utilisateurs devront rester <span className="font-semibold">20 secondes</span> sur la page.
             </p>
           </div>
         )}
@@ -202,7 +219,7 @@ export const MiniAppCreateTask: React.FC = () => {
           <div className="flex items-start gap-2.5 p-3 rounded-xl bg-orange-500/10 border border-orange-500/20">
             <Info className="w-4 h-4 text-orange-400 flex-shrink-0 mt-0.5" />
             <p className="text-xs text-orange-300 leading-relaxed">
-              Supporte Instagram, TikTok, X (Twitter), Discord, YouTube. Entrez l'URL exacte de votre profil ou page.
+              Entrez le lien de votre profil ou page. Supporte Instagram, TikTok, X (Twitter), Discord et autres.
             </p>
           </div>
         )}
