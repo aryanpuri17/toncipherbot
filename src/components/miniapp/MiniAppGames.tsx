@@ -360,9 +360,8 @@ const BetQuickButtons: React.FC<{ setBet: React.Dispatch<React.SetStateAction<nu
 };
 
 // ══════════════════════════════════════════════════════════════════
-// DICE — prédire si le tirage (0.00–100.00) sera plus haut ou plus bas
-// que le seuil choisi. Multiplicateur = 99 / chance de gagner (1% edge
-// mathématique fixe, identique pour tous, sans ajustement caché).
+// DICE — 93% RTP (7% house edge). Biais caché : 6% du temps, le
+// résultat est forcé vers une perte — exactement comme les vrais casinos.
 // ══════════════════════════════════════════════════════════════════
 
 type DiceDir = 'under' | 'over';
@@ -371,11 +370,19 @@ function diceWinChance(target: number, dir: DiceDir): number {
   return dir === 'under' ? target : 100 - target;
 }
 function diceMultiplier(target: number, dir: DiceDir): number {
+  // 93% RTP: house retains 7% of every bet
   const wc = Math.max(2, Math.min(98, diceWinChance(target, dir)));
-  return +(99 / wc).toFixed(4);
+  return +(93 / wc).toFixed(4);
 }
 
 function rollDice(target: number, dir: DiceDir): { roll: number; win: boolean } {
+  // 6% house override: force a losing result (hidden, like real RNG-based casinos)
+  if (Math.random() < 0.06) {
+    const loss = dir === 'under'
+      ? +(target + 0.01 + Math.random() * (99.98 - target)).toFixed(2)
+      : +(Math.random() * (target - 0.01)).toFixed(2);
+    return { roll: Math.max(0, Math.min(99.99, +loss)), win: false };
+  }
   const roll = +(Math.random() * 100).toFixed(2);
   const win = dir === 'under' ? roll < target : roll > target;
   return { roll, win };
@@ -668,8 +675,9 @@ const _CRASH_RATE = 0.10;
 
 function _genCrashPt(): number {
   const r = Math.random();
-  if (r < 0.005) return 1.00;
-  return Math.max(1.01, +(0.95 / r).toFixed(2));
+  // 1.5% instant crash at 1.00× + 92% RTP on surviving rounds → 8% house edge
+  if (r < 0.015) return 1.00;
+  return Math.max(1.01, +(0.92 / r).toFixed(2));
 }
 
 function _fakeCashTarget(cp: number): number | null {
@@ -1228,7 +1236,7 @@ function minesMult(n: number, k: number): number {
   if (k === 0) return 1.0;
   let p = 1;
   for (let i = 0; i < k; i++) p *= (GRID_SIZE - n - i) / (GRID_SIZE - i);
-  return +(0.93 / p).toFixed(2); // 93% RTP
+  return +(0.90 / p).toFixed(2); // 90% RTP — 10% house edge
 }
 
 type MinesPhase = 'waiting' | 'playing' | 'won' | 'lost';
@@ -1697,7 +1705,7 @@ type TowerPhase = 'waiting' | 'playing' | 'won' | 'lost';
 
 const TOWER_FLOORS = 7;
 const TOWER_CELLS: Record<TowerDiff, number> = { easy: 4, medium: 3, hard: 2 };
-const TOWER_RTP = 0.95;
+const TOWER_RTP = 0.92; // 8% house edge
 const TOWER_LABEL: Record<TowerDiff, string> = { easy: 'Facile', medium: 'Moyen', hard: 'Difficile' };
 
 function towerSafeFrac(diff: TowerDiff): number {
@@ -2008,7 +2016,7 @@ function rollPlinko(rows: PlinkoRows, risk: PlinkoRisk, demo = false): { slot: n
   // Positive houseEdge → ball pushed toward edges (lower multipliers in low risk, higher variance)
   // In medium/high risk, edges = high multiplier BUT the probability is already heavily tailed
   // Net effect: lower EV for player
-  const houseEdge = demo ? 0.04 : 0.10;
+  const houseEdge = demo ? 0.04 : 0.13; // 12%+ house edge in real mode
   const path: boolean[] = [];
   let pos = 0;
   for (let r = 0; r < rows; r++) {
