@@ -19,7 +19,7 @@ from urllib.parse import parse_qsl
 
 import aiosqlite
 from aiohttp import web
-from aiogram import Bot, Dispatcher, types
+from aiogram import Bot, Dispatcher, F, types
 from aiogram.filters import CommandStart, Command
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 
@@ -333,6 +333,33 @@ async def init_db() -> None:
                 updated_at TEXT NOT NULL DEFAULT (datetime('now'))
             )
         """)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS bot_verifications (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                telegram_id INTEGER NOT NULL,
+                task_id     TEXT    NOT NULL,
+                created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+                UNIQUE(telegram_id, task_id)
+            )
+        """)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS waiting_proof (
+                telegram_id INTEGER PRIMARY KEY,
+                task_id     TEXT    NOT NULL,
+                created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+            )
+        """)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS social_proofs (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                telegram_id INTEGER NOT NULL,
+                task_id     TEXT    NOT NULL,
+                file_id     TEXT    NOT NULL,
+                status      TEXT    NOT NULL DEFAULT 'pending',
+                created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+                reviewed_at TEXT
+            )
+        """)
         # A given on-chain tx hash may only be credited once — blocks deposit replay
         await db.execute("""
             CREATE UNIQUE INDEX IF NOT EXISTS idx_deposit_txhash
@@ -419,6 +446,55 @@ async def cmd_start(msg: types.Message):
             (msg.from_user.id,)
         )
         await db.commit()
+
+    arg = (msg.text or "").split(maxsplit=1)[1] if len((msg.text or "").split()) > 1 else ""
+
+    # ── Bot verification for start_bot tasks ──
+    if arg.startswith("vb_"):
+        rest = arg[3:]  # <taskId>_<telegramId>
+        sep = rest.rfind("_")
+        if sep > 0:
+            task_id    = rest[:sep]
+            claimed_id = rest[sep + 1:]
+            if claimed_id == str(msg.from_user.id):
+                async with aiosqlite.connect(DB_PATH) as db:
+                    await db.execute(
+                        "INSERT OR IGNORE INTO bot_verifications (telegram_id, task_id) VALUES (?,?)",
+                        (msg.from_user.id, task_id),
+                    )
+                    await db.commit()
+                await msg.answer(
+                    "✅ <b>Visite confirmée !</b>\n\nRevenez dans l'app et appuyez sur <b>Vérifier</b> pour recevoir votre récompense.",
+                    parse_mode="HTML",
+                )
+            else:
+                await msg.answer("❌ Lien invalide.")
+        return
+
+    # ── Social proof request ──
+    if arg.startswith("sp_"):
+        rest = arg[3:]
+        sep = rest.rfind("_")
+        if sep > 0:
+            task_id    = rest[:sep]
+            claimed_id = rest[sep + 1:]
+            if claimed_id == str(msg.from_user.id):
+                async with aiosqlite.connect(DB_PATH) as db:
+                    await db.execute(
+                        "INSERT OR REPLACE INTO waiting_proof (telegram_id, task_id) VALUES (?,?)",
+                        (msg.from_user.id, task_id),
+                    )
+                    await db.commit()
+                await msg.answer(
+                    "📸 <b>Envoyez maintenant votre screenshot</b> comme preuve que vous avez effectué l'action.\n\n"
+                    "• Instagram / TikTok : screenshot du profil avec le bouton <i>Abonné</i>\n"
+                    "• X (Twitter) : screenshot du profil avec <i>Suivi(e)</i>\n"
+                    "• Discord : screenshot du serveur rejoint",
+                    parse_mode="HTML",
+                )
+            else:
+                await msg.answer("❌ Lien invalide.")
+        return
 
     if not WEBAPP_URL:
         await msg.answer("⚙️ <b>TonCipher</b> — configuration en cours.", parse_mode="HTML")
@@ -532,6 +608,126 @@ async def cmd_credit(msg: types.Message):
         f"📝 {note}",
         parse_mode="HTML",
     )
+
+
+# ── Photo handler — social proof screenshots ──────────────────────────────────
+
+@dp.message(F.photo)
+async def handle_proof_photo(msg: types.Message) -> None:
+    uid = msg.from_user.id
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT task_id FROM waiting_proof WHERE telegram_id = ?", (uid,)
+        ) as cur:
+            wp = await cur.fetchone()
+        if not wp:
+            return  # not in proof-waiting state
+
+        task_id = wp[0]
+        file_id = msg.photo[-1].file_id
+
+        await db.execute(
+            "INSERT INTO social_proofs (telegram_id, task_id, file_id) VALUES (?,?,?)",
+            (uid, task_id, file_id),
+        )
+        proof_id = db.lastrowid
+        await db.execute("DELETE FROM waiting_proof WHERE telegram_id = ?", (uid,))
+
+        async with db.execute(
+            "SELECT first_name, username FROM users WHERE telegram_id = ?", (uid,)
+        ) as cur:
+            urow = await cur.fetchone()
+        async with db.execute(
+            "SELECT title FROM user_tasks WHERE id = ?", (task_id,)
+        ) as cur:
+            trow = await cur.fetchone()
+
+        await db.commit()
+
+    user_display = (
+        f"@{urow[1]}" if urow and urow[1]
+        else (urow[0] if urow else str(uid))
+    )
+    task_title = trow[0] if trow else task_id
+
+    if ADMIN_TELEGRAM_ID:
+        kb = InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(
+                text="✅ Approuver",
+                callback_data=f"proof_ok_{proof_id}_{uid}_{task_id}",
+            ),
+            InlineKeyboardButton(
+                text="❌ Refuser",
+                callback_data=f"proof_ko_{proof_id}_{uid}_{task_id}",
+            ),
+        ]])
+        caption = (
+            f"📸 <b>Preuve sociale</b>\n"
+            f"👤 {user_display} (ID: <code>{uid}</code>)\n"
+            f"📋 Tâche : {task_title}\n"
+            f"🆔 Proof #{proof_id}"
+        )
+        try:
+            await bot.forward_message(ADMIN_TELEGRAM_ID, msg.chat.id, msg.message_id)
+            await bot.send_message(ADMIN_TELEGRAM_ID, caption, parse_mode="HTML", reply_markup=kb)
+        except Exception:
+            pass
+
+    await msg.answer(
+        "⏳ <b>Preuve reçue !</b>\n\nElle est en cours de vérification par notre équipe. "
+        "Vous recevrez une notification dès la validation.",
+        parse_mode="HTML",
+    )
+
+
+# ── Callback — admin approves / rejects social proof ──────────────────────────
+
+@dp.callback_query(F.data.startswith("proof_"))
+async def handle_proof_callback(cb: types.CallbackQuery) -> None:
+    if cb.from_user.id != ADMIN_TELEGRAM_ID:
+        await cb.answer("Non autorisé")
+        return
+
+    parts    = cb.data.split("_")  # proof_ok_<proofId>_<userId>_<taskId>
+    action   = parts[1]            # ok | ko
+    proof_id = int(parts[2])
+    user_tg  = int(parts[3])
+    task_id  = "_".join(parts[4:])
+
+    new_status = "approved" if action == "ok" else "rejected"
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "UPDATE social_proofs SET status=?, reviewed_at=datetime('now') WHERE id=?",
+            (new_status, proof_id),
+        )
+        await db.commit()
+
+    try:
+        await cb.message.edit_reply_markup(reply_markup=None)
+    except Exception:
+        pass
+
+    if action == "ok":
+        await cb.answer("✅ Approuvé")
+        try:
+            await bot.send_message(
+                user_tg,
+                "✅ <b>Preuve validée !</b>\n\nRevenez dans l'app — votre récompense va être créditée automatiquement.",
+                parse_mode="HTML",
+            )
+        except Exception:
+            pass
+    else:
+        await cb.answer("❌ Refusé")
+        try:
+            await bot.send_message(
+                user_tg,
+                "❌ Votre preuve n'a pas été acceptée. Assurez-vous d'effectuer l'action demandée et renvoyez un screenshot plus clair.",
+                parse_mode="HTML",
+            )
+        except Exception:
+            pass
 
 
 # ── API — User init ────────────────────────────────────────────────────────────
@@ -2008,6 +2204,46 @@ async def api_user_task_complete(request: web.Request) -> web.Response:
     return web.json_response({"success": True, "reward": reward}, headers=_CORS)
 
 
+async def api_check_bot_verify(request: web.Request) -> web.Response:
+    """Return whether user confirmed via bot deep-link for a start_bot task."""
+    try:
+        telegram_id = int(request.rel_url.query.get("telegramId", 0))
+        task_id     = request.rel_url.query.get("taskId", "")
+    except (ValueError, TypeError):
+        return web.json_response({"error": "Bad params"}, status=400, headers=_CORS)
+    if not telegram_id or not task_id:
+        return web.json_response({"verified": False}, headers=_CORS)
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT id FROM bot_verifications WHERE telegram_id=? AND task_id=?",
+            (telegram_id, task_id),
+        ) as cur:
+            row = await cur.fetchone()
+
+    return web.json_response({"verified": row is not None}, headers=_CORS)
+
+
+async def api_check_social_proof(request: web.Request) -> web.Response:
+    """Return approval status for a submitted social proof screenshot."""
+    try:
+        telegram_id = int(request.rel_url.query.get("telegramId", 0))
+        task_id     = request.rel_url.query.get("taskId", "")
+    except (ValueError, TypeError):
+        return web.json_response({"error": "Bad params"}, status=400, headers=_CORS)
+    if not telegram_id or not task_id:
+        return web.json_response({"status": "none"}, headers=_CORS)
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT status FROM social_proofs WHERE telegram_id=? AND task_id=? ORDER BY created_at DESC LIMIT 1",
+            (telegram_id, task_id),
+        ) as cur:
+            row = await cur.fetchone()
+
+    return web.json_response({"status": row[0] if row else "none"}, headers=_CORS)
+
+
 async def _verify_task_completion(task_id: str, telegram_id: int) -> bool | None:
     """Return True if verified, False if definitely NOT a member, None if unverifiable."""
     async with aiosqlite.connect(DB_PATH) as db:
@@ -2021,22 +2257,44 @@ async def _verify_task_completion(task_id: str, telegram_id: int) -> bool | None
     task_type, target_url = row[0], row[1]
 
     if task_type == "start_bot":
+        # Prefer deep-link bot confirmation (new flow)
+        async with aiosqlite.connect(DB_PATH) as db:
+            async with db.execute(
+                "SELECT id FROM bot_verifications WHERE telegram_id=? AND task_id=?",
+                (telegram_id, task_id),
+            ) as cur:
+                bv = await cur.fetchone()
+        if bv:
+            return True
+        # Fallback: legacy bot_started flag (our own bot tasks)
         async with aiosqlite.connect(DB_PATH) as db:
             async with db.execute(
                 "SELECT bot_started FROM users WHERE telegram_id = ?", (telegram_id,)
             ) as cur:
                 urow = await cur.fetchone()
-        if urow is None:
-            return None
-        return bool(urow[0])
+        return None if urow is None else (bool(urow[0]) or None)
+
+    if task_type == "social":
+        async with aiosqlite.connect(DB_PATH) as db:
+            async with db.execute(
+                "SELECT status FROM social_proofs WHERE telegram_id=? AND task_id=? ORDER BY created_at DESC LIMIT 1",
+                (telegram_id, task_id),
+            ) as cur:
+                sp = await cur.fetchone()
+        if sp is None:
+            return None  # No proof yet — benefit of doubt (timer-based)
+        if sp[0] == "approved":
+            return True
+        if sp[0] == "rejected":
+            return False
+        return None  # pending — don't block, let frontend poll
 
     if task_type in ("join_channel", "join_group"):
         chat_ref = _extract_chat_ref(target_url)
         if chat_ref is None:
-            # Invite link — can't verify by username; give benefit of doubt
             return None
         result = await _is_chat_member(chat_ref, telegram_id)
-        return result  # True / False / None
+        return result
 
     return None
 
@@ -2369,6 +2627,8 @@ async def start_web() -> None:
     app.router.add_get( "/api/user/transactions",          api_user_transactions)
     app.router.add_get( "/api/check-membership",           api_check_membership)
     app.router.add_get( "/api/check-bot-start",            api_check_bot_start)
+    app.router.add_get( "/api/check-bot-verify",           api_check_bot_verify)
+    app.router.add_get( "/api/check-social-proof",         api_check_social_proof)
     app.router.add_get( "/api/leaderboard",                api_leaderboard)
 
     # Transaction API (called by frontend)
