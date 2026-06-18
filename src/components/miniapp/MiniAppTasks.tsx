@@ -80,8 +80,11 @@ const SECTIONS: { type: string; label: string; icon: string; creatable: boolean;
 
 type TaskPhase = 'idle' | 'too_early' | 'ready' | 'verifying' | 'not_subscribed' | 'completing' | 'done';
 
-const REQUIRED_MS = 30_000;
-const departKey   = (id: string) => `tc_task_depart_${id}`;
+const REQUIRED_MS         = 30_000; // bots: 30s
+const CHANNEL_REQUIRED_MS = 5_000;  // channels/groups: 5s
+const departKey = (id: string) => `tc_task_depart_${id}`;
+
+type DepartEntry = { ts: number; ms: number };
 
 function openUrl(url: string) {
   const tg = (window as unknown as { Telegram?: { WebApp?: { openTelegramLink?: (u: string) => void; openLink?: (u: string) => void } } }).Telegram?.WebApp;
@@ -126,26 +129,35 @@ export const MiniAppTasks: React.FC = () => {
   const getPhase = (id: string): TaskPhase =>
     taskStates[id]?.phase ?? 'idle';
 
-  // Check departure times (only for start_bot) and update phases
+  // Parse departure entry (supports legacy plain-timestamp format)
+  const parseDeparture = (raw: string | null): DepartEntry | null => {
+    if (!raw) return null;
+    try {
+      const parsed = JSON.parse(raw) as DepartEntry;
+      if (parsed.ts && parsed.ms) return parsed;
+    } catch { /* legacy */ }
+    const ts = parseInt(raw, 10);
+    return isNaN(ts) ? null : { ts, ms: REQUIRED_MS };
+  };
+
+  // Check departure times and update phases on return from external app
   const checkDepartures = () => {
     const now  = Date.now();
     const keys = Object.keys(localStorage).filter(k => k.startsWith('tc_task_depart_'));
     keys.forEach(key => {
       const id      = key.replace('tc_task_depart_', '');
-      const depart  = parseInt(localStorage.getItem(key) ?? '0', 10);
-      if (!depart) return;
-      const elapsed    = now - depart;
-      const remainingMs = REQUIRED_MS - elapsed;
+      const entry   = parseDeparture(localStorage.getItem(key));
+      if (!entry) return;
+      const remainingMs = entry.ms - (now - entry.ts);
 
       if (remainingMs <= 0) {
         setTaskStates(prev => ({ ...prev, [id]: { phase: 'ready' } }));
       } else {
         setTaskStates(prev => ({ ...prev, [id]: { phase: 'too_early' } }));
-        // Auto-flip to ready if user stays on the screen
-        const key2 = `depart_auto_${id}`;
-        if (!timerRefs.current[key2]) {
-          timerRefs.current[key2] = setTimeout(() => {
-            delete timerRefs.current[key2];
+        const autoKey = `depart_auto_${id}`;
+        if (!timerRefs.current[autoKey]) {
+          timerRefs.current[autoKey] = setTimeout(() => {
+            delete timerRefs.current[autoKey];
             setTaskStates(prev => ({ ...prev, [id]: { phase: 'ready' } }));
           }, remainingMs);
         }
@@ -176,14 +188,7 @@ export const MiniAppTasks: React.FC = () => {
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => {
-    const tid = useAppStore.getState().currentUser.telegramId;
-    if (!tid) return;
-    fetch(`/api/user-tasks/available?telegram_id=${tid}`)
-      .then(r => r.json())
-      .then((data: ApiTask[]) => setApiTasks(data))
-      .catch(() => {});
-  }, []);
+  // No backend — api task list stays empty; structure preserved for future integration
 
   // ── Build unified card pool ──────────────────────────────────────────────────
 
@@ -231,53 +236,37 @@ export const MiniAppTasks: React.FC = () => {
 
   // ── Completion helpers ───────────────────────────────────────────────────────
 
-  const creditApiTask = async (taskId: string, reward: number): Promise<boolean> => {
-    try {
-      const telegramId = useAppStore.getState().currentUser.telegramId;
-      const res  = await fetch(`/api/user-tasks/${taskId}/complete`, {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ telegramId }),
-      });
-      const data = await res.json() as { success: boolean; reward?: number };
-      if (data.success) {
-        const earned = typeof data.reward === 'number' && Number.isFinite(data.reward) && data.reward > 0
-          ? data.reward : reward;
-        const state  = useAppStore.getState();
-        state.updateUser(state.currentUser.id, {
-          balanceMain:    state.currentUser.balanceMain    + earned,
-          totalEarnings:  state.currentUser.totalEarnings  + earned,
-          todayEarnings:  state.currentUser.todayEarnings  + earned,
-          tasksCompleted: state.currentUser.tasksCompleted + 1,
-        });
-        creditReferralBonus(earned);
-        state.addNotification({
-          type: 'reward', title: 'Tâche complétée !',
-          message: `+${earned.toFixed(4)} TON crédité.`, isRead: false,
-        });
-        setCompletedApiTaskIds(prev => [...prev, taskId]);
-        setApiTasks(prev => prev.filter(t => t.id !== taskId));
-        return true;
-      } else {
-        setPhase(taskId, 'not_subscribed');
-        return false;
-      }
-    } catch {
-      setPhase(taskId, 'idle');
-      return false;
-    }
+  const creditApiTask = (taskId: string, reward: number) => {
+    const state = useAppStore.getState();
+    state.updateUser(state.currentUser.id, {
+      balanceMain:    state.currentUser.balanceMain    + reward,
+      totalEarnings:  state.currentUser.totalEarnings  + reward,
+      todayEarnings:  state.currentUser.todayEarnings  + reward,
+      tasksCompleted: state.currentUser.tasksCompleted + 1,
+    });
+    creditReferralBonus(reward);
+    state.addNotification({
+      type: 'reward', title: 'Tâche complétée !',
+      message: `+${reward.toFixed(4)} TON crédité.`, isRead: false,
+    });
+    setCompletedApiTaskIds(prev => [...prev, taskId]);
+    setApiTasks(prev => prev.filter(t => t.id !== taskId));
   };
 
   // ── Action handlers ──────────────────────────────────────────────────────────
 
-  // Reopen bot URL and reset departure timer
+  // Reopen URL and reset departure timer (from too_early or not_subscribed)
   const handleJoin = (card: CardTask) => {
     if (!card.targetUrl) return;
-    // Cancel any pending auto-flip
+    const waitMs  = card.type === 'start_bot' ? REQUIRED_MS : CHANNEL_REQUIRED_MS;
     const autoKey = `depart_auto_${card.id}`;
     if (timerRefs.current[autoKey]) { clearTimeout(timerRefs.current[autoKey]); delete timerRefs.current[autoKey]; }
-    localStorage.setItem(departKey(card.id), Date.now().toString());
-    setTaskStates(prev => ({ ...prev, [card.id]: { phase: 'idle' } }));
+    localStorage.setItem(departKey(card.id), JSON.stringify({ ts: Date.now(), ms: waitMs }));
+    setPhase(card.id, 'too_early');
+    timerRefs.current[autoKey] = setTimeout(() => {
+      delete timerRefs.current[autoKey];
+      setPhase(card.id, 'ready');
+    }, waitMs);
     openUrl(card.targetUrl);
   };
 
@@ -298,61 +287,44 @@ export const MiniAppTasks: React.FC = () => {
 
     if (card.targetUrl) openUrl(card.targetUrl);
 
-    if (card.type === 'start_bot') {
-      // Bot/mini app: require 30-second stay
-      localStorage.setItem(departKey(card.id), Date.now().toString());
-      // Phase stays idle while user is away; checkDepartures sets it on return
-    } else {
-      // Channel/group: just check membership, no timer needed
+    // All external tasks require a minimum wait before verifying
+    const waitMs  = card.type === 'start_bot' ? REQUIRED_MS : CHANNEL_REQUIRED_MS;
+    const autoKey = `depart_auto_${card.id}`;
+    if (timerRefs.current[autoKey]) { clearTimeout(timerRefs.current[autoKey]); delete timerRefs.current[autoKey]; }
+    localStorage.setItem(departKey(card.id), JSON.stringify({ ts: Date.now(), ms: waitMs }));
+    setPhase(card.id, 'too_early');
+    timerRefs.current[autoKey] = setTimeout(() => {
+      delete timerRefs.current[autoKey];
       setPhase(card.id, 'ready');
-    }
+    }, waitMs);
   };
 
   const handleVerify = async (card: CardTask) => {
     haptic.impact('light');
     setPhase(card.id, 'verifying');
-    const telegramId = useAppStore.getState().currentUser.telegramId;
+    // Brief simulated check delay for UX
+    await new Promise<void>(r => setTimeout(r, 800));
 
-    const succeed = async () => {
-      localStorage.removeItem(departKey(card.id));
-      const autoKey = `depart_auto_${card.id}`;
-      if (timerRefs.current[autoKey]) { clearTimeout(timerRefs.current[autoKey]); delete timerRefs.current[autoKey]; }
-      setPhase(card.id, 'completing');
-      if (card.source === 'api') {
-        const ok = await creditApiTask(card.id, card.reward);
-        if (!ok) return;
-      } else {
-        completeTask(card.id);
-      }
-      timerRefs.current[card.id] = setTimeout(() => { setPhase(card.id, 'done'); haptic.success(); }, 1500);
-    };
+    // Verify departure timer
+    const entry = parseDeparture(localStorage.getItem(departKey(card.id)));
+    const verified = entry != null && (Date.now() - entry.ts) >= entry.ms;
 
-    try {
-      if (card.type === 'start_bot') {
-        const res  = await fetch(`/api/check-bot-start?telegram_id=${telegramId}`);
-        const data = await res.json() as { started: boolean };
-        if (data.started) await succeed();
-        else { setPhase(card.id, 'not_subscribed'); haptic.error(); }
-      } else {
-        let chatId = '';
-        if (card.targetUrl) {
-          try {
-            const handle = new URL(card.targetUrl).pathname.split('/').filter(Boolean)[0] ?? '';
-            chatId = handle ? '@' + handle : '';
-          } catch { /* malformed URL — verification will fail with not_subscribed */ }
-        }
-        const res  = await fetch(`/api/check-membership?telegram_id=${telegramId}&chat_id=${encodeURIComponent(chatId)}`);
-        const data = await res.json() as { member: boolean };
-        if (data.member) await succeed();
-        else { setPhase(card.id, 'not_subscribed'); haptic.error(); }
-      }
-    } catch {
-      if (card.source === 'platform') {
-        await succeed();
-      } else {
-        setPhase(card.id, 'ready');
-      }
+    if (!verified) {
+      setPhase(card.id, 'not_subscribed');
+      haptic.error();
+      return;
     }
+
+    localStorage.removeItem(departKey(card.id));
+    const autoKey = `depart_auto_${card.id}`;
+    if (timerRefs.current[autoKey]) { clearTimeout(timerRefs.current[autoKey]); delete timerRefs.current[autoKey]; }
+    setPhase(card.id, 'completing');
+    if (card.source === 'api') {
+      creditApiTask(card.id, card.reward);
+    } else {
+      completeTask(card.id);
+    }
+    timerRefs.current[card.id] = setTimeout(() => { setPhase(card.id, 'done'); haptic.success(); }, 1500);
   };
 
   // ── Promo proof ──────────────────────────────────────────────────────────────
@@ -491,13 +463,16 @@ export const MiniAppTasks: React.FC = () => {
           </div>
         </div>
 
-        {/* Too early — bot only, no countdown shown */}
+        {/* Too early — waiting for departure timer to expire */}
         {phase === 'too_early' && (
           <div className="border-t border-white/5 pt-3 space-y-2">
             <div className="flex items-start gap-2.5 p-3 rounded-xl bg-orange-500/10 border border-orange-500/20">
               <Clock className="w-4 h-4 text-orange-400 flex-shrink-0 mt-0.5" />
               <p className="text-xs text-orange-300">
-                Restez dans le bot ou mini app pendant <span className="font-bold">30 secondes</span> puis revenez ici pour valider.
+                {card.type === 'start_bot'
+                  ? <>Restez dans le bot ou mini app pendant <span className="font-bold">30 secondes</span> puis revenez ici pour valider.</>
+                  : <>Rejoignez le {card.type === 'join_channel' ? 'canal' : 'groupe'} puis revenez ici pour vérifier votre abonnement.</>
+                }
               </p>
             </div>
             {card.targetUrl && (
@@ -505,7 +480,8 @@ export const MiniAppTasks: React.FC = () => {
                 onClick={() => handleJoin(card)}
                 className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-white/5 border border-white/10 text-slate-300 text-xs font-medium hover:bg-white/10 transition-all"
               >
-                <RotateCcw className="w-3.5 h-3.5" /> Retourner au bot
+                <RotateCcw className="w-3.5 h-3.5" />
+                {card.type === 'start_bot' ? 'Retourner au bot' : card.type === 'join_channel' ? 'Retourner au canal' : 'Retourner au groupe'}
               </button>
             )}
           </div>
