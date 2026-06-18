@@ -1110,48 +1110,19 @@ export const useAppStore = create<AppState>((set, get) => ({
   }),
 
   checkLoginStreak: () => {
-    const state = get();
     const today = new Date().toISOString().slice(0, 10);
     const lastDate = localStorage.getItem('tc_streak_date');
-    if (lastDate === today) return; // already processed today
+    if (lastDate === today) return;
 
     const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
-    const MILESTONES: Record<number, number> = Object.fromEntries(
-      (state.platformConfig.streakMilestones ?? []).map(m => [m.day, m.bonus])
-    );
-
-    const newStreak = lastDate === yesterday ? (state.currentUser.loginStreak ?? 0) + 1 : 1;
-    // No base reward on day 1 — reward starts day 2 to encourage return
-    const base = newStreak > 1 ? state.platformConfig.streakBonusPerDay : 0;
-    const milestoneBonus = MILESTONES[newStreak] ?? 0;
-    const totalReward = +(base + milestoneBonus).toFixed(6);
+    const newStreak = lastDate === yesterday ? (get().currentUser.loginStreak ?? 0) + 1 : 1;
 
     localStorage.setItem('tc_streak_date', today);
 
-    set(s => {
-      const upd = {
-        loginStreak:   newStreak,
-        balanceMain:   s.currentUser.balanceMain   + totalReward,
-        totalEarnings: s.currentUser.totalEarnings + totalReward,
-        todayEarnings: s.currentUser.todayEarnings + totalReward,
-      };
-      return {
-        currentUser: { ...s.currentUser, ...upd },
-        users: s.users.map(u => u.id === s.currentUser.id ? { ...u, ...upd } : u),
-      };
-    });
-
-    if (totalReward > 0) {
-      const isMilestone = milestoneBonus > 0;
-      get().addNotification({
-        type: 'reward',
-        title: isMilestone
-          ? `🏆 Palier Jour ${newStreak} atteint !`
-          : `🔥 Streak Jour ${newStreak}`,
-        message: `+${totalReward.toFixed(isMilestone ? 2 : 3)} TON${isMilestone ? ` — bonus palier inclus !` : ' pour votre connexion quotidienne.'}`,
-        isRead: false,
-      });
-    }
+    set(s => ({
+      currentUser: { ...s.currentUser, loginStreak: newStreak },
+      users: s.users.map(u => u.id === s.currentUser.id ? { ...u, loginStreak: newStreak } : u),
+    }));
   },
 
   completeTask: (taskId) => {

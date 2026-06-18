@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useAppStore } from '../../store/appStore';
 import { ArrowLeft, RotateCcw, Trophy, Zap } from 'lucide-react';
 import { CountUp } from '../ui/CountUp';
-import { ConfettiEffect } from '../ui/ConfettiEffect';
 
 // ══════════════════════════════════════════════════════════════════
 // AUDIO ENGINE (Web Audio API — aucun fichier externe)
@@ -2891,13 +2890,12 @@ export const MiniAppGames: React.FC = () => {
     return 0;
   });
   const [muted, setMuted]           = useState(_soundMuted);
-  const [showConfetti, setShowConfetti] = useState(false);
+
   const [liveFeed, setLiveFeed]     = useState<FeedEntry[]>([]);
   const [, setTick]                 = useState(0);
   const feedIdxRef                  = useRef(0);
 
   const handleResult = (won: boolean) => {
-    if (won) setShowConfetti(true);
     setStreak(s => {
       const next = won ? s + 1 : 0;
       try { localStorage.setItem('tc_game_streak', JSON.stringify({ count: next, ts: Date.now() })); } catch {}
@@ -2953,7 +2951,7 @@ export const MiniAppGames: React.FC = () => {
 
   return (
     <div className="space-y-5 animate-slide-up pb-4">
-      {showConfetti && <ConfettiEffect onComplete={() => setShowConfetti(false)} />}
+
       <div className="flex items-center justify-between">
         <div>
           <div className="flex items-center gap-2">

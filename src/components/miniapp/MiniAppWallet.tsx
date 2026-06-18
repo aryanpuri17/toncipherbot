@@ -4,6 +4,8 @@ import { useTonConnectUI, useTonWallet } from '@tonconnect/ui-react';
 import { ArrowDownLeft, ArrowUpRight, TrendingUp, Copy, CheckCircle, ChevronRight, AlertCircle, Wallet, Unlink } from 'lucide-react';
 import { haptic } from '../../lib/haptics';
 
+const displaySymbol = (s: string) => s === 'TON' ? 'GRAM' : s;
+
 // ── Shared TxRow component ─────────────────────────────────────────────────
 
 type Tx = ReturnType<typeof useAppStore.getState>['transactions'][0];
@@ -58,7 +60,7 @@ const TxRow: React.FC<{ tx: Tx }> = ({ tx }) => {
           cancelled ? 'text-slate-500 line-through' :
           debit     ? 'text-orange-400' : 'text-emerald-400'
         }`}>
-          {debit ? '−' : '+'}{tx.amount.toFixed(2)} {tx.currency}
+          {debit ? '−' : '+'}{tx.amount.toFixed(2)} {displaySymbol(tx.currency)}
         </p>
         <p className={`text-[10px] font-medium ${
           tx.status === 'completed'                           ? 'text-emerald-400' :
@@ -121,7 +123,7 @@ export const MiniAppWallet: React.FC = () => {
             <div className="mt-3">
               <div className="flex justify-between text-[10px] text-slate-500 mb-1">
                 <span>Retirable</span>
-                <span>{withdrawable.toFixed(2)} / {u.balanceMain.toFixed(2)} TON</span>
+                <span>{withdrawable.toFixed(2)} / {u.balanceMain.toFixed(2)} GRAM</span>
               </div>
               <div className="h-1 rounded-full bg-white/10 overflow-hidden">
                 <div
@@ -344,7 +346,7 @@ export const MiniAppDeposit: React.FC = () => {
               onClick={() => { setSelectedId(net.id); setTxStatus('idle'); setTxError(''); setDepositAmount(''); }}
               className={`p-3 rounded-xl text-center transition-all ${selectedId === net.id ? 'bg-blue-500/15 border border-blue-500/40 text-white' : 'glass-card-light text-slate-400 hover:text-white'}`}>
               <span className="text-xl block mb-1">{networkIcon(net.symbol)}</span>
-              <span className="text-xs font-medium">{net.symbol}</span>
+              <span className="text-xs font-medium">{displaySymbol(net.symbol)}</span>
               <span className="text-[9px] text-slate-500 block">{net.network}</span>
             </button>
           ))}
@@ -356,7 +358,7 @@ export const MiniAppDeposit: React.FC = () => {
         <div className="glass-card p-5 space-y-4">
           <div className="flex items-center gap-2">
             <span>💎</span>
-            <h3 className="text-sm font-semibold text-white">Dépôt TON via TonKeeper</h3>
+            <h3 className="text-sm font-semibold text-white">Dépôt GRAM via TonKeeper</h3>
             <span className="ml-auto px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/20 text-blue-400 border border-blue-500/30">
               Auto-détecté
             </span>
@@ -383,7 +385,7 @@ export const MiniAppDeposit: React.FC = () => {
           {isWalletConnected && (
             <>
               <div>
-                <p className="text-xs text-slate-400 mb-2">Montant (TON)</p>
+                <p className="text-xs text-slate-400 mb-2">Montant (GRAM)</p>
                 <input type="number" step="0.1" min={selected?.minDeposit ?? 1}
                   value={depositAmount}
                   onChange={e => { setDepositAmount(e.target.value); setTxError(''); }}
@@ -629,10 +631,10 @@ export const MiniAppWithdraw: React.FC = () => {
         <div className="text-center space-y-1">
           <h2 className="text-xl font-bold text-white">Retrait soumis !</h2>
           <p className="text-sm text-slate-400 leading-relaxed">
-            Votre retrait de {parsedAmount.toFixed(2)} {selected?.symbol} est en cours de traitement.
+            Votre retrait de {parsedAmount.toFixed(2)} {displaySymbol(selected?.symbol ?? 'GRAM')} est en cours de traitement.
             <br />Vous recevrez{' '}
             <span className="text-emerald-400 font-semibold">
-              {Math.max(0, netReceived).toFixed(2)} {selected?.symbol}
+              {Math.max(0, netReceived).toFixed(2)} {displaySymbol(selected?.symbol ?? 'GRAM')}
             </span>{' '}
             après frais de réseau.
           </p>
@@ -666,13 +668,13 @@ export const MiniAppWithdraw: React.FC = () => {
         <div className="flex items-center justify-between">
           <span className="text-xs text-slate-400">Retirable</span>
           <span className="text-sm font-bold text-blue-400">
-            {Math.max(0, currentUser.balanceMain - currentUser.taskCredits).toFixed(2)} {selected?.symbol ?? 'TON'}
+            {Math.max(0, currentUser.balanceMain - currentUser.taskCredits).toFixed(2)} {displaySymbol(selected?.symbol ?? 'GRAM')}
           </span>
         </div>
         {currentUser.taskCredits > 0 && (
           <div className="flex items-center justify-between">
             <span className="text-[10px] text-slate-500">Crédits campagnes (non retirables)</span>
-            <span className="text-[10px] text-blue-400 font-medium">{currentUser.taskCredits.toFixed(2)} TON</span>
+            <span className="text-[10px] text-blue-400 font-medium">{currentUser.taskCredits.toFixed(2)} GRAM</span>
           </div>
         )}
       </div>
@@ -688,7 +690,7 @@ export const MiniAppWithdraw: React.FC = () => {
               className={`p-3 rounded-xl text-center transition-all ${selectedId === net.id ? 'bg-blue-500/15 border border-blue-500/40 text-white' : 'glass-card-light text-slate-400'}`}
             >
               <span className="text-xl block mb-1">{networkIcon(net.symbol)}</span>
-              <span className="text-xs font-medium">{net.symbol}</span>
+              <span className="text-xs font-medium">{displaySymbol(net.symbol)}</span>
               <span className="text-[9px] text-slate-500 block">{net.network}</span>
             </button>
           ))}
@@ -763,19 +765,19 @@ export const MiniAppWithdraw: React.FC = () => {
             <span className="text-slate-400">Frais de réseau</span>
             <span className="text-orange-400 font-medium">
               {selected.withdrawalFeeType === 'percentage'
-                ? `${selected.withdrawalFee}% (${calcFee(parsedAmount).toFixed(4)} ${selected.symbol})`
-                : `${selected.withdrawalFee} ${selected.symbol}`}
+                ? `${selected.withdrawalFee}% (${calcFee(parsedAmount).toFixed(4)} ${displaySymbol(selected.symbol)})`
+                : `${selected.withdrawalFee} ${displaySymbol(selected.symbol)}`}
             </span>
           </div>
           <div className="flex justify-between text-xs">
             <span className="text-slate-400">Vous recevrez</span>
-            <span className="text-emerald-400 font-medium">{netReceived > 0 ? netReceived.toFixed(2) : '0.00'} {selected.symbol}</span>
+            <span className="text-emerald-400 font-medium">{netReceived > 0 ? netReceived.toFixed(2) : '0.00'} {displaySymbol(selected.symbol)}</span>
           </div>
           {dailyRemaining !== null && (
             <div className="flex justify-between text-xs">
               <span className="text-slate-400">Restant aujourd'hui</span>
               <span className={`font-medium ${dailyRemaining < 50 ? 'text-amber-400' : 'text-white'}`}>
-                {dailyRemaining.toFixed(2)} / {perUserDailyLimit!.limit} {selected.symbol}
+                {dailyRemaining.toFixed(2)} / {perUserDailyLimit!.limit} {displaySymbol(selected.symbol)}
               </span>
             </div>
           )}
@@ -805,7 +807,7 @@ export const MiniAppWithdraw: React.FC = () => {
         disabled={!parsedAmount || !address.trim()}
         className="w-full btn-accent py-3.5 rounded-xl text-sm font-semibold text-white disabled:opacity-40 disabled:cursor-not-allowed"
       >
-        Retirer {parsedAmount > 0 ? parsedAmount.toFixed(2) : '0.00'} {selected?.symbol ?? 'TON'}
+        Retirer {parsedAmount > 0 ? parsedAmount.toFixed(2) : '0.00'} {displaySymbol(selected?.symbol ?? 'GRAM')}
       </button>
     </div>
   );
