@@ -143,6 +143,26 @@ export const TaskModal: React.FC = () => {
           </FormSection>
         )}
 
+        {form.type === 'watch_video' && (
+          <FormSection title="Vidéo à regarder">
+            <FormGroup>
+              <FormLabel required>URL de la vidéo</FormLabel>
+              <FormInput value={form.targetUrl} onChange={e => setForm({ ...form, targetUrl: e.target.value })} placeholder="https://www.youtube.com/watch?v=..." />
+            </FormGroup>
+            <p className="text-xs text-slate-500 mt-1">L'utilisateur doit rester 20 secondes sur la page avant de pouvoir valider.</p>
+          </FormSection>
+        )}
+
+        {form.type === 'social' && (
+          <FormSection title="Compte à suivre">
+            <FormGroup>
+              <FormLabel required>URL du profil</FormLabel>
+              <FormInput value={form.targetUrl} onChange={e => setForm({ ...form, targetUrl: e.target.value })} placeholder="https://x.com/... ou https://instagram.com/... ou https://tiktok.com/@..." />
+            </FormGroup>
+            <p className="text-xs text-slate-500 mt-1">Supporte X, Instagram, TikTok, Discord, YouTube. Le logo est détecté automatiquement.</p>
+          </FormSection>
+        )}
+
         {form.type === 'invite_friends' && (
           <FormSection title="Condition d'invitation">
             <FormGroup>
