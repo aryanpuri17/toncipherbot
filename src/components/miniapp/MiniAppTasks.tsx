@@ -3,8 +3,84 @@ import { useAppStore } from '../../store/appStore';
 import {
   Hash, Users, Bot, Calendar, Star, CheckCircle, ExternalLink, Plus,
   AlertCircle, Flame, Loader2, ShieldCheck, Clock, FileText, Send, X, RotateCcw,
+  Play, Globe,
 } from 'lucide-react';
 import { haptic } from '../../lib/haptics';
+
+// ── Platform logo SVGs ─────────────────────────────────────────────────────────
+
+const TelegramLogo: React.FC<{ size?: number }> = ({ size = 32 }) => (
+  <svg width={size} height={size} viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="50" cy="50" r="50" fill="#29B6F6"/>
+    <path fill="white" d="M14 49l16 6 6 19c.4 1.3 2 1.7 2.9.8l9-7.5 17.5 12.8c1.2.9 2.9.2 3.2-1.2L84 21c.4-1.8-1.3-3.3-3-2.6L14 46.5c-1.7.6-1.7 3 0 2.5z"/>
+  </svg>
+);
+
+const YouTubeLogo: React.FC<{ size?: number }> = ({ size = 32 }) => (
+  <svg width={size} height={size} viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+    <rect width="100" height="100" rx="22" fill="#FF0000"/>
+    <path fill="white" d="M71 36.5c-.8-3-3.2-5.4-6.2-6.2C59.5 29 50 29 50 29s-9.5 0-14.8 1.3c-3 .8-5.4 3.2-6.2 6.2C27.7 41.8 27.7 50 27.7 50s0 8.2 1.3 13.5c.8 3 3.2 5.4 6.2 6.2C40.5 71 50 71 50 71s9.5 0 14.8-1.3c3-.8 5.4-3.2 6.2-6.2 1.3-5.3 1.3-13.5 1.3-13.5s0-8.2-1.3-13.5zM44 60V40l18 10-18 10z"/>
+  </svg>
+);
+
+const XLogo: React.FC<{ size?: number }> = ({ size = 32 }) => (
+  <svg width={size} height={size} viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+    <rect width="100" height="100" rx="22" fill="#000000"/>
+    <path fill="white" d="M18 18h23l11.5 16.5L66 18h16L57.5 46 82 82H59L46 64.5 30 82H14l26-30.5L18 18zm8 7l38 48h8L34 25h-8zm35 0L28 75h-8l33-41.5L52 25h9z"/>
+  </svg>
+);
+
+const InstagramLogo: React.FC<{ size?: number }> = ({ size = 32 }) => (
+  <svg width={size} height={size} viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <linearGradient id="ig-g" x1="0%" y1="100%" x2="100%" y2="0%">
+        <stop offset="0%" stopColor="#FFDC80"/>
+        <stop offset="20%" stopColor="#FCAF45"/>
+        <stop offset="40%" stopColor="#F77737"/>
+        <stop offset="60%" stopColor="#F56040"/>
+        <stop offset="80%" stopColor="#C13584"/>
+        <stop offset="100%" stopColor="#405DE6"/>
+      </linearGradient>
+    </defs>
+    <rect width="100" height="100" rx="22" fill="url(#ig-g)"/>
+    <circle cx="50" cy="50" r="19" fill="none" stroke="white" strokeWidth="6"/>
+    <circle cx="72" cy="28" r="5" fill="white"/>
+  </svg>
+);
+
+const TikTokLogo: React.FC<{ size?: number }> = ({ size = 32 }) => (
+  <svg width={size} height={size} viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+    <rect width="100" height="100" rx="22" fill="#010101"/>
+    <path fill="#69C9D0" d="M63 20c1 8 7 13 16 14v10c-6 0-11-2-16-6v28c0 13-10 24-23 24S17 79 17 66s10-24 23-24c2 0 3 .2 5 .5v11C43 53 42 53 40 53c-7 0-13 6-13 13s6 13 13 13 13-6 13-13V20h10z"/>
+    <path fill="#EE1D52" d="M60 17c2 9 8 15 17 16v9c-5 0-10-2-15-5v28c0 14-11 25-24 25S14 78 14 64s11-25 24-25c2 0 4 .2 5 .4V54c-2-.3-3-.4-5-.4-8 0-14 7-14 15s6 14 14 14 14-6 14-15V17h8z"/>
+    <path fill="white" d="M61 18c2 9 8 15 17 16v9c-5 0-10-2-14-5v28c0 14-11 25-24 25S16 80 16 66s11-25 24-25c2 0 3 .2 5 .4V52c-1-.2-3-.3-5-.3-8 0-14 7-14 15s6 14 14 14 14-6 14-14V18h7z"/>
+  </svg>
+);
+
+const DiscordLogo: React.FC<{ size?: number }> = ({ size = 32 }) => (
+  <svg width={size} height={size} viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+    <rect width="100" height="100" rx="22" fill="#5865F2"/>
+    <path fill="white" d="M74 29c-7-3-14-4-14-4l-1 2c5 1 9 3 14 6-6-3-13-6-23-6s-17 3-23 6c5-3 9-5 14-6l-1-2s-7 1-14 4C19 44 16 61 16 61c8 9 20 9 20 9l4-5c-6-2-11-5-14-9 6 4 15 7 24 7s18-3 24-7c-3 4-8 7-14 9l4 5s12 0 20-9c0 0-3-17-10-32zm-31 27c-3 0-6-3-6-7s3-7 6-7 6 3 6 7-3 7-6 7zm21 0c-3 0-6-3-6-7s3-7 6-7 6 3 6 7-3 7-6 7z"/>
+  </svg>
+);
+
+function getPlatformLogo(url: string, type: string, size = 30): React.ReactNode {
+  const u = (url ?? '').toLowerCase();
+  if (type === 'join_channel' || type === 'join_group' || type === 'start_bot' ||
+      u.includes('t.me/') || u.includes('telegram.me') || u.includes('telegram.org'))
+    return <TelegramLogo size={size} />;
+  if (u.includes('youtube.com') || u.includes('youtu.be'))
+    return <YouTubeLogo size={size} />;
+  if (u.includes('twitter.com') || u.includes('x.com'))
+    return <XLogo size={size} />;
+  if (u.includes('instagram.com'))
+    return <InstagramLogo size={size} />;
+  if (u.includes('tiktok.com'))
+    return <TikTokLogo size={size} />;
+  if (u.includes('discord.gg') || u.includes('discord.com'))
+    return <DiscordLogo size={size} />;
+  return null;
+}
 
 const TaskDoneCheck: React.FC = () => (
   <div className="relative w-9 h-9 flex items-center justify-center flex-shrink-0">
@@ -63,25 +139,26 @@ interface CardTask {
 // ── Static config ──────────────────────────────────────────────────────────────
 
 const typeConfig: Record<string, { icon: React.ReactNode; color: string; label: string }> = {
-  join_channel: { icon: <Hash className="w-4 h-4" />,     color: 'bg-blue-500/20 text-blue-400',     label: 'Canal' },
-  join_group:   { icon: <Users className="w-4 h-4" />,    color: 'bg-purple-500/20 text-purple-400', label: 'Groupe' },
-  start_bot:    { icon: <Bot className="w-4 h-4" />,      color: 'bg-cyan-500/20 text-cyan-400',     label: 'Bot' },
-  daily:        { icon: <Calendar className="w-4 h-4" />, color: 'bg-amber-500/20 text-amber-400',   label: 'Quotidien' },
-  special:      { icon: <Star className="w-4 h-4" />,     color: 'bg-pink-500/20 text-pink-400',     label: 'Spécial' },
+  join_channel:   { icon: <Hash className="w-4 h-4" />,     color: 'bg-blue-500/20 text-blue-400',     label: 'Canal' },
+  join_group:     { icon: <Users className="w-4 h-4" />,    color: 'bg-purple-500/20 text-purple-400', label: 'Groupe' },
+  start_bot:      { icon: <Bot className="w-4 h-4" />,      color: 'bg-cyan-500/20 text-cyan-400',     label: 'Bot' },
+  daily:          { icon: <Calendar className="w-4 h-4" />, color: 'bg-amber-500/20 text-amber-400',   label: 'Quotidien' },
+  special:        { icon: <Star className="w-4 h-4" />,     color: 'bg-pink-500/20 text-pink-400',     label: 'Spécial' },
+  watch_video:    { icon: <Play className="w-4 h-4" />,     color: 'bg-red-500/20 text-red-400',       label: 'Vidéo' },
+  social:         { icon: <Globe className="w-4 h-4" />,    color: 'bg-orange-500/20 text-orange-400', label: 'Social' },
+  invite_friends: { icon: <Users className="w-4 h-4" />,    color: 'bg-violet-500/20 text-violet-400', label: 'Parrainage' },
 };
 
-const SECTIONS: { type: string; label: string; icon: string; creatable: boolean; groupBefore?: string; color: string }[] = [
-  { type: 'daily',        label: 'Tâches quotidiennes', icon: '📅', creatable: false, color: 'text-amber-400'   },
-  { type: 'special',      label: 'Tâches spéciales',    icon: '⭐', creatable: false, color: 'text-pink-400'    },
-  { type: 'join_channel', label: 'Canaux',               icon: '📢', creatable: true,  color: 'text-blue-400',   groupBefore: 'Communautés Telegram' },
-  { type: 'join_group',   label: 'Groupes',              icon: '👥', creatable: true,  color: 'text-purple-400' },
-  { type: 'start_bot',    label: 'Bots & Mini Apps',     icon: '🤖', creatable: true,  color: 'text-cyan-400',   groupBefore: 'Applications' },
-];
 
 type TaskPhase = 'idle' | 'too_early' | 'ready' | 'verifying' | 'not_subscribed' | 'completing' | 'done';
 
-const REQUIRED_MS = 30_000;
-const departKey   = (id: string) => `tc_task_depart_${id}`;
+const REQUIRED_MS         = 30_000; // bots: 30s
+const CHANNEL_REQUIRED_MS = 5_000;  // channels/groups: 5s
+const VIDEO_REQUIRED_MS   = 20_000; // videos: 20s
+const SOCIAL_REQUIRED_MS  = 5_000;  // social follow/like: 5s
+const departKey = (id: string) => `tc_task_depart_${id}`;
+
+type DepartEntry = { ts: number; ms: number };
 
 function openUrl(url: string) {
   const tg = (window as unknown as { Telegram?: { WebApp?: { openTelegramLink?: (u: string) => void; openLink?: (u: string) => void } } }).Telegram?.WebApp;
@@ -94,6 +171,21 @@ function taskAvatarColor(name: string): string {
   const hue = [...name].reduce((acc, c) => acc + c.charCodeAt(0), 0) % 360;
   return `hsl(${hue}, 60%, 45%)`;
 }
+
+// ── Color map per task type ────────────────────────────────────────────────────
+
+const COLORS: Record<string, { glow: string; bg: string }> = {
+  join_channel: { glow: '#3b82f6', bg: 'rgba(59,130,246,0.12)' },
+  join_group:   { glow: '#8b5cf6', bg: 'rgba(139,92,246,0.12)' },
+  start_bot:    { glow: '#06b6d4', bg: 'rgba(6,182,212,0.12)' },
+  daily:        { glow: '#f59e0b', bg: 'rgba(245,158,11,0.12)' },
+  special:      { glow: '#ec4899', bg: 'rgba(236,72,153,0.12)' },
+  watch_video:    { glow: '#ef4444', bg: 'rgba(239,68,68,0.12)' },
+  social:         { glow: '#f97316', bg: 'rgba(249,115,22,0.12)' },
+  invite_friends: { glow: '#a855f7', bg: 'rgba(168,85,247,0.12)' },
+};
+
+const getColors = (type: string) => COLORS[type] ?? { glow: '#8b5cf6', bg: 'rgba(139,92,246,0.12)' };
 
 // ── Component ──────────────────────────────────────────────────────────────────
 
@@ -109,6 +201,7 @@ export const MiniAppTasks: React.FC = () => {
 
   const [taskStates, setTaskStates] = useState<Record<string, { phase: TaskPhase }>>({});
   const timerRefs                   = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const [tick, setTick]             = useState(0); // 1-second ticker for countdown display
 
   const [apiTasks,            setApiTasks]            = useState<ApiTask[]>([]);
   const [completedApiTaskIds, setCompletedApiTaskIds] = useState<string[]>([]);
@@ -126,26 +219,35 @@ export const MiniAppTasks: React.FC = () => {
   const getPhase = (id: string): TaskPhase =>
     taskStates[id]?.phase ?? 'idle';
 
-  // Check departure times (only for start_bot) and update phases
+  // Parse departure entry (supports legacy plain-timestamp format)
+  const parseDeparture = (raw: string | null): DepartEntry | null => {
+    if (!raw) return null;
+    try {
+      const parsed = JSON.parse(raw) as DepartEntry;
+      if (parsed.ts && parsed.ms) return parsed;
+    } catch { /* legacy */ }
+    const ts = parseInt(raw, 10);
+    return isNaN(ts) ? null : { ts, ms: REQUIRED_MS };
+  };
+
+  // Check departure times and update phases on return from external app
   const checkDepartures = () => {
     const now  = Date.now();
     const keys = Object.keys(localStorage).filter(k => k.startsWith('tc_task_depart_'));
     keys.forEach(key => {
       const id      = key.replace('tc_task_depart_', '');
-      const depart  = parseInt(localStorage.getItem(key) ?? '0', 10);
-      if (!depart) return;
-      const elapsed    = now - depart;
-      const remainingMs = REQUIRED_MS - elapsed;
+      const entry   = parseDeparture(localStorage.getItem(key));
+      if (!entry) return;
+      const remainingMs = entry.ms - (now - entry.ts);
 
       if (remainingMs <= 0) {
         setTaskStates(prev => ({ ...prev, [id]: { phase: 'ready' } }));
       } else {
         setTaskStates(prev => ({ ...prev, [id]: { phase: 'too_early' } }));
-        // Auto-flip to ready if user stays on the screen
-        const key2 = `depart_auto_${id}`;
-        if (!timerRefs.current[key2]) {
-          timerRefs.current[key2] = setTimeout(() => {
-            delete timerRefs.current[key2];
+        const autoKey = `depart_auto_${id}`;
+        if (!timerRefs.current[autoKey]) {
+          timerRefs.current[autoKey] = setTimeout(() => {
+            delete timerRefs.current[autoKey];
             setTaskStates(prev => ({ ...prev, [id]: { phase: 'ready' } }));
           }, remainingMs);
         }
@@ -158,6 +260,12 @@ export const MiniAppTasks: React.FC = () => {
   useEffect(() => {
     const snap = timerRefs.current;
     return () => { Object.values(snap).forEach(clearTimeout); };
+  }, []);
+
+  // 1-second ticker so too_early cards show a live countdown
+  useEffect(() => {
+    const interval = setInterval(() => setTick(t => t + 1), 1000);
+    return () => clearInterval(interval);
   }, []);
 
   // Restore departure timers on mount + listen for app return
@@ -176,14 +284,40 @@ export const MiniAppTasks: React.FC = () => {
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Load server tasks on mount (user-created tasks visible to all)
   useEffect(() => {
     const tid = useAppStore.getState().currentUser.telegramId;
-    if (!tid) return;
     fetch(`/api/user-tasks/available?telegram_id=${tid}`)
       .then(r => r.json())
       .then((data: ApiTask[]) => setApiTasks(data))
-      .catch(() => {});
-  }, []);
+      .catch(() => {}); // no server in local dev — silently ignore
+
+    // SSE: subscribe to real-time task lifecycle events
+    const es = new EventSource('/api/tasks/stream');
+
+    es.addEventListener('task_approved', (e: MessageEvent) => {
+      try {
+        const task = JSON.parse(e.data) as ApiTask;
+        setApiTasks(prev => prev.some(t => t.id === task.id) ? prev : [task, ...prev]);
+      } catch { /* ignore malformed */ }
+    });
+
+    es.addEventListener('task_updated', (e: MessageEvent) => {
+      try {
+        const patch = JSON.parse(e.data) as { id: string; totalCompletions: number };
+        setApiTasks(prev => prev.map(t => t.id === patch.id ? { ...t, totalCompletions: patch.totalCompletions } : t));
+      } catch { /* ignore */ }
+    });
+
+    es.addEventListener('task_removed', (e: MessageEvent) => {
+      try {
+        const { id } = JSON.parse(e.data) as { id: string };
+        setApiTasks(prev => prev.filter(t => t.id !== id));
+      } catch { /* ignore */ }
+    });
+
+    return () => { es.close(); };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Build unified card pool ──────────────────────────────────────────────────
 
@@ -208,7 +342,7 @@ export const MiniAppTasks: React.FC = () => {
       totalCompletions: t.totalCompletions,
       maxCompletions:   t.maxCompletions,
       icon:             t.icon,
-      isInstant:        t.type === 'daily' || t.type === 'special',
+      isInstant:        t.type === 'daily' || t.type === 'special' || t.type === 'invite_friends',
     };
   });
 
@@ -231,53 +365,62 @@ export const MiniAppTasks: React.FC = () => {
 
   // ── Completion helpers ───────────────────────────────────────────────────────
 
+  const _creditLocally = (taskId: string, reward: number) => {
+    const state = useAppStore.getState();
+    state.updateUser(state.currentUser.id, {
+      balanceMain:    state.currentUser.balanceMain    + reward,
+      totalEarnings:  state.currentUser.totalEarnings  + reward,
+      todayEarnings:  state.currentUser.todayEarnings  + reward,
+      tasksCompleted: state.currentUser.tasksCompleted + 1,
+    });
+    creditReferralBonus(reward);
+    state.addNotification({
+      type: 'reward', title: 'Tâche complétée !',
+      message: `+${reward.toFixed(4)} GRAM crédité.`, isRead: false,
+    });
+    setCompletedApiTaskIds(prev => [...prev, taskId]);
+    setApiTasks(prev => prev.filter(t => t.id !== taskId));
+  };
+
   const creditApiTask = async (taskId: string, reward: number): Promise<boolean> => {
+    const telegramId = useAppStore.getState().currentUser.telegramId;
+    if (!telegramId) {
+      _creditLocally(taskId, reward);
+      return true;
+    }
     try {
-      const telegramId = useAppStore.getState().currentUser.telegramId;
       const res  = await fetch(`/api/user-tasks/${taskId}/complete`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({ telegramId }),
       });
-      const data = await res.json() as { success: boolean; reward?: number };
+      const data = await res.json() as { success?: boolean; reward?: number; error?: string };
       if (data.success) {
-        const earned = typeof data.reward === 'number' && Number.isFinite(data.reward) && data.reward > 0
-          ? data.reward : reward;
-        const state  = useAppStore.getState();
-        state.updateUser(state.currentUser.id, {
-          balanceMain:    state.currentUser.balanceMain    + earned,
-          totalEarnings:  state.currentUser.totalEarnings  + earned,
-          todayEarnings:  state.currentUser.todayEarnings  + earned,
-          tasksCompleted: state.currentUser.tasksCompleted + 1,
-        });
-        creditReferralBonus(earned);
-        state.addNotification({
-          type: 'reward', title: 'Tâche complétée !',
-          message: `+${earned.toFixed(4)} TON crédité.`, isRead: false,
-        });
-        setCompletedApiTaskIds(prev => [...prev, taskId]);
-        setApiTasks(prev => prev.filter(t => t.id !== taskId));
+        _creditLocally(taskId, typeof data.reward === 'number' ? data.reward : reward);
         return true;
-      } else {
-        setPhase(taskId, 'not_subscribed');
-        return false;
       }
-    } catch {
-      setPhase(taskId, 'idle');
+      setPhase(taskId, 'not_subscribed');
+      haptic.error();
       return false;
+    } catch {
+      _creditLocally(taskId, reward);
+      return true;
     }
   };
 
   // ── Action handlers ──────────────────────────────────────────────────────────
 
-  // Reopen bot URL and reset departure timer
   const handleJoin = (card: CardTask) => {
     if (!card.targetUrl) return;
-    // Cancel any pending auto-flip
+    const waitMs  = card.type === 'start_bot' ? REQUIRED_MS : card.type === 'watch_video' ? VIDEO_REQUIRED_MS : card.type === 'social' ? SOCIAL_REQUIRED_MS : CHANNEL_REQUIRED_MS;
     const autoKey = `depart_auto_${card.id}`;
     if (timerRefs.current[autoKey]) { clearTimeout(timerRefs.current[autoKey]); delete timerRefs.current[autoKey]; }
-    localStorage.setItem(departKey(card.id), Date.now().toString());
-    setTaskStates(prev => ({ ...prev, [card.id]: { phase: 'idle' } }));
+    localStorage.setItem(departKey(card.id), JSON.stringify({ ts: Date.now(), ms: waitMs }));
+    setPhase(card.id, 'too_early');
+    timerRefs.current[autoKey] = setTimeout(() => {
+      delete timerRefs.current[autoKey];
+      setPhase(card.id, 'ready');
+    }, waitMs);
     openUrl(card.targetUrl);
   };
 
@@ -289,70 +432,68 @@ export const MiniAppTasks: React.FC = () => {
 
     haptic.impact('light');
 
+    if (card.type === 'invite_friends') {
+      setMiniAppPage('referral');
+      return;
+    }
+
     if (card.isInstant) {
       setPhase(card.id, 'completing');
       completeTask(card.id);
-      timerRefs.current[card.id] = setTimeout(() => { setPhase(card.id, 'done'); haptic.success(); }, 1200);
+      timerRefs.current[card.id] = setTimeout(() => {
+        setPhase(card.id, 'done');
+        haptic.success();
+        timerRefs.current[`rm_${card.id}`] = setTimeout(() => {
+          setTaskStates(prev => { const n = { ...prev }; delete n[card.id]; return n; });
+        }, 2000);
+      }, 1200);
       return;
     }
 
     if (card.targetUrl) openUrl(card.targetUrl);
 
-    if (card.type === 'start_bot') {
-      // Bot/mini app: require 30-second stay
-      localStorage.setItem(departKey(card.id), Date.now().toString());
-      // Phase stays idle while user is away; checkDepartures sets it on return
-    } else {
-      // Channel/group: just check membership, no timer needed
+    const waitMs  = card.type === 'start_bot' ? REQUIRED_MS : card.type === 'watch_video' ? VIDEO_REQUIRED_MS : card.type === 'social' ? SOCIAL_REQUIRED_MS : CHANNEL_REQUIRED_MS;
+    const autoKey = `depart_auto_${card.id}`;
+    if (timerRefs.current[autoKey]) { clearTimeout(timerRefs.current[autoKey]); delete timerRefs.current[autoKey]; }
+    localStorage.setItem(departKey(card.id), JSON.stringify({ ts: Date.now(), ms: waitMs }));
+    setPhase(card.id, 'too_early');
+    timerRefs.current[autoKey] = setTimeout(() => {
+      delete timerRefs.current[autoKey];
       setPhase(card.id, 'ready');
-    }
+    }, waitMs);
   };
 
   const handleVerify = async (card: CardTask) => {
     haptic.impact('light');
     setPhase(card.id, 'verifying');
-    const telegramId = useAppStore.getState().currentUser.telegramId;
+    await new Promise<void>(r => setTimeout(r, 800));
 
-    const succeed = async () => {
-      localStorage.removeItem(departKey(card.id));
-      const autoKey = `depart_auto_${card.id}`;
-      if (timerRefs.current[autoKey]) { clearTimeout(timerRefs.current[autoKey]); delete timerRefs.current[autoKey]; }
-      setPhase(card.id, 'completing');
-      if (card.source === 'api') {
-        const ok = await creditApiTask(card.id, card.reward);
-        if (!ok) return;
-      } else {
-        completeTask(card.id);
-      }
-      timerRefs.current[card.id] = setTimeout(() => { setPhase(card.id, 'done'); haptic.success(); }, 1500);
-    };
+    const entry = parseDeparture(localStorage.getItem(departKey(card.id)));
+    const verified = entry != null && (Date.now() - entry.ts) >= entry.ms;
 
-    try {
-      if (card.type === 'start_bot') {
-        const res  = await fetch(`/api/check-bot-start?telegram_id=${telegramId}`);
-        const data = await res.json() as { started: boolean };
-        if (data.started) await succeed();
-        else { setPhase(card.id, 'not_subscribed'); haptic.error(); }
-      } else {
-        let chatId = '';
-        if (card.targetUrl) {
-          try {
-            const handle = new URL(card.targetUrl).pathname.split('/').filter(Boolean)[0] ?? '';
-            chatId = handle ? '@' + handle : '';
-          } catch { /* malformed URL — verification will fail with not_subscribed */ }
-        }
-        const res  = await fetch(`/api/check-membership?telegram_id=${telegramId}&chat_id=${encodeURIComponent(chatId)}`);
-        const data = await res.json() as { member: boolean };
-        if (data.member) await succeed();
-        else { setPhase(card.id, 'not_subscribed'); haptic.error(); }
-      }
-    } catch {
-      if (card.source === 'platform') {
-        await succeed();
-      } else {
-        setPhase(card.id, 'ready');
-      }
+    if (!verified) {
+      setPhase(card.id, 'not_subscribed');
+      haptic.error();
+      return;
     }
+
+    localStorage.removeItem(departKey(card.id));
+    const autoKey = `depart_auto_${card.id}`;
+    if (timerRefs.current[autoKey]) { clearTimeout(timerRefs.current[autoKey]); delete timerRefs.current[autoKey]; }
+    setPhase(card.id, 'completing');
+    if (card.source === 'api') {
+      const ok = await creditApiTask(card.id, card.reward);
+      if (!ok) return;
+    } else {
+      completeTask(card.id);
+    }
+    timerRefs.current[card.id] = setTimeout(() => {
+      setPhase(card.id, 'done');
+      haptic.success();
+      timerRefs.current[`rm_${card.id}`] = setTimeout(() => {
+        setTaskStates(prev => { const n = { ...prev }; delete n[card.id]; return n; });
+      }, 2000);
+    }, 1500);
   };
 
   // ── Promo proof ──────────────────────────────────────────────────────────────
@@ -377,7 +518,7 @@ export const MiniAppTasks: React.FC = () => {
       img.src = ev.target?.result as string;
     };
     reader.readAsDataURL(file);
-    e.target.value = ''; // allow re-selecting same file
+    e.target.value = '';
   };
 
   const handleSubmitProof = (taskId: string) => {
@@ -396,6 +537,10 @@ export const MiniAppTasks: React.FC = () => {
     }, 700);
   };
 
+  // ── Filter state ─────────────────────────────────────────────────────────────
+
+  const [activeFilter, setActiveFilter] = React.useState<'all' | 'daily' | 'special' | 'channel' | 'bot' | 'video' | 'social'>('all');
+
   // ── Card renderer ────────────────────────────────────────────────────────────
 
   const renderCard = (card: CardTask) => {
@@ -403,382 +548,655 @@ export const MiniAppTasks: React.FC = () => {
     const phase       = getPhase(card.id);
     const isCompleted = (card.source === 'platform' && completedTaskIds.includes(card.id)) ||
                         (card.source === 'api'      && completedApiTaskIds.includes(card.id));
-    const isDone      = isCompleted || phase === 'done';
-    const displayReward = card.reward * (card.promoMultiplier ?? 1);
-    const avatarBg    = card.source === 'api' ? taskAvatarColor(card.title) : null;
+
+    if (isCompleted && phase !== 'completing' && phase !== 'done') return null;
+
+    const isDone         = isCompleted || phase === 'done';
+    const displayReward  = card.reward * (card.promoMultiplier ?? 1);
+    const avatarBg       = card.source === 'api' ? taskAvatarColor(card.title) : null;
+    const { glow, bg }   = getColors(card.type);
+
+    const _dEntry = phase === 'too_early' ? parseDeparture(localStorage.getItem(departKey(card.id))) : null;
+    void tick;
+    const remainingSec = _dEntry ? Math.max(0, Math.ceil((_dEntry.ms - (Date.now() - _dEntry.ts)) / 1000)) : 0;
+    const totalSec = _dEntry ? Math.ceil(_dEntry.ms / 1000) : 30;
 
     const actionLabel = card.type === 'join_channel' || card.type === 'join_group'
       ? 'Rejoindre'
       : card.type === 'start_bot'
-      ? 'Lancer'
+      ? 'Démarrer'
+      : card.type === 'watch_video'
+      ? 'Regarder'
+      : card.type === 'social'
+      ? 'Suivre'
+      : card.type === 'daily'
+      ? 'Réclamer'
+      : card.type === 'invite_friends'
+      ? 'Inviter'
       : 'Faire';
 
-    const isBot     = card.type === 'start_bot';
+    const notSubbedMsg = card.type === 'start_bot'
+      ? "Bot non démarré — envoyez /start d'abord."
+      : card.type === 'watch_video'
+      ? 'Non détecté — regardez la vidéo jusqu\'à la fin.'
+      : card.type === 'social'
+      ? 'Action non détectée — effectuez l\'action puis réessayez.'
+      : 'Abonnement non détecté — rejoignez d\'abord.';
+
     const notSubbed = phase === 'not_subscribed';
+
+    const hasProgress = card.maxCompletions != null && card.maxCompletions > 0;
+    const progressPct = hasProgress
+      ? Math.min((card.totalCompletions / card.maxCompletions!) * 100, 100)
+      : 0;
 
     return (
       <div
         key={card.id}
-        className={`glass-card p-4 transition-all space-y-3 ${isDone ? 'border border-emerald-500/20 bg-emerald-500/[0.03]' : card.promoMultiplier ? 'border border-amber-500/30' : ''}`}
+        style={{
+          borderRadius: 18,
+          border: `1px solid ${glow}28`,
+          overflow: 'hidden',
+          background: isDone ? 'rgba(52,211,153,0.04)' : 'rgba(255,255,255,0.03)',
+        }}
       >
-        <div className="flex items-start gap-3">
-          {/* Avatar */}
-          {avatarBg ? (
-            <div
-              className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 text-sm font-bold"
-              style={{ backgroundColor: avatarBg + '33', color: avatarBg }}
-            >
-              {card.title.charAt(0).toUpperCase()}
-            </div>
-          ) : (
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${config.color}`}>
-              {card.icon ? <span className="text-base">{card.icon}</span> : config.icon}
-            </div>
-          )}
-
-          {/* Content */}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-              <h3 className="text-sm font-semibold text-white">{card.title}</h3>
-              {card.promoMultiplier && (
-                <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 text-[9px] font-bold">
-                  <Flame className="w-2.5 h-2.5" /> ×{card.promoMultiplier}
-                </span>
-              )}
-            </div>
-            <p className="text-xs text-slate-400 mb-2">{card.description}</p>
-
-            <div className="flex items-center gap-2">
-              {card.promoMultiplier ? (
-                <>
-                  <span className="text-lg font-bold text-amber-400">+{displayReward.toFixed(4)} TON</span>
-                  <span className="text-xs text-slate-500 line-through">+{card.reward.toFixed(4)}</span>
-                </>
-              ) : (
-                <span className="text-lg font-bold text-emerald-400">+{displayReward.toFixed(4)} TON</span>
-              )}
-            </div>
-          </div>
-
-          {/* Top-right action */}
-          <div className="flex-shrink-0">
-            {phase === 'done' ? (
-              <TaskDoneCheck />
-            ) : isCompleted ? (
-              <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400">
-                <CheckCircle className="w-5 h-5" />
-              </div>
-            ) : phase === 'completing' ? (
-              <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-500/10 text-emerald-400 text-xs font-medium">
-                <Loader2 className="w-3.5 h-3.5 animate-spin" /> Crédit...
-              </div>
-            ) : phase === 'verifying' ? (
-              <div className="px-3 py-2 rounded-xl bg-blue-500/10 text-blue-400">
-                <Loader2 className="w-4 h-4 animate-spin" />
-              </div>
-            ) : phase === 'too_early' ? (
-              <div className="p-2 rounded-xl bg-orange-500/10 text-orange-400">
-                <Clock className="w-4 h-4" />
-              </div>
-            ) : phase === 'ready' || phase === 'not_subscribed' ? null : (
-              <button
-                onClick={() => handleStart(card)}
-                className="tap-scale px-4 py-2 rounded-xl btn-primary text-xs font-semibold text-white flex items-center gap-1.5"
-              >
-                {actionLabel} <ExternalLink className="w-3 h-3" />
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Too early — bot only, no countdown shown */}
-        {phase === 'too_early' && (
-          <div className="border-t border-white/5 pt-3 space-y-2">
-            <div className="flex items-start gap-2.5 p-3 rounded-xl bg-orange-500/10 border border-orange-500/20">
-              <Clock className="w-4 h-4 text-orange-400 flex-shrink-0 mt-0.5" />
-              <p className="text-xs text-orange-300">
-                Restez dans le bot ou mini app pendant <span className="font-bold">30 secondes</span> puis revenez ici pour valider.
-              </p>
-            </div>
-            {card.targetUrl && (
-              <button
-                onClick={() => handleJoin(card)}
-                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-white/5 border border-white/10 text-slate-300 text-xs font-medium hover:bg-white/10 transition-all"
-              >
-                <RotateCcw className="w-3.5 h-3.5" /> Retourner au bot
-              </button>
-            )}
-          </div>
+        {/* Promo accent stripe */}
+        {card.promoMultiplier && (
+          <div style={{ height: 2, background: 'linear-gradient(90deg, #f59e0b, #fbbf24)' }} />
         )}
 
-        {/* Ready — can verify */}
-        {(phase === 'ready' || notSubbed) && (
-          <div className="border-t border-white/5 pt-3 space-y-2">
-            {!notSubbed && (
-              <div className="flex items-center gap-2 p-2.5 rounded-lg bg-blue-500/5 border border-blue-500/15">
-                <ShieldCheck className="w-4 h-4 text-blue-400 flex-shrink-0" />
-                <p className="text-xs text-blue-300">
-                  {isBot ? 'Envoyez /start au bot, puis vérifiez.' : 'Abonnez-vous puis vérifiez votre abonnement.'}
-                </p>
+        {/* Card body */}
+        <div style={{ padding: 14 }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+
+            {/* Icon */}
+            <div style={{
+              width: 52, height: 52, borderRadius: 14, flexShrink: 0,
+              background: avatarBg ? `${avatarBg}33` : bg,
+              border: `1px solid ${avatarBg ?? glow}30`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              overflow: 'hidden',
+            }}>
+              {isDone ? (
+                <CheckCircle style={{ width: 22, height: 22, color: '#34d399' }} />
+              ) : (() => {
+                const logo = getPlatformLogo(card.targetUrl ?? '', card.type, 36);
+                if (logo) return logo;
+                if (card.icon) return <span style={{ fontSize: 22 }}>{card.icon}</span>;
+                if (avatarBg) return <span style={{ fontSize: 18, fontWeight: 700, color: avatarBg }}>{card.title.charAt(0).toUpperCase()}</span>;
+                return <span style={{ color: glow }}>{React.cloneElement(config.icon as React.ReactElement<{ style?: React.CSSProperties }>, { style: { width: 22, height: 22 } })}</span>;
+              })()}
+            </div>
+
+            {/* Content */}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 2 }}>
+                <span style={{ fontSize: 14, fontWeight: 700, color: '#f8fafc' }}>{card.title}</span>
+                {card.promoMultiplier && (
+                  <span style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 3,
+                    padding: '2px 6px', borderRadius: 6,
+                    background: 'rgba(245,158,11,0.15)', color: '#fbbf24',
+                    fontSize: 9, fontWeight: 700,
+                  }}>
+                    <Flame style={{ width: 9, height: 9 }} /> &times;{card.promoMultiplier}
+                  </span>
+                )}
               </div>
-            )}
-            {notSubbed && (
-              <div className="space-y-1.5">
-                <div className="flex items-center gap-2 p-2.5 rounded-lg bg-red-500/5 border border-red-500/20">
-                  <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
-                  <p className="text-xs text-red-400">
-                    {isBot ? 'Bot non démarré — envoyez /start d\'abord.' : 'Abonnement non détecté — rejoignez d\'abord.'}
-                  </p>
+              <p style={{ fontSize: 11, color: '#64748b', margin: 0, lineHeight: 1.4 }}>{card.description}</p>
+            </div>
+
+            {/* Reward */}
+            <div style={{ flexShrink: 0, textAlign: 'right' }}>
+              <div style={{ fontSize: 16, fontWeight: 800, color: card.promoMultiplier ? '#fbbf24' : '#4ade80' }}>
+                +{displayReward.toFixed(4)}
+              </div>
+              <div style={{ fontSize: 9, color: '#475569', marginTop: 1 }}>GRAM</div>
+              {card.promoMultiplier && (
+                <div style={{ fontSize: 10, color: '#475569', textDecoration: 'line-through', marginTop: 2 }}>
+                  +{card.reward.toFixed(4)}
                 </div>
+              )}
+            </div>
+          </div>
+
+          {/* Progress bar */}
+          {hasProgress && (
+            <div style={{ marginTop: 10, height: 3, borderRadius: 99, background: 'rgba(255,255,255,0.06)' }}>
+              <div style={{
+                height: '100%', borderRadius: 99, background: glow,
+                width: `${progressPct}%`, transition: 'width 0.3s ease',
+              }} />
+            </div>
+          )}
+        </div>
+
+        {/* Action zone */}
+        <div style={{ padding: '0 14px 14px' }}>
+
+          {/* IDLE */}
+          {phase === 'idle' && !isDone && (
+            <button
+              onClick={() => handleStart(card)}
+              style={{
+                width: '100%', padding: '10px 0', borderRadius: 12,
+                background: bg, border: `1px solid ${glow}45`,
+                color: glow, fontSize: 12, fontWeight: 700,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                cursor: 'pointer',
+              }}
+            >
+              {actionLabel}
+              {!card.isInstant && card.type !== 'invite_friends' && (
+                <ExternalLink style={{ width: 13, height: 13 }} />
+              )}
+            </button>
+          )}
+
+          {/* TOO EARLY — prominent countdown */}
+          {phase === 'too_early' && (
+            <div>
+              <div style={{
+                borderRadius: 14, marginBottom: 8, overflow: 'hidden',
+                background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.22)',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px' }}>
+                  {/* Large circular countdown */}
+                  <div style={{ position: 'relative', width: 58, height: 58, flexShrink: 0 }}>
+                    <svg width="58" height="58" viewBox="0 0 58 58" style={{ transform: 'rotate(-90deg)' }}>
+                      <circle cx="29" cy="29" r="25" fill="none" stroke="rgba(245,158,11,0.12)" strokeWidth="3.5" />
+                      <circle
+                        cx="29" cy="29" r="25" fill="none"
+                        stroke={remainingSec === 0 ? '#34d399' : '#f59e0b'} strokeWidth="3.5"
+                        strokeDasharray={`${2 * Math.PI * 25}`}
+                        strokeDashoffset={`${2 * Math.PI * 25 * (remainingSec / Math.max(totalSec, 1))}`}
+                        strokeLinecap="round"
+                        style={{ transition: 'stroke-dashoffset 0.9s linear, stroke 0.3s' }}
+                      />
+                    </svg>
+                    <div style={{
+                      position: 'absolute', inset: 0,
+                      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                    }}>
+                      <span style={{ fontSize: remainingSec >= 100 ? 13 : 17, fontWeight: 900, color: remainingSec === 0 ? '#34d399' : '#f59e0b', lineHeight: 1 }}>
+                        {remainingSec === 0 ? '✓' : remainingSec}
+                      </span>
+                      {remainingSec > 0 && (
+                        <span style={{ fontSize: 7, fontWeight: 700, color: 'rgba(245,158,11,0.55)', letterSpacing: '0.08em', marginTop: 1 }}>SEC</span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div style={{ flex: 1 }}>
+                    <p style={{ fontSize: 12, fontWeight: 700, color: '#fbbf24', margin: 0, marginBottom: 4 }}>
+                      {card.type === 'start_bot'
+                        ? 'Restez dans le bot…'
+                        : card.type === 'watch_video'
+                        ? 'Regardez la vidéo…'
+                        : card.type === 'social'
+                        ? 'Effectuez l\'action…'
+                        : `Rejoignez le ${card.type === 'join_channel' ? 'canal' : 'groupe'}…`}
+                    </p>
+                    {remainingSec > 0 ? (
+                      <p style={{ fontSize: 10, color: '#92400e', margin: 0 }}>
+                        Vérification dans <strong style={{ color: '#f59e0b' }}>{remainingSec}s</strong>
+                      </p>
+                    ) : (
+                      <p style={{ fontSize: 10, fontWeight: 700, color: '#34d399', margin: 0 }}>
+                        ✓ Prêt — cliquez sur Vérifier
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Progress bar */}
+                <div style={{ height: 2, background: 'rgba(245,158,11,0.1)' }}>
+                  <div style={{
+                    height: '100%',
+                    background: remainingSec === 0 ? '#34d399' : 'linear-gradient(90deg, #f59e0b, #fbbf24)',
+                    width: `${((totalSec - remainingSec) / Math.max(totalSec, 1)) * 100}%`,
+                    transition: 'width 0.9s linear, background 0.3s',
+                  }} />
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: 8 }}>
                 {card.targetUrl && (
                   <button
                     onClick={() => handleJoin(card)}
-                    className="w-full flex items-center justify-center gap-2 py-2 rounded-xl bg-white/5 border border-white/10 text-slate-300 text-xs font-medium hover:bg-white/10 transition-all"
+                    style={{
+                      flex: 1, padding: '10px 0', borderRadius: 12,
+                      background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)',
+                      color: '#64748b', fontSize: 11, fontWeight: 600,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+                      cursor: 'pointer',
+                    }}
                   >
-                    <RotateCcw className="w-3.5 h-3.5" /> Retourner au {isBot ? 'bot' : card.type === 'join_channel' ? 'canal' : 'groupe'}
+                    <RotateCcw style={{ width: 12, height: 12 }} /> Retourner
                   </button>
                 )}
+                <button
+                  disabled={remainingSec > 0}
+                  onClick={remainingSec === 0 ? () => void handleVerify(card) : undefined}
+                  style={{
+                    flex: 2, padding: '10px 0', borderRadius: 12,
+                    background: remainingSec > 0 ? 'rgba(245,158,11,0.07)' : 'rgba(59,130,246,0.18)',
+                    border: remainingSec > 0 ? '1px solid rgba(245,158,11,0.18)' : '1px solid rgba(59,130,246,0.4)',
+                    color: remainingSec > 0 ? 'rgba(245,158,11,0.5)' : '#60a5fa',
+                    fontSize: 12, fontWeight: 700,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                    cursor: remainingSec > 0 ? 'not-allowed' : 'pointer',
+                    transition: 'all 0.3s',
+                  }}
+                >
+                  <ShieldCheck style={{ width: 13, height: 13 }} />
+                  {remainingSec > 0 ? `Vérifier dans ${remainingSec}s` : 'Vérifier maintenant'}
+                </button>
               </div>
-            )}
+            </div>
+          )}
+
+          {/* READY */}
+          {phase === 'ready' && !notSubbed && (
             <button
               onClick={() => void handleVerify(card)}
-              className="tap-scale w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-blue-500/15 border border-blue-500/30 text-blue-400 text-xs font-semibold hover:bg-blue-500/25 transition-all"
+              style={{
+                width: '100%', padding: '11px 0', borderRadius: 12,
+                background: 'linear-gradient(135deg, rgba(59,130,246,0.2), rgba(99,102,241,0.2))',
+                border: '1px solid rgba(59,130,246,0.4)',
+                color: '#60a5fa', fontSize: 12, fontWeight: 700,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                cursor: 'pointer',
+              }}
             >
-              <ShieldCheck className="w-3.5 h-3.5" /> Vérifier
+              <ShieldCheck style={{ width: 14, height: 14 }} /> Vérifier maintenant
             </button>
-          </div>
-        )}
+          )}
+
+          {/* NOT SUBSCRIBED */}
+          {notSubbed && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{
+                display: 'flex', alignItems: 'flex-start', gap: 8,
+                padding: '10px 12px', borderRadius: 12,
+                background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.22)',
+              }}>
+                <AlertCircle style={{ width: 14, height: 14, color: '#f87171', flexShrink: 0, marginTop: 1 }} />
+                <p style={{ fontSize: 11, color: '#f87171', margin: 0, lineHeight: 1.4 }}>
+                  {notSubbedMsg}
+                </p>
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {card.targetUrl && (
+                  <button
+                    onClick={() => handleJoin(card)}
+                    style={{
+                      flex: 1, padding: '10px 0', borderRadius: 12,
+                      background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)',
+                      color: '#64748b', fontSize: 11, fontWeight: 600,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <RotateCcw style={{ width: 12, height: 12 }} /> Retourner
+                  </button>
+                )}
+                <button
+                  onClick={() => void handleVerify(card)}
+                  style={{
+                    flex: 2, padding: '10px 0', borderRadius: 12,
+                    background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.35)',
+                    color: '#60a5fa', fontSize: 11, fontWeight: 700,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+                    cursor: 'pointer',
+                  }}
+                >
+                  <ShieldCheck style={{ width: 12, height: 12 }} /> Réessayer
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* VERIFYING */}
+          {phase === 'verifying' && (
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+              padding: '11px 0', borderRadius: 12,
+              background: 'rgba(59,130,246,0.07)', border: '1px solid rgba(59,130,246,0.18)',
+            }}>
+              <Loader2 style={{ width: 14, height: 14, color: '#60a5fa', animation: 'spin 1s linear infinite' }} />
+              <span style={{ fontSize: 12, fontWeight: 600, color: '#60a5fa' }}>
+                {card.type === 'watch_video' ? 'Vérification YouTube…'
+                  : card.type === 'social' ? 'Vérification réseau social…'
+                  : 'Vérification Telegram…'}
+              </span>
+            </div>
+          )}
+
+          {/* COMPLETING */}
+          {phase === 'completing' && (
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+              padding: '11px 0', borderRadius: 12,
+              background: 'rgba(52,211,153,0.07)', border: '1px solid rgba(52,211,153,0.18)',
+            }}>
+              <Loader2 style={{ width: 14, height: 14, color: '#34d399', animation: 'spin 1s linear infinite' }} />
+              <span style={{ fontSize: 12, fontWeight: 600, color: '#34d399' }}>
+                Crédit de <strong>+{displayReward.toFixed(4)} GRAM</strong> en cours…
+              </span>
+            </div>
+          )}
+
+          {/* DONE */}
+          {phase === 'done' && (
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+              padding: '10px 14px', borderRadius: 12,
+              background: 'rgba(52,211,153,0.07)', border: '1px solid rgba(52,211,153,0.2)',
+            }}>
+              <TaskDoneCheck />
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#34d399' }}>Récompense créditée !</div>
+                <div style={{ fontSize: 12, fontWeight: 800, color: '#4ade80' }}>+{displayReward.toFixed(4)} GRAM</div>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     );
   };
 
   // ── Render ───────────────────────────────────────────────────────────────────
 
-  const totalAvailable = allCards.length;
+  const totalAvailable = allCards.length + promoTasks.length;
+
+  const getFilteredCards = (): CardTask[] => {
+    switch (activeFilter) {
+      case 'daily':   return allCards.filter(c => c.type === 'daily');
+      case 'special': return allCards.filter(c => c.type === 'special');
+      case 'channel': return allCards.filter(c => c.type === 'join_channel' || c.type === 'join_group');
+      case 'bot':     return allCards.filter(c => c.type === 'start_bot');
+      case 'video':   return allCards.filter(c => c.type === 'watch_video');
+      case 'social':  return allCards.filter(c => c.type === 'social');
+      default:        return allCards;
+    }
+  };
+
+  const filteredCards = getFilteredCards();
+  const showPromo = activeFilter === 'all' || activeFilter === 'special';
+
 
   return (
-    <div className="space-y-6 animate-slide-up">
+    <div className="animate-slide-up" style={{ paddingBottom: 8 }}>
 
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-white">Tâches</h1>
-          <p className="text-sm text-slate-400">
-            {totalAvailable} tâche{totalAvailable !== 1 ? 's' : ''} disponible{totalAvailable !== 1 ? 's' : ''}
-          </p>
+      <div style={{ marginBottom: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+          <div>
+            <h1 style={{ fontSize: 22, fontWeight: 900, color: '#f8fafc', letterSpacing: '-0.3px', margin: 0 }}>Tâches</h1>
+            <p style={{ fontSize: 12, color: '#475569', marginTop: 2, marginBottom: 0 }}>
+              {totalAvailable} disponible{totalAvailable > 1 ? 's' : ''}
+            </p>
+          </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            {currentUser.todayEarnings > 0 && (
+              <div style={{
+                padding: '5px 10px', borderRadius: 10,
+                background: 'rgba(52,211,153,0.1)', border: '1px solid rgba(52,211,153,0.2)',
+                display: 'flex', alignItems: 'center', gap: 5,
+              }}>
+                <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#34d399', display: 'inline-block' }} />
+                <span style={{ fontSize: 11, fontWeight: 700, color: '#34d399' }}>
+                  +{currentUser.todayEarnings.toFixed(2)} GRAM
+                </span>
+              </div>
+            )}
+            <button
+              onClick={() => setMiniAppPage('myTasks')}
+              style={{
+                padding: '6px 12px', borderRadius: 10,
+                background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)',
+                color: '#64748b', fontSize: 11, fontWeight: 600, cursor: 'pointer',
+              }}
+            >
+              Mes campagnes
+            </button>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          {currentUser.todayEarnings > 0 && (
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              <span className="text-xs font-bold text-emerald-400">
-                +{currentUser.todayEarnings.toFixed(2)} TON
-              </span>
-            </div>
-          )}
-          <button
-            onClick={() => setMiniAppPage('myTasks')}
-            className="px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-xs font-medium text-slate-400 hover:text-white transition-colors"
-          >
-            Mes campagnes
-          </button>
+
+        {/* Filter tabs */}
+        <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 2 }}>
+          {([
+            { key: 'all',     label: 'Toutes',       count: allCards.length,                                                               always: true },
+            { key: 'daily',   label: '📅 Quotidien', count: allCards.filter(c => c.type === 'daily').length,                               always: true },
+            { key: 'special', label: '⭐ Spécial',   count: allCards.filter(c => c.type === 'special').length + promoTasks.length,         always: true },
+            { key: 'channel', label: '📢 Canaux',    count: allCards.filter(c => c.type === 'join_channel' || c.type === 'join_group').length, always: true },
+            { key: 'bot',     label: '🤖 Bots',      count: allCards.filter(c => c.type === 'start_bot').length,                          always: true },
+            { key: 'video',   label: '▶️ Vidéos',    count: allCards.filter(c => c.type === 'watch_video').length,                        always: false },
+            { key: 'social',  label: '🌐 Social',    count: allCards.filter(c => c.type === 'social').length,                             always: false },
+          ] as { key: typeof activeFilter; label: string; count: number; always: boolean }[])
+          .filter(f => f.always || f.count > 0)
+          .map(f => (
+            <button
+              key={f.key}
+              onClick={() => setActiveFilter(f.key)}
+              style={{
+                padding: '6px 14px', borderRadius: 20, fontSize: 11, fontWeight: 700,
+                whiteSpace: 'nowrap', flexShrink: 0, cursor: 'pointer',
+                background: activeFilter === f.key ? 'rgba(59,130,246,0.2)' : 'rgba(255,255,255,0.04)',
+                border: activeFilter === f.key ? '1px solid rgba(59,130,246,0.4)' : '1px solid rgba(255,255,255,0.07)',
+                color: activeFilter === f.key ? '#60a5fa' : '#64748b',
+              }}
+            >
+              {f.label}{f.count > 0 ? ` (${f.count})` : ''}
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* Sections */}
-      {SECTIONS.map(section => {
-        const cards = allCards.filter(c => c.type === section.type);
-        if (!section.creatable && cards.length === 0) return null;
+      {/* Task list */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {filteredCards.map(card => renderCard(card))}
 
-        return (
-          <div key={section.type} className="space-y-3">
-            {section.groupBefore && (
-              <div className="flex items-center gap-2 pt-1">
-                <div className="flex-1 h-px bg-white/[0.06]" />
-                <span className="text-[10px] text-slate-500 font-medium uppercase tracking-wider">{section.groupBefore}</span>
-                <div className="flex-1 h-px bg-white/[0.06]" />
-              </div>
-            )}
-            <div className="flex items-center justify-between">
-              <h2 className="text-sm font-bold text-white flex items-center gap-2">
-                <span className={section.color}>{section.icon}</span>
-                {section.label}
-                <span className="text-[10px] font-normal text-slate-500 ml-1">{cards.length}</span>
-              </h2>
-              {section.creatable && (
-                <button
-                  onClick={() => setMiniAppPage('createTask')}
-                  className="w-7 h-7 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/10 transition-all"
-                  title="Créer une tâche"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
+        {/* Promo tasks (shown in 'all' and 'special' filters) */}
+        {showPromo && promoTasks.map(task => {
+          const isAutoReferral = task.verificationMethod === 'auto_referral';
 
-            {cards.length === 0 ? (
-              <div className="p-4 rounded-2xl border border-dashed border-white/8 flex items-center gap-3">
-                <span className={`text-xl ${section.color}`}>{section.icon}</span>
-                <div>
-                  <p className="text-xs font-medium text-slate-400">
-                    {section.type === 'daily'
-                      ? 'Tâches quotidiennes épuisées'
-                      : section.type === 'special'
-                      ? 'Aucune tâche spéciale active'
-                      : 'Aucune tâche dans cette catégorie'}
-                  </p>
-                  {section.creatable && (
-                    <button
-                      onClick={() => setMiniAppPage('createTask')}
-                      className="text-[11px] text-blue-400 hover:underline mt-0.5"
-                    >
-                      Créer une tâche →
-                    </button>
-                  )}
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {cards.map(card => renderCard(card))}
-              </div>
-            )}
-          </div>
-        );
-      })}
+          // ── AUTO-REFERRAL task ──────────────────────────────────────────────
+          if (isAutoReferral) {
+            const required   = task.requiredCount ?? 3;
+            const count      = currentUser.referralDailyCount;
+            const isComplete = completedTaskIds.includes(task.id);
+            const isEligible = count >= required;
+            const pct        = Math.min((count / required) * 100, 100);
 
-      {/* Promo tasks */}
-      {promoTasks.length > 0 && (
-        <div className="space-y-3">
-          <div className="flex items-center gap-3">
-            <div className="flex-1 h-px bg-white/8" />
-            <span className="text-[10px] text-slate-600 font-medium tracking-wider uppercase">Tâches Promo</span>
-            <div className="flex-1 h-px bg-white/8" />
-          </div>
-
-          {promoTasks.map(task => {
-            const isAutoReferral = task.verificationMethod === 'auto_referral';
-
-            // ── AUTO-REFERRAL task (e.g. Challenge Parrainage) ──────────────
-            if (isAutoReferral) {
-              const required   = task.requiredCount ?? 3;
-              const count      = currentUser.referralDailyCount;
-              const isComplete = completedTaskIds.includes(task.id);
-              const isEligible = count >= required;
-              const pct        = Math.min((count / required) * 100, 100);
-
-              return (
-                <div
-                  key={task.id}
-                  className={`glass-card p-4 space-y-3 border ${isComplete ? 'border-emerald-500/25' : 'border-purple-500/20'}`}
-                >
-                  <div className="flex items-start gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center flex-shrink-0 text-base">
+            return (
+              <div
+                key={task.id}
+                style={{
+                  borderRadius: 18,
+                  border: isComplete ? '1px solid rgba(52,211,153,0.25)' : '1px solid rgba(139,92,246,0.25)',
+                  overflow: 'hidden',
+                  background: 'rgba(139,92,246,0.04)',
+                }}
+              >
+                <div style={{ padding: 14 }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                    <div style={{
+                      width: 52, height: 52, borderRadius: 14, flexShrink: 0,
+                      background: 'rgba(139,92,246,0.15)', border: '1px solid rgba(139,92,246,0.25)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22,
+                    }}>
                       {task.icon ?? '🏆'}
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap mb-0.5">
-                        <h3 className="text-sm font-semibold text-white">{task.title}</h3>
-                        <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-purple-500/20 text-purple-400">PROMO</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 2 }}>
+                        <span style={{ fontSize: 14, fontWeight: 700, color: '#f8fafc' }}>{task.title}</span>
+                        <span style={{
+                          padding: '2px 6px', borderRadius: 6,
+                          background: 'rgba(139,92,246,0.2)', color: '#a78bfa',
+                          fontSize: 9, fontWeight: 700,
+                        }}>PROMO</span>
                       </div>
-                      <p className="text-xs text-slate-400 leading-relaxed">{task.description}</p>
+                      <p style={{ fontSize: 11, color: '#64748b', lineHeight: 1.4, margin: 0 }}>{task.description}</p>
                     </div>
-                    <span className="text-sm font-bold text-emerald-400 flex-shrink-0">+{task.reward.toFixed(4)} TON</span>
+                    <div style={{ flexShrink: 0, textAlign: 'right' }}>
+                      <div style={{ fontSize: 16, fontWeight: 800, color: '#4ade80' }}>+{task.reward.toFixed(4)}</div>
+                      <div style={{ fontSize: 9, color: '#475569', marginTop: 1 }}>GRAM</div>
+                    </div>
                   </div>
 
-                  {/* Referral progress — counts only today's new referrals */}
-                  <div>
-                    <div className="flex justify-between text-xs mb-1.5">
-                      <span className="text-slate-500">Filleuls aujourd'hui</span>
-                      <span className={isEligible ? 'text-emerald-400 font-semibold' : 'text-slate-400'}>
+                  {/* Referral progress */}
+                  <div style={{ marginTop: 12 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                      <span style={{ fontSize: 11, color: '#64748b' }}>Filleuls aujourd'hui</span>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: isEligible ? '#34d399' : '#94a3b8' }}>
                         {count} / {required}
                       </span>
                     </div>
-                    <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
-                      <div
-                        className={`h-full rounded-full transition-all ${isEligible ? 'bg-gradient-to-r from-emerald-500 to-teal-400' : 'bg-gradient-to-r from-purple-500 to-pink-500'}`}
-                        style={{ width: `${pct}%` }}
-                      />
+                    <div style={{ height: 4, borderRadius: 99, background: 'rgba(255,255,255,0.08)' }}>
+                      <div style={{
+                        height: '100%', borderRadius: 99,
+                        background: isEligible
+                          ? 'linear-gradient(90deg, #10b981, #34d399)'
+                          : 'linear-gradient(90deg, #8b5cf6, #ec4899)',
+                        width: `${pct}%`, transition: 'width 0.3s ease',
+                      }} />
                     </div>
                   </div>
+                </div>
 
+                <div style={{ padding: '0 14px 14px' }}>
                   {isComplete ? (
-                    <div className="flex items-center gap-2 p-2.5 rounded-lg bg-emerald-500/5 border border-emerald-500/20">
-                      <CheckCircle className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-                      <p className="text-xs font-semibold text-emerald-400">Validée — récompense créditée</p>
+                    <div style={{
+                      display: 'flex', alignItems: 'center', gap: 8,
+                      padding: '9px 12px', borderRadius: 12,
+                      background: 'rgba(52,211,153,0.07)', border: '1px solid rgba(52,211,153,0.2)',
+                    }}>
+                      <CheckCircle style={{ width: 14, height: 14, color: '#34d399', flexShrink: 0 }} />
+                      <span style={{ fontSize: 12, fontWeight: 600, color: '#34d399' }}>Validée — récompense créditée</span>
                     </div>
                   ) : isEligible ? (
                     <button
                       onClick={() => completeTask(task.id)}
-                      className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl btn-primary text-xs font-semibold text-white"
+                      style={{
+                        width: '100%', padding: '10px 0', borderRadius: 12,
+                        background: 'linear-gradient(135deg, #3b82f6, #6366f1)',
+                        border: 'none', color: '#fff', fontSize: 12, fontWeight: 700,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                        cursor: 'pointer',
+                      }}
                     >
-                      <CheckCircle className="w-3.5 h-3.5" />
+                      <CheckCircle style={{ width: 14, height: 14 }} />
                       Récupérer ma récompense
                     </button>
                   ) : (
                     <button
                       onClick={() => setMiniAppPage('referral')}
-                      className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-purple-500/15 border border-purple-500/30 text-purple-400 text-xs font-semibold hover:bg-purple-500/25 transition-all"
+                      style={{
+                        width: '100%', padding: '10px 0', borderRadius: 12,
+                        background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.3)',
+                        color: '#a78bfa', fontSize: 12, fontWeight: 700,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                        cursor: 'pointer',
+                      }}
                     >
-                      <Users className="w-3.5 h-3.5" />
+                      <Users style={{ width: 14, height: 14 }} />
                       Inviter des amis ({required - count} restant{required - count > 1 ? 's' : ''})
                     </button>
                   )}
                 </div>
-              );
-            }
-
-            // ── MANUAL task (e.g. Partage Communauté) ───────────────────────
-            const userSubmission = taskSubmissions.find(
-              s => s.taskId === task.id && s.userId === currentUser.id
+              </div>
             );
-            const isApproved = userSubmission?.status === 'approved';
-            const isPending  = userSubmission?.status === 'pending';
-            const isRejected = userSubmission?.status === 'rejected';
-            const isOpen     = proofOpen === task.id;
-            const thisResult = proofResult?.taskId === task.id ? proofResult : null;
+          }
 
-            return (
-              <div
-                key={task.id}
-                className={`glass-card p-4 space-y-3 border ${isApproved ? 'border-emerald-500/25' : 'border-purple-500/20'}`}
-              >
-                <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center flex-shrink-0 text-base">
+          // ── MANUAL task ─────────────────────────────────────────────────────
+          const userSubmission = taskSubmissions.find(
+            s => s.taskId === task.id && s.userId === currentUser.id
+          );
+          const isApproved = userSubmission?.status === 'approved';
+          const isPending  = userSubmission?.status === 'pending';
+          const isRejected = userSubmission?.status === 'rejected';
+          const isOpen     = proofOpen === task.id;
+          const thisResult = proofResult?.taskId === task.id ? proofResult : null;
+
+          return (
+            <div
+              key={task.id}
+              style={{
+                borderRadius: 18,
+                border: isApproved ? '1px solid rgba(52,211,153,0.25)' : '1px solid rgba(139,92,246,0.25)',
+                overflow: 'hidden',
+                background: isApproved ? 'rgba(52,211,153,0.04)' : 'rgba(139,92,246,0.04)',
+              }}
+            >
+              <div style={{ padding: 14 }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                  <div style={{
+                    width: 52, height: 52, borderRadius: 14, flexShrink: 0,
+                    background: 'rgba(139,92,246,0.15)', border: '1px solid rgba(139,92,246,0.25)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22,
+                  }}>
                     {task.icon ?? '🎯'}
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap mb-0.5">
-                      <h3 className="text-sm font-semibold text-white">{task.title}</h3>
-                      <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-purple-500/20 text-purple-400">PROMO</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 2 }}>
+                      <span style={{ fontSize: 14, fontWeight: 700, color: '#f8fafc' }}>{task.title}</span>
+                      <span style={{
+                        padding: '2px 6px', borderRadius: 6,
+                        background: 'rgba(139,92,246,0.2)', color: '#a78bfa',
+                        fontSize: 9, fontWeight: 700,
+                      }}>PROMO</span>
                     </div>
-                    <p className="text-xs text-slate-400 leading-relaxed">{task.description}</p>
+                    <p style={{ fontSize: 11, color: '#64748b', lineHeight: 1.4, margin: 0 }}>{task.description}</p>
                   </div>
-                  <span className="text-sm font-bold text-emerald-400 flex-shrink-0">+{task.reward.toFixed(4)} TON</span>
+                  <div style={{ flexShrink: 0, textAlign: 'right' }}>
+                    <div style={{ fontSize: 16, fontWeight: 800, color: '#4ade80' }}>+{task.reward.toFixed(4)}</div>
+                    <div style={{ fontSize: 9, color: '#475569', marginTop: 1 }}>GRAM</div>
+                  </div>
                 </div>
+              </div>
+
+              <div style={{ padding: '0 14px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
 
                 {isApproved && (
-                  <div className="flex items-center gap-2 p-2.5 rounded-lg bg-emerald-500/5 border border-emerald-500/20">
-                    <CheckCircle className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-                    <p className="text-xs font-semibold text-emerald-400">Validée — récompense créditée</p>
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: 8,
+                    padding: '9px 12px', borderRadius: 12,
+                    background: 'rgba(52,211,153,0.07)', border: '1px solid rgba(52,211,153,0.2)',
+                  }}>
+                    <CheckCircle style={{ width: 14, height: 14, color: '#34d399', flexShrink: 0 }} />
+                    <span style={{ fontSize: 12, fontWeight: 600, color: '#34d399' }}>Validée — récompense créditée</span>
                   </div>
                 )}
+
                 {isPending && (
-                  <div className="flex items-center gap-2 p-2.5 rounded-lg bg-amber-500/5 border border-amber-500/20">
-                    <Clock className="w-4 h-4 text-amber-400 flex-shrink-0" />
-                    <p className="text-xs font-semibold text-amber-400">En attente de validation par l'équipe</p>
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: 8,
+                    padding: '9px 12px', borderRadius: 12,
+                    background: 'rgba(245,158,11,0.07)', border: '1px solid rgba(245,158,11,0.2)',
+                  }}>
+                    <Clock style={{ width: 14, height: 14, color: '#fbbf24', flexShrink: 0 }} />
+                    <span style={{ fontSize: 12, fontWeight: 600, color: '#fbbf24' }}>En attente de validation par l'équipe</span>
                   </div>
                 )}
+
                 {isRejected && (
-                  <div className="p-2.5 rounded-lg bg-red-500/5 border border-red-500/20 space-y-1">
-                    <p className="text-xs font-semibold text-red-400">Preuve refusée</p>
+                  <div style={{
+                    padding: '9px 12px', borderRadius: 12,
+                    background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.2)',
+                  }}>
+                    <p style={{ fontSize: 12, fontWeight: 600, color: '#f87171', margin: 0, marginBottom: userSubmission?.adminNote ? 3 : 0 }}>
+                      Preuve refusée
+                    </p>
                     {userSubmission?.adminNote && (
-                      <p className="text-[10px] text-red-400/70">Motif : {userSubmission.adminNote}</p>
+                      <p style={{ fontSize: 10, color: 'rgba(248,113,113,0.7)', margin: 0 }}>Motif : {userSubmission.adminNote}</p>
                     )}
                   </div>
                 )}
 
                 {thisResult && (
-                  <p className={`text-xs font-medium ${thisResult.success ? 'text-emerald-400' : 'text-red-400'}`}>
+                  <p style={{ fontSize: 11, fontWeight: 600, color: thisResult.success ? '#34d399' : '#f87171', margin: 0 }}>
                     {thisResult.success ? '✓' : '✗'} {thisResult.message}
                   </p>
                 )}
@@ -786,72 +1204,120 @@ export const MiniAppTasks: React.FC = () => {
                 {!isApproved && !isPending && !isOpen && (
                   <button
                     onClick={() => { setProofOpen(task.id); setProofText(''); setProofResult(null); }}
-                    className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-purple-500/15 border border-purple-500/30 text-purple-400 text-xs font-semibold hover:bg-purple-500/25 transition-all"
+                    style={{
+                      width: '100%', padding: '10px 0', borderRadius: 12,
+                      background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.3)',
+                      color: '#a78bfa', fontSize: 12, fontWeight: 700,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                      cursor: 'pointer',
+                    }}
                   >
-                    <FileText className="w-3.5 h-3.5" />
+                    <FileText style={{ width: 14, height: 14 }} />
                     {isRejected ? 'Soumettre à nouveau' : 'Soumettre ma preuve'}
                   </button>
                 )}
 
                 {isOpen && (
-                  <div className="space-y-3 border-t border-white/5 pt-3">
-                    <div className="flex items-center justify-between">
-                      <p className="text-xs font-semibold text-white">Votre preuve</p>
-                      <button onClick={() => { setProofOpen(null); setProofText(''); setProofImage(null); }} className="text-slate-500 hover:text-white">
-                        <X className="w-4 h-4" />
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10, borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 12 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: '#f8fafc' }}>Votre preuve</span>
+                      <button
+                        onClick={() => { setProofOpen(null); setProofText(''); setProofImage(null); }}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', display: 'flex', padding: 0 }}
+                      >
+                        <X style={{ width: 16, height: 16 }} />
                       </button>
                     </div>
 
-                    {/* Screenshot upload */}
                     {proofImage ? (
-                      <div className="relative rounded-xl overflow-hidden">
-                        <img src={proofImage} alt="Capture d'écran" className="w-full max-h-48 object-contain rounded-xl bg-white/5" />
+                      <div style={{ position: 'relative', borderRadius: 12, overflow: 'hidden' }}>
+                        <img
+                          src={proofImage} alt="Capture d'écran"
+                          style={{ width: '100%', maxHeight: 192, objectFit: 'contain', display: 'block', background: 'rgba(255,255,255,0.04)' }}
+                        />
                         <button
                           onClick={() => setProofImage(null)}
-                          className="absolute top-2 right-2 bg-black/60 hover:bg-black/80 text-white rounded-full p-1 transition-colors"
+                          style={{
+                            position: 'absolute', top: 8, right: 8,
+                            background: 'rgba(0,0,0,0.6)', border: 'none', borderRadius: '50%',
+                            width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            cursor: 'pointer', color: '#fff',
+                          }}
                         >
-                          <X className="w-3 h-3" />
+                          <X style={{ width: 12, height: 12 }} />
                         </button>
                       </div>
                     ) : (
-                      <label className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl border-2 border-dashed border-white/15 hover:border-purple-500/40 cursor-pointer transition-colors">
-                        <span className="text-2xl">📸</span>
-                        <p className="text-xs font-semibold text-slate-300">Ajouter une capture d'écran</p>
-                        <p className="text-[10px] text-slate-500">Appuyez pour choisir ou prendre une photo</p>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          className="hidden"
-                          onChange={handleImageSelect}
-                        />
+                      <label style={{
+                        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                        gap: 6, padding: 16, borderRadius: 12,
+                        border: '2px dashed rgba(255,255,255,0.12)', cursor: 'pointer',
+                      }}>
+                        <span style={{ fontSize: 24 }}>📸</span>
+                        <p style={{ fontSize: 12, fontWeight: 600, color: '#cbd5e1', margin: 0 }}>Ajouter une capture d'écran</p>
+                        <p style={{ fontSize: 10, color: '#64748b', margin: 0 }}>Appuyez pour choisir ou prendre une photo</p>
+                        <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImageSelect} />
                       </label>
                     )}
 
-                    {/* Optional text description */}
                     <textarea
                       value={proofText}
                       onChange={e => setProofText(e.target.value)}
                       placeholder="Description optionnelle ou lien…"
                       rows={2}
-                      className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white text-xs resize-none focus:outline-none focus:border-purple-500/50 placeholder:text-slate-600"
+                      style={{
+                        width: '100%', padding: '10px 12px', boxSizing: 'border-box',
+                        background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)',
+                        borderRadius: 10, color: '#f8fafc', fontSize: 12, resize: 'none',
+                        outline: 'none', fontFamily: 'inherit',
+                      }}
                     />
 
                     <button
                       onClick={() => handleSubmitProof(task.id)}
                       disabled={(!proofText.trim() && !proofImage) || proofSubmitting}
-                      className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl btn-primary text-xs font-semibold text-white disabled:opacity-40 disabled:cursor-not-allowed"
+                      style={{
+                        width: '100%', padding: '10px 0', borderRadius: 12,
+                        background: 'linear-gradient(135deg, #3b82f6, #6366f1)',
+                        border: 'none', color: '#fff', fontSize: 12, fontWeight: 700,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                        cursor: (!proofText.trim() && !proofImage) || proofSubmitting ? 'not-allowed' : 'pointer',
+                        opacity: (!proofText.trim() && !proofImage) || proofSubmitting ? 0.45 : 1,
+                      }}
                     >
                       {proofSubmitting
-                        ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Envoi...</>
-                        : <><Send className="w-3.5 h-3.5" /> Envoyer ma preuve</>}
+                        ? <><Loader2 style={{ width: 13, height: 13, animation: 'spin 1s linear infinite' }} /> Envoi...</>
+                        : <><Send style={{ width: 13, height: 13 }} /> Envoyer ma preuve</>}
                     </button>
                   </div>
                 )}
               </div>
-            );
-          })}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Empty state */}
+      {filteredCards.length === 0 && !(showPromo && promoTasks.length > 0) && (
+        <div style={{ textAlign: 'center', padding: '40px 20px' }}>
+          <div style={{ fontSize: 36, marginBottom: 12 }}>✅</div>
+          <p style={{ color: '#475569', fontSize: 13, fontWeight: 600 }}>Aucune tâche dans cette catégorie</p>
         </div>
       )}
+
+      {/* Create task CTA */}
+      <button
+        onClick={() => setMiniAppPage('createTask')}
+        style={{
+          width: '100%', padding: '12px 0', borderRadius: 14,
+          background: 'rgba(59,130,246,0.06)', border: '1px dashed rgba(59,130,246,0.25)',
+          color: '#3b82f6', fontSize: 12, fontWeight: 700,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+          marginTop: 16, cursor: 'pointer',
+        }}
+      >
+        <Plus style={{ width: 14, height: 14 }} /> Créer une tâche sponsorisée
+      </button>
 
     </div>
   );

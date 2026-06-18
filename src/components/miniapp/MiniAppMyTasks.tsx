@@ -140,7 +140,7 @@ export const MiniAppMyTasks: React.FC = () => {
     setBudgetError('');
     if (additionalExecs < 1) { setBudgetError('Entrez un nombre valide.'); return; }
     if (currentUser.balanceMain < additionalCost) {
-      setBudgetError(`Solde insuffisant. Disponible: ${currentUser.balanceMain.toFixed(4)} TON, requis: ${additionalCost.toFixed(4)} TON.`);
+      setBudgetError(`Solde insuffisant. Disponible: ${currentUser.balanceMain.toFixed(4)} GRAM, requis: ${additionalCost.toFixed(4)} TON.`);
       return;
     }
     setActionLoading(task.id);
@@ -377,7 +377,7 @@ export const MiniAppMyTasks: React.FC = () => {
                       </button>
                     </div>
                     <div className="space-y-1.5">
-                      <p className="text-[10px] text-slate-500">Exécutions à ajouter (× {priceFixed.toFixed(4)} TON)</p>
+                      <p className="text-[10px] text-slate-500">Exécutions à ajouter (× {priceFixed.toFixed(4)} GRAM)</p>
                       <input
                         type="number" min="1" value={addExecs}
                         onChange={e => { setAddExecs(e.target.value); setBudgetError(''); }}
@@ -388,13 +388,13 @@ export const MiniAppMyTasks: React.FC = () => {
                     <div className="flex justify-between text-xs text-slate-400">
                       <span>Coût supplémentaire</span>
                       <span className={`font-semibold ${additionalExecs > 0 ? 'text-amber-400' : 'text-slate-500'}`}>
-                        {additionalExecs > 0 ? `${additionalCost.toFixed(4)} TON` : '—'}
+                        {additionalExecs > 0 ? `${additionalCost.toFixed(4)} GRAM` : '—'}
                       </span>
                     </div>
                     <div className="flex justify-between text-xs text-slate-400">
                       <span>Votre solde</span>
                       <span className={`font-semibold ${currentUser.balanceMain >= additionalCost && additionalCost > 0 ? 'text-emerald-400' : 'text-slate-300'}`}>
-                        {currentUser.balanceMain.toFixed(4)} TON
+                        {currentUser.balanceMain.toFixed(4)} GRAM
                       </span>
                     </div>
                     {budgetError && (
@@ -410,7 +410,7 @@ export const MiniAppMyTasks: React.FC = () => {
                     >
                       {isLoading
                         ? <Loader2 className="w-3.5 h-3.5 animate-spin mx-auto" />
-                        : `Confirmer — ${additionalExecs > 0 ? `${additionalCost.toFixed(4)} TON` : '0 TON'}`
+                        : `Confirmer — ${additionalExecs > 0 ? `${additionalCost.toFixed(4)} GRAM` : '0 GRAM'}`
                       }
                     </button>
                   </div>

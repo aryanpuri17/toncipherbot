@@ -1,5 +1,15 @@
 import { adminFetch } from '../../utils/adminFetch';
 import React, { useState, useEffect, useCallback } from 'react';
+
+// Open external links properly inside Telegram WebApp (window.open / target="_blank"
+// don't work in the Telegram WebView — must use the WebApp API).
+function openExternal(url: string) {
+  try {
+    const tg = (window as unknown as { Telegram?: { WebApp?: { openLink?: (u: string) => void } } }).Telegram;
+    if (tg?.WebApp?.openLink) { tg.WebApp.openLink(url); return; }
+  } catch { /* not in Telegram */ }
+  window.open(url, '_blank', 'noopener,noreferrer');
+}
 import { useAppStore } from '../../store/appStore';
 import { StatusBadge } from '../ui/StatusBadge';
 import { ToggleSwitch } from '../ui/ToggleSwitch';
@@ -131,7 +141,7 @@ type ApiWithdrawal = {
 };
 
 export const AdminWithdrawals: React.FC = () => {
-  const [withdrawals, setWithdrawals] = useState<ApiWithdrawal[]>([]);
+  const [allWithdrawals, setAllWithdrawals] = useState<ApiWithdrawal[]>([]);
   const [loading, setLoading]         = useState(true);
   const [filter, setFilter]           = useState<'pending' | 'completed' | 'rejected' | 'all'>('pending');
   const [actioning, setActioning]     = useState<string | null>(null);
@@ -139,15 +149,18 @@ export const AdminWithdrawals: React.FC = () => {
   const [noteInput, setNoteInput]     = useState<Record<string, string>>({});
   const [expanded, setExpanded]       = useState<string | null>(null);
   const [copied, setCopied]           = useState<string | null>(null);
-
   const [actionError, setActionError] = useState('');
+  const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
 
-  const fetchWithdrawals = useCallback(async () => {
+  // Always load ALL statuses so counts are always correct and approved/rejected
+  // withdrawals stay visible instead of "disappearing" after an action.
+  const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await adminFetch(`/api/admin/withdrawals?status=${filter}`);
+      const res = await adminFetch('/api/admin/withdrawals?status=all');
       if (res.ok) {
-        setWithdrawals(await res.json() as ApiWithdrawal[]);
+        setAllWithdrawals(await res.json() as ApiWithdrawal[]);
+        setLastRefresh(new Date());
         setActionError('');
       } else {
         setActionError(res.status === 401 ? 'Clé API admin invalide — configurez-la dans l\'onglet Sécurité.' : `Erreur serveur (${res.status}).`);
@@ -156,9 +169,12 @@ export const AdminWithdrawals: React.FC = () => {
       setActionError('Backend injoignable — vérifiez que le serveur tourne.');
     }
     setLoading(false);
-  }, [filter]);
+  }, []);
 
-  useEffect(() => { void fetchWithdrawals(); }, [fetchWithdrawals]);
+  useEffect(() => { void fetchAll(); }, [fetchAll]);
+
+  // Apply filter client-side so counts are always accurate
+  const withdrawals = filter === 'all' ? allWithdrawals : allWithdrawals.filter(w => w.status === filter);
 
   const doApprove = async (id: string) => {
     setActioning(id);
@@ -171,7 +187,12 @@ export const AdminWithdrawals: React.FC = () => {
       if (!res.ok && res.status !== 409) {
         setActionError(`Échec de l'approbation (${res.status}). Réessayez.`);
       } else {
-        await fetchWithdrawals();
+        // Update status locally so the withdrawal stays visible with new status
+        setAllWithdrawals(prev => prev.map(w =>
+          w.id === id ? { ...w, status: 'completed', tx_hash: txHashInput[id] ?? '', processed_at: new Date().toISOString() } : w
+        ));
+        setExpanded(null);
+        void fetchAll(); // sync with server in background
       }
     } catch {
       setActionError('Approbation non envoyée — backend injoignable.');
@@ -190,7 +211,12 @@ export const AdminWithdrawals: React.FC = () => {
       if (!res.ok && res.status !== 409) {
         setActionError(`Échec du refus (${res.status}). Réessayez.`);
       } else {
-        await fetchWithdrawals();
+        // Update status locally so the withdrawal stays visible with new status
+        setAllWithdrawals(prev => prev.map(w =>
+          w.id === id ? { ...w, status: 'rejected', admin_note: noteInput[id] ?? '', processed_at: new Date().toISOString() } : w
+        ));
+        setExpanded(null);
+        void fetchAll(); // sync with server in background
       }
     } catch {
       setActionError('Refus non envoyé — backend injoignable.');
@@ -204,9 +230,9 @@ export const AdminWithdrawals: React.FC = () => {
     setTimeout(() => setCopied(null), 2000);
   };
 
-  const pending   = withdrawals.filter(w => w.status === 'pending').length;
-  const completed = withdrawals.filter(w => w.status === 'completed').length;
-  const rejected  = withdrawals.filter(w => w.status === 'rejected').length;
+  const pending   = allWithdrawals.filter(w => w.status === 'pending').length;
+  const completed = allWithdrawals.filter(w => w.status === 'completed').length;
+  const rejected  = allWithdrawals.filter(w => w.status === 'rejected').length;
 
   const statusColor: Record<string, string> = {
     pending:   'bg-amber-500/20 text-amber-400',
@@ -221,15 +247,18 @@ export const AdminWithdrawals: React.FC = () => {
           <h2 className="text-2xl font-bold text-white">Retraits</h2>
           <p className="text-slate-400 text-sm mt-1">Approbation manuelle — vérifiez les dépôts avant d'envoyer</p>
         </div>
-        <button onClick={() => void fetchWithdrawals()} className="p-2 rounded-lg hover:bg-white/5 text-slate-400" title="Actualiser">
-          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-        </button>
+        <div className="flex items-center gap-2">
+          {lastRefresh && <span className="text-xs text-slate-500">Actualisé {lastRefresh.toLocaleTimeString('fr-FR')}</span>}
+          <button onClick={() => void fetchAll()} className="p-2 rounded-lg hover:bg-white/5 text-slate-400" title="Actualiser">
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          </button>
+        </div>
       </div>
 
       {actionError && (
         <div className="glass-card p-3 border-red-500/30 bg-red-500/10 text-sm text-red-400 flex items-center justify-between">
           <span>⚠ {actionError}</span>
-          <button onClick={() => void fetchWithdrawals()} className="text-xs font-semibold underline hover:text-red-300">Réessayer</button>
+          <button onClick={() => void fetchAll()} className="text-xs font-semibold underline hover:text-red-300">Réessayer</button>
         </div>
       )}
 
@@ -238,7 +267,7 @@ export const AdminWithdrawals: React.FC = () => {
           { v: 'pending',   label: `⏳ En attente (${pending})`   },
           { v: 'completed', label: `✓ Approuvés (${completed})`   },
           { v: 'rejected',  label: `✗ Refusés (${rejected})`      },
-          { v: 'all',       label: `Tous (${withdrawals.length})` },
+          { v: 'all',       label: `Tous (${allWithdrawals.length})` },
         ] as const).map(({ v, label }) => (
           <button key={v} onClick={() => setFilter(v)}
             className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all ${filter === v ? 'bg-blue-500/15 text-blue-400 border border-blue-500/30' : 'bg-white/5 text-slate-400'}`}>
@@ -256,7 +285,9 @@ export const AdminWithdrawals: React.FC = () => {
         )}
         {!loading && withdrawals.length === 0 && (
           <div className="glass-card p-10 text-center">
-            <p className="text-sm text-slate-500">Aucune demande de retrait{filter !== 'all' ? ` "${filter}"` : ''}</p>
+            <p className="text-sm text-slate-500">
+              {filter === 'pending' ? 'Aucun retrait en attente 🎉' : `Aucun retrait "${filter}"`}
+            </p>
           </div>
         )}
         {!loading && withdrawals.map(w => {
@@ -367,19 +398,22 @@ export const AdminWithdrawals: React.FC = () => {
                     <div className="flex items-center gap-2 p-3 rounded-lg bg-white/[0.03]">
                       {w.status === 'completed'
                         ? <><CheckCircle className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-                            <div>
+                            <div className="flex-1 min-w-0">
                               <p className="text-xs text-emerald-400 font-medium">Approuvé {w.processed_at ? new Date(w.processed_at).toLocaleString('fr-FR') : ''}</p>
-                              {w.tx_hash && (
-                                <a href={`https://tonscan.org/tx/${w.tx_hash}`} target="_blank" rel="noopener noreferrer"
-                                   className="flex items-center gap-1 text-[10px] text-blue-400 hover:text-blue-300 mt-0.5 font-mono">
+                              {w.tx_hash ? (
+                                <button
+                                  onClick={() => openExternal(`https://tonscan.org/tx/${w.tx_hash}`)}
+                                  className="flex items-center gap-1 text-[10px] text-blue-400 hover:text-blue-300 mt-1 font-mono underline underline-offset-2">
                                   <ExternalLink className="w-2.5 h-2.5 flex-shrink-0" />
-                                  {w.tx_hash.length > 20 ? w.tx_hash.slice(0, 20) + '…' : w.tx_hash}
-                                </a>
+                                  {w.tx_hash.length > 24 ? w.tx_hash.slice(0, 24) + '…' : w.tx_hash}
+                                </button>
+                              ) : (
+                                <p className="text-[10px] text-slate-500 mt-0.5">Pas de TX Hash renseigné</p>
                               )}
                             </div></>
                         : <><XCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
                             <div><p className="text-xs text-red-400 font-medium">Refusé {w.processed_at ? new Date(w.processed_at).toLocaleString('fr-FR') : ''}</p>
-                              {w.admin_note && <p className="text-[10px] text-slate-500 mt-0.5">Motif: {w.admin_note}</p>}</div></>}
+                              {w.admin_note && <p className="text-[10px] text-slate-500 mt-0.5">Motif : {w.admin_note}</p>}</div></>}
                     </div>
                   )}
                 </div>

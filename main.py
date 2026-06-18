@@ -20,7 +20,7 @@ from urllib.parse import parse_qsl
 import aiosqlite
 from aiohttp import web
 from aiogram import Bot, Dispatcher, types
-from aiogram.filters import CommandStart
+from aiogram.filters import CommandStart, Command
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 
 BOT_TOKEN         = os.getenv("BOT_TOKEN", "")
@@ -50,6 +50,50 @@ _CORS = {
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type, X-Admin-Key",
 }
+
+# ── Server-Sent Events (real-time task updates) ───────────────────────────────
+
+_sse_queues: list[asyncio.Queue] = []
+
+
+async def _sse_broadcast(event: str, data: dict) -> None:
+    """Push an event to every connected SSE client."""
+    msg = f"event: {event}\ndata: {json.dumps(data)}\n\n".encode()
+    dead = []
+    for q in list(_sse_queues):
+        try:
+            q.put_nowait(msg)
+        except asyncio.QueueFull:
+            dead.append(q)
+    for d in dead:
+        try: _sse_queues.remove(d)
+        except ValueError: pass
+
+
+async def api_tasks_stream(request: web.Request) -> web.StreamResponse:
+    """SSE endpoint — clients subscribe here for real-time task lifecycle events."""
+    resp = web.StreamResponse()
+    resp.headers["Content-Type"] = "text/event-stream"
+    resp.headers["Cache-Control"] = "no-cache"
+    resp.headers["X-Accel-Buffering"] = "no"
+    resp.headers.update(_CORS)
+    await resp.prepare(request)
+    queue: asyncio.Queue = asyncio.Queue(maxsize=50)
+    _sse_queues.append(queue)
+    try:
+        await resp.write(b"event: connected\ndata: {}\n\n")
+        while True:
+            try:
+                msg = await asyncio.wait_for(queue.get(), timeout=25)
+                await resp.write(msg)
+            except asyncio.TimeoutError:
+                await resp.write(b": ping\n\n")
+    except Exception:
+        pass
+    finally:
+        try: _sse_queues.remove(queue)
+        except ValueError: pass
+    return resp
 
 # In-memory rate-limit buckets  {ip: [timestamps]}
 _rate_buckets: dict[str, list[float]] = defaultdict(list)
@@ -388,6 +432,105 @@ async def cmd_start(msg: types.Message):
         "👥 Invitez vos amis et montez dans le classement.\n\n"
         "⬇️ Appuyez sur le bouton pour démarrer :",
         parse_mode="HTML", reply_markup=kb,
+    )
+
+
+# ── Bot command: /credit ──────────────────────────────────────────────────────
+
+@dp.message(Command("credit"))
+async def cmd_credit(msg: types.Message):
+    if msg.from_user.id != ADMIN_TELEGRAM_ID:
+        return
+
+    args = (msg.text or "").split(maxsplit=3)[1:]
+    if len(args) < 2:
+        await msg.reply(
+            "❌ Usage : <code>/credit &lt;id_ou_@username&gt; &lt;montant&gt; [note]</code>\n\n"
+            "Exemples :\n"
+            "<code>/credit 123456789 5.00</code>\n"
+            "<code>/credit @monami 10 Cadeau</code>",
+            parse_mode="HTML",
+        )
+        return
+
+    target_raw = args[0]
+    try:
+        amount = float(args[1])
+    except ValueError:
+        await msg.reply("❌ Montant invalide.", parse_mode="HTML")
+        return
+
+    if not (0 < amount <= 100_000):
+        await msg.reply("❌ Montant doit être entre 0 et 100 000 GRAM.", parse_mode="HTML")
+        return
+
+    note = args[2] if len(args) > 2 else "Crédit admin"
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        if target_raw.startswith("@"):
+            async with db.execute(
+                "SELECT telegram_id, first_name, username FROM users WHERE username = ? COLLATE NOCASE",
+                (target_raw[1:],),
+            ) as cur:
+                row = await cur.fetchone()
+        else:
+            try:
+                tid = int(target_raw)
+            except ValueError:
+                await msg.reply("❌ ID invalide. Utilisez un nombre ou @username.", parse_mode="HTML")
+                return
+            async with db.execute(
+                "SELECT telegram_id, first_name, username FROM users WHERE telegram_id = ?",
+                (tid,),
+            ) as cur:
+                row = await cur.fetchone()
+
+        if not row:
+            await msg.reply(f"❌ Utilisateur introuvable : <code>{target_raw}</code>", parse_mode="HTML")
+            return
+
+        target_id  = row[0]
+        first_name = row[1] or "Utilisateur"
+        username   = row[2]
+
+        await db.execute(
+            """UPDATE users
+               SET app_balance        = COALESCE(app_balance, 0)        + ?,
+                   app_total_earnings = COALESCE(app_total_earnings, 0) + ?
+               WHERE telegram_id = ?""",
+            (amount, amount, target_id),
+        )
+        await db.execute(
+            """INSERT INTO transactions
+                   (id, telegram_id, type, amount, currency, network, address, status, admin_note)
+               VALUES (?, ?, 'admin_credit', ?, 'GRAM', 'admin', 'admin', 'completed', ?)""",
+            (str(uuid.uuid4()), target_id, amount, note),
+        )
+        await db.commit()
+
+    try:
+        note_line = f"\n📝 <i>{note}</i>" if note != "Crédit admin" else ""
+        await bot.send_message(
+            target_id,
+            f"💎 <b>Crédit reçu !</b>\n\n"
+            f"Bonjour <b>{first_name}</b> 👋\n\n"
+            f"L'équipe TonCipher vous a crédité :\n"
+            f"<b>+{amount:.4f} GRAM</b>{note_line}\n\n"
+            f"Votre solde a été mis à jour instantanément.\n"
+            f"Merci de votre confiance en TonCipher ! 🙏",
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass
+
+    username_part = f" (@{username})" if username else ""
+    await msg.reply(
+        f"✅ <b>Crédit envoyé !</b>\n\n"
+        f"👤 {first_name}{username_part}\n"
+        f"🆔 <code>{target_id}</code>\n"
+        f"💎 <b>+{amount:.4f} GRAM</b>\n"
+        f"📝 {note}",
+        parse_mode="HTML",
     )
 
 
@@ -1138,6 +1281,80 @@ async def api_admin_unblock_withdrawals(request: web.Request) -> web.Response:
     return web.json_response({"success": True}, headers=_CORS)
 
 
+# ── API — Admin: credit user balance ──────────────────────────────────────────
+
+async def api_admin_credit_user(request: web.Request) -> web.Response:
+    if not _check_admin_auth(request):
+        return web.json_response({"error": "Unauthorized"}, status=401, headers=_CORS)
+    telegram_id, err = _require_admin_telegram_id(request)
+    if err: return err
+
+    try:
+        data = await request.json()
+    except Exception:
+        return web.json_response({"error": "Invalid JSON"}, status=400, headers=_CORS)
+
+    try:
+        amount = float(data.get("amount", 0))
+    except (TypeError, ValueError):
+        return web.json_response({"error": "Montant invalide"}, status=400, headers=_CORS)
+
+    if not (0 < amount <= 100_000):
+        return web.json_response({"error": "Le montant doit être entre 0 et 100 000"}, status=400, headers=_CORS)
+
+    note = str(data.get("note", "")).strip()[:200] or "Crédit administrateur"
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT telegram_id, first_name, username FROM users WHERE telegram_id = ?",
+            (telegram_id,)
+        ) as cur:
+            row = await cur.fetchone()
+        if not row:
+            return web.json_response({"error": "Utilisateur introuvable"}, status=404, headers=_CORS)
+
+        first_name = row[1] or "Utilisateur"
+        username   = row[2]
+
+        # Credit balance + total earnings
+        await db.execute(
+            """UPDATE users
+               SET app_balance        = COALESCE(app_balance, 0)        + ?,
+                   app_total_earnings = COALESCE(app_total_earnings, 0) + ?
+               WHERE telegram_id = ?""",
+            (amount, amount, telegram_id),
+        )
+
+        # Audit trail in transactions table
+        tx_id = str(uuid.uuid4())
+        await db.execute(
+            """INSERT INTO transactions
+                   (id, telegram_id, type, amount, currency, network, address, status, admin_note)
+               VALUES (?, ?, 'admin_credit', ?, 'GRAM', 'admin', 'admin', 'completed', ?)""",
+            (tx_id, telegram_id, amount, note),
+        )
+        await db.commit()
+
+    # Telegram notification (non-blocking)
+    try:
+        username_part = f" (@{username})" if username else ""
+        note_line     = f"\n📝 <i>{note}</i>" if note != "Crédit administrateur" else ""
+        await bot.send_message(
+            telegram_id,
+            f"💎 <b>Crédit reçu !</b>\n\n"
+            f"Bonjour <b>{first_name}</b>{username_part} 👋\n\n"
+            f"L'équipe TonCipher vous a crédité :\n"
+            f"<b>+{amount:.4f} GRAM</b>{note_line}\n\n"
+            f"Votre solde a été mis à jour instantanément.\n"
+            f"Merci de votre confiance en TonCipher ! 🙏",
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass  # Notification failure must not block the response
+
+    return web.json_response({"ok": True, "amount": amount, "telegram_id": telegram_id}, headers=_CORS)
+
+
 # ── API — Admin: withdrawals list + approve/reject ─────────────────────────────
 
 async def api_admin_withdrawals(request: web.Request) -> web.Response:
@@ -1323,6 +1540,7 @@ async def api_admin_config_set(request: web.Request) -> web.Response:
             (key, value),
         )
         await db.commit()
+    await _sse_broadcast("config_updated", {"key": key})
     return web.json_response({"success": True}, headers=_CORS)
 
 
@@ -1348,6 +1566,7 @@ async def api_admin_config_bulk(request: web.Request) -> web.Response:
             )
             saved += 1
         await db.commit()
+    await _sse_broadcast("config_updated", {"keys": list(configs.keys())})
     return web.json_response({"success": True, "saved": saved}, headers=_CORS)
 
 
@@ -1371,32 +1590,52 @@ async def api_admin_approve_withdrawal(request: web.Request) -> web.Response:
         if cur.rowcount == 0:
             # Already approved/rejected (or unknown id) — don't notify twice
             return web.json_response({"error": "Already processed or not found"}, status=409, headers=_CORS)
-        # Notify user via bot if available
-        async with db.execute("SELECT telegram_id, amount, currency FROM transactions WHERE id = ?", (tx_id,)) as cur2:
+        # Fetch transaction + user details for the notification
+        async with db.execute("""
+            SELECT t.telegram_id, t.amount, t.currency, t.address,
+                   u.first_name, u.username
+            FROM transactions t
+            LEFT JOIN users u ON t.telegram_id = u.telegram_id
+            WHERE t.id = ?
+        """, (tx_id,)) as cur2:
             tx_row = await cur2.fetchone()
         await db.commit()
 
     tx_link = f"https://tonscan.org/tx/{tx_hash}" if tx_hash else ""
     if bot and tx_row:
+        first_name = tx_row[4] or "cher utilisateur"
+        username_part = f" (@{tx_row[5]})" if tx_row[5] else ""
+        addr_short = tx_row[3][:8] + "…" + tx_row[3][-6:] if tx_row[3] and len(tx_row[3]) > 14 else (tx_row[3] or "")
+        tx_hash_short = (tx_hash[:16] + "…") if len(tx_hash) > 16 else tx_hash
         try:
             await bot.send_message(
                 tx_row[0],
                 f"✅ <b>Retrait approuvé !</b>\n\n"
-                f"💰 Montant : <b>{tx_row[1]:.2f} {tx_row[2]}</b>\n"
-                + (f'🔗 <a href="{tx_link}">Voir la transaction</a>' if tx_link else ""),
+                f"Félicitations <b>{first_name}</b>{username_part} 🎉\n\n"
+                f"Votre retrait a été traité avec succès et envoyé à votre adresse.\n\n"
+                f"━━━━━━━━━━━━━━━━━━━━\n"
+                f"💎 Montant envoyé : <b>{tx_row[1]:.4f} {tx_row[2]}</b>\n"
+                f"📍 Adresse : <code>{addr_short}</code>\n"
+                + (f"🔗 TX Hash : <code>{tx_hash_short}</code>\n"
+                   f'<a href="{tx_link}">👁 Voir sur TonScan</a>\n' if tx_link else "")
+                + f"━━━━━━━━━━━━━━━━━━━━\n\n"
+                f"Merci de votre confiance en TonCipher ! 🙏\n"
+                f"Continuez à accomplir des tâches et profitez de nos jeux pour gagner encore plus de TON ! 🚀",
                 parse_mode="HTML",
-                disable_web_page_preview=True,
+                disable_web_page_preview=False,
             )
         except Exception:
             pass
 
     if tx_row:
+        user_label = f"@{tx_row[5]}" if tx_row[5] else (tx_row[4] or f"ID:{tx_row[0]}")
         await _notify_channel(
             await _configured_withdrawal_channel(),
             f"✅ <b>Retrait approuvé</b>\n"
-            f"🆔 TX ID: <code>{tx_id}</code>\n"
-            f"💰 {tx_row[1]:.2f} {tx_row[2]}\n"
-            + (f'🔗 <a href="{tx_link}">Voir sur TonScan</a>' if tx_link else ""),
+            f"👤 {user_label} (<code>{tx_row[0]}</code>)\n"
+            f"💰 {tx_row[1]:.4f} {tx_row[2]}\n"
+            f"🆔 TX: <code>{tx_id}</code>\n"
+            + (f'🔗 <a href="{tx_link}">Voir sur TonScan</a>' if tx_link else "📭 Aucun TX Hash"),
         )
 
     return web.json_response({"success": True}, headers=_CORS)
@@ -1422,7 +1661,13 @@ async def api_admin_reject_withdrawal(request: web.Request) -> web.Response:
         if cur.rowcount == 0:
             # Already approved/rejected (or unknown id) — don't notify twice
             return web.json_response({"error": "Already processed or not found"}, status=409, headers=_CORS)
-        async with db.execute("SELECT telegram_id, amount, currency FROM transactions WHERE id = ?", (tx_id,)) as cur2:
+        async with db.execute("""
+            SELECT t.telegram_id, t.amount, t.currency,
+                   u.first_name, u.username
+            FROM transactions t
+            LEFT JOIN users u ON t.telegram_id = u.telegram_id
+            WHERE t.id = ?
+        """, (tx_id,)) as cur2:
             tx_row = await cur2.fetchone()
         if tx_row:
             # Keep the server-side balance backup consistent: the amount was
@@ -1434,14 +1679,21 @@ async def api_admin_reject_withdrawal(request: web.Request) -> web.Response:
         await db.commit()
 
     if bot and tx_row:
+        first_name = tx_row[3] or "cher utilisateur"
+        username_part = f" (@{tx_row[4]})" if tx_row[4] else ""
         try:
             await bot.send_message(
                 tx_row[0],
-                f"❌ <b>Retrait refusé</b>\n\n"
-                f"💰 Montant : {tx_row[1]:.2f} {tx_row[2]}\n"
-                f"{'📝 Motif : ' + note if note else 'Aucun motif précisé.'}\n\n"
-                f"🔄 Votre solde de <b>{tx_row[1]:.2f} {tx_row[2]}</b> sera recrédité "
-                f"automatiquement à la prochaine ouverture de l'application.",
+                f"❌ <b>Retrait non traité</b>\n\n"
+                f"Bonjour <b>{first_name}</b>{username_part},\n\n"
+                f"Votre demande de retrait n'a pas pu être traitée pour le moment.\n\n"
+                f"━━━━━━━━━━━━━━━━━━━━\n"
+                f"💎 Montant : <b>{tx_row[1]:.4f} {tx_row[2]}</b>\n"
+                + (f"📝 Motif : {note}\n" if note else "📝 Aucun motif précisé.\n")
+                + f"━━━━━━━━━━━━━━━━━━━━\n\n"
+                f"✅ <b>Bonne nouvelle :</b> votre solde de <b>{tx_row[1]:.4f} {tx_row[2]}</b> "
+                f"a été automatiquement recrédité sur votre compte.\n\n"
+                f"Si vous pensez qu'il s'agit d'une erreur, contactez notre support : @TonCipher_bot 💬",
                 parse_mode="HTML",
             )
         except Exception:
@@ -1743,6 +1995,16 @@ async def api_user_task_complete(request: web.Request) -> web.Response:
             await db2.commit()
         return web.json_response({"error": "Membership not verified. Please join and try again."}, status=403, headers=_CORS)
 
+    # Broadcast updated completion count to SSE clients
+    async with aiosqlite.connect(DB_PATH) as db3:
+        async with db3.execute(
+            "SELECT completions, max_completions, status FROM user_tasks WHERE id = ?", (task_id,)
+        ) as cur:
+            upd_row = await cur.fetchone()
+    if upd_row:
+        evt = "task_removed" if upd_row[2] == "depleted" else "task_updated"
+        await _sse_broadcast(evt, {"id": task_id, "totalCompletions": upd_row[0], "maxCompletions": upd_row[1]})
+
     return web.json_response({"success": True, "reward": reward}, headers=_CORS)
 
 
@@ -1810,6 +2072,7 @@ async def api_user_task_pause(request: web.Request) -> web.Response:
         await db.execute("UPDATE user_tasks SET status = ? WHERE id = ?", (new_status, task_id))
         await db.commit()
 
+    await _sse_broadcast("task_removed" if new_status == "paused" else "task_approved", {"id": task_id})
     return web.json_response({"success": True, "status": new_status}, headers=_CORS)
 
 
@@ -1846,6 +2109,7 @@ async def api_user_task_delete(request: web.Request) -> web.Response:
         await db.execute("DELETE FROM user_task_completions WHERE task_id = ?", (task_id,))
         await db.commit()
 
+    await _sse_broadcast("task_removed", {"id": task_id})
     return web.json_response({"success": True, "refund": refund}, headers=_CORS)
 
 
@@ -1966,6 +2230,21 @@ async def api_admin_approve_user_task(request: web.Request) -> web.Response:
             (task_id,)
         )
         await db.commit()
+
+        # Fetch full task to broadcast to SSE clients
+        async with db.execute(
+            "SELECT id, type, title, description, target_url, reward, completions, max_completions "
+            "FROM user_tasks WHERE id = ?", (task_id,)
+        ) as cur:
+            trow = await cur.fetchone()
+
+    if trow:
+        await _sse_broadcast("task_approved", {
+            "id": trow[0], "type": trow[1], "title": trow[2],
+            "description": trow[3], "targetUrl": trow[4],
+            "reward": float(trow[5]), "totalCompletions": trow[6],
+            "maxCompletions": trow[7],
+        })
 
     if bot and task:
         try:
@@ -2108,6 +2387,7 @@ async def start_web() -> None:
     app.router.add_post("/api/admin/users/{telegram_id}/unflag",               api_admin_unflag_user)
     app.router.add_post("/api/admin/users/{telegram_id}/block-withdrawals",    api_admin_block_withdrawals)
     app.router.add_post("/api/admin/users/{telegram_id}/unblock-withdrawals",  api_admin_unblock_withdrawals)
+    app.router.add_post("/api/admin/users/{telegram_id}/credit",               api_admin_credit_user)
 
     # Admin — withdrawals
     app.router.add_get( "/api/admin/withdrawals",          api_admin_withdrawals)
@@ -2119,6 +2399,7 @@ async def start_web() -> None:
     app.router.add_post("/api/admin/fraud-alerts/{alert_id}/resolve", api_admin_resolve_alert)
 
     # User tasks marketplace
+    app.router.add_get( "/api/tasks/stream",                    api_tasks_stream)
     app.router.add_post("/api/user-tasks/create",               api_user_task_create)
     app.router.add_get( "/api/user-tasks/mine",                 api_user_task_mine)
     app.router.add_get( "/api/user-tasks/available",            api_user_task_available)

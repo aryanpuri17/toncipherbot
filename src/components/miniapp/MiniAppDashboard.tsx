@@ -49,7 +49,7 @@ export const MiniAppDashboard: React.FC = () => {
       if (ok) haptic.success(); else haptic.error();
       setPromoResult(
         ok
-          ? { success: true, message: `+${(result.reward ?? 0).toFixed(2)} TON crédité sur votre compte!` }
+          ? { success: true, message: `+${(result.reward ?? 0).toFixed(2)} GRAM crédité sur votre compte!` }
           : { success: false, message: result.error ?? 'Erreur inconnue.' }
       );
       if (ok) setPromoCode('');
@@ -105,13 +105,13 @@ export const MiniAppDashboard: React.FC = () => {
         <div className="relative">
           <p className="text-[#7DD4FC] text-xs font-medium uppercase tracking-widest mb-2">Solde total</p>
           <p className="text-4xl font-bold text-white tracking-tight mb-0.5">
-            <CountUp value={u.balanceMain} decimals={2} animateOnMount suffix=" TON" />
+            <CountUp value={u.balanceMain} decimals={2} animateOnMount suffix=" GRAM" />
           </p>
           {u.todayEarnings > 0 ? (
             <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/20 border border-emerald-500/30 mb-4">
               <TrendingUp className="w-3 h-3 text-emerald-400" />
               <span className="text-emerald-300 text-xs font-semibold">
-                +<CountUp value={u.todayEarnings} decimals={2} duration={0.8} /> TON aujourd'hui
+                +<CountUp value={u.todayEarnings} decimals={2} duration={0.8} /> GRAM aujourd'hui
               </span>
             </div>
           ) : (
@@ -148,7 +148,7 @@ export const MiniAppDashboard: React.FC = () => {
           <div className="flex-1 min-w-0">
             <p className="text-sm font-bold text-white">Streak démarré !</p>
             <p className="text-xs text-slate-400 mt-0.5">
-              Revenez demain → +{platformConfig.streakBonusPerDay.toFixed(2)} TON · Palier Jour 3 → +0.05 TON bonus
+              Revenez demain → +{platformConfig.streakBonusPerDay.toFixed(2)} GRAM · Palier Jour 3 → +0.05 GRAM bonus
             </p>
           </div>
         </div>
@@ -168,7 +168,7 @@ export const MiniAppDashboard: React.FC = () => {
               </div>
               <p className="text-[10px] text-slate-500 mt-0.5">
                 {nextMilestone
-                  ? `Palier Jour ${nextMilestone.day} → +${nextMilestone.bonus.toFixed(2)} TON bonus`
+                  ? `Palier Jour ${nextMilestone.day} → +${nextMilestone.bonus.toFixed(2)} GRAM bonus`
                   : '🏆 Tous les paliers débloqués !'}
               </p>
             </div>
@@ -201,8 +201,8 @@ export const MiniAppDashboard: React.FC = () => {
           <p className="text-sm font-semibold text-white">Invitez vos amis</p>
           <p className="text-xs text-purple-300">
             {u.referralCount > 0
-              ? `${u.referralCount} ami${u.referralCount !== 1 ? 's' : ''} invité${u.referralCount !== 1 ? 's' : ''} · ${(u.referralCount * platformConfig.referralBonusSignup).toFixed(2)} TON gagnés`
-              : `Gagnez ${platformConfig.referralBonusSignup.toFixed(2)} TON par ami qui s'inscrit`}
+              ? `${u.referralCount} ami${u.referralCount !== 1 ? 's' : ''} invité${u.referralCount !== 1 ? 's' : ''} · ${(u.referralCount * platformConfig.referralBonusSignup).toFixed(2)} GRAM gagnés`
+              : `Gagnez ${platformConfig.referralBonusSignup.toFixed(2)} GRAM par ami qui s'inscrit`}
           </p>
         </div>
         <div className="shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-lg bg-purple-500/20 border border-purple-500/30">
@@ -233,7 +233,7 @@ export const MiniAppDashboard: React.FC = () => {
               <TrendingUp className="w-4 h-4 text-emerald-400" />
             </div>
             <p className="text-xl font-bold text-emerald-400 leading-none">
-              <CountUp value={u.totalEarnings} decimals={2} animateOnMount suffix=" TON" />
+              <CountUp value={u.totalEarnings} decimals={2} animateOnMount suffix=" GRAM" />
             </p>
             <p className="text-[11px] text-slate-400 mt-1">Total gagné</p>
             <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-emerald-500/60 to-transparent rounded-b-2xl" />

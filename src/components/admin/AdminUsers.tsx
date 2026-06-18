@@ -1,6 +1,6 @@
 import { adminFetch } from '../../utils/adminFetch';
 import React, { useState, useEffect, useCallback } from 'react';
-import { Search, Filter, UserCheck, UserX, Eye, Shield, ChevronDown, RefreshCw, AlertTriangle, ArrowDownLeft, ArrowUpRight, Lock, Unlock, Clock } from 'lucide-react';
+import { Search, Filter, UserCheck, UserX, Eye, Shield, ChevronDown, RefreshCw, AlertTriangle, ArrowDownLeft, ArrowUpRight, Lock, Unlock, Clock, PlusCircle, X } from 'lucide-react';
 
 type ApiUser = {
   telegram_id:         number;
@@ -38,6 +38,11 @@ export const AdminUsers: React.FC = () => {
   const [fetchError, setFetchError] = useState('');
   const [confirm, setConfirm]       = useState<{ id: number; action: string } | null>(null);
   const [actionFeedback, setActionFeedback] = useState<{ id: number; msg: string; ok: boolean } | null>(null);
+  const [creditOpen,   setCreditOpen]   = useState(false);
+  const [creditAmount, setCreditAmount] = useState('');
+  const [creditNote,   setCreditNote]   = useState('');
+  const [crediting,    setCrediting]    = useState(false);
+  const [creditResult, setCreditResult] = useState<{ ok: boolean; msg: string } | null>(null);
 
   const fetchUsers = useCallback(async (): Promise<ApiUser[]> => {
     setLoading(true);
@@ -83,6 +88,34 @@ export const AdminUsers: React.FC = () => {
     }
     setActioning(null);
     setTimeout(() => setActionFeedback(null), 3000);
+  };
+
+  const doCredit = async (telegramId: number) => {
+    const amount = parseFloat(creditAmount);
+    if (!creditAmount || isNaN(amount) || amount <= 0) {
+      setCreditResult({ ok: false, msg: 'Montant invalide' });
+      return;
+    }
+    setCrediting(true);
+    try {
+      const res = await adminFetch(`/api/admin/users/${telegramId}/credit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount, note: creditNote.trim() || undefined }),
+      });
+      const data = await res.json() as { ok?: boolean; error?: string };
+      if (res.ok && data.ok) {
+        setCreditResult({ ok: true, msg: `+${amount.toFixed(4)} GRAM crédités avec succès` });
+        setCreditAmount('');
+        setCreditNote('');
+        setTimeout(() => { setCreditOpen(false); setCreditResult(null); }, 2500);
+      } else {
+        setCreditResult({ ok: false, msg: data.error ?? `Erreur ${res.status}` });
+      }
+    } catch {
+      setCreditResult({ ok: false, msg: 'Backend injoignable' });
+    }
+    setCrediting(false);
   };
 
   const statusLabel = { banned: 'Banni', blocked: 'Retraits bloqués', flagged: 'Signalé', active: 'Actif' } as const;
@@ -323,6 +356,56 @@ export const AdminUsers: React.FC = () => {
                     {selected.banned ? 'Compte banni' : selected.flagged ? 'Compte signalé' : 'Compte sain'}
                   </span>
                 </div>
+              </div>
+
+              {/* Credit balance */}
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Créditer</p>
+                {!creditOpen ? (
+                  <button
+                    onClick={() => { setCreditOpen(true); setCreditResult(null); }}
+                    className="w-full py-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 text-xs font-semibold hover:bg-emerald-500/20 flex items-center justify-center gap-2">
+                    <PlusCircle className="w-3.5 h-3.5" /> Ajouter du solde
+                  </button>
+                ) : (
+                  <div className="rounded-xl bg-emerald-500/5 border border-emerald-500/20 p-3 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-emerald-400">Crédit manuel</span>
+                      <button onClick={() => { setCreditOpen(false); setCreditAmount(''); setCreditNote(''); setCreditResult(null); }}
+                        className="text-slate-500 hover:text-slate-300">
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                    <div className="relative">
+                      <input
+                        type="number" min="0.0001" step="0.0001" placeholder="Montant (ex: 1.5)"
+                        value={creditAmount}
+                        onChange={e => setCreditAmount(e.target.value)}
+                        className="w-full pr-14 pl-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-emerald-500/40"
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-500">GRAM</span>
+                    </div>
+                    <input
+                      type="text" placeholder="Note (optionnel)"
+                      value={creditNote}
+                      onChange={e => setCreditNote(e.target.value)}
+                      className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-xs text-white placeholder:text-slate-600 focus:outline-none focus:border-emerald-500/40"
+                    />
+                    {creditResult && (
+                      <p className={`text-xs font-semibold ${creditResult.ok ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {creditResult.ok ? '✓ ' : '✗ '}{creditResult.msg}
+                      </p>
+                    )}
+                    <button
+                      onClick={() => void doCredit(selected.telegram_id)}
+                      disabled={crediting || !creditAmount}
+                      className="w-full py-2 rounded-lg bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 text-xs font-bold hover:bg-emerald-500/30 disabled:opacity-40 flex items-center justify-center gap-2">
+                      {crediting
+                        ? <><span className="w-3 h-3 border border-emerald-400/40 border-t-emerald-400 rounded-full animate-spin" /> En cours…</>
+                        : <><PlusCircle className="w-3.5 h-3.5" /> Confirmer le crédit</>}
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Action buttons */}

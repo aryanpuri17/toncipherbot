@@ -20,6 +20,12 @@ type ApiStats = {
   high_alerts: number;
   medium_alerts: number;
   low_alerts: number;
+  // Financial totals from DB (reliable even after localStorage reset)
+  total_deposits_amount: number;
+  total_withdrawals_amount: number;
+  total_deposits_count: number;
+  total_withdrawals_count: number;
+  pending_withdrawals: number;
 };
 
 type ApiAlert = {
@@ -40,7 +46,7 @@ export const AdminOverview: React.FC = () => {
   const [apiStats, setApiStats] = useState<ApiStats | null>(null);
   const [recentAlerts, setRecentAlerts] = useState<ApiAlert[]>([]);
 
-  useEffect(() => {
+  const refreshStats = React.useCallback(() => {
     void adminFetch('/api/admin/stats')
       .then(r => r.ok ? r.json() : null)
       .then((d: ApiStats | null) => { if (d) setApiStats(d); })
@@ -51,11 +57,20 @@ export const AdminOverview: React.FC = () => {
       .catch(() => {});
   }, []);
 
+  useEffect(() => {
+    refreshStats();
+    const poll = setInterval(refreshStats, 30_000);
+    return () => clearInterval(poll);
+  }, [refreshStats]);
+
   const today = new Date().toDateString();
-  const totalUsers       = apiStats?.total_users ?? 0;
+  const totalUsers       = apiStats?.total_users ?? users.length;
   const openFraudAlerts  = apiStats?.open_alerts ?? 0;
-  const totalDeposits    = transactions.filter(t => t.type === 'deposit' && t.status === 'completed').reduce((sum, t) => sum + t.amount, 0);
-  const totalWithdrawals = transactions.filter(t => t.type === 'withdrawal' && ['completed', 'processing'].includes(t.status)).reduce((sum, t) => sum + t.amount, 0);
+  // Prefer server-side totals (accurate across all users / devices)
+  const totalDeposits    = apiStats?.total_deposits_amount
+    ?? transactions.filter(t => t.type === 'deposit' && t.status === 'completed').reduce((sum, t) => sum + t.amount, 0);
+  const totalWithdrawals = apiStats?.total_withdrawals_amount
+    ?? transactions.filter(t => t.type === 'withdrawal' && ['completed', 'processing'].includes(t.status)).reduce((sum, t) => sum + t.amount, 0);
   const platformRevenue  = transactions.filter(t => t.fee && t.fee > 0).reduce((sum, t) => sum + (t.fee || 0), 0);
   const activeCampaigns  = campaigns.filter(c => c.status === 'active').length;
   const completedTasksToday = transactions.filter(t => t.type === 'reward' && new Date(t.createdAt).toDateString() === today).length;

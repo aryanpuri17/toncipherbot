@@ -87,7 +87,7 @@ export const MiniAppWallet: React.FC = () => {
     <div className="space-y-5 animate-slide-up">
       <h1 className="text-xl font-bold text-white">Wallet</h1>
 
-      {/* Balance card — identité TON cohérente avec Dashboard */}
+      {/* Balance card — identité GRAM cohérente avec Dashboard */}
       <div className="wallet-balance-card relative overflow-hidden rounded-2xl p-5">
         <div className="absolute -top-8 -right-8 w-32 h-32 rounded-full pointer-events-none"
           style={{ background: 'radial-gradient(circle, rgba(0,152,234,0.2), transparent)' }} />
@@ -100,18 +100,18 @@ export const MiniAppWallet: React.FC = () => {
           </p>
           <p className="text-3xl font-bold text-white tracking-tight">
             {u.balanceMain.toFixed(2)}{' '}
-            <span style={{ color: '#0098EA' }}>TON</span>
+            <span style={{ color: '#0098EA' }}>GRAM</span>
           </p>
 
           <div className="flex items-center gap-3 mt-2 flex-wrap">
             <span className="text-xs text-emerald-400">
-              Total gagné : {u.totalEarnings.toFixed(2)} TON
+              Total gagné : {u.totalEarnings.toFixed(2)} GRAM
             </span>
             {u.taskCredits > 0 && (
               <>
                 <span className="text-white/20">·</span>
                 <span className="text-xs text-blue-400">
-                  dont {u.taskCredits.toFixed(2)} TON crédits campagnes
+                  dont {u.taskCredits.toFixed(2)} GRAM crédits campagnes
                 </span>
               </>
             )}
@@ -239,7 +239,7 @@ export const MiniAppDeposit: React.FC = () => {
   const handleTonDeposit = async () => {
     const amount = parseFloat(depositAmount);
     if (!amount || amount < (selected?.minDeposit ?? 1)) {
-      setTxError(`Minimum: ${selected?.minDeposit} TON`);
+      setTxError(`Minimum: ${selected?.minDeposit} GRAM`);
       return;
     }
     if (!hasAddress) {
@@ -262,7 +262,7 @@ export const MiniAppDeposit: React.FC = () => {
         status: 'confirming',
         address: connectedAddr, // sender — used for matching in monitor
       });
-      setSuccessMsg(`${amount} TON envoyés. Confirmation blockchain en cours…`);
+      setSuccessMsg(`${amount} GRAM envoyés. Confirmation blockchain en cours…`);
       setTxStatus('success');
     } catch {
       setTxStatus('error');
@@ -387,7 +387,7 @@ export const MiniAppDeposit: React.FC = () => {
                 <input type="number" step="0.1" min={selected?.minDeposit ?? 1}
                   value={depositAmount}
                   onChange={e => { setDepositAmount(e.target.value); setTxError(''); }}
-                  placeholder={`Min: ${selected?.minDeposit ?? 1} TON`}
+                  placeholder={`Min: ${selected?.minDeposit ?? 1} GRAM`}
                   className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white text-lg font-semibold placeholder:text-slate-600 focus:outline-none focus:border-blue-500/50" />
               </div>
               {txError && (
@@ -412,7 +412,7 @@ export const MiniAppDeposit: React.FC = () => {
               <button onClick={handleTonDeposit}
                 disabled={txStatus === 'pending' || !depositAmount || !hasAddress}
                 className="w-full btn-primary py-3.5 rounded-xl text-sm font-semibold text-white disabled:opacity-40 disabled:cursor-not-allowed">
-                {txStatus === 'pending' ? '⏳ En attente de signature…' : `Envoyer ${depositAmount || '0'} TON`}
+                {txStatus === 'pending' ? '⏳ En attente de signature…' : `Envoyer ${depositAmount || '0'} GRAM`}
               </button>
             </>
           )}

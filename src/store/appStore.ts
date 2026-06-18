@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { getAdminKey } from '../utils/adminFetch';
 
 // ===================== TYPES =====================
 
@@ -510,6 +511,34 @@ const _savedRefBoost: string | null = (() => {
     return v && new Date(v) > new Date() ? v : null;
   } catch { return null; }
 })();
+const _savedTransactions: Transaction[] = (() => {
+  try { return JSON.parse(localStorage.getItem('tc_transactions') || '[]') as Transaction[]; }
+  catch { return []; }
+})();
+const _savedNotifications: Notification[] = (() => {
+  try { return JSON.parse(localStorage.getItem('tc_notifications') || '[]') as Notification[]; }
+  catch { return []; }
+})();
+const _savedCampaigns: Campaign[] = (() => {
+  try { return JSON.parse(localStorage.getItem('tc_campaigns') || '[]') as Campaign[]; }
+  catch { return []; }
+})();
+const _savedChannels: Channel[] = (() => {
+  try { return JSON.parse(localStorage.getItem('tc_channels') || '[]') as Channel[]; }
+  catch { return []; }
+})();
+const _savedShopItems: ShopItem[] = (() => {
+  try { return JSON.parse(localStorage.getItem('tc_shop_items') || '[]') as ShopItem[]; }
+  catch { return []; }
+})();
+const _savedPromoCodes: PromoCode[] = (() => {
+  try { return JSON.parse(localStorage.getItem('tc_promo_codes') || '[]') as PromoCode[]; }
+  catch { return []; }
+})();
+const _savedReferralMilestones: ReferralMilestone[] = (() => {
+  try { return JSON.parse(localStorage.getItem('tc_referral_milestones') || '[]') as ReferralMilestone[]; }
+  catch { return []; }
+})();
 
 const mockUsers: User[] = [
   {
@@ -522,7 +551,7 @@ const mockUsers: User[] = [
   },
 ];
 
-const mockTasks: Task[] = [
+const _defaultTasks: Task[] = [
   { id: '1', type: 'daily', title: 'Mission Quotidienne', description: 'Connectez-vous chaque jour pour gagner', reward: 0.10, rewardType: 'main', cooldownHours: 24, isActive: true, totalCompletions: 0, createdAt: new Date().toISOString(), verificationMethod: 'auto', priority: 0, maxPerUser: 1, icon: '📅', createdByUserId: 'platform' },
   { id: '2', type: 'join_channel', title: 'Rejoindre TonCipher Officiel', description: 'Abonnez-vous à notre canal officiel pour rester informé', reward: 0.0425, rewardType: 'main', targetUrl: 'https://t.me/TonCipher_Official', isActive: true, totalCompletions: 0, maxCompletions: 1000, createdAt: new Date(Date.now() - 5 * 86400000).toISOString(), verificationMethod: 'auto', priority: 8, icon: '📢', createdByUserId: 'platform' },
   { id: '3', type: 'join_channel', title: 'Rejoindre TonCipher Paiements', description: 'Rejoignez notre canal de suivi des paiements', reward: 0.0425, rewardType: 'main', targetUrl: 'https://t.me/TonCipher_Pays', isActive: true, totalCompletions: 0, maxCompletions: 500, createdAt: new Date(Date.now() - 3 * 86400000).toISOString(), verificationMethod: 'auto', priority: 7, icon: '💸', createdByUserId: 'platform' },
@@ -530,23 +559,34 @@ const mockTasks: Task[] = [
   { id: '5', type: 'special', title: '🏆 Challenge Parrainage', description: 'Invitez 3 amis à rejoindre TonCipher. La vérification est automatique dès que vous avez 3 filleuls.', reward: 1.50, rewardType: 'main', isActive: true, totalCompletions: 0, createdAt: new Date(Date.now() - 2 * 86400000).toISOString(), verificationMethod: 'auto_referral', requiredCount: 3, priority: 10, isPromoTask: true, icon: '🏆', createdByUserId: 'platform' },
   { id: '6', type: 'special', title: '📢 Partage Communauté', description: 'Partagez TonCipher dans un groupe Telegram de 100+ membres. Soumettez un lien ou une description de votre preuve — l\'équipe validera sous 24h.', reward: 0.80, rewardType: 'main', isActive: true, totalCompletions: 0, createdAt: new Date(Date.now() - 1 * 86400000).toISOString(), verificationMethod: 'manual', priority: 9, isPromoTask: true, icon: '📢', createdByUserId: 'platform' },
 ];
+// Merge saved tasks (user/admin-created) with defaults; defaults fill any missing IDs
+const mockTasks: Task[] = (() => {
+  try {
+    const saved = JSON.parse(localStorage.getItem('tc_tasks') || '[]') as Task[];
+    if (saved.length === 0) return _defaultTasks;
+    const savedIds = new Set(saved.map((t: Task) => t.id));
+    const missingDefaults = _defaultTasks.filter(t => !savedIds.has(t.id));
+    return [...saved, ...missingDefaults];
+  } catch { return _defaultTasks; }
+})();
 
-const mockPromoCodes: PromoCode[] = [
+const _defaultPromoCodes: PromoCode[] = [
   { id: '1', code: 'LAUNCH50', reward: 0.50, currency: 'main', maxUses: 500, currentUses: 127, isActive: true, description: 'Code de lancement officiel', createdAt: new Date(Date.now() - 10 * 86400000).toISOString() },
   { id: '2', code: 'VIP200', reward: 2.00, currency: 'main', maxUses: 20, currentUses: 3, isActive: true, expiresAt: new Date(Date.now() + 7 * 86400000).toISOString(), description: 'Code VIP exclusif — 7 jours', createdAt: new Date().toISOString() },
 ];
+const mockPromoCodes: PromoCode[] = _savedPromoCodes.length > 0 ? _savedPromoCodes : _defaultPromoCodes;
 
 const mockTaskSubmissions: TaskSubmission[] = [];
 
-const mockTransactions: Transaction[] = [];
+const mockTransactions: Transaction[] = _savedTransactions;
 
-const mockCampaigns: Campaign[] = [];
+const mockCampaigns: Campaign[] = _savedCampaigns;
 
-const mockChannels: Channel[] = [];
+const mockChannels: Channel[] = _savedChannels;
 
-const mockShopItems: ShopItem[] = [];
+const mockShopItems: ShopItem[] = _savedShopItems;
 
-const mockNotifications: Notification[] = [];
+const mockNotifications: Notification[] = _savedNotifications;
 
 const mockFraudAlerts: FraudAlert[] = [];
 
@@ -644,12 +684,13 @@ const mockAdminUsers: AdminUser[] = [
   { id: '1', telegramId: 0, username: 'puriaryan', role: 'super_admin', permissions: ['*'], isActive: true, createdAt: new Date().toISOString() },
 ];
 
-const mockReferralMilestones: ReferralMilestone[] = [
+const _defaultReferralMilestones: ReferralMilestone[] = [
   { id: '1', referralCount: 5, reward: 2.00, description: 'Invitez 5 amis', isActive: true },
   { id: '2', referralCount: 20, reward: 10.00, description: 'Invitez 20 amis', isActive: true },
   { id: '3', referralCount: 50, reward: 30.00, description: 'Invitez 50 amis', isActive: true },
   { id: '4', referralCount: 100, reward: 75.00, description: 'Invitez 100 amis', isActive: true },
 ];
+const mockReferralMilestones: ReferralMilestone[] = _savedReferralMilestones.length > 0 ? _savedReferralMilestones : _defaultReferralMilestones;
 
 const _savedPlatformConfig: Partial<PlatformConfig> = (() => {
   try { return JSON.parse(localStorage.getItem('tc_platform_config') ?? '{}') as Partial<PlatformConfig>; }
@@ -928,7 +969,7 @@ const generateId = () => Math.random().toString(36).substr(2, 9);
 // (the store itself is per-device; without this, admin changes stay local).
 async function pushConfigToBackend(key: string, value: unknown): Promise<void> {
   try {
-    const adminKey = localStorage.getItem('tc_admin_key') ?? '';
+    const adminKey = getAdminKey();
     await fetch('/api/admin/config', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...(adminKey ? { 'X-Admin-Key': adminKey } : {}) },
@@ -1257,7 +1298,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (state.currentUser.balanceMain < amount) return { success: false, error: 'Solde insuffisant' };
     const maxWithdrawable = state.currentUser.balanceMain - state.currentUser.taskCredits;
     if (amount > maxWithdrawable) {
-      return { success: false, error: `${state.currentUser.taskCredits.toFixed(2)} TON sont réservés à la création de campagnes et ne peuvent pas être retirés.` };
+      return { success: false, error: `${state.currentUser.taskCredits.toFixed(2)} GRAM sont réservés à la création de campagnes et ne peuvent pas être retirés.` };
     }
     if (!address || address.trim().length < 20) return { success: false, error: 'Adresse invalide (trop courte)' };
     // Per-user daily withdrawal limit
@@ -1372,14 +1413,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       const res = await fetch('/api/config');
       if (!res.ok) return;
-      const cfg = await res.json() as { promoEvent?: PlatformConfig['promoEvent']; streakMilestones?: PlatformConfig['streakMilestones'] };
-      set(s => ({
-        platformConfig: {
-          ...s.platformConfig,
-          ...(cfg.promoEvent !== undefined ? { promoEvent: cfg.promoEvent } : {}),
-          ...(Array.isArray(cfg.streakMilestones) && cfg.streakMilestones.length > 0 ? { streakMilestones: cfg.streakMilestones } : {}),
-        },
-      }));
+      const cfg = await res.json() as Partial<PlatformConfig>;
+      if (cfg && typeof cfg === 'object') {
+        set(s => ({ platformConfig: { ...s.platformConfig, ...cfg } }));
+      }
     } catch { /* offline — keep local defaults */ }
   },
 
@@ -1492,7 +1529,13 @@ export const useAppStore = create<AppState>((set, get) => ({
   markNotificationRead: (id) => set((s) => ({ notifications: s.notifications.map(n => n.id === id ? { ...n, isRead: true } : n) })),
   markAllNotificationsRead: () => set((s) => ({ notifications: s.notifications.map(n => ({ ...n, isRead: true })) })),
   addNotification: (n) => set((s) => ({ notifications: [{ ...n, id: generateId(), createdAt: new Date().toISOString() }, ...s.notifications] })),
-  updatePlatformConfig: (data) => set((s) => ({ platformConfig: { ...s.platformConfig, ...data } })),
+  updatePlatformConfig: (data) => {
+    set((s) => ({ platformConfig: { ...s.platformConfig, ...data } }));
+    // Push every changed key to the backend so all users get the update
+    for (const [key, value] of Object.entries(data)) {
+      void pushConfigToBackend(key, value);
+    }
+  },
   addPlatformRevenue: (amount) => set((s) => ({ platformStats: { ...s.platformStats, platformRevenue: s.platformStats.platformRevenue + amount } })),
   addLog: (log) => set((s) => ({ logs: [{ ...log, id: generateId(), createdAt: new Date().toISOString() }, ...s.logs] })),
 
@@ -1513,7 +1556,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       users: s.users.map(u => u.id === state.currentUser.id ? { ...u, ...balanceUpdate } : u),
     }));
     get().addTransaction({ userId: state.currentUser.id, type: 'bonus', amount: earned, currency: 'TON', status: 'completed', completedAt: new Date().toISOString() });
-    get().addNotification({ userId: state.currentUser.id, type: 'reward', title: 'Code promo activé! 🎉', message: `+${earned.toFixed(2)} TON crédité via le code "${promo.code}".`, isRead: false });
+    get().addNotification({ userId: state.currentUser.id, type: 'reward', title: 'Code promo activé! 🎉', message: `+${earned.toFixed(2)} GRAM crédité via le code "${promo.code}".`, isRead: false });
     return { success: true, reward: earned };
   },
 
@@ -1563,7 +1606,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         currentUser: s.currentUser.id === submission.userId ? { ...s.currentUser, ...balanceUpdate } : s.currentUser,
       }));
       get().addTransaction({ userId: submission.userId, type: 'reward', amount: task.reward, currency: 'TON', status: 'completed', completedAt: new Date().toISOString() });
-      get().addNotification({ userId: submission.userId, type: 'reward', title: 'Tâche promo validée! 🎉', message: `+${task.reward.toFixed(2)} TON crédité pour "${task.title}".`, isRead: false });
+      get().addNotification({ userId: submission.userId, type: 'reward', title: 'Tâche promo validée! 🎉', message: `+${task.reward.toFixed(2)} GRAM crédité pour "${task.title}".`, isRead: false });
     } else if (status === 'rejected') {
       get().addNotification({ userId: submission.userId, type: 'alert', title: 'Preuve refusée', message: `Votre soumission pour "${task?.title}" a été refusée.${adminNote ? ` Motif: ${adminNote}` : ''}`, isRead: false });
     }
@@ -1636,6 +1679,14 @@ useAppStore.subscribe((state) => {
     }));
     localStorage.setItem('tc_platform_config', JSON.stringify(state.platformConfig));
     localStorage.setItem('tc_completed_tasks', JSON.stringify(state.completedTaskIds));
+    localStorage.setItem('tc_tasks', JSON.stringify(state.tasks.slice(-500)));
+    localStorage.setItem('tc_transactions', JSON.stringify(state.transactions.slice(-300)));
+    localStorage.setItem('tc_notifications', JSON.stringify(state.notifications.slice(0, 50)));
+    localStorage.setItem('tc_campaigns', JSON.stringify(state.campaigns.slice(-200)));
+    localStorage.setItem('tc_channels', JSON.stringify(state.channels.slice(-200)));
+    localStorage.setItem('tc_shop_items', JSON.stringify(state.shopItems.slice(-200)));
+    localStorage.setItem('tc_promo_codes', JSON.stringify(state.promoCodes.slice(-200)));
+    localStorage.setItem('tc_referral_milestones', JSON.stringify(state.referralMilestones));
     localStorage.setItem('tc_boosters', JSON.stringify(state.activeBoosters));
     if (state.referralBoostExpiresAt) {
       localStorage.setItem('tc_ref_boost', state.referralBoostExpiresAt);

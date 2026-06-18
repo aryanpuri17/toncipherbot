@@ -1,0 +1,21 @@
+name: Keepalive Ping
+
+on:
+  schedule:
+    # Every 10 minutes — keeps Render free tier awake permanently
+    - cron: '*/10 * * * *'
+  workflow_dispatch: # Allow manual trigger from GitHub UI
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping TonCipher server
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 https://toncipherbot.onrender.com/health)
+          echo "Health check status: $STATUS at $(date)"
+          if [ "$STATUS" = "200" ]; then
+            echo "✅ Server is awake and healthy"
+          else
+            echo "⚠️  Server returned $STATUS — it may be waking up"
+          fi

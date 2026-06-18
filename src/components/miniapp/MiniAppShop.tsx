@@ -58,7 +58,7 @@ export const MiniAppShop: React.FC = () => {
           <span className="text-sm font-bold" style={{ color: '#0098EA' }}>
             {currentUser.balanceMain.toFixed(2)}
           </span>
-          <span className="text-xs text-slate-500 font-medium">TON</span>
+          <span className="text-xs text-slate-500 font-medium">GRAM</span>
         </div>
       </div>
 
@@ -88,7 +88,7 @@ export const MiniAppShop: React.FC = () => {
             <div className="text-right">
               <p className="text-xs text-slate-500">Solde après achat</p>
               <p className={`text-sm font-semibold ${currentUser.balanceMain - confirmItem.price < 0 ? 'text-red-400' : 'text-emerald-400'}`}>
-                {(currentUser.balanceMain - confirmItem.price).toFixed(2)} TON
+                {(currentUser.balanceMain - confirmItem.price).toFixed(2)} GRAM
               </p>
             </div>
           </div>
