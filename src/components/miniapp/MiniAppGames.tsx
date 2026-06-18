@@ -648,6 +648,13 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
   const [autoCash,  setAutoCash]  = useState('');
   const [roundId,   setRoundId]   = useState(1);
   const [fakes,     setFakes]     = useState<{name:string; bet:number; cashedAt:number|null}[]>([]);
+  const [betTab,    setBetTab]    = useState<'all' | 'my' | 'top'>('all');
+  const [showBet2,  setShowBet2]  = useState(false);
+  const [bet2,      setBet2]      = useState(0.10);
+  const [autoCash2, setAutoCash2] = useState('');
+  const [myBet2,    setMyBet2]    = useState<number|null>(null);
+  const [queuedBet2,setQueuedBet2]= useState<number|null>(null);
+  const [cashedOut2,setCashedOut2]= useState<number|null>(null);
 
   type LiveEntry = { name: string; bet: number; cashedAt: number | null; k: number };
   const [liveFeed, setLiveFeed] = useState<LiveEntry[]>(() => {
@@ -666,16 +673,20 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
   });
   const feedKeyR = useRef(28);
 
-  const phaseR      = useRef<CPhase>('waiting');
-  const startR      = useRef(0);
-  const crashR      = useRef(0);
-  const activeBetR  = useRef<number|null>(null);
-  const cashedOutR  = useRef<number|null>(null);
-  const autoCashR   = useRef('');
-  const queuedBetR  = useRef<number|null>(null);
-  const rafR        = useRef(0);
-  const resetTimerR = useRef<ReturnType<typeof setTimeout>>(0 as unknown as ReturnType<typeof setTimeout>);
-  const fakeDataR   = useRef<{name:string; bet:number; cashTarget:number|null; cashedAt:number|null}[]>([]);
+  const phaseR       = useRef<CPhase>('waiting');
+  const startR       = useRef(0);
+  const crashR       = useRef(0);
+  const activeBetR   = useRef<number|null>(null);
+  const cashedOutR   = useRef<number|null>(null);
+  const autoCashR    = useRef('');
+  const queuedBetR   = useRef<number|null>(null);
+  const myBet2R      = useRef<number|null>(null);
+  const queuedBet2R  = useRef<number|null>(null);
+  const cashedOut2R  = useRef<number|null>(null);
+  const autoCash2R   = useRef('');
+  const rafR         = useRef(0);
+  const resetTimerR  = useRef<ReturnType<typeof setTimeout>>(0 as unknown as ReturnType<typeof setTimeout>);
+  const fakeDataR    = useRef<{name:string; bet:number; cashTarget:number|null; cashedAt:number|null}[]>([]);
   const startFlightR = useRef<() => void>(() => {});
 
   useEffect(() => { phaseR.current = phase; }, [phase]);
@@ -683,20 +694,37 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
   useEffect(() => { cashedOutR.current = cashedOut; }, [cashedOut]);
   useEffect(() => { autoCashR.current = autoCash; }, [autoCash]);
   useEffect(() => { queuedBetR.current = queuedBet; }, [queuedBet]);
+  useEffect(() => { myBet2R.current = myBet2; }, [myBet2]);
+  useEffect(() => { queuedBet2R.current = queuedBet2; }, [queuedBet2]);
+  useEffect(() => { cashedOut2R.current = cashedOut2; }, [cashedOut2]);
+  useEffect(() => { autoCash2R.current = autoCash2; }, [autoCash2]);
 
   const doCashout = useCallback((m: number) => {
     const ab = activeBetR.current;
     if (ab === null || cashedOutR.current !== null) return;
     const win = +(ab * m).toFixed(4);
     placeGameBet(ab, win);
-    recordGameResult('Crash', ab, win);
+    recordGameResult('Aviator', ab, win);
     onResult(true);
     setCashedOut(m);
     cashedOutR.current = m;
   }, [placeGameBet, recordGameResult, onResult]);
 
-  const doCashoutR = useRef(doCashout);
-  useEffect(() => { doCashoutR.current = doCashout; }, [doCashout]);
+  const doCashout2 = useCallback((m: number) => {
+    const ab = myBet2R.current;
+    if (ab === null || cashedOut2R.current !== null) return;
+    const win = +(ab * m).toFixed(4);
+    placeGameBet(ab, win);
+    recordGameResult('Aviator', ab, win);
+    onResult(true);
+    setCashedOut2(m);
+    cashedOut2R.current = m;
+  }, [placeGameBet, recordGameResult, onResult]);
+
+  const doCashoutR  = useRef(doCashout);
+  const doCashout2R = useRef(doCashout2);
+  useEffect(() => { doCashoutR.current  = doCashout;  }, [doCashout]);
+  useEffect(() => { doCashout2R.current = doCashout2; }, [doCashout2]);
 
   const startFlight = useCallback(() => {
     cancelAnimationFrame(rafR.current);
@@ -713,19 +741,33 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
     fakeDataR.current = fd;
     setFakes(fd.map(f => ({ name: f.name, bet: f.bet, cashedAt: null })));
 
+    const state0 = useAppStore.getState();
+    const curBal0 = state0.demoMode ? state0.demoBalance : state0.currentUser.balanceMain;
+    let deducted = 0;
+
     const qb = queuedBetR.current;
     if (qb !== null) {
-      const state = useAppStore.getState();
-      const curBal = state.demoMode ? state.demoBalance : state.currentUser.balanceMain;
-      if (qb <= curBal) {
+      if (qb <= curBal0 - deducted) {
         setActiveBet(qb);
         activeBetR.current = qb;
+        deducted += qb;
       }
       setQueuedBet(null);
       queuedBetR.current = null;
     }
+    const qb2 = queuedBet2R.current;
+    if (qb2 !== null) {
+      if (qb2 <= curBal0 - deducted) {
+        setMyBet2(qb2);
+        myBet2R.current = qb2;
+      }
+      setQueuedBet2(null);
+      queuedBet2R.current = null;
+    }
     setCashedOut(null);
     cashedOutR.current = null;
+    setCashedOut2(null);
+    cashedOut2R.current = null;
     setCrashedAt(0);
     setMult(1.0);
     setTEl(0);
@@ -743,6 +785,10 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
       const ac = parseFloat(autoCashR.current);
       if (activeBetR.current !== null && cashedOutR.current === null && !isNaN(ac) && ac >= 1.01 && m >= ac) {
         doCashoutR.current(m);
+      }
+      const ac2 = parseFloat(autoCash2R.current);
+      if (myBet2R.current !== null && cashedOut2R.current === null && !isNaN(ac2) && ac2 >= 1.01 && m >= ac2) {
+        doCashout2R.current(m);
       }
 
       if (fc % 8 === 0) {
@@ -769,13 +815,20 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
         const ab = activeBetR.current;
         if (ab !== null && cashedOutR.current === null) {
           placeGameBet(ab, 0);
-          recordGameResult('Crash', ab, 0);
+          recordGameResult('Aviator', ab, 0);
           onResult(false);
           setActiveBet(null);
           activeBetR.current = null;
         }
+        const ab2 = myBet2R.current;
+        if (ab2 !== null && cashedOut2R.current === null) {
+          placeGameBet(ab2, 0);
+          recordGameResult('Aviator', ab2, 0);
+          onResult(false);
+          setMyBet2(null);
+          myBet2R.current = null;
+        }
         setHistory(h => [+(crashR.current).toFixed(2), ...h].slice(0, 20));
-        // Ajouter les résultats du tour au live feed
         setLiveFeed(prev => [
           ...fakeDataR.current.map(f => ({ name: f.name, bet: f.bet, cashedAt: f.cashedAt, k: feedKeyR.current++ })),
           ...prev,
@@ -827,41 +880,80 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
   const yTk = [1, ...Array.from({ length: 3 }, (_, i) => +(1 + (i + 1) * (mMax - 1) / 3).toFixed(1))];
   const xTk = [Math.round(tMax * 0.25), Math.round(tMax * 0.5), Math.round(tMax * 0.75), Math.round(tMax)];
 
-  // Button logic
+  // Button logic — Bet 1
   const _isCrash = phase === 'crashed'; void _isCrash;
   let btnLabel = '', btnBg = '#1e2847', btnColor = '#475569', btnDis = false, btnFn: () => void = () => {};
   if (phase === 'waiting') {
     if (queuedBet !== null) {
-      btnLabel = `Annuler (${queuedBet.toFixed(2)} TON)`; btnBg = '#334155'; btnColor = '#94a3b8';
+      btnLabel = `Cancel (${queuedBet.toFixed(2)} TON)`; btnBg = '#334155'; btnColor = '#94a3b8';
       btnFn = () => { setQueuedBet(null); queuedBetR.current = null; };
     } else {
-      btnLabel = `Miser ${bet.toFixed(2)} TON`; btnBg = 'linear-gradient(135deg,#3b82f6,#6366f1)'; btnColor = '#fff';
+      btnLabel = `BET ${bet.toFixed(2)} TON`; btnBg = 'linear-gradient(135deg,#3b82f6,#6366f1)'; btnColor = '#fff';
       if (bet > bal || bet < 0.01) btnDis = true;
       btnFn = () => { setQueuedBet(bet); queuedBetR.current = bet; };
     }
   } else if (phase === 'flying') {
     if (activeBet !== null && cashedOut === null) {
-      btnLabel = `💰 Encaisser ×${mult.toFixed(2)}`; btnBg = 'linear-gradient(135deg,#059669,#34d399)'; btnColor = '#fff';
+      btnLabel = `CASH OUT ×${mult.toFixed(2)}`; btnBg = 'linear-gradient(135deg,#059669,#34d399)'; btnColor = '#fff';
       btnFn = () => doCashout(mult);
     } else if (cashedOut !== null) {
-      btnLabel = `✓ Encaissé ×${cashedOut.toFixed(2)}`; btnBg = '#064e3b'; btnColor = '#4ade80'; btnDis = true;
+      btnLabel = `✓ Cashed out ×${cashedOut.toFixed(2)}`; btnBg = '#064e3b'; btnColor = '#4ade80'; btnDis = true;
     } else {
-      btnLabel = `Miser au prochain tour`; btnBg = '#1e293b'; btnColor = '#64748b';
+      btnLabel = `Bet next round`; btnBg = '#1e293b'; btnColor = '#64748b';
       btnFn = () => { setQueuedBet(bet); queuedBetR.current = bet; };
     }
   } else {
-    btnLabel = 'Prochain tour…'; btnDis = true;
+    btnLabel = 'Next round…'; btnDis = true;
   }
 
-  const isActiveCashout = phase === 'flying' && activeBet !== null && cashedOut === null;
+  // Button logic — Bet 2
+  let btn2Label = '', btn2Bg = '#1e2847', btn2Color = '#475569', btn2Dis = false, btn2Fn: () => void = () => {};
+  if (phase === 'waiting') {
+    if (queuedBet2 !== null) {
+      btn2Label = `Cancel (${queuedBet2.toFixed(2)} TON)`; btn2Bg = '#334155'; btn2Color = '#94a3b8';
+      btn2Fn = () => { setQueuedBet2(null); queuedBet2R.current = null; };
+    } else {
+      btn2Label = `BET ${bet2.toFixed(2)} TON`; btn2Bg = 'linear-gradient(135deg,#3b82f6,#6366f1)'; btn2Color = '#fff';
+      if (bet2 > bal || bet2 < 0.01) btn2Dis = true;
+      btn2Fn = () => { setQueuedBet2(bet2); queuedBet2R.current = bet2; };
+    }
+  } else if (phase === 'flying') {
+    if (myBet2 !== null && cashedOut2 === null) {
+      btn2Label = `CASH OUT ×${mult.toFixed(2)}`; btn2Bg = 'linear-gradient(135deg,#059669,#34d399)'; btn2Color = '#fff';
+      btn2Fn = () => doCashout2(mult);
+    } else if (cashedOut2 !== null) {
+      btn2Label = `✓ Cashed out ×${cashedOut2.toFixed(2)}`; btn2Bg = '#064e3b'; btn2Color = '#4ade80'; btn2Dis = true;
+    } else {
+      btn2Label = `Bet next round`; btn2Bg = '#1e293b'; btn2Color = '#64748b';
+      btn2Fn = () => { setQueuedBet2(bet2); queuedBet2R.current = bet2; };
+    }
+  } else {
+    btn2Label = 'Next round…'; btn2Dis = true;
+  }
+
+  const isActiveCashout  = phase === 'flying' && activeBet !== null && cashedOut === null;
+  const isActiveCashout2 = phase === 'flying' && myBet2 !== null && cashedOut2 === null;
 
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 60, background: '#080c1a', display: 'flex', flexDirection: 'column' }}>
 
       {/* ── HEADER ── */}
-      <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px 8px', borderBottom: '1px solid #1e2847' }}>
+      <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px 8px', borderBottom: '1px solid #1e2847', background: 'rgba(8,12,26,0.95)' }}>
         <button onClick={onBack} style={{ width: 32, height: 32, borderRadius: 9, border: 'none', background: 'rgba(255,255,255,.06)', color: '#94a3b8', fontSize: 17, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>←</button>
-        <span style={{ flex: 1, textAlign: 'center', fontWeight: 900, fontSize: 14, color: '#f8fafc', letterSpacing: '0.08em', textTransform: 'uppercase' }}>CRASH</span>
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+          <svg viewBox="0 0 108 28" width="72" height="19" style={{ flexShrink: 0, display: 'block' }} aria-label="Aviator">
+            <g fill="#E50539">
+              <path d="M35.8316259,8.46081696 L32.6511471,21.1003182 C32.3861297,22.1108319 31.7898404,22.9804878 30.8579701,23.7052459 C29.9260998,24.430004 28.9406334,24.794403 27.9091122,24.794403 L32.0257706,8.46081696 L26.9360349,8.46081696 L26.4100399,10.9372758 L22.330818,27.2708618 L27.2796958,27.2708618 C29.6942095,27.2708618 31.9886035,26.3764279 34.1669177,24.5916 C36.3452319,22.8067721 37.7284938,20.7068319 38.324783,18.2923182 L40.1634763,10.9372758 L40.7845436,8.46081696 L35.8316259,8.46081696 Z"/>
+              <path d="M49.5521237,0.741321696 C49.1378993,0.248453865 48.5871262,0.000134663342 47.8995352,0.000134663342 C47.2081736,0.000134663342 46.5784878,0.248453865 46.0029367,0.741321696 C45.4314254,1.23418953 45.0877646,1.8264389 44.9757247,2.5137606 C44.855605,3.2304389 45.004812,3.83076808 45.4190364,4.32363591 C45.8289516,4.81650374 46.3797247,5.06509227 47.0673157,5.06509227 C47.7589466,5.06509227 48.392403,4.81219451 48.9682234,4.30720698 C49.5397347,3.8016808 49.8877047,3.20539152 49.999206,2.5137606 C50.1112459,1.8264389 49.9620389,1.23418953 49.5521237,0.741321696 M44.9094703,22.9473067 C44.9180888,22.8977506 44.9345177,22.8355362 44.9592958,22.7609327 C44.9840738,22.6863292 45.0007721,22.640813 45.004812,22.6117257 L48.5456499,8.46076309 L40.3416898,8.46076309 L39.7163132,10.9372219 L43.0002135,10.9372219 L40.0518943,22.6117257 C40.010418,22.7154165 39.9772908,22.8603142 39.9441636,23.0590773 C39.7327421,24.3389177 40.0599741,25.3534713 40.9212808,26.1073167 C41.7828569,26.8568529 43.0624279,27.2336409 44.7648419,27.2336409 L45.5017197,27.2336409 L46.1311362,24.757182 C45.1456698,24.6122843 44.7354853,24.0076459 44.9094703,22.9473067"/>
+              <path d="M58.5553377,21.9865915 C58.3565746,22.7485167 57.9175721,23.4029805 57.2385995,23.9454045 C56.5593576,24.4880978 55.8345995,24.7571551 55.072405,24.7571551 C53.6436269,24.7571551 53.0432978,24.0695641 53.2668389,22.6863022 C53.2711481,22.6658334 53.2875771,22.603619 53.3166643,22.5042374 C53.3454823,22.4048559 53.3621805,22.3302524 53.3702603,22.2806963 L55.7432978,12.7842374 C56.0664898,11.5544918 56.7454623,10.937195 57.7810234,10.937195 L61.3302105,10.937195 L58.5553377,21.9865915 Z M63.1645945,23.3905915 C63.1729436,23.3407661 63.1896419,23.29121 63.21038,23.2413845 C63.2311182,23.1918284 63.2435072,23.1460429 63.251587,23.0964868 L66.9085047,8.46073616 L58.3732728,8.46073616 C56.5965247,8.46073616 54.9442055,8.96195312 53.4157766,9.96007781 C51.8835771,10.9579332 50.9352778,12.2086863 50.5665696,13.7080279 L48.5043352,21.9865915 C48.458819,22.1107511 48.4216519,22.2680379 48.3922953,22.4670703 C48.1647142,23.8460229 48.5662803,24.9850055 49.6015721,25.8834793 C50.6368638,26.7822224 51.9913077,27.233614 53.6686743,27.233614 L54.4432579,27.233614 C55.8965446,27.233614 57.2466793,26.7286264 58.4974324,25.7178434 C59.122809,26.7286264 60.2949187,27.233614 62.0178015,27.233614 L63.7568439,27.233614 L64.3824898,24.7571551 C63.4298813,24.7073297 63.024006,24.2518983 63.1645945,23.3905915 Z"/>
+              <path d="M87.1846564,13.3020988 L87.118402,13.7079741 L85.0602075,21.9865377 C84.8407062,22.8728918 84.4803471,23.5561736 83.9834394,24.0366524 C83.4865317,24.5168618 82.9688858,24.7571012 82.4264618,24.7571012 C81.933594,24.7571012 81.5565367,24.5376 81.2958284,24.0902484 C81.0348509,23.647206 80.9645566,23.0840439 81.0760579,22.392413 C81.084407,22.3425875 81.1011052,22.2763332 81.1301925,22.18961 C81.1549706,22.1023481 81.1716688,22.0363631 81.1797486,21.9865377 L83.2379431,13.7079741 C83.4450554,12.8962234 83.7887162,12.2377197 84.2651551,11.7324628 C84.7413247,11.2274753 85.2753995,10.9745776 85.8676489,10.9745776 C86.3605167,10.9745776 86.7332648,11.1776499 86.9858933,11.5835252 C87.2385217,11.9934404 87.3090853,12.5649516 87.1846564,13.3020988 M90.9533446,9.81081696 C89.9304419,8.91234314 88.5846165,8.46068229 86.9072499,8.46068229 L86.1326663,8.46068229 C84.3066314,8.46068229 82.6416539,8.96620848 81.1342324,9.97672219 C79.6265416,10.9872359 78.6909007,12.2336798 78.3265017,13.7079741 L76.2265616,21.9865377 C76.1853546,22.1106973 76.1438783,22.2682534 76.114791,22.4670165 C75.8829007,23.8707471 76.2844668,25.0140389 77.3240678,25.9044329 C78.3596289,26.7905177 79.7302324,27.2338294 81.4280678,27.2338294 L82.1654843,27.2338294 C83.9670105,27.2338294 85.6236389,26.7202234 87.1474893,25.7013606 C88.671609,24.6784579 89.6115591,23.4400938 89.9759581,21.9865377 L92.071589,13.7079741 L92.1502324,13.2318045 C92.3740429,11.8485426 91.9762474,10.7098294 90.9533446,9.81081696"/>
+              <path d="M106.1978,8.46081696 C104.20182,8.46081696 102.474628,8.99085187 101.021072,10.051191 L101.39382,8.46081696 L96.4656808,8.46081696 L91.7360349,27.2336948 L96.6892219,27.2336948 L99.2610224,16.963191 C99.5882544,15.7040888 100.23006,14.5279392 101.186708,13.4347421 C102.143357,12.3372359 103.220125,11.5793506 104.425362,11.1610863 L103.837152,13.6003781 L106.537421,13.6003781 L107.858469,8.46081696 L106.1978,8.46081696 Z"/>
+              <path d="M12.664387,13.9475132 L12.6724668,13.8917626 L14.9436988,5.02902943 C15.11122,4.28784239 15.4618833,3.67404688 15.9956888,3.19572269 C16.5300329,2.71793716 17.1354793,2.47850574 17.7969456,2.47850574 C18.4188209,2.47850574 18.8729057,2.68588728 19.1758983,3.10819152 C19.470811,3.52268529 19.5742324,4.05649077 19.470811,4.69452569 L19.4150603,5.02902943 L17.1435591,13.8917626 L17.1276688,13.9475132 L12.664387,13.9475132 Z M23.0014145,1.40254564 C21.8697037,0.470136658 20.3474693,0.00016159601 18.4266314,0.00016159601 C16.3307312,0.00016159601 14.489614,0.526156608 12.8876589,1.57033616 C11.2857037,2.61424638 10.2733047,4.00100948 9.8429207,5.73035611 L7.78661147,13.8917626 C6.04918504,13.8917626 4.43915012,13.8995731 3.18785835,13.8995731 C1.4189207,13.8995731 0.000107730673,15.3423561 0.000107730673,17.1118324 L6.97378354,17.1118324 L4.43133965,27.2333985 L9.34089576,27.2333985 L11.8914195,17.1118324 L16.3625117,17.1118324 L14.7764469,23.391992 C14.7287761,23.5115731 14.6967262,23.6710145 14.6649456,23.8703162 C14.489614,24.930386 14.6967262,25.7588349 15.2943621,26.3489297 C15.8841875,26.9384858 16.784816,27.2333985 17.9881676,27.2333985 L19.9491352,27.2333985 L20.5785516,24.754785 C19.8691451,24.7071142 19.5742324,24.324401 19.6940828,23.6149945 L24.1810653,5.73035611 C24.1888758,5.67487481 24.2050354,5.57899451 24.2448958,5.43544339 C24.2847561,5.2840818 24.3006464,5.1882015 24.3084569,5.1327202 C24.5635092,3.58651571 24.1250454,2.34303441 23.0014145,1.40254564 Z"/>
+              <path d="M76.0941067,8.46081696 L77.216391,4.10418853 L72.263204,4.10418853 L71.1783561,8.46081696 L68.7474135,8.46081696 L68.1177277,10.9372758 L70.5529796,10.9372758 L67.5960419,22.649216 C67.5876928,22.6990414 67.5672239,22.7860339 67.5338274,22.9101935 C67.5007002,23.0343531 67.4842713,23.1173057 67.4759222,23.1709017 C67.26881,24.4256948 67.5130893,25.4157397 68.2047202,26.1445377 C68.9006603,26.8692958 69.9483411,27.2336948 71.3520718,27.2336948 L73.0916529,27.2336948 L73.7251092,24.7197995 C72.7065157,24.6247272 72.2839421,24.0448668 72.4581965,22.984797 C72.4662763,22.9349716 72.4827052,22.8727571 72.5074833,22.7984229 C72.5284908,22.7235501 72.545189,22.6780339 72.5492289,22.649216 L75.5018574,10.9372758 L77.6098773,10.9372758 L78.2395631,8.46081696 L76.0941067,8.46081696 Z"/>
+            </g>
+          </svg>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 7px', borderRadius: 6, background: 'rgba(239,68,68,0.18)', border: '1px solid rgba(239,68,68,0.35)', fontSize: 9, fontWeight: 800, color: '#ef4444', letterSpacing: '0.08em', animation: 'pulse 1.5s ease-in-out infinite' }}>● LIVE</span>
+        </div>
         <span style={{ fontSize: 11, color: '#475569', fontWeight: 700 }}>#{roundId}</span>
       </div>
 
@@ -896,8 +988,13 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
         <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-55%)', textAlign: 'center', pointerEvents: 'none', animation: phase === 'crashed' ? 'crashShake 0.35s ease-out' : 'none' }}>
           {phase === 'waiting' && (
             <>
-              <div style={{ fontSize: 10, color: '#475569', fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase' }}>PROCHAIN TOUR</div>
-              <div style={{ fontSize: 58, fontWeight: 900, color: '#f8fafc', lineHeight: 1 }}>{countdown}</div>
+              <div style={{ fontSize: 10, color: '#475569', fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 6 }}>WAITING FOR NEXT ROUND</div>
+              <div style={{ display: 'flex', gap: 6, justifyContent: 'center', alignItems: 'center' }}>
+                {[0,1,2].map(i => (
+                  <span key={i} style={{ width: 8, height: 8, borderRadius: '50%', background: '#818cf8', display: 'inline-block', animation: `pulse 1.2s ease-in-out ${i * 0.2}s infinite` }} />
+                ))}
+              </div>
+              <div style={{ fontSize: 42, fontWeight: 900, color: '#f8fafc', lineHeight: 1, marginTop: 6 }}>{countdown}</div>
             </>
           )}
           {phase === 'flying' && (
@@ -907,14 +1004,17 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
           )}
           {phase === 'crashed' && (
             <>
-              <div style={{ fontSize: 11, fontWeight: 900, color: '#ef4444', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 2 }}>CRASH !</div>
+              <div style={{ fontSize: 13, fontWeight: 900, color: '#ef4444', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 2 }}>FLEW AWAY!</div>
               <div style={{ fontSize: 48, fontWeight: 900, color: '#ef4444', lineHeight: 1, textShadow: '0 0 30px rgba(239,68,68,.55)' }}>
                 {crashedAt.toFixed(2)}<span style={{ fontSize: 25 }}>×</span>
               </div>
             </>
           )}
           {cashedOut !== null && phase !== 'waiting' && (
-            <div style={{ marginTop: 8, fontSize: 13, fontWeight: 800, color: '#4ade80' }}>✓ Encaissé ×{cashedOut.toFixed(2)}</div>
+            <div style={{ marginTop: 8, fontSize: 13, fontWeight: 800, color: '#4ade80' }}>✓ Cashed out @×{cashedOut.toFixed(2)}</div>
+          )}
+          {cashedOut2 !== null && phase !== 'waiting' && (
+            <div style={{ marginTop: 4, fontSize: 12, fontWeight: 700, color: '#34d399' }}>✓ Bet 2 cashed @×{cashedOut2.toFixed(2)}</div>
           )}
         </div>
         {phase === 'crashed' && (
@@ -963,75 +1063,173 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
           </button>
           {queuedBet !== null && (
             <div style={{ textAlign: 'center', fontSize: 10, color: '#475569', marginTop: 4 }}>
-              ✋ En attente : {queuedBet.toFixed(2)} TON ·{' '}
-              <span onClick={() => { setQueuedBet(null); queuedBetR.current = null; }} style={{ color: '#3b82f6', cursor: 'pointer' }}>Annuler</span>
+              ✋ Queued: {queuedBet.toFixed(2)} TON ·{' '}
+              <span onClick={() => { setQueuedBet(null); queuedBetR.current = null; }} style={{ color: '#3b82f6', cursor: 'pointer' }}>Cancel</span>
             </div>
           )}
         </div>
 
-        {/* LIVE FEED — apparaît en scrollant */}
-        <div style={{ padding: '0 0 4px' }}>
-          <div style={{ padding: '10px 14px 6px', display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#4ade80', display: 'inline-block', animation: 'pulse 1.5s ease-in-out infinite' }} />
-            <span style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-              {phase === 'flying'
-                ? `En direct · ${fakes.length} joueurs`
-                : `${liveFeed.length} parieurs récents`}
-            </span>
+        {/* Second bet panel */}
+        {showBet2 ? (
+          <div style={{ background: '#0d1021', border: '1px solid #1e2847' }} className="mx-3 mt-2 rounded-xl p-3 space-y-2">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+              <span style={{ fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Bet 2</span>
+              <button onClick={() => { setShowBet2(false); setMyBet2(null); myBet2R.current = null; setQueuedBet2(null); queuedBet2R.current = null; setCashedOut2(null); cashedOut2R.current = null; }}
+                style={{ color: '#475569', fontSize: 14, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>✕</button>
+            </div>
+            <div style={{ background: '#080c1e', border: `1px solid ${isActiveCashout2 ? 'rgba(52,211,153,.3)' : '#1e2847'}`, borderRadius: 10, opacity: myBet2 !== null ? 0.55 : 1, display: 'flex', alignItems: 'center', padding: '8px 12px' }}>
+              <input type="text" inputMode="decimal" pattern="[0-9]*[.,]?[0-9]*" value={bet2} disabled={myBet2 !== null}
+                onChange={e => { const v = parseFloat(e.target.value.replace(',', '.')); if (!isNaN(v)) setBet2(Math.max(0.01, Math.min(50, v))); }}
+                style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: '#f8fafc', fontSize: 16, fontWeight: 700 }} />
+              <span style={{ fontSize: 12, color: '#64748b' }}>TON</span>
+            </div>
+            <div style={{ background: '#080c1e', border: '1px solid #1e2847', borderRadius: 10, display: 'flex', alignItems: 'center', padding: '6px 8px', gap: 4 }}>
+              <span style={{ fontSize: 9, color: '#64748b', fontWeight: 700 }}>AUTO ×</span>
+              <input type="number" value={autoCash2} placeholder="2.00" min={1.01} step={0.01}
+                onChange={e => setAutoCash2(e.target.value)}
+                style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: '#f8fafc', fontSize: 14, fontWeight: 600 }} />
+              {autoCash2 && <button onClick={() => setAutoCash2('')} style={{ color: '#64748b', fontSize: 12, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>✕</button>}
+            </div>
+            <button onClick={btn2Fn} disabled={btn2Dis}
+              className="w-full py-3 rounded-xl font-black text-sm tracking-wide uppercase"
+              style={{ background: btn2Bg, color: btn2Color, border: 'none', cursor: btn2Dis ? 'not-allowed' : 'pointer', opacity: btn2Dis ? 0.6 : 1, animation: isActiveCashout2 ? 'cashoutPulse 0.9s ease-in-out infinite' : 'none', padding: isActiveCashout2 ? '14px 0' : '11px 0', fontSize: isActiveCashout2 ? 14 : 12 }}>
+              {btn2Label}
+            </button>
           </div>
+        ) : (
+          <div style={{ padding: '6px 12px 4px' }}>
+            <button onClick={() => setShowBet2(true)}
+              style={{ width: '100%', padding: '8px 0', borderRadius: 10, border: '1px dashed #1e2847', background: 'transparent', color: '#475569', fontSize: 12, fontWeight: 700, letterSpacing: '0.05em', cursor: 'pointer' }}>
+              + ADD BET
+            </button>
+          </div>
+        )}
 
-          {/* Pendant le vol : joueurs du tour en cours */}
-          {phase === 'flying' && fakes.map((f, i) => {
-            const win = f.cashedAt ? +(f.bet * f.cashedAt).toFixed(2) : null;
-            return (
-              <div key={i} style={{ display: 'grid', gridTemplateColumns: '88px 1fr auto auto', gap: 4, padding: '5px 14px', alignItems: 'center', borderBottom: '1px solid rgba(30,40,71,.18)' }}>
-                <span style={{ fontSize: 12, color: '#94a3b8', fontWeight: 600 }}>{f.name}</span>
-                <span style={{ fontSize: 11, color: '#475569' }}>
-                  <span style={{ color: '#3b82f6', fontWeight: 800, marginRight: 2 }}>◆</span>{f.bet.toFixed(2)}
-                </span>
-                <span style={{ fontSize: 11, fontWeight: 700, color: f.cashedAt ? '#4ade80' : '#475569', minWidth: 42, textAlign: 'right' }}>
-                  {f.cashedAt ? `×${f.cashedAt.toFixed(2)}` : '…'}
-                </span>
-                <span style={{ fontSize: 11, fontWeight: 700, minWidth: 52, textAlign: 'right',
-                  color: win ? '#4ade80' : '#334155' }}>
-                  {win ? <><span style={{ color: '#3b82f6', fontWeight: 800 }}>◆</span>{win.toFixed(2)}</> : '—'}
-                </span>
-              </div>
-            );
-          })}
-
-          {/* En attente / après crash : live feed historique */}
-          {phase !== 'flying' && liveFeed.map(f => {
-            const won = f.cashedAt !== null;
-            const win = won ? +(f.bet * f.cashedAt!).toFixed(2) : null;
-            return (
-              <div key={f.k} style={{ display: 'grid', gridTemplateColumns: '88px 1fr auto auto', gap: 4, padding: '5px 14px', alignItems: 'center', borderBottom: '1px solid rgba(30,40,71,.18)' }}>
-                <span style={{ fontSize: 12, color: '#94a3b8', fontWeight: 600 }}>{f.name}</span>
-                <span style={{ fontSize: 11, color: '#475569' }}>
-                  <span style={{ color: '#3b82f6', fontWeight: 800, marginRight: 2 }}>◆</span>{f.bet.toFixed(2)}
-                </span>
-                <span style={{ fontSize: 11, fontWeight: 700, minWidth: 42, textAlign: 'right',
-                  color: won ? '#4ade80' : '#f87171' }}>
-                  {won ? `×${f.cashedAt!.toFixed(2)}` : 'CRASH'}
-                </span>
-                <span style={{ fontSize: 11, fontWeight: 700, minWidth: 52, textAlign: 'right',
-                  color: won ? '#4ade80' : '#f87171' }}>
-                  {won ? <><span style={{ color: '#3b82f6', fontWeight: 800 }}>◆</span>{win!.toFixed(2)}</> : <span style={{ color: '#475569' }}>—</span>}
-                </span>
-              </div>
-            );
-          })}
+        {/* TABS — All Bets / My Bets / Top */}
+        <div style={{ background: '#0d1021', border: '1px solid #1e2847' }} className="mx-3 mt-2 rounded-xl overflow-hidden">
+          <div style={{ borderBottom: '1px solid #1e2847', display: 'flex' }}>
+            {(['all', 'my', 'top'] as const).map(tab => (
+              <button key={tab} onClick={() => setBetTab(tab)}
+                style={{ flex: 1, padding: '7px 0', fontSize: 11, fontWeight: 700, background: 'none', border: 'none', cursor: 'pointer',
+                  color: betTab === tab ? '#f8fafc' : '#475569',
+                  borderBottom: betTab === tab ? '2px solid #ef4444' : '2px solid transparent',
+                  letterSpacing: '0.05em', textTransform: 'uppercase' as const }}>
+                {tab === 'all' ? 'All Bets' : tab === 'my' ? 'My Bets' : 'Top'}
+              </button>
+            ))}
+          </div>
+          <div style={{ maxHeight: 180, overflowY: 'auto', overflowX: 'hidden' }}>
+            {betTab === 'all' && (
+              <>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', padding: '6px 12px', borderBottom: '1px solid rgba(30,40,71,0.6)' }}>
+                  {['USER','BET','×','CASH OUT'].map(h => (
+                    <span key={h} style={{ fontSize: 9, fontWeight: 700, color: '#475569', letterSpacing: '0.06em' }}>{h}</span>
+                  ))}
+                </div>
+                {(activeBet !== null || queuedBet !== null) && (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', padding: '5px 12px', alignItems: 'center', background: 'rgba(79,111,240,0.08)', borderBottom: '1px solid rgba(30,40,71,0.4)' }}>
+                    <span style={{ fontSize: 11, fontWeight: 800, color: '#818cf8' }}>You</span>
+                    <span style={{ fontSize: 11, color: '#cbd5e1' }}>{(activeBet ?? queuedBet ?? 0).toFixed(2)}</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: cashedOut !== null ? '#4ade80' : '#475569' }}>
+                      {cashedOut !== null ? `×${cashedOut.toFixed(2)}` : '—'}
+                    </span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: cashedOut !== null ? '#4ade80' : phase === 'crashed' ? '#f87171' : '#475569' }}>
+                      {cashedOut !== null
+                        ? `+${((activeBet ?? 0) * cashedOut - (activeBet ?? 0)).toFixed(2)}`
+                        : activeBet !== null && phase === 'crashed' ? `-${activeBet.toFixed(2)}` : '—'}
+                    </span>
+                  </div>
+                )}
+                {(myBet2 !== null || queuedBet2 !== null) && (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', padding: '5px 12px', alignItems: 'center', background: 'rgba(79,111,240,0.05)', borderBottom: '1px solid rgba(30,40,71,0.4)' }}>
+                    <span style={{ fontSize: 11, fontWeight: 800, color: '#6366f1' }}>You 2</span>
+                    <span style={{ fontSize: 11, color: '#cbd5e1' }}>{(myBet2 ?? queuedBet2 ?? 0).toFixed(2)}</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: cashedOut2 !== null ? '#4ade80' : '#475569' }}>
+                      {cashedOut2 !== null ? `×${cashedOut2.toFixed(2)}` : '—'}
+                    </span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: cashedOut2 !== null ? '#4ade80' : phase === 'crashed' ? '#f87171' : '#475569' }}>
+                      {cashedOut2 !== null
+                        ? `+${((myBet2 ?? 0) * cashedOut2 - (myBet2 ?? 0)).toFixed(2)}`
+                        : myBet2 !== null && phase === 'crashed' ? `-${myBet2.toFixed(2)}` : '—'}
+                    </span>
+                  </div>
+                )}
+                {fakes.length === 0 && phase === 'waiting' && (
+                  <p style={{ padding: '12px', textAlign: 'center', fontSize: 11, color: '#475569' }}>Players joining…</p>
+                )}
+                {(phase === 'flying' ? fakes : liveFeed.slice(0, 20)).map((f, i, arr) => (
+                  <div key={phase === 'flying' ? i : (f as typeof liveFeed[0]).k} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', padding: '5px 12px', alignItems: 'center', borderBottom: i < arr.length - 1 ? '1px solid rgba(30,40,71,0.3)' : 'none' }}>
+                    <span style={{ fontSize: 11, color: '#94a3b8' }}>{f.name}</span>
+                    <span style={{ fontSize: 11, color: '#cbd5e1' }}>{f.bet.toFixed(2)}</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: f.cashedAt !== null ? '#4ade80' : phase === 'crashed' ? '#f87171' : '#475569' }}>
+                      {f.cashedAt !== null ? `×${f.cashedAt.toFixed(2)}` : phase === 'crashed' ? 'FLEW AWAY' : '—'}
+                    </span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: f.cashedAt !== null ? '#4ade80' : phase === 'crashed' ? '#f87171' : '#475569' }}>
+                      {f.cashedAt !== null ? `+${(f.bet * f.cashedAt - f.bet).toFixed(2)}` : phase === 'crashed' ? `-${f.bet.toFixed(2)}` : '—'}
+                    </span>
+                  </div>
+                ))}
+              </>
+            )}
+            {betTab === 'my' && (
+              <>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', padding: '6px 12px', borderBottom: '1px solid rgba(30,40,71,0.6)' }}>
+                  {['ROUND','BET','RESULT'].map(h => (
+                    <span key={h} style={{ fontSize: 9, fontWeight: 700, color: '#475569', letterSpacing: '0.06em' }}>{h}</span>
+                  ))}
+                </div>
+                {activeBet !== null && (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', padding: '5px 12px', alignItems: 'center', background: 'rgba(79,111,240,0.06)', borderBottom: '1px solid rgba(30,40,71,0.4)' }}>
+                    <span style={{ fontSize: 11, color: '#64748b' }}>#{roundId}</span>
+                    <span style={{ fontSize: 11, color: '#cbd5e1' }}>{activeBet.toFixed(2)} TON</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: cashedOut !== null ? '#4ade80' : phase === 'crashed' ? '#f87171' : '#94a3b8' }}>
+                      {cashedOut !== null ? `×${cashedOut.toFixed(2)} 🏆` : phase === 'crashed' ? 'FLEW AWAY!' : 'In flight…'}
+                    </span>
+                  </div>
+                )}
+                {history.length === 0 && activeBet === null && (
+                  <p style={{ padding: '12px', textAlign: 'center', fontSize: 11, color: '#475569' }}>No bets yet</p>
+                )}
+                {history.slice(0, 8).map((h, i) => (
+                  <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', padding: '5px 12px', alignItems: 'center', borderBottom: i < 7 ? '1px solid rgba(30,40,71,0.3)' : 'none' }}>
+                    <span style={{ fontSize: 11, color: '#64748b' }}>Past</span>
+                    <span style={{ fontSize: 11, color: '#64748b' }}>—</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: h < 2 ? '#f87171' : h < 10 ? '#818cf8' : '#4ade80' }}>{h.toFixed(2)}×</span>
+                  </div>
+                ))}
+              </>
+            )}
+            {betTab === 'top' && (
+              <>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', padding: '6px 12px', borderBottom: '1px solid rgba(30,40,71,0.6)' }}>
+                  {['MULTIPLIER','ROUND'].map(h => (
+                    <span key={h} style={{ fontSize: 9, fontWeight: 700, color: '#475569', letterSpacing: '0.06em' }}>{h}</span>
+                  ))}
+                </div>
+                {history.length === 0 && (
+                  <p style={{ padding: '12px', textAlign: 'center', fontSize: 11, color: '#475569' }}>No history yet</p>
+                )}
+                {[...history].sort((a, b) => b - a).slice(0, 8).map((h, i) => (
+                  <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', padding: '5px 12px', alignItems: 'center', borderBottom: i < 7 ? '1px solid rgba(30,40,71,0.3)' : 'none' }}>
+                    <span style={{ fontSize: 12, fontWeight: 800, color: h >= 10 ? '#4ade80' : h >= 5 ? '#f59e0b' : '#818cf8' }}>{h.toFixed(2)}×</span>
+                    <span style={{ fontSize: 11, color: '#64748b' }}>Round #{roundId - i}</span>
+                  </div>
+                ))}
+              </>
+            )}
+          </div>
         </div>
 
         {/* HISTORIQUE DES TOURS (chips) */}
         <div style={{ padding: '12px 14px 28px' }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Historique des crashs</div>
-          {history.length === 0 && <span style={{ fontSize: 11, color: '#1e2847', fontStyle: 'italic' }}>Aucun tour joué…</span>}
+          <div style={{ fontSize: 10, fontWeight: 700, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Round history</div>
+          {history.length === 0 && <span style={{ fontSize: 11, color: '#1e2847', fontStyle: 'italic' }}>No rounds yet…</span>}
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
             {history.map((h, i) => (
-              <span key={i} style={{ padding: '3px 10px', borderRadius: 99, fontSize: 12, fontWeight: 800,
+              <span key={i} style={{ padding: '3px 10px', borderRadius: 99, fontSize: 13, fontWeight: 800,
                 background: h < 1.5 ? 'rgba(239,68,68,.15)' : h < 5 ? 'rgba(129,140,248,.15)' : 'rgba(74,222,128,.15)',
                 color: h < 1.5 ? '#f87171' : h < 5 ? '#818cf8' : '#4ade80',
+                boxShadow: h >= 5 ? '0 0 8px rgba(74,222,128,.2)' : h >= 2 ? '0 0 6px rgba(129,140,248,.15)' : 'none',
               }}>{h.toFixed(2)}×</span>
             ))}
           </div>
@@ -2505,14 +2703,14 @@ const CATALOG = [
   },
   {
     id: 'crash' as ActiveGame,
-    title: 'Crash',
-    desc: 'Encaissez avant le crash · courbe infinie',
-    stats: 'jusqu\'à ×1000 · encaissez à tout moment',
-    emoji: '📈',
+    title: 'Aviator',
+    desc: 'Cash out before it flies away · infinite curve',
+    stats: 'up to ×1000 · cash out anytime',
+    emoji: '✈️',
     badge: 'HOT',
-    accentFrom: '#818cf8', accentTo: '#6366f1',
-    glow: 'rgba(129,140,248,0.4)',
-    badgeColor: '#818cf8',
+    accentFrom: '#ef4444', accentTo: '#dc2626',
+    glow: 'rgba(239,68,68,0.4)',
+    badgeColor: '#ef4444',
     pattern: 'crash',
   },
   {
@@ -2597,7 +2795,7 @@ export const MiniAppGames: React.FC = () => {
 
   // Live feed auto-rotation — new fake entry every 8–18 seconds
   useEffect(() => {
-    const GAME_NAMES = ['Crash', 'Plinko', 'Tower', 'Mines', 'Dice'];
+    const GAME_NAMES = ['Aviator', 'Plinko', 'Tower', 'Mines', 'Dice'];
     const scheduleNext = () => {
       const ms = 8000 + Math.floor(Math.random() * 10000);
       return setTimeout(() => {
