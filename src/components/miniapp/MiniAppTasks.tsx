@@ -139,22 +139,16 @@ interface CardTask {
 // ── Static config ──────────────────────────────────────────────────────────────
 
 const typeConfig: Record<string, { icon: React.ReactNode; color: string; label: string }> = {
-  join_channel: { icon: <Hash className="w-4 h-4" />,     color: 'bg-blue-500/20 text-blue-400',     label: 'Canal' },
-  join_group:   { icon: <Users className="w-4 h-4" />,    color: 'bg-purple-500/20 text-purple-400', label: 'Groupe' },
-  start_bot:    { icon: <Bot className="w-4 h-4" />,      color: 'bg-cyan-500/20 text-cyan-400',     label: 'Bot' },
-  daily:        { icon: <Calendar className="w-4 h-4" />, color: 'bg-amber-500/20 text-amber-400',   label: 'Quotidien' },
-  special:      { icon: <Star className="w-4 h-4" />,     color: 'bg-pink-500/20 text-pink-400',     label: 'Spécial' },
-  watch_video:  { icon: <Play className="w-4 h-4" />,     color: 'bg-red-500/20 text-red-400',       label: 'Vidéo' },
-  social:       { icon: <Globe className="w-4 h-4" />,    color: 'bg-orange-500/20 text-orange-400', label: 'Social' },
+  join_channel:   { icon: <Hash className="w-4 h-4" />,     color: 'bg-blue-500/20 text-blue-400',     label: 'Canal' },
+  join_group:     { icon: <Users className="w-4 h-4" />,    color: 'bg-purple-500/20 text-purple-400', label: 'Groupe' },
+  start_bot:      { icon: <Bot className="w-4 h-4" />,      color: 'bg-cyan-500/20 text-cyan-400',     label: 'Bot' },
+  daily:          { icon: <Calendar className="w-4 h-4" />, color: 'bg-amber-500/20 text-amber-400',   label: 'Quotidien' },
+  special:        { icon: <Star className="w-4 h-4" />,     color: 'bg-pink-500/20 text-pink-400',     label: 'Spécial' },
+  watch_video:    { icon: <Play className="w-4 h-4" />,     color: 'bg-red-500/20 text-red-400',       label: 'Vidéo' },
+  social:         { icon: <Globe className="w-4 h-4" />,    color: 'bg-orange-500/20 text-orange-400', label: 'Social' },
+  invite_friends: { icon: <Users className="w-4 h-4" />,    color: 'bg-violet-500/20 text-violet-400', label: 'Parrainage' },
 };
 
-const SECTIONS: { type: string; label: string; icon: string; creatable: boolean; groupBefore?: string; color: string }[] = [
-  { type: 'daily',        label: 'Tâches quotidiennes', icon: '📅', creatable: false, color: 'text-amber-400'   },
-  { type: 'special',      label: 'Tâches spéciales',    icon: '⭐', creatable: false, color: 'text-pink-400'    },
-  { type: 'join_channel', label: 'Canaux',               icon: '📢', creatable: true,  color: 'text-blue-400',   groupBefore: 'Communautés Telegram' },
-  { type: 'join_group',   label: 'Groupes',              icon: '👥', creatable: true,  color: 'text-purple-400' },
-  { type: 'start_bot',    label: 'Bots & Mini Apps',     icon: '🤖', creatable: true,  color: 'text-cyan-400',   groupBefore: 'Applications' },
-];
 
 type TaskPhase = 'idle' | 'too_early' | 'ready' | 'verifying' | 'not_subscribed' | 'completing' | 'done';
 
@@ -186,8 +180,9 @@ const COLORS: Record<string, { glow: string; bg: string }> = {
   start_bot:    { glow: '#06b6d4', bg: 'rgba(6,182,212,0.12)' },
   daily:        { glow: '#f59e0b', bg: 'rgba(245,158,11,0.12)' },
   special:      { glow: '#ec4899', bg: 'rgba(236,72,153,0.12)' },
-  watch_video:  { glow: '#ef4444', bg: 'rgba(239,68,68,0.12)' },
-  social:       { glow: '#f97316', bg: 'rgba(249,115,22,0.12)' },
+  watch_video:    { glow: '#ef4444', bg: 'rgba(239,68,68,0.12)' },
+  social:         { glow: '#f97316', bg: 'rgba(249,115,22,0.12)' },
+  invite_friends: { glow: '#a855f7', bg: 'rgba(168,85,247,0.12)' },
 };
 
 const getColors = (type: string) => COLORS[type] ?? { glow: '#8b5cf6', bg: 'rgba(139,92,246,0.12)' };
@@ -303,12 +298,7 @@ export const MiniAppTasks: React.FC = () => {
     es.addEventListener('task_approved', (e: MessageEvent) => {
       try {
         const task = JSON.parse(e.data) as ApiTask;
-        const myId = useAppStore.getState().currentUser.telegramId;
-        setApiTasks(prev => {
-          if (prev.some(t => t.id === task.id)) return prev;
-          return [task, ...prev];
-        });
-        void myId;
+        setApiTasks(prev => prev.some(t => t.id === task.id) ? prev : [task, ...prev]);
       } catch { /* ignore malformed */ }
     });
 
@@ -352,7 +342,7 @@ export const MiniAppTasks: React.FC = () => {
       totalCompletions: t.totalCompletions,
       maxCompletions:   t.maxCompletions,
       icon:             t.icon,
-      isInstant:        t.type === 'daily' || t.type === 'special',
+      isInstant:        t.type === 'daily' || t.type === 'special' || t.type === 'invite_friends',
     };
   });
 
@@ -441,6 +431,11 @@ export const MiniAppTasks: React.FC = () => {
     if (card.source === 'api'      && completedApiTaskIds.includes(card.id)) return;
 
     haptic.impact('light');
+
+    if (card.type === 'invite_friends') {
+      setMiniAppPage('referral');
+      return;
+    }
 
     if (card.isInstant) {
       setPhase(card.id, 'completing');
@@ -574,6 +569,10 @@ export const MiniAppTasks: React.FC = () => {
       ? 'Regarder'
       : card.type === 'social'
       ? 'Suivre'
+      : card.type === 'daily'
+      ? 'Réclamer'
+      : card.type === 'invite_friends'
+      ? 'Inviter'
       : 'Faire';
 
     const notSubbedMsg = card.type === 'start_bot'
@@ -584,7 +583,6 @@ export const MiniAppTasks: React.FC = () => {
       ? 'Action non détectée — effectuez l\'action puis réessayez.'
       : 'Abonnement non détecté — rejoignez d\'abord.';
 
-    const isBot     = card.type === 'start_bot';
     const notSubbed = phase === 'not_subscribed';
 
     const hasProgress = card.maxCompletions != null && card.maxCompletions > 0;
@@ -688,7 +686,10 @@ export const MiniAppTasks: React.FC = () => {
                 cursor: 'pointer',
               }}
             >
-              {actionLabel} <ExternalLink style={{ width: 13, height: 13 }} />
+              {actionLabel}
+              {!card.isInstant && card.type !== 'invite_friends' && (
+                <ExternalLink style={{ width: 13, height: 13 }} />
+              )}
             </button>
           )}
 
@@ -719,8 +720,12 @@ export const MiniAppTasks: React.FC = () => {
                 </div>
                 <div style={{ flex: 1 }}>
                   <p style={{ fontSize: 11, color: '#fbbf24', fontWeight: 600, margin: 0, marginBottom: 2 }}>
-                    {isBot
+                    {card.type === 'start_bot'
                       ? 'Restez dans le bot au moins 30s'
+                      : card.type === 'watch_video'
+                      ? 'Regardez la vidéo puis revenez'
+                      : card.type === 'social'
+                      ? 'Effectuez l\'action puis revenez'
                       : `Rejoignez le ${card.type === 'join_channel' ? 'canal' : 'groupe'} puis revenez`}
                   </p>
                   <p style={{ fontSize: 10, color: '#92400e', margin: 0 }}>
@@ -882,8 +887,6 @@ export const MiniAppTasks: React.FC = () => {
   const filteredCards = getFilteredCards();
   const showPromo = activeFilter === 'all' || activeFilter === 'special';
 
-  // Keep SECTIONS defined for completeness, suppress unused warning
-  void SECTIONS;
 
   return (
     <div className="animate-slide-up" style={{ paddingBottom: 8 }}>
