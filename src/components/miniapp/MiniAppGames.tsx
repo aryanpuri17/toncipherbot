@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useAppStore } from '../../store/appStore';
-import { ArrowLeft, RotateCcw, Trophy, Zap } from 'lucide-react';
+import { ArrowLeft, RotateCcw, Zap } from 'lucide-react';
 import { CountUp } from '../ui/CountUp';
 
 // ══════════════════════════════════════════════════════════════════
@@ -590,35 +590,6 @@ const DiceGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResul
   );
 };
 
-const ALL_FAKE_NAMES = [
-  'Marco T.','Léa R.','Yusuf K.','Chen W.','Amira S.','Dmytro P.',
-  'Fatou D.','Nicolás V.','Sofia M.','Jamal B.','Elena G.','Pierre L.',
-  'Aisha N.','Viktor S.','Mina H.','Diego F.','Anya K.','Tariq M.',
-  'Hana P.','Reza A.','Priya S.','Omar F.','Julia B.','Kwame O.',
-  'Nadia V.','Ivan C.','Mei L.','Lucas R.','Sara D.','Ali H.',
-  'Ekaterina B.','Tomás G.','Layla J.','Patrick N.','Yuna K.','Carlos M.',
-  'Nour A.','Sergei P.','Zara T.','Matteo F.','Ingrid L.','Hamid R.',
-  'Chiara V.','Tunde A.','Sofía C.','Arjun M.','Lena S.','David K.',
-  'Blessing O.','Kenji T.','Irina D.','Rafael S.','Fatima Z.','Max W.',
-  'Nathalie B.','Seo-Yeon P.','Ibrahim H.','Valentina R.','Tobias L.','Akira N.',
-  'Camille D.','Emeka C.','Anastasia K.','Gabriel M.','Hira S.','Finn O.',
-  'Amara D.','Nikolai V.','Jasmine T.','Ricardo B.','Olga M.','Khalid A.',
-  'Moana K.','Sven H.','Yasmin F.','Andrei S.','Chloé N.','Bashir O.',
-  'Elisa P.','Darius C.','Naomi W.','Lukas J.','Rania H.','Felipe A.',
-  'Marta G.','Yousef K.','Petra L.','Emmanuel T.','Adaeze N.','Hugo R.',
-  'Oksana B.','Rahim J.','Vivienne C.','Kiran S.','Theo M.','Zainab A.',
-  'Bianca F.','Kwabena O.','Miriam L.','Tamar K.','Simone B.','Javier H.',
-];
-
-function randomFakeBet(): number {
-  const r = Math.random();
-  if (r < 0.40) return +(0.01 + Math.random() * 0.04).toFixed(2);   // 40%: 0.01–0.05
-  if (r < 0.65) return +(0.05 + Math.random() * 0.15).toFixed(2);   // 25%: 0.05–0.20
-  if (r < 0.82) return +(0.20 + Math.random() * 0.80).toFixed(2);   // 17%: 0.20–1.00
-  if (r < 0.94) return +(1.00 + Math.random() * 4.00).toFixed(2);   // 12%: 1.00–5.00
-  return +(5.00 + Math.random() * 10.00).toFixed(2);                 //  6%: 5.00–15.00
-}
-
 // ══════════════════════════════════════════════════════════════════
 // CRASH — courbe de multiplicateur animée
 // ══════════════════════════════════════════════════════════════════
@@ -684,17 +655,6 @@ function _genCrashPt(): number {
   return Math.max(1.01, +(0.92 / r).toFixed(2));
 }
 
-function _fakeCashTarget(cp: number): number | null {
-  if (Math.random() < 0.28) return null;
-  const r = Math.random();
-  let t: number;
-  if      (r < 0.42) t = 1.05 + Math.random() * 0.45;
-  else if (r < 0.70) t = 1.50 + Math.random() * 0.80;
-  else if (r < 0.88) t = 2.30 + Math.random() * 1.70;
-  else if (r < 0.96) t = 4.00 + Math.random() * 4.00;
-  else               t = 8.00 + Math.random() * 12.0;
-  return +(Math.min(t, cp - 0.01)).toFixed(2);
-}
 
 const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResult }> = ({ onBack, onResult }) => {
   const { currentUser, placeGameBet, recordGameResult, demoMode, demoBalance } = useAppStore();
@@ -713,7 +673,6 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
   const [cashedOut, setCashedOut] = useState<number|null>(null);
   const [autoCash,  setAutoCash]  = useState('');
   const [roundId,   setRoundId]   = useState(1);
-  const [fakes,     setFakes]     = useState<{name:string; bet:number; cashedAt:number|null}[]>([]);
   const [betTab,     setBetTab]     = useState<'all' | 'my' | 'top'>('all');
   const [showBet2,   setShowBet2]   = useState(false);
   const [bet2,       setBet2]       = useState(0.10);
@@ -735,7 +694,6 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
   const queuedBet2R  = useRef<number|null>(null);
   const rafR         = useRef(0);
   const resetTimerR  = useRef<ReturnType<typeof setTimeout>>(0 as unknown as ReturnType<typeof setTimeout>);
-  const fakeDataR    = useRef<{name:string; bet:number; cashTarget:number|null; cashedAt:number|null}[]>([]);
   const startFlightR = useRef<() => void>(() => {});
 
   useEffect(() => { phaseR.current = phase; }, [phase]);
@@ -780,16 +738,6 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
     cancelAnimationFrame(rafR.current);
     const cp = _genCrashPt();
     crashR.current = cp;
-
-    const count = 20 + Math.floor(Math.random() * 8);
-    const fd = Array.from({ length: count }, (_, i) => ({
-      name: ALL_FAKE_NAMES[i % ALL_FAKE_NAMES.length],
-      bet: +(0.05 + Math.random() * 2.5).toFixed(2),
-      cashTarget: _fakeCashTarget(cp),
-      cashedAt: null as number|null,
-    }));
-    fakeDataR.current = fd;
-    setFakes(fd.map(f => ({ name: f.name, bet: f.bet, cashedAt: null })));
 
     const qb = queuedBetR.current;
     if (qb !== null) {
@@ -838,17 +786,6 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
       const ac2 = parseFloat(autoCash2R.current);
       if (myBet2R.current !== null && cashedOut2R.current === null && !isNaN(ac2) && ac2 >= 1.01 && m >= ac2) {
         doCashout2R.current(m);
-      }
-
-      if (fc % 8 === 0) {
-        let changed = false;
-        fakeDataR.current.forEach(f => {
-          if (f.cashTarget !== null && f.cashedAt === null && m >= f.cashTarget) {
-            f.cashedAt = f.cashTarget;
-            changed = true;
-          }
-        });
-        if (changed) setFakes(fakeDataR.current.map(f => ({ name: f.name, bet: f.bet, cashedAt: f.cashedAt })));
       }
 
       setMult(m);
@@ -1238,21 +1175,9 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
                     </span>
                   </div>
                 )}
-                {fakes.length === 0 && (
-                  <p style={{ padding: '12px', textAlign: 'center', fontSize: 11, color: '#475569' }}>Players joining…</p>
+                {(activeBet === null && queuedBet === null) && (
+                  <p style={{ padding: '12px', textAlign: 'center', fontSize: 11, color: '#475569' }}>Aucune mise pour l'instant</p>
                 )}
-                {fakes.map((f, i) => (
-                  <div key={f.name} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', padding: '5px 12px', alignItems: 'center', borderBottom: i < fakes.length - 1 ? '1px solid rgba(30,40,71,0.3)' : 'none' }}>
-                    <span style={{ fontSize: 11, color: '#94a3b8' }}>{f.name}</span>
-                    <span style={{ fontSize: 11, color: '#cbd5e1' }}>{f.bet.toFixed(2)}</span>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: f.cashedAt !== null ? '#4ade80' : phase === 'crashed' ? '#f87171' : '#475569' }}>
-                      {f.cashedAt !== null ? `×${f.cashedAt.toFixed(2)}` : phase === 'crashed' ? 'CRASH' : '—'}
-                    </span>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: f.cashedAt !== null ? '#4ade80' : phase === 'crashed' ? '#f87171' : '#475569' }}>
-                      {f.cashedAt !== null ? `+${(f.bet*f.cashedAt-f.bet).toFixed(2)}` : phase === 'crashed' ? `-${f.bet.toFixed(2)}` : '—'}
-                    </span>
-                  </div>
-                ))}
               </>
             )}
             {betTab === 'my' && (
@@ -2801,21 +2726,6 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
 };
 
 // ══════════════════════════════════════════════════════════════════
-// LIVE FEED
-// ══════════════════════════════════════════════════════════════════
-
-type FeedEntry = { username: string; bet: number; win: number; mult: number; game: string; createdAt: number };
-
-function formatFeedTime(ts: number): string {
-  const s = Math.floor((Date.now() - ts) / 1000);
-  if (s < 5)    return 'maintenant';
-  if (s < 60)   return `il y a ${s}s`;
-  if (s < 3600) return `il y a ${Math.floor(s / 60)}m`;
-  return `il y a ${Math.floor(s / 3600)}h`;
-}
-
-
-// ══════════════════════════════════════════════════════════════════
 // GAMES HUB
 // ══════════════════════════════════════════════════════════════════
 
@@ -2956,10 +2866,6 @@ export const MiniAppGames: React.FC = () => {
   });
   const [muted, setMuted]           = useState(_soundMuted);
 
-  const [liveFeed, setLiveFeed]     = useState<FeedEntry[]>([]);
-  const [, setTick]                 = useState(0);
-  const feedIdxRef                  = useRef(0);
-
   const handleResult = (won: boolean) => {
     setStreak(s => {
       const next = won ? s + 1 : 0;
@@ -2976,36 +2882,6 @@ export const MiniAppGames: React.FC = () => {
   useEffect(() => {
     return () => { if (useAppStore.getState().demoMode) toggleDemoMode(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Tick every 10s to refresh relative timestamps in live feed
-  useEffect(() => {
-    const id = setInterval(() => setTick(t => t + 1), 10000);
-    return () => clearInterval(id);
-  }, []);
-
-  // Live feed auto-rotation — new fake entry every 8–18 seconds
-  useEffect(() => {
-    const GAME_NAMES = ['Crash', 'Plinko', 'Tower', 'Mines', 'Dice'];
-    const scheduleNext = () => {
-      const ms = 8000 + Math.floor(Math.random() * 10000);
-      return setTimeout(() => {
-        const name = ALL_FAKE_NAMES[feedIdxRef.current % ALL_FAKE_NAMES.length];
-        feedIdxRef.current++;
-        const game = GAME_NAMES[Math.floor(Math.random() * GAME_NAMES.length)];
-        const bet  = randomFakeBet();
-        const r    = Math.random();
-        const mult = r < 0.42 ? 0 : r < 0.65 ? 1.5 : r < 0.78 ? 2 : r < 0.89 ? 3 : r < 0.96 ? 5 : 10;
-        const win  = +(bet * mult).toFixed(4);
-        setLiveFeed(prev => [
-          { username: name, bet, win, mult, game, createdAt: Date.now() },
-          ...prev.slice(0, 9),
-        ]);
-        timerRef.current = scheduleNext();
-      }, ms);
-    };
-    const timerRef = { current: scheduleNext() };
-    return () => clearTimeout(timerRef.current);
   }, []);
 
   if (activeGame === 'dice')     return <DiceGame     onBack={() => setActiveGame(null)} streak={streak} onResult={handleResult} />;
@@ -3196,49 +3072,6 @@ export const MiniAppGames: React.FC = () => {
           </div>
         );
       })()}
-
-      {/* Live activity feed */}
-      <style>{`@keyframes feedIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}} @keyframes liveDot{0%,100%{opacity:1}50%{opacity:0.2}}`}</style>
-      <div style={{ background: '#0d1021', border: '1px solid #1e2847', borderRadius: 16 }} className="p-4">
-        <div className="flex items-center gap-2 mb-3">
-          <Trophy className="w-4 h-4" style={{ color: '#f59e0b' }} />
-          <h3 className="text-sm font-semibold" style={{ color: '#f8fafc' }}>Activité récente</h3>
-          <span style={{ marginLeft: 'auto', width: 7, height: 7, borderRadius: '50%', background: '#22c55e', animation: 'liveDot 2s ease-in-out infinite' }} title="En direct" />
-        </div>
-        <div className="space-y-2">
-          {liveFeed.map((f, i) => (
-            <div key={f.createdAt} className="flex items-center justify-between py-1.5" style={{
-              borderBottom: i < liveFeed.length - 1 ? '1px solid rgba(30,40,71,0.6)' : 'none',
-              animation: 'feedIn 0.35s ease',
-            }}>
-              <div className="flex items-center gap-2.5">
-                <span style={{
-                  width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 11, fontWeight: 700,
-                  background: f.mult >= 3 ? 'rgba(34,197,94,0.2)' : f.mult > 0 ? 'rgba(245,158,11,0.2)' : 'rgba(239,68,68,0.15)',
-                  color: f.mult >= 3 ? '#22c55e' : f.mult > 0 ? '#f59e0b' : '#ef4444',
-                }}>
-                  {f.mult > 0 ? `×${f.mult}` : '✗'}
-                </span>
-                <div>
-                  <p style={{ fontSize: 13, color: '#f8fafc', lineHeight: 1 }}>{f.username}</p>
-                  <p style={{ fontSize: 10, color: '#64748b' }}>{f.game}</p>
-                </div>
-              </div>
-              <div className="text-right">
-                <span style={{
-                  fontSize: 13, fontWeight: 600,
-                  color: f.win > f.bet ? '#22c55e' : f.win > 0 ? '#f59e0b' : '#64748b',
-                }}>
-                  {f.win > 0 ? <><TonLogo size={11} />+{f.win.toFixed(2)}</> : <>−{f.bet.toFixed(2)}</>}
-                </span>
-                <p style={{ fontSize: 10, color: '#64748b' }}>{formatFeedTime(f.createdAt)}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
 
       {/* Info bar */}
       <div style={{ background: '#0d1021', border: '1px solid #1e2847', borderRadius: 16 }} className="p-4">
