@@ -603,7 +603,7 @@ function randomFakeBet(): number {
 // CRASH — courbe de multiplicateur animée
 // ══════════════════════════════════════════════════════════════════
 
-const _CRASH_RATE = 0.06;
+const _CRASH_RATE = 0.10; // croissance 10%/s : 2× en ~7s, 5× en ~16s
 const _CRASH_NAMES = [
   'AlexK','Maria','Yosef','Emma_','LucaB','Dani_','Sasha','KimLo',
   'RajPK','LiuWW','OmarS','SofiT','BenAR','YukiM','CarloZ','NinaP',
@@ -615,6 +615,19 @@ function _genCrashPt(): number {
   const r = Math.random();
   if (r < 0.005) return 1.00;
   return Math.max(1.01, +(0.95 / r).toFixed(2));
+}
+
+// Distribution réaliste : la plupart cashent tôt, certains perdent
+function _fakeCashTarget(cp: number): number | null {
+  if (Math.random() < 0.28) return null; // 28% perdent
+  const r = Math.random();
+  let t: number;
+  if      (r < 0.42) t = 1.05 + Math.random() * 0.45;  // 42% : 1.05–1.50
+  else if (r < 0.70) t = 1.50 + Math.random() * 0.80;  // 28% : 1.50–2.30
+  else if (r < 0.88) t = 2.30 + Math.random() * 1.70;  // 18% : 2.30–4.00
+  else if (r < 0.96) t = 4.00 + Math.random() * 4.00;  //  8% : 4.00–8.00
+  else               t = 8.00 + Math.random() * 12.0;  //  4% : 8.00–20.00
+  return +(Math.min(t, cp - 0.01)).toFixed(2);
 }
 
 const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResult }> = ({ onBack, onResult }) => {
@@ -635,6 +648,23 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
   const [autoCash,  setAutoCash]  = useState('');
   const [roundId,   setRoundId]   = useState(1);
   const [fakes,     setFakes]     = useState<{name:string; bet:number; cashedAt:number|null}[]>([]);
+
+  type LiveEntry = { name: string; bet: number; cashedAt: number | null; k: number };
+  const [liveFeed, setLiveFeed] = useState<LiveEntry[]>(() => {
+    let k = 0;
+    return Array.from({ length: 28 }, (_, i) => {
+      const r = Math.random();
+      let cashedAt: number | null = null;
+      if (Math.random() > 0.28) {
+        if      (r < 0.42) cashedAt = +(1.05 + Math.random() * 0.45).toFixed(2);
+        else if (r < 0.70) cashedAt = +(1.50 + Math.random() * 0.80).toFixed(2);
+        else if (r < 0.88) cashedAt = +(2.30 + Math.random() * 1.70).toFixed(2);
+        else                cashedAt = +(4.00 + Math.random() * 8.00).toFixed(2);
+      }
+      return { name: _CRASH_NAMES[i % _CRASH_NAMES.length], bet: +(0.05 + Math.random() * 2.5).toFixed(2), cashedAt, k: k++ };
+    });
+  });
+  const feedKeyR = useRef(28);
 
   const phaseR      = useRef<CPhase>('waiting');
   const startR      = useRef(0);
@@ -676,10 +706,8 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
     const count = 20 + Math.floor(Math.random() * 8);
     const fd = Array.from({ length: count }, (_, i) => ({
       name: _CRASH_NAMES[i % _CRASH_NAMES.length],
-      bet: +(0.05 + Math.random() * 3).toFixed(2),
-      cashTarget: Math.random() < 0.60 && cp > 1.05
-        ? +(1.03 + Math.random() * (cp - 1.03) * 0.85).toFixed(2)
-        : null,
+      bet: +(0.05 + Math.random() * 2.5).toFixed(2),
+      cashTarget: _fakeCashTarget(cp),
       cashedAt: null as number|null,
     }));
     fakeDataR.current = fd;
@@ -747,6 +775,11 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
           activeBetR.current = null;
         }
         setHistory(h => [+(crashR.current).toFixed(2), ...h].slice(0, 20));
+        // Ajouter les résultats du tour au live feed
+        setLiveFeed(prev => [
+          ...fakeDataR.current.map(f => ({ name: f.name, bet: f.bet, cashedAt: f.cashedAt, k: feedKeyR.current++ })),
+          ...prev,
+        ].slice(0, 60));
         clearTimeout(resetTimerR.current);
         resetTimerR.current = setTimeout(() => {
           setRoundId(r => r + 1);
@@ -795,7 +828,7 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
   const xTk = [Math.round(tMax * 0.25), Math.round(tMax * 0.5), Math.round(tMax * 0.75), Math.round(tMax)];
 
   // Button logic
-  const isCrash = phase === 'crashed';
+  const _isCrash = phase === 'crashed'; void _isCrash;
   let btnLabel = '', btnBg = '#1e2847', btnColor = '#475569', btnDis = false, btnFn: () => void = () => {};
   if (phase === 'waiting') {
     if (queuedBet !== null) {
@@ -941,25 +974,59 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
           <div style={{ padding: '10px 14px 6px', display: 'flex', alignItems: 'center', gap: 6 }}>
             <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#4ade80', display: 'inline-block', animation: 'pulse 1.5s ease-in-out infinite' }} />
             <span style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-              En direct · {fakes.length} joueurs
+              {phase === 'flying'
+                ? `En direct · ${fakes.length} joueurs`
+                : `${liveFeed.length} parieurs récents`}
             </span>
           </div>
-          {fakes.map((f, i) => (
-            <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 58px 66px', padding: '5px 14px', alignItems: 'center', borderBottom: '1px solid rgba(30,40,71,.2)' }}>
-              <span style={{ fontSize: 12, color: '#94a3b8' }}>{f.name}</span>
-              <span style={{ fontSize: 12, color: '#64748b', textAlign: 'right' }}>{f.bet.toFixed(2)}</span>
-              <span style={{ fontSize: 12, fontWeight: 700, textAlign: 'right',
-                color: f.cashedAt ? '#4ade80' : isCrash ? '#f87171' : '#334155' }}>
-                {f.cashedAt ? `×${f.cashedAt.toFixed(2)}` : isCrash ? 'CRASH' : '…'}
-              </span>
-            </div>
-          ))}
+
+          {/* Pendant le vol : joueurs du tour en cours */}
+          {phase === 'flying' && fakes.map((f, i) => {
+            const win = f.cashedAt ? +(f.bet * f.cashedAt).toFixed(2) : null;
+            return (
+              <div key={i} style={{ display: 'grid', gridTemplateColumns: '88px 1fr auto auto', gap: 4, padding: '5px 14px', alignItems: 'center', borderBottom: '1px solid rgba(30,40,71,.18)' }}>
+                <span style={{ fontSize: 12, color: '#94a3b8', fontWeight: 600 }}>{f.name}</span>
+                <span style={{ fontSize: 11, color: '#475569' }}>
+                  <span style={{ color: '#3b82f6', fontWeight: 800, marginRight: 2 }}>◆</span>{f.bet.toFixed(2)}
+                </span>
+                <span style={{ fontSize: 11, fontWeight: 700, color: f.cashedAt ? '#4ade80' : '#475569', minWidth: 42, textAlign: 'right' }}>
+                  {f.cashedAt ? `×${f.cashedAt.toFixed(2)}` : '…'}
+                </span>
+                <span style={{ fontSize: 11, fontWeight: 700, minWidth: 52, textAlign: 'right',
+                  color: win ? '#4ade80' : '#334155' }}>
+                  {win ? <><span style={{ color: '#3b82f6', fontWeight: 800 }}>◆</span>{win.toFixed(2)}</> : '—'}
+                </span>
+              </div>
+            );
+          })}
+
+          {/* En attente / après crash : live feed historique */}
+          {phase !== 'flying' && liveFeed.map(f => {
+            const won = f.cashedAt !== null;
+            const win = won ? +(f.bet * f.cashedAt!).toFixed(2) : null;
+            return (
+              <div key={f.k} style={{ display: 'grid', gridTemplateColumns: '88px 1fr auto auto', gap: 4, padding: '5px 14px', alignItems: 'center', borderBottom: '1px solid rgba(30,40,71,.18)' }}>
+                <span style={{ fontSize: 12, color: '#94a3b8', fontWeight: 600 }}>{f.name}</span>
+                <span style={{ fontSize: 11, color: '#475569' }}>
+                  <span style={{ color: '#3b82f6', fontWeight: 800, marginRight: 2 }}>◆</span>{f.bet.toFixed(2)}
+                </span>
+                <span style={{ fontSize: 11, fontWeight: 700, minWidth: 42, textAlign: 'right',
+                  color: won ? '#4ade80' : '#f87171' }}>
+                  {won ? `×${f.cashedAt!.toFixed(2)}` : 'CRASH'}
+                </span>
+                <span style={{ fontSize: 11, fontWeight: 700, minWidth: 52, textAlign: 'right',
+                  color: won ? '#4ade80' : '#f87171' }}>
+                  {won ? <><span style={{ color: '#3b82f6', fontWeight: 800 }}>◆</span>{win!.toFixed(2)}</> : <span style={{ color: '#475569' }}>—</span>}
+                </span>
+              </div>
+            );
+          })}
         </div>
 
-        {/* HISTORIQUE DES TOURS */}
-        <div style={{ padding: '12px 14px 24px' }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Historique des tours</div>
-          {history.length === 0 && <span style={{ fontSize: 12, color: '#1e2847', fontStyle: 'italic' }}>Aucun tour joué…</span>}
+        {/* HISTORIQUE DES TOURS (chips) */}
+        <div style={{ padding: '12px 14px 28px' }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Historique des crashs</div>
+          {history.length === 0 && <span style={{ fontSize: 11, color: '#1e2847', fontStyle: 'italic' }}>Aucun tour joué…</span>}
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
             {history.map((h, i) => (
               <span key={i} style={{ padding: '3px 10px', borderRadius: 99, fontSize: 12, fontWeight: 800,
