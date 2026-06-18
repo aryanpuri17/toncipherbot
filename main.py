@@ -391,6 +391,7 @@ async def init_db() -> None:
             # JSON list of completed platform-task ids. Restored together with
             # the balance so clearing localStorage can't re-farm one-time tasks.
             ("users", "app_completed_tasks", "TEXT"),
+            ("social_proofs", "creator_id", "INTEGER"),
         ]:
             try:
                 await db.execute(f"ALTER TABLE {tbl} ADD COLUMN {col} {defn}")
@@ -626,50 +627,30 @@ async def handle_proof_photo(msg: types.Message) -> None:
         task_id = wp[0]
         file_id = msg.photo[-1].file_id
 
-        await db.execute(
-            "INSERT INTO social_proofs (telegram_id, task_id, file_id) VALUES (?,?,?)",
-            (uid, task_id, file_id),
-        )
-        proof_id = db.lastrowid
-        await db.execute("DELETE FROM waiting_proof WHERE telegram_id = ?", (uid,))
-
         async with db.execute(
-            "SELECT first_name, username FROM users WHERE telegram_id = ?", (uid,)
-        ) as cur:
-            urow = await cur.fetchone()
-        async with db.execute(
-            "SELECT title FROM user_tasks WHERE id = ?", (task_id,)
+            "SELECT creator_id, title FROM user_tasks WHERE id = ?", (task_id,)
         ) as cur:
             trow = await cur.fetchone()
 
+        creator_id = trow[0] if trow else None
+        task_title = trow[1] if trow else task_id
+
+        await db.execute(
+            "INSERT INTO social_proofs (telegram_id, task_id, file_id, creator_id) VALUES (?,?,?,?)",
+            (uid, task_id, file_id, creator_id),
+        )
+        await db.execute("DELETE FROM waiting_proof WHERE telegram_id = ?", (uid,))
         await db.commit()
 
-    user_display = (
-        f"@{urow[1]}" if urow and urow[1]
-        else (urow[0] if urow else str(uid))
-    )
-    task_title = trow[0] if trow else task_id
-
-    if ADMIN_TELEGRAM_ID:
-        kb = InlineKeyboardMarkup(inline_keyboard=[[
-            InlineKeyboardButton(
-                text="✅ Approuver",
-                callback_data=f"proof_ok_{proof_id}_{uid}_{task_id}",
-            ),
-            InlineKeyboardButton(
-                text="❌ Refuser",
-                callback_data=f"proof_ko_{proof_id}_{uid}_{task_id}",
-            ),
-        ]])
-        caption = (
-            f"📸 <b>Preuve sociale</b>\n"
-            f"👤 {user_display} (ID: <code>{uid}</code>)\n"
-            f"📋 Tâche : {task_title}\n"
-            f"🆔 Proof #{proof_id}"
-        )
+    if creator_id:
         try:
-            await bot.forward_message(ADMIN_TELEGRAM_ID, msg.chat.id, msg.message_id)
-            await bot.send_message(ADMIN_TELEGRAM_ID, caption, parse_mode="HTML", reply_markup=kb)
+            await bot.send_message(
+                creator_id,
+                f"📸 <b>Nouvelle preuve à valider</b>\n\n"
+                f"Un utilisateur a soumis une preuve pour votre tâche <b>{task_title}</b>.\n\n"
+                f"Ouvrez <b>Mes campagnes</b> dans l'app pour approuver ou refuser.",
+                parse_mode="HTML",
+            )
         except Exception:
             pass
 
@@ -2561,6 +2542,206 @@ async def api_admin_reject_user_task(request: web.Request) -> web.Response:
     return web.json_response({"success": True, "refund": float(task[2]) if task else 0}, headers=_CORS)
 
 
+async def api_pending_proofs(request: web.Request) -> web.Response:
+    """Pending social proofs for tasks created by a given user."""
+    try:
+        telegram_id = int(request.rel_url.query.get("telegramId", 0))
+    except (ValueError, TypeError):
+        return web.json_response([], headers=_CORS)
+    if not telegram_id:
+        return web.json_response([], headers=_CORS)
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            """
+            SELECT sp.id, sp.task_id, sp.telegram_id, sp.file_id, sp.status, sp.created_at,
+                   ut.title, u.first_name, u.username
+            FROM social_proofs sp
+            JOIN user_tasks ut ON sp.task_id = ut.id
+            LEFT JOIN users u ON sp.telegram_id = u.telegram_id
+            WHERE ut.creator_id = ? AND sp.status = 'pending'
+            ORDER BY sp.created_at DESC
+            """,
+            (telegram_id,),
+        ) as cur:
+            rows = await cur.fetchall()
+
+    return web.json_response(
+        [
+            {
+                "id":              r[0],
+                "taskId":          r[1],
+                "workerId":        r[2],
+                "fileId":          r[3],
+                "status":          r[4],
+                "createdAt":       r[5],
+                "taskTitle":       r[6],
+                "workerName":      r[7] or str(r[2]),
+                "workerUsername":  r[8],
+            }
+            for r in rows
+        ],
+        headers=_CORS,
+    )
+
+
+async def api_review_proof(request: web.Request) -> web.Response:
+    """Creator approves or rejects a pending social proof."""
+    proof_id = request.match_info.get("id", "")
+    try:
+        data        = await request.json()
+        telegram_id = int(data.get("telegramId", 0))
+        action      = data.get("action", "")
+    except Exception:
+        return web.json_response({"error": "Invalid JSON"}, status=400, headers=_CORS)
+
+    if action not in ("approve", "reject"):
+        return web.json_response({"error": "Invalid action"}, status=400, headers=_CORS)
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            """
+            SELECT sp.telegram_id, sp.task_id, ut.creator_id, ut.title
+            FROM social_proofs sp
+            JOIN user_tasks ut ON sp.task_id = ut.id
+            WHERE sp.id = ?
+            """,
+            (proof_id,),
+        ) as cur:
+            row = await cur.fetchone()
+
+        if not row:
+            return web.json_response({"error": "Not found"}, status=404, headers=_CORS)
+
+        worker_tg, task_id, creator_id, task_title = row
+
+        if creator_id != telegram_id and telegram_id != ADMIN_TELEGRAM_ID:
+            return web.json_response({"error": "Unauthorized"}, status=403, headers=_CORS)
+
+        new_status = "approved" if action == "approve" else "rejected"
+        await db.execute(
+            "UPDATE social_proofs SET status=?, reviewed_at=datetime('now') WHERE id=?",
+            (new_status, proof_id),
+        )
+        await db.commit()
+
+    worker_msg = (
+        "✅ <b>Preuve validée !</b>\n\nRevenez dans l'app — votre récompense sera créditée automatiquement."
+        if action == "approve"
+        else "❌ Votre preuve a été refusée. Si vous pensez que c'est injuste, vous pouvez contester depuis l'app."
+    )
+    try:
+        await bot.send_message(worker_tg, worker_msg, parse_mode="HTML")
+    except Exception:
+        pass
+
+    return web.json_response({"success": True}, headers=_CORS)
+
+
+async def api_proof_image(request: web.Request) -> web.Response:
+    """Redirect to Telegram CDN URL for a proof screenshot."""
+    proof_id    = request.match_info.get("id", "")
+    try:
+        telegram_id = int(request.rel_url.query.get("telegramId", 0))
+    except (ValueError, TypeError):
+        return web.Response(status=400)
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            """
+            SELECT sp.file_id, ut.creator_id
+            FROM social_proofs sp
+            JOIN user_tasks ut ON sp.task_id = ut.id
+            WHERE sp.id = ?
+            """,
+            (proof_id,),
+        ) as cur:
+            row = await cur.fetchone()
+
+    if not row:
+        return web.Response(status=404)
+
+    file_id, creator_id = row
+    if telegram_id != creator_id and telegram_id != ADMIN_TELEGRAM_ID:
+        return web.Response(status=403)
+
+    try:
+        tg_file = await bot.get_file(file_id)
+        raise web.HTTPFound(
+            f"https://api.telegram.org/file/bot{BOT_TOKEN}/{tg_file.file_path}"
+        )
+    except web.HTTPFound:
+        raise
+    except Exception:
+        return web.Response(status=500)
+
+
+async def api_report_proof_abuse(request: web.Request) -> web.Response:
+    """Worker reports that a task creator is abusively rejecting proofs."""
+    try:
+        data        = await request.json()
+        telegram_id = int(data.get("telegramId", 0))
+        task_id     = data.get("taskId", "")
+    except Exception:
+        return web.json_response({"error": "Invalid JSON"}, status=400, headers=_CORS)
+
+    if not telegram_id or not task_id:
+        return web.json_response({"error": "Missing fields"}, status=400, headers=_CORS)
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT creator_id, title FROM user_tasks WHERE id=?", (task_id,)
+        ) as cur:
+            task_row = await cur.fetchone()
+
+        if not task_row:
+            return web.json_response({"error": "Task not found"}, status=404, headers=_CORS)
+
+        creator_id, task_title = task_row
+
+        async with db.execute(
+            """
+            SELECT COUNT(*) FROM social_proofs sp
+            JOIN user_tasks ut ON sp.task_id = ut.id
+            WHERE ut.creator_id = ? AND sp.status = 'rejected'
+              AND sp.reviewed_at > datetime('now', '-7 days')
+            """,
+            (creator_id,),
+        ) as cur:
+            rejection_count = (await cur.fetchone())[0]
+
+        severity   = "high" if rejection_count >= 5 else "medium"
+        risk_score = min(100, rejection_count * 15)
+        details    = (
+            f"Signalement d'abus par worker {telegram_id} · tâche '{task_title}' ({task_id}) · "
+            f"creator {creator_id} · {rejection_count} refus en 7 jours"
+        )
+        await db.execute(
+            """
+            INSERT INTO fraud_alerts (telegram_id, username, alert_type, details, severity, risk_score)
+            VALUES (?, '', 'proof_rejection_abuse', ?, ?, ?)
+            """,
+            (creator_id, details, severity, risk_score),
+        )
+        await db.commit()
+
+    if ADMIN_TELEGRAM_ID:
+        try:
+            await bot.send_message(
+                ADMIN_TELEGRAM_ID,
+                f"⚠️ <b>Signalement d'abus — preuves</b>\n\n"
+                f"Creator ID: <code>{creator_id}</code>\n"
+                f"Tâche: {task_title}\n"
+                f"Refus en 7 jours: {rejection_count}\n"
+                f"Signalé par: <code>{telegram_id}</code>",
+                parse_mode="HTML",
+            )
+        except Exception:
+            pass
+
+    return web.json_response({"success": True}, headers=_CORS)
+
+
 # ── Static Files ───────────────────────────────────────────────────────────────
 
 DIST = os.path.join(os.path.dirname(__file__), "dist")
@@ -2629,6 +2810,10 @@ async def start_web() -> None:
     app.router.add_get( "/api/check-bot-start",            api_check_bot_start)
     app.router.add_get( "/api/check-bot-verify",           api_check_bot_verify)
     app.router.add_get( "/api/check-social-proof",         api_check_social_proof)
+    app.router.add_get( "/api/user-tasks/pending-proofs",      api_pending_proofs)
+    app.router.add_post("/api/social-proof/{id}/review",        api_review_proof)
+    app.router.add_get( "/api/proof-image/{id}",                api_proof_image)
+    app.router.add_post("/api/report-proof-abuse",              api_report_proof_abuse)
     app.router.add_get( "/api/leaderboard",                api_leaderboard)
 
     # Transaction API (called by frontend)

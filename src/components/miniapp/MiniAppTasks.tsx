@@ -545,6 +545,7 @@ export const MiniAppTasks: React.FC = () => {
             if (card) await directComplete(card);
           } else if (status === 'rejected') {
             localStorage.removeItem(key);
+            localStorage.setItem(`tc_proof_rejected_${taskId}`, '1');
             setPhase(taskId, 'not_subscribed');
           }
         } catch { /* ignore — no server in local dev */ }
@@ -628,6 +629,18 @@ export const MiniAppTasks: React.FC = () => {
       if (result.success) { setProofOpen(null); setProofText(''); setProofImage(null); }
       setTimeout(() => setProofResult(null), 5000);
     }, 700);
+  };
+
+  const handleReportAbuse = async (taskId: string) => {
+    try {
+      await fetch('/api/report-proof-abuse', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ telegramId: currentUser.telegramId, taskId }),
+      });
+      localStorage.removeItem(`tc_proof_rejected_${taskId}`);
+      setPhase(taskId, 'needs_proof');
+    } catch { /* ignore */ }
   };
 
   // ── Filter state ─────────────────────────────────────────────────────────────
@@ -1030,6 +1043,24 @@ export const MiniAppTasks: React.FC = () => {
                   <ShieldCheck style={{ width: 12, height: 12 }} /> Réessayer
                 </button>
               </div>
+              {card.type === 'social' && (() => {
+                const wasRejected = !!localStorage.getItem(`tc_proof_rejected_${card.id}`);
+                return wasRejected ? (
+                  <button
+                    onClick={() => void handleReportAbuse(card.id)}
+                    style={{
+                      marginTop: 6,
+                      width: '100%', padding: '9px 0', borderRadius: 12,
+                      background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.25)',
+                      color: '#fbbf24', fontSize: 11, fontWeight: 700,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    🚨 Contester ce refus
+                  </button>
+                ) : null;
+              })()}
             </div>
           )}
 
