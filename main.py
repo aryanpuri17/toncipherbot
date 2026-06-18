@@ -20,7 +20,7 @@ from urllib.parse import parse_qsl
 import aiosqlite
 from aiohttp import web
 from aiogram import Bot, Dispatcher, types
-from aiogram.filters import CommandStart
+from aiogram.filters import CommandStart, Command
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 
 BOT_TOKEN         = os.getenv("BOT_TOKEN", "")
@@ -432,6 +432,105 @@ async def cmd_start(msg: types.Message):
         "👥 Invitez vos amis et montez dans le classement.\n\n"
         "⬇️ Appuyez sur le bouton pour démarrer :",
         parse_mode="HTML", reply_markup=kb,
+    )
+
+
+# ── Bot command: /credit ──────────────────────────────────────────────────────
+
+@dp.message(Command("credit"))
+async def cmd_credit(msg: types.Message):
+    if msg.from_user.id != ADMIN_TELEGRAM_ID:
+        return
+
+    args = (msg.text or "").split(maxsplit=3)[1:]
+    if len(args) < 2:
+        await msg.reply(
+            "❌ Usage : <code>/credit &lt;id_ou_@username&gt; &lt;montant&gt; [note]</code>\n\n"
+            "Exemples :\n"
+            "<code>/credit 123456789 5.00</code>\n"
+            "<code>/credit @monami 10 Cadeau</code>",
+            parse_mode="HTML",
+        )
+        return
+
+    target_raw = args[0]
+    try:
+        amount = float(args[1])
+    except ValueError:
+        await msg.reply("❌ Montant invalide.", parse_mode="HTML")
+        return
+
+    if not (0 < amount <= 100_000):
+        await msg.reply("❌ Montant doit être entre 0 et 100 000 GRAM.", parse_mode="HTML")
+        return
+
+    note = args[2] if len(args) > 2 else "Crédit admin"
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        if target_raw.startswith("@"):
+            async with db.execute(
+                "SELECT telegram_id, first_name, username FROM users WHERE username = ? COLLATE NOCASE",
+                (target_raw[1:],),
+            ) as cur:
+                row = await cur.fetchone()
+        else:
+            try:
+                tid = int(target_raw)
+            except ValueError:
+                await msg.reply("❌ ID invalide. Utilisez un nombre ou @username.", parse_mode="HTML")
+                return
+            async with db.execute(
+                "SELECT telegram_id, first_name, username FROM users WHERE telegram_id = ?",
+                (tid,),
+            ) as cur:
+                row = await cur.fetchone()
+
+        if not row:
+            await msg.reply(f"❌ Utilisateur introuvable : <code>{target_raw}</code>", parse_mode="HTML")
+            return
+
+        target_id  = row[0]
+        first_name = row[1] or "Utilisateur"
+        username   = row[2]
+
+        await db.execute(
+            """UPDATE users
+               SET app_balance        = COALESCE(app_balance, 0)        + ?,
+                   app_total_earnings = COALESCE(app_total_earnings, 0) + ?
+               WHERE telegram_id = ?""",
+            (amount, amount, target_id),
+        )
+        await db.execute(
+            """INSERT INTO transactions
+                   (id, telegram_id, type, amount, currency, network, address, status, admin_note)
+               VALUES (?, ?, 'admin_credit', ?, 'GRAM', 'admin', 'admin', 'completed', ?)""",
+            (str(uuid.uuid4()), target_id, amount, note),
+        )
+        await db.commit()
+
+    try:
+        note_line = f"\n📝 <i>{note}</i>" if note != "Crédit admin" else ""
+        await bot.send_message(
+            target_id,
+            f"💎 <b>Crédit reçu !</b>\n\n"
+            f"Bonjour <b>{first_name}</b> 👋\n\n"
+            f"L'équipe TonCipher vous a crédité :\n"
+            f"<b>+{amount:.4f} GRAM</b>{note_line}\n\n"
+            f"Votre solde a été mis à jour instantanément.\n"
+            f"Merci de votre confiance en TonCipher ! 🙏",
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass
+
+    username_part = f" (@{username})" if username else ""
+    await msg.reply(
+        f"✅ <b>Crédit envoyé !</b>\n\n"
+        f"👤 {first_name}{username_part}\n"
+        f"🆔 <code>{target_id}</code>\n"
+        f"💎 <b>+{amount:.4f} GRAM</b>\n"
+        f"📝 {note}",
+        parse_mode="HTML",
     )
 
 
