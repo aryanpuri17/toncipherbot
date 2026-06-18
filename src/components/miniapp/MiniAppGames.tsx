@@ -459,7 +459,12 @@ const DiceGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResul
         </button>
         <div className="flex-1">
           <div className="flex items-center gap-2">
-            <h2 className="text-base font-bold text-white">Dice</h2>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+              <div style={{ width: 28, height: 28, borderRadius: 8, background: 'rgba(245,158,11,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <GameIcon id="dice" color="#f59e0b" size={16} />
+              </div>
+              <h2 className="text-base font-bold text-white">Dice</h2>
+            </div>
             <StreakChip streak={streak} />
           </div>
           <p className="text-[11px] text-slate-500">Choisissez votre seuil · misez · lancez</p>
@@ -996,7 +1001,12 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
         }}>←</button>
 
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-          <h2 className="text-base font-bold text-white">Crash 📈</h2>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+            <div style={{ width: 28, height: 28, borderRadius: 8, background: 'rgba(129,140,248,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <GameIcon id="crash" color="#818cf8" size={16} />
+            </div>
+            <h2 className="text-base font-bold text-white">Crash</h2>
+          </div>
         </div>
 
         <span style={{ fontSize: 11, color: '#475569', fontWeight: 700, background: 'rgba(255,255,255,.04)', padding: '3px 8px', borderRadius: 6 }}>
@@ -1552,7 +1562,12 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
           </button>
           <div className="flex-1">
             <div className="flex items-center gap-2">
-              <h2 className="text-base font-bold" style={{ color: '#f8fafc' }}>Mines 💣</h2>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                <div style={{ width: 28, height: 28, borderRadius: 8, background: 'rgba(139,92,246,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <GameIcon id="mines" color="#8b5cf6" size={16} />
+                </div>
+                <h2 className="text-base font-bold" style={{ color: '#f8fafc' }}>Mines</h2>
+              </div>
               <StreakChip streak={streak} />
             </div>
             <p className="text-[11px]" style={{ color: '#64748b' }}>Évitez les mines · Encaissez au bon moment</p>
@@ -1971,7 +1986,12 @@ const TowerGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
         </button>
         <div className="flex-1">
           <div className="flex items-center gap-2">
-            <h2 className="text-base font-bold text-white">Tower</h2>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+              <div style={{ width: 28, height: 28, borderRadius: 8, background: 'rgba(16,185,129,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <GameIcon id="tower" color="#10b981" size={16} />
+              </div>
+              <h2 className="text-base font-bold text-white">Tower</h2>
+            </div>
             <StreakChip streak={streak} />
           </div>
           <p className="text-[11px] text-slate-500">Grimpez les étages · évitez le piège · encaissez</p>
@@ -2548,7 +2568,12 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
           </button>
           <div className="flex-1">
             <div className="flex items-center gap-2">
-              <h2 className="text-base font-bold" style={{ color: '#f8fafc' }}>Plinko 🎯</h2>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                <div style={{ width: 28, height: 28, borderRadius: 8, background: 'rgba(251,191,36,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <GameIcon id="plinko" color="#fbbf24" size={16} />
+                </div>
+                <h2 className="text-base font-bold" style={{ color: '#f8fafc' }}>Plinko</h2>
+              </div>
               <StreakChip streak={streak} />
             </div>
             <p className="text-[11px]" style={{ color: '#64748b' }}>Lâchez la balle · Visez les multiplicateurs élevés</p>
@@ -2796,6 +2821,65 @@ function formatFeedTime(ts: number): string {
 
 type ActiveGame = 'dice' | 'crash' | 'mines' | 'tower' | 'plinko' | null;
 
+const GameIcon: React.FC<{ id: string; size?: number; color?: string }> = ({ id, size = 24, color = 'currentColor' }) => {
+  const s: React.CSSProperties = { width: size, height: size, display: 'block', flexShrink: 0 };
+  switch (id) {
+    case 'dice': return (
+      <svg viewBox="0 0 24 24" fill="none" style={s}>
+        <rect x="2" y="2" width="20" height="20" rx="4.5" stroke={color} strokeWidth="1.8"/>
+        <circle cx="8" cy="8" r="1.7" fill={color}/>
+        <circle cx="16" cy="8" r="1.7" fill={color}/>
+        <circle cx="12" cy="12" r="1.7" fill={color}/>
+        <circle cx="8" cy="16" r="1.7" fill={color}/>
+        <circle cx="16" cy="16" r="1.7" fill={color}/>
+      </svg>
+    );
+    case 'crash': return (
+      <svg viewBox="0 0 24 24" fill="none" style={s}>
+        <path d="M12 2C9 2 6.5 4.5 6 8L5 13h14l-1-5C17.5 4.5 15 2 12 2Z" stroke={color} strokeWidth="1.8" strokeLinejoin="round"/>
+        <circle cx="12" cy="7.5" r="2" stroke={color} strokeWidth="1.6"/>
+        <path d="M9 13v4l3 3 3-3v-4" stroke={color} strokeWidth="1.8" strokeLinejoin="round"/>
+        <path d="M6 11l-2 1-1 3 2.5-1M18 11l2 1 1 3-2.5-1" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
+    );
+    case 'mines': return (
+      <svg viewBox="0 0 24 24" fill="none" style={s}>
+        <path d="M12 2L21 7.5V16.5L12 22L3 16.5V7.5L12 2Z" stroke={color} strokeWidth="1.8" strokeLinejoin="round"/>
+        <line x1="12" y1="2" x2="12" y2="7" stroke={color} strokeWidth="1.2" opacity="0.55"/>
+        <line x1="21" y1="7.5" x2="16.5" y2="10.5" stroke={color} strokeWidth="1.2" opacity="0.55"/>
+        <line x1="21" y1="16.5" x2="16.5" y2="13.5" stroke={color} strokeWidth="1.2" opacity="0.55"/>
+        <line x1="12" y1="22" x2="12" y2="17" stroke={color} strokeWidth="1.2" opacity="0.55"/>
+        <line x1="3" y1="16.5" x2="7.5" y2="13.5" stroke={color} strokeWidth="1.2" opacity="0.55"/>
+        <line x1="3" y1="7.5" x2="7.5" y2="10.5" stroke={color} strokeWidth="1.2" opacity="0.55"/>
+        <circle cx="12" cy="12" r="2.8" stroke={color} strokeWidth="1.8"/>
+        <circle cx="12" cy="12" r="1" fill={color}/>
+      </svg>
+    );
+    case 'tower': return (
+      <svg viewBox="0 0 24 24" fill={color} style={s}>
+        <rect x="9" y="2" width="6" height="3.5" rx="1.5"/>
+        <rect x="6.5" y="7.5" width="11" height="3.5" rx="1.5"/>
+        <rect x="3.5" y="13" width="17" height="3.5" rx="1.5"/>
+        <rect x="1" y="18.5" width="22" height="3.5" rx="1.5"/>
+      </svg>
+    );
+    case 'plinko': return (
+      <svg viewBox="0 0 24 24" fill={color} style={s}>
+        <circle cx="12" cy="2.5" r="2.2"/>
+        <circle cx="7.5" cy="8.5" r="1.5" opacity="0.75"/>
+        <circle cx="16.5" cy="8.5" r="1.5" opacity="0.75"/>
+        <circle cx="4" cy="14.5" r="1.5" opacity="0.6"/>
+        <circle cx="12" cy="14.5" r="1.5" opacity="0.6"/>
+        <circle cx="20" cy="14.5" r="1.5" opacity="0.6"/>
+        <rect x="2" y="20" width="4.5" height="3.5" rx="1.2"/>
+        <rect x="9.5" y="20" width="5" height="3.5" rx="1.2" opacity="0.85"/>
+        <rect x="17.5" y="20" width="4.5" height="3.5" rx="1.2"/>
+      </svg>
+    );
+    default: return null;
+  }
+};
+
 const CATALOG = [
   {
     id: 'dice' as ActiveGame,
@@ -3008,7 +3092,7 @@ export const MiniAppGames: React.FC = () => {
                 className="game-icon-wrap w-11 h-11 rounded-xl flex items-center justify-center mb-2.5"
                 style={{ background: `linear-gradient(135deg,${game.accentFrom}33,${game.accentTo}22)`, boxShadow: `0 4px 12px ${game.glow}` }}
               >
-                <span className="text-2xl">{game.emoji}</span>
+                <GameIcon id={game.id as string} color={game.accentFrom} size={26} />
               </div>
               <p className="text-white font-bold text-sm leading-tight">{game.title}</p>
               <p className="text-slate-400 text-[11px] mt-0.5 leading-tight">{game.desc}</p>
