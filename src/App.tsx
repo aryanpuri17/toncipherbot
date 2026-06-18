@@ -345,6 +345,12 @@ export default function App() {
     // reaches users already in the app (not just on next open)
     const configPoll = setInterval(() => { void useAppStore.getState().syncConfigFromBackend(); }, 5 * 60_000);
 
+    // SSE: receive real-time config updates pushed by admin
+    const appEs = new EventSource('/api/tasks/stream');
+    appEs.addEventListener('config_updated', () => {
+      void useAppStore.getState().syncConfigFromBackend();
+    });
+
     // Poll transaction statuses so an admin approval/rejection reaches the
     // user while the app is open — also re-check when the app regains focus.
     const pollWithdrawals = () => { void syncServerTransactions(useAppStore.getState().currentUser.telegramId); };
@@ -405,15 +411,29 @@ export default function App() {
           appBalance?: number | null; appTotalEarnings?: number | null;
           appTasksCompleted?: number | null; appCompletedTasks?: string[];
         };
-        if (!hadSavedBalance && typeof apiData.appBalance === 'number') {
-          useAppStore.getState().adoptServerBalance({
-            balance:          apiData.appBalance,
-            totalEarnings:    apiData.appTotalEarnings ?? 0,
-            tasksCompleted:   apiData.appTasksCompleted ?? 0,
-            referralBalance:  apiData.referralBalance,
-            completedTaskIds: Array.isArray(apiData.appCompletedTasks) ? apiData.appCompletedTasks : [],
-          });
-          adoptedServerBalance = true;
+        if (typeof apiData.appBalance === 'number') {
+          const localBalance = useAppStore.getState().currentUser.balanceMain;
+          // Server is authoritative: adopt if server balance ≥ local (avoids rare 3s window loss)
+          // OR if localStorage was empty (fresh device)
+          if (!hadSavedBalance || apiData.appBalance >= localBalance) {
+            useAppStore.getState().adoptServerBalance({
+              balance:         apiData.appBalance,
+              totalEarnings:   apiData.appTotalEarnings ?? 0,
+              tasksCompleted:  apiData.appTasksCompleted ?? 0,
+              referralBalance: apiData.referralBalance,
+              completedTaskIds: Array.isArray(apiData.appCompletedTasks) ? apiData.appCompletedTasks : [],
+            });
+            adoptedServerBalance = true;
+          } else {
+            // Local balance is higher (earned in last few seconds before close) — keep it
+            // but still merge completedTaskIds from server to prevent task re-farming
+            const completedFromServer = Array.isArray(apiData.appCompletedTasks) ? apiData.appCompletedTasks : [];
+            if (completedFromServer.length > 0) {
+              useAppStore.setState(s => ({
+                completedTaskIds: Array.from(new Set([...s.completedTaskIds, ...completedFromServer])),
+              }));
+            }
+          }
         }
         syncUserFromApi(apiData);
       }
@@ -455,6 +475,7 @@ export default function App() {
     return () => {
       clearInterval(configPoll);
       clearInterval(withdrawalPoll);
+      appEs.close();
       document.removeEventListener('visibilitychange', onVisibleWd);
       window.removeEventListener('hashchange', handleHashChange);
     };

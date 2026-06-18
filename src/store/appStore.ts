@@ -1386,14 +1386,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       const res = await fetch('/api/config');
       if (!res.ok) return;
-      const cfg = await res.json() as { promoEvent?: PlatformConfig['promoEvent']; streakMilestones?: PlatformConfig['streakMilestones'] };
-      set(s => ({
-        platformConfig: {
-          ...s.platformConfig,
-          ...(cfg.promoEvent !== undefined ? { promoEvent: cfg.promoEvent } : {}),
-          ...(Array.isArray(cfg.streakMilestones) && cfg.streakMilestones.length > 0 ? { streakMilestones: cfg.streakMilestones } : {}),
-        },
-      }));
+      const cfg = await res.json() as Partial<PlatformConfig>;
+      if (cfg && typeof cfg === 'object') {
+        set(s => ({ platformConfig: { ...s.platformConfig, ...cfg } }));
+      }
     } catch { /* offline — keep local defaults */ }
   },
 
@@ -1506,7 +1502,13 @@ export const useAppStore = create<AppState>((set, get) => ({
   markNotificationRead: (id) => set((s) => ({ notifications: s.notifications.map(n => n.id === id ? { ...n, isRead: true } : n) })),
   markAllNotificationsRead: () => set((s) => ({ notifications: s.notifications.map(n => ({ ...n, isRead: true })) })),
   addNotification: (n) => set((s) => ({ notifications: [{ ...n, id: generateId(), createdAt: new Date().toISOString() }, ...s.notifications] })),
-  updatePlatformConfig: (data) => set((s) => ({ platformConfig: { ...s.platformConfig, ...data } })),
+  updatePlatformConfig: (data) => {
+    set((s) => ({ platformConfig: { ...s.platformConfig, ...data } }));
+    // Push every changed key to the backend so all users get the update
+    for (const [key, value] of Object.entries(data)) {
+      void pushConfigToBackend(key, value);
+    }
+  },
   addPlatformRevenue: (amount) => set((s) => ({ platformStats: { ...s.platformStats, platformRevenue: s.platformStats.platformRevenue + amount } })),
   addLog: (log) => set((s) => ({ logs: [{ ...log, id: generateId(), createdAt: new Date().toISOString() }, ...s.logs] })),
 

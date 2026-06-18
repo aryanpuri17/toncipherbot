@@ -1367,6 +1367,7 @@ async def api_admin_config_set(request: web.Request) -> web.Response:
             (key, value),
         )
         await db.commit()
+    await _sse_broadcast("config_updated", {"key": key})
     return web.json_response({"success": True}, headers=_CORS)
 
 
@@ -1392,6 +1393,7 @@ async def api_admin_config_bulk(request: web.Request) -> web.Response:
             )
             saved += 1
         await db.commit()
+    await _sse_broadcast("config_updated", {"keys": list(configs.keys())})
     return web.json_response({"success": True, "saved": saved}, headers=_CORS)
 
 
