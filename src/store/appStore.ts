@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { getAdminKey } from '../utils/adminFetch';
 
 // ===================== TYPES =====================
 
@@ -514,6 +515,30 @@ const _savedTransactions: Transaction[] = (() => {
   try { return JSON.parse(localStorage.getItem('tc_transactions') || '[]') as Transaction[]; }
   catch { return []; }
 })();
+const _savedNotifications: Notification[] = (() => {
+  try { return JSON.parse(localStorage.getItem('tc_notifications') || '[]') as Notification[]; }
+  catch { return []; }
+})();
+const _savedCampaigns: Campaign[] = (() => {
+  try { return JSON.parse(localStorage.getItem('tc_campaigns') || '[]') as Campaign[]; }
+  catch { return []; }
+})();
+const _savedChannels: Channel[] = (() => {
+  try { return JSON.parse(localStorage.getItem('tc_channels') || '[]') as Channel[]; }
+  catch { return []; }
+})();
+const _savedShopItems: ShopItem[] = (() => {
+  try { return JSON.parse(localStorage.getItem('tc_shop_items') || '[]') as ShopItem[]; }
+  catch { return []; }
+})();
+const _savedPromoCodes: PromoCode[] = (() => {
+  try { return JSON.parse(localStorage.getItem('tc_promo_codes') || '[]') as PromoCode[]; }
+  catch { return []; }
+})();
+const _savedReferralMilestones: ReferralMilestone[] = (() => {
+  try { return JSON.parse(localStorage.getItem('tc_referral_milestones') || '[]') as ReferralMilestone[]; }
+  catch { return []; }
+})();
 
 const mockUsers: User[] = [
   {
@@ -545,22 +570,23 @@ const mockTasks: Task[] = (() => {
   } catch { return _defaultTasks; }
 })();
 
-const mockPromoCodes: PromoCode[] = [
+const _defaultPromoCodes: PromoCode[] = [
   { id: '1', code: 'LAUNCH50', reward: 0.50, currency: 'main', maxUses: 500, currentUses: 127, isActive: true, description: 'Code de lancement officiel', createdAt: new Date(Date.now() - 10 * 86400000).toISOString() },
   { id: '2', code: 'VIP200', reward: 2.00, currency: 'main', maxUses: 20, currentUses: 3, isActive: true, expiresAt: new Date(Date.now() + 7 * 86400000).toISOString(), description: 'Code VIP exclusif — 7 jours', createdAt: new Date().toISOString() },
 ];
+const mockPromoCodes: PromoCode[] = _savedPromoCodes.length > 0 ? _savedPromoCodes : _defaultPromoCodes;
 
 const mockTaskSubmissions: TaskSubmission[] = [];
 
 const mockTransactions: Transaction[] = _savedTransactions;
 
-const mockCampaigns: Campaign[] = [];
+const mockCampaigns: Campaign[] = _savedCampaigns;
 
-const mockChannels: Channel[] = [];
+const mockChannels: Channel[] = _savedChannels;
 
-const mockShopItems: ShopItem[] = [];
+const mockShopItems: ShopItem[] = _savedShopItems;
 
-const mockNotifications: Notification[] = [];
+const mockNotifications: Notification[] = _savedNotifications;
 
 const mockFraudAlerts: FraudAlert[] = [];
 
@@ -658,12 +684,13 @@ const mockAdminUsers: AdminUser[] = [
   { id: '1', telegramId: 0, username: 'puriaryan', role: 'super_admin', permissions: ['*'], isActive: true, createdAt: new Date().toISOString() },
 ];
 
-const mockReferralMilestones: ReferralMilestone[] = [
+const _defaultReferralMilestones: ReferralMilestone[] = [
   { id: '1', referralCount: 5, reward: 2.00, description: 'Invitez 5 amis', isActive: true },
   { id: '2', referralCount: 20, reward: 10.00, description: 'Invitez 20 amis', isActive: true },
   { id: '3', referralCount: 50, reward: 30.00, description: 'Invitez 50 amis', isActive: true },
   { id: '4', referralCount: 100, reward: 75.00, description: 'Invitez 100 amis', isActive: true },
 ];
+const mockReferralMilestones: ReferralMilestone[] = _savedReferralMilestones.length > 0 ? _savedReferralMilestones : _defaultReferralMilestones;
 
 const _savedPlatformConfig: Partial<PlatformConfig> = (() => {
   try { return JSON.parse(localStorage.getItem('tc_platform_config') ?? '{}') as Partial<PlatformConfig>; }
@@ -942,7 +969,7 @@ const generateId = () => Math.random().toString(36).substr(2, 9);
 // (the store itself is per-device; without this, admin changes stay local).
 async function pushConfigToBackend(key: string, value: unknown): Promise<void> {
   try {
-    const adminKey = localStorage.getItem('tc_admin_key') ?? '';
+    const adminKey = getAdminKey();
     await fetch('/api/admin/config', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...(adminKey ? { 'X-Admin-Key': adminKey } : {}) },
@@ -1654,6 +1681,12 @@ useAppStore.subscribe((state) => {
     localStorage.setItem('tc_completed_tasks', JSON.stringify(state.completedTaskIds));
     localStorage.setItem('tc_tasks', JSON.stringify(state.tasks.slice(-500)));
     localStorage.setItem('tc_transactions', JSON.stringify(state.transactions.slice(-300)));
+    localStorage.setItem('tc_notifications', JSON.stringify(state.notifications.slice(0, 50)));
+    localStorage.setItem('tc_campaigns', JSON.stringify(state.campaigns.slice(-200)));
+    localStorage.setItem('tc_channels', JSON.stringify(state.channels.slice(-200)));
+    localStorage.setItem('tc_shop_items', JSON.stringify(state.shopItems.slice(-200)));
+    localStorage.setItem('tc_promo_codes', JSON.stringify(state.promoCodes.slice(-200)));
+    localStorage.setItem('tc_referral_milestones', JSON.stringify(state.referralMilestones));
     localStorage.setItem('tc_boosters', JSON.stringify(state.activeBoosters));
     if (state.referralBoostExpiresAt) {
       localStorage.setItem('tc_ref_boost', state.referralBoostExpiresAt);
