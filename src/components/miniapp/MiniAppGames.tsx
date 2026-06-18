@@ -824,7 +824,7 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 16px 10px', borderBottom: '1px solid #1e2847', flexShrink: 0 }}>
         <button onClick={onBack} style={{ width: 34, height: 34, borderRadius: 10, border: 'none', background: 'rgba(255,255,255,.06)', color: '#94a3b8', fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>←</button>
         <span style={{ flex: 1, textAlign: 'center', fontWeight: 900, fontSize: 15, color: '#f8fafc', letterSpacing: '0.08em', textTransform: 'uppercase' }}>CRASH</span>
-        <span style={{ fontSize: 11, color: '#334155', fontWeight: 700 }}>#{roundId}</span>
+        <span style={{ fontSize: 11, color: '#475569', fontWeight: 700 }}>#{roundId}</span>
       </div>
 
       {/* History */}
@@ -839,7 +839,7 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
       </div>
 
       {/* Graph */}
-      <div style={{ flex: '1 1 0%', minHeight: 0, position: 'relative', padding: '4px 6px 0' }}>
+      <div style={{ flex: '1 1 0%', minHeight: 0, position: 'relative', padding: '4px 6px 0', borderBottom: '1px solid #1e2847' }}>
         <svg width="100%" height="100%" viewBox={`0 0 ${PL + GW + 6} ${GH + PB}`} preserveAspectRatio="xMidYMid meet" style={{ display: 'block' }}>
           {yTk.map((m, i) => (
             <g key={i}>
@@ -850,6 +850,13 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
           {xTk.map((t, i) => (
             <text key={i} x={toX(t)} y={GH + PB - 2} fontSize="7.5" fill="#334155" textAnchor="middle">{t}s</text>
           ))}
+          {!isNaN(parseFloat(autoCash)) && parseFloat(autoCash) >= 1.01 && (
+            <line
+              x1={PL} x2={PL + GW}
+              y1={toY(parseFloat(autoCash))} y2={toY(parseFloat(autoCash))}
+              stroke="#fbbf24" strokeWidth="1" strokeDasharray="4,3" opacity="0.6"
+            />
+          )}
           {pathD && phase !== 'crashed' && (
             <path d={`${pathD} L ${toX(tCur).toFixed(1)},${GH} L ${PL},${GH} Z`} fill={`${lineC}12`} />
           )}
@@ -863,7 +870,7 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
         </svg>
 
         {/* Center multiplier display */}
-        <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-55%)', textAlign: 'center', pointerEvents: 'none' }}>
+        <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-55%)', textAlign: 'center', pointerEvents: 'none', animation: phase === 'crashed' ? 'crashShake 0.35s ease-out' : 'none' }}>
           {phase === 'waiting' && (
             <>
               <div style={{ fontSize: 10, color: '#475569', fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase' }}>PROCHAIN TOUR</div>
@@ -871,7 +878,7 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
             </>
           )}
           {phase === 'flying' && (
-            <div style={{ fontSize: 50, fontWeight: 900, color: '#818cf8', lineHeight: 1, textShadow: '0 0 40px rgba(129,140,248,.6)' }}>
+            <div style={{ fontSize: 50, fontWeight: 900, color: '#c7d2fe', lineHeight: 1, textShadow: '0 0 40px rgba(165,180,252,.8)' }}>
               {mult.toFixed(2)}<span style={{ fontSize: 28 }}>×</span>
             </div>
           )}
@@ -887,11 +894,14 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
             <div style={{ marginTop: 8, fontSize: 13, fontWeight: 800, color: '#4ade80' }}>✓ Encaissé ×{cashedOut.toFixed(2)}</div>
           )}
         </div>
+        {phase === 'crashed' && (
+          <div style={{ position: 'absolute', inset: 0, background: 'rgba(239,68,68,0.15)', pointerEvents: 'none', animation: 'crashFlash 0.4s ease-out forwards', borderRadius: 0 }} />
+        )}
       </div>
 
       {/* Players list */}
-      <div style={{ margin: '4px 12px 4px', background: '#0d1021', border: '1px solid #1e2847', borderRadius: 12, flexShrink: 0, maxHeight: 84, overflow: 'hidden' }}>
-        <div style={{ overflowY: 'auto', maxHeight: 84 }}>
+      <div style={{ margin: '4px 12px 4px', background: '#0d1021', border: '1px solid #1e2847', borderRadius: 12, flexShrink: 0, maxHeight: 68, overflow: 'hidden' }}>
+        <div style={{ overflowY: 'auto', maxHeight: 68 }}>
           {fakes.map((f, i) => (
             <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 58px 62px', padding: '4px 12px', alignItems: 'center', borderBottom: i < fakes.length - 1 ? '1px solid rgba(30,40,71,.25)' : 'none' }}>
               <span style={{ fontSize: 11, color: '#64748b' }}>{f.name}</span>
@@ -909,8 +919,8 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
       <div style={{ flexShrink: 0, padding: '5px 12px 18px', display: 'flex', flexDirection: 'column', gap: 6 }}>
         <div style={{ display: 'flex', gap: 5 }}>
           <div style={{ flex: 1, background: '#0d1021', border: '1px solid #1e2847', borderRadius: 10, display: 'flex', alignItems: 'center', padding: '8px 12px', opacity: activeBet !== null ? 0.55 : 1 }}>
-            <input type="number" value={bet} min={0.01} max={50} step={0.01} disabled={activeBet !== null}
-              onChange={e => { const v = +e.target.value; if (!isNaN(v)) setBet(Math.max(0.01, Math.min(50, v))); }}
+            <input type="text" inputMode="decimal" pattern="[0-9]*[.,]?[0-9]*" value={bet} disabled={activeBet !== null}
+              onChange={e => { const v = parseFloat(e.target.value.replace(',', '.')); if (!isNaN(v)) setBet(Math.max(0.01, Math.min(50, v))); }}
               style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: '#f8fafc', fontSize: 16, fontWeight: 700 }} />
             <span style={{ fontSize: 11, color: '#475569' }}>TON</span>
           </div>
@@ -932,7 +942,13 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
           ))}
         </div>
         <button onClick={btnFn} disabled={btnDis}
-          style={{ border: 'none', borderRadius: 14, padding: '14px 0', fontSize: 14, fontWeight: 900, letterSpacing: '0.04em', textTransform: 'uppercase', width: '100%', cursor: btnDis ? 'not-allowed' : 'pointer', opacity: btnDis ? 0.65 : 1, background: btnBg, color: btnColor }}>
+          style={{
+            border: 'none', borderRadius: 14, fontWeight: 900, letterSpacing: '0.04em', textTransform: 'uppercase', width: '100%',
+            cursor: btnDis ? 'not-allowed' : 'pointer', opacity: btnDis ? 0.65 : 1, background: btnBg, color: btnColor,
+            padding: (phase === 'flying' && activeBet !== null && cashedOut === null) ? '16px 0' : '14px 0',
+            fontSize: (phase === 'flying' && activeBet !== null && cashedOut === null) ? 15 : 14,
+            animation: (phase === 'flying' && activeBet !== null && cashedOut === null) ? 'cashoutPulse 0.9s ease-in-out infinite' : 'none',
+          }}>
           {btnLabel}
         </button>
         {queuedBet !== null && (
