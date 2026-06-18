@@ -195,7 +195,46 @@ export const MiniAppTasks: React.FC = () => {
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // No backend — api task list stays empty; structure preserved for future integration
+  // Load server tasks on mount (user-created tasks visible to all)
+  useEffect(() => {
+    const tid = useAppStore.getState().currentUser.telegramId;
+    fetch(`/api/user-tasks/available?telegram_id=${tid}`)
+      .then(r => r.json())
+      .then((data: ApiTask[]) => setApiTasks(data))
+      .catch(() => {}); // no server in local dev — silently ignore
+
+    // SSE: subscribe to real-time task lifecycle events
+    const es = new EventSource('/api/tasks/stream');
+
+    es.addEventListener('task_approved', (e: MessageEvent) => {
+      try {
+        const task = JSON.parse(e.data) as ApiTask;
+        // Only add if this user hasn't completed it and isn't the creator
+        const myId = useAppStore.getState().currentUser.telegramId;
+        setApiTasks(prev => {
+          if (prev.some(t => t.id === task.id)) return prev;
+          return [task, ...prev];
+        });
+        void myId; // type-check used ref
+      } catch { /* ignore malformed */ }
+    });
+
+    es.addEventListener('task_updated', (e: MessageEvent) => {
+      try {
+        const patch = JSON.parse(e.data) as { id: string; totalCompletions: number };
+        setApiTasks(prev => prev.map(t => t.id === patch.id ? { ...t, totalCompletions: patch.totalCompletions } : t));
+      } catch { /* ignore */ }
+    });
+
+    es.addEventListener('task_removed', (e: MessageEvent) => {
+      try {
+        const { id } = JSON.parse(e.data) as { id: string };
+        setApiTasks(prev => prev.filter(t => t.id !== id));
+      } catch { /* ignore */ }
+    });
+
+    return () => { es.close(); };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Build unified card pool ──────────────────────────────────────────────────
 
@@ -243,7 +282,7 @@ export const MiniAppTasks: React.FC = () => {
 
   // ── Completion helpers ───────────────────────────────────────────────────────
 
-  const creditApiTask = (taskId: string, reward: number) => {
+  const _creditLocally = (taskId: string, reward: number) => {
     const state = useAppStore.getState();
     state.updateUser(state.currentUser.id, {
       balanceMain:    state.currentUser.balanceMain    + reward,
@@ -258,6 +297,35 @@ export const MiniAppTasks: React.FC = () => {
     });
     setCompletedApiTaskIds(prev => [...prev, taskId]);
     setApiTasks(prev => prev.filter(t => t.id !== taskId));
+  };
+
+  const creditApiTask = async (taskId: string, reward: number): Promise<boolean> => {
+    const telegramId = useAppStore.getState().currentUser.telegramId;
+    if (!telegramId) {
+      // Dev/demo mode — no real Telegram ID, credit locally
+      _creditLocally(taskId, reward);
+      return true;
+    }
+    try {
+      const res  = await fetch(`/api/user-tasks/${taskId}/complete`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ telegramId }),
+      });
+      const data = await res.json() as { success?: boolean; reward?: number; error?: string };
+      if (data.success) {
+        _creditLocally(taskId, typeof data.reward === 'number' ? data.reward : reward);
+        return true;
+      }
+      // Server says not a member or another error
+      setPhase(taskId, 'not_subscribed');
+      haptic.error();
+      return false;
+    } catch {
+      // Network error — credit locally so user doesn't lose progress
+      _creditLocally(taskId, reward);
+      return true;
+    }
   };
 
   // ── Action handlers ──────────────────────────────────────────────────────────
@@ -334,7 +402,8 @@ export const MiniAppTasks: React.FC = () => {
     if (timerRefs.current[autoKey]) { clearTimeout(timerRefs.current[autoKey]); delete timerRefs.current[autoKey]; }
     setPhase(card.id, 'completing');
     if (card.source === 'api') {
-      creditApiTask(card.id, card.reward);
+      const ok = await creditApiTask(card.id, card.reward);
+      if (!ok) return; // server rejected — phase already set to not_subscribed
     } else {
       completeTask(card.id);
     }

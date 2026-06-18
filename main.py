@@ -51,6 +51,50 @@ _CORS = {
     "Access-Control-Allow-Headers": "Content-Type, X-Admin-Key",
 }
 
+# ── Server-Sent Events (real-time task updates) ───────────────────────────────
+
+_sse_queues: list[asyncio.Queue] = []
+
+
+async def _sse_broadcast(event: str, data: dict) -> None:
+    """Push an event to every connected SSE client."""
+    msg = f"event: {event}\ndata: {json.dumps(data)}\n\n".encode()
+    dead = []
+    for q in list(_sse_queues):
+        try:
+            q.put_nowait(msg)
+        except asyncio.QueueFull:
+            dead.append(q)
+    for d in dead:
+        try: _sse_queues.remove(d)
+        except ValueError: pass
+
+
+async def api_tasks_stream(request: web.Request) -> web.StreamResponse:
+    """SSE endpoint — clients subscribe here for real-time task lifecycle events."""
+    resp = web.StreamResponse()
+    resp.headers["Content-Type"] = "text/event-stream"
+    resp.headers["Cache-Control"] = "no-cache"
+    resp.headers["X-Accel-Buffering"] = "no"
+    resp.headers.update(_CORS)
+    await resp.prepare(request)
+    queue: asyncio.Queue = asyncio.Queue(maxsize=50)
+    _sse_queues.append(queue)
+    try:
+        await resp.write(b"event: connected\ndata: {}\n\n")
+        while True:
+            try:
+                msg = await asyncio.wait_for(queue.get(), timeout=25)
+                await resp.write(msg)
+            except asyncio.TimeoutError:
+                await resp.write(b": ping\n\n")
+    except Exception:
+        pass
+    finally:
+        try: _sse_queues.remove(queue)
+        except ValueError: pass
+    return resp
+
 # In-memory rate-limit buckets  {ip: [timestamps]}
 _rate_buckets: dict[str, list[float]] = defaultdict(list)
 
@@ -1743,6 +1787,16 @@ async def api_user_task_complete(request: web.Request) -> web.Response:
             await db2.commit()
         return web.json_response({"error": "Membership not verified. Please join and try again."}, status=403, headers=_CORS)
 
+    # Broadcast updated completion count to SSE clients
+    async with aiosqlite.connect(DB_PATH) as db3:
+        async with db3.execute(
+            "SELECT completions, max_completions, status FROM user_tasks WHERE id = ?", (task_id,)
+        ) as cur:
+            upd_row = await cur.fetchone()
+    if upd_row:
+        evt = "task_removed" if upd_row[2] == "depleted" else "task_updated"
+        await _sse_broadcast(evt, {"id": task_id, "totalCompletions": upd_row[0], "maxCompletions": upd_row[1]})
+
     return web.json_response({"success": True, "reward": reward}, headers=_CORS)
 
 
@@ -1810,6 +1864,7 @@ async def api_user_task_pause(request: web.Request) -> web.Response:
         await db.execute("UPDATE user_tasks SET status = ? WHERE id = ?", (new_status, task_id))
         await db.commit()
 
+    await _sse_broadcast("task_removed" if new_status == "paused" else "task_approved", {"id": task_id})
     return web.json_response({"success": True, "status": new_status}, headers=_CORS)
 
 
@@ -1846,6 +1901,7 @@ async def api_user_task_delete(request: web.Request) -> web.Response:
         await db.execute("DELETE FROM user_task_completions WHERE task_id = ?", (task_id,))
         await db.commit()
 
+    await _sse_broadcast("task_removed", {"id": task_id})
     return web.json_response({"success": True, "refund": refund}, headers=_CORS)
 
 
@@ -1966,6 +2022,21 @@ async def api_admin_approve_user_task(request: web.Request) -> web.Response:
             (task_id,)
         )
         await db.commit()
+
+        # Fetch full task to broadcast to SSE clients
+        async with db.execute(
+            "SELECT id, type, title, description, target_url, reward, completions, max_completions "
+            "FROM user_tasks WHERE id = ?", (task_id,)
+        ) as cur:
+            trow = await cur.fetchone()
+
+    if trow:
+        await _sse_broadcast("task_approved", {
+            "id": trow[0], "type": trow[1], "title": trow[2],
+            "description": trow[3], "targetUrl": trow[4],
+            "reward": float(trow[5]), "totalCompletions": trow[6],
+            "maxCompletions": trow[7],
+        })
 
     if bot and task:
         try:
@@ -2119,6 +2190,7 @@ async def start_web() -> None:
     app.router.add_post("/api/admin/fraud-alerts/{alert_id}/resolve", api_admin_resolve_alert)
 
     # User tasks marketplace
+    app.router.add_get( "/api/tasks/stream",                    api_tasks_stream)
     app.router.add_post("/api/user-tasks/create",               api_user_task_create)
     app.router.add_get( "/api/user-tasks/mine",                 api_user_task_mine)
     app.router.add_get( "/api/user-tasks/available",            api_user_task_available)
