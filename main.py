@@ -1182,6 +1182,80 @@ async def api_admin_unblock_withdrawals(request: web.Request) -> web.Response:
     return web.json_response({"success": True}, headers=_CORS)
 
 
+# ── API — Admin: credit user balance ──────────────────────────────────────────
+
+async def api_admin_credit_user(request: web.Request) -> web.Response:
+    if not _check_admin_auth(request):
+        return web.json_response({"error": "Unauthorized"}, status=401, headers=_CORS)
+    telegram_id, err = _require_admin_telegram_id(request)
+    if err: return err
+
+    try:
+        data = await request.json()
+    except Exception:
+        return web.json_response({"error": "Invalid JSON"}, status=400, headers=_CORS)
+
+    try:
+        amount = float(data.get("amount", 0))
+    except (TypeError, ValueError):
+        return web.json_response({"error": "Montant invalide"}, status=400, headers=_CORS)
+
+    if not (0 < amount <= 100_000):
+        return web.json_response({"error": "Le montant doit être entre 0 et 100 000"}, status=400, headers=_CORS)
+
+    note = str(data.get("note", "")).strip()[:200] or "Crédit administrateur"
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT telegram_id, first_name, username FROM users WHERE telegram_id = ?",
+            (telegram_id,)
+        ) as cur:
+            row = await cur.fetchone()
+        if not row:
+            return web.json_response({"error": "Utilisateur introuvable"}, status=404, headers=_CORS)
+
+        first_name = row[1] or "Utilisateur"
+        username   = row[2]
+
+        # Credit balance + total earnings
+        await db.execute(
+            """UPDATE users
+               SET app_balance        = COALESCE(app_balance, 0)        + ?,
+                   app_total_earnings = COALESCE(app_total_earnings, 0) + ?
+               WHERE telegram_id = ?""",
+            (amount, amount, telegram_id),
+        )
+
+        # Audit trail in transactions table
+        tx_id = str(uuid.uuid4())
+        await db.execute(
+            """INSERT INTO transactions
+                   (id, telegram_id, type, amount, currency, network, address, status, admin_note)
+               VALUES (?, ?, 'admin_credit', ?, 'GRAM', 'admin', 'admin', 'completed', ?)""",
+            (tx_id, telegram_id, amount, note),
+        )
+        await db.commit()
+
+    # Telegram notification (non-blocking)
+    try:
+        username_part = f" (@{username})" if username else ""
+        note_line     = f"\n📝 <i>{note}</i>" if note != "Crédit administrateur" else ""
+        await bot.send_message(
+            telegram_id,
+            f"💎 <b>Crédit reçu !</b>\n\n"
+            f"Bonjour <b>{first_name}</b>{username_part} 👋\n\n"
+            f"L'équipe TonCipher vous a crédité :\n"
+            f"<b>+{amount:.4f} GRAM</b>{note_line}\n\n"
+            f"Votre solde a été mis à jour instantanément.\n"
+            f"Merci de votre confiance en TonCipher ! 🙏",
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass  # Notification failure must not block the response
+
+    return web.json_response({"ok": True, "amount": amount, "telegram_id": telegram_id}, headers=_CORS)
+
+
 # ── API — Admin: withdrawals list + approve/reject ─────────────────────────────
 
 async def api_admin_withdrawals(request: web.Request) -> web.Response:
@@ -2214,6 +2288,7 @@ async def start_web() -> None:
     app.router.add_post("/api/admin/users/{telegram_id}/unflag",               api_admin_unflag_user)
     app.router.add_post("/api/admin/users/{telegram_id}/block-withdrawals",    api_admin_block_withdrawals)
     app.router.add_post("/api/admin/users/{telegram_id}/unblock-withdrawals",  api_admin_unblock_withdrawals)
+    app.router.add_post("/api/admin/users/{telegram_id}/credit",               api_admin_credit_user)
 
     # Admin — withdrawals
     app.router.add_get( "/api/admin/withdrawals",          api_admin_withdrawals)
