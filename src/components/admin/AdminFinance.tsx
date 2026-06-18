@@ -1,5 +1,15 @@
 import { adminFetch } from '../../utils/adminFetch';
 import React, { useState, useEffect, useCallback } from 'react';
+
+// Open external links properly inside Telegram WebApp (window.open / target="_blank"
+// don't work in the Telegram WebView — must use the WebApp API).
+function openExternal(url: string) {
+  try {
+    const tg = (window as unknown as { Telegram?: { WebApp?: { openLink?: (u: string) => void } } }).Telegram;
+    if (tg?.WebApp?.openLink) { tg.WebApp.openLink(url); return; }
+  } catch { /* not in Telegram */ }
+  window.open(url, '_blank', 'noopener,noreferrer');
+}
 import { useAppStore } from '../../store/appStore';
 import { StatusBadge } from '../ui/StatusBadge';
 import { ToggleSwitch } from '../ui/ToggleSwitch';
@@ -388,19 +398,22 @@ export const AdminWithdrawals: React.FC = () => {
                     <div className="flex items-center gap-2 p-3 rounded-lg bg-white/[0.03]">
                       {w.status === 'completed'
                         ? <><CheckCircle className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-                            <div>
+                            <div className="flex-1 min-w-0">
                               <p className="text-xs text-emerald-400 font-medium">Approuvé {w.processed_at ? new Date(w.processed_at).toLocaleString('fr-FR') : ''}</p>
-                              {w.tx_hash && (
-                                <a href={`https://tonscan.org/tx/${w.tx_hash}`} target="_blank" rel="noopener noreferrer"
-                                   className="flex items-center gap-1 text-[10px] text-blue-400 hover:text-blue-300 mt-0.5 font-mono">
+                              {w.tx_hash ? (
+                                <button
+                                  onClick={() => openExternal(`https://tonscan.org/tx/${w.tx_hash}`)}
+                                  className="flex items-center gap-1 text-[10px] text-blue-400 hover:text-blue-300 mt-1 font-mono underline underline-offset-2">
                                   <ExternalLink className="w-2.5 h-2.5 flex-shrink-0" />
-                                  {w.tx_hash.length > 20 ? w.tx_hash.slice(0, 20) + '…' : w.tx_hash}
-                                </a>
+                                  {w.tx_hash.length > 24 ? w.tx_hash.slice(0, 24) + '…' : w.tx_hash}
+                                </button>
+                              ) : (
+                                <p className="text-[10px] text-slate-500 mt-0.5">Pas de TX Hash renseigné</p>
                               )}
                             </div></>
                         : <><XCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
                             <div><p className="text-xs text-red-400 font-medium">Refusé {w.processed_at ? new Date(w.processed_at).toLocaleString('fr-FR') : ''}</p>
-                              {w.admin_note && <p className="text-[10px] text-slate-500 mt-0.5">Motif: {w.admin_note}</p>}</div></>}
+                              {w.admin_note && <p className="text-[10px] text-slate-500 mt-0.5">Motif : {w.admin_note}</p>}</div></>}
                     </div>
                   )}
                 </div>

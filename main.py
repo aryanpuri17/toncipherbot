@@ -1417,32 +1417,52 @@ async def api_admin_approve_withdrawal(request: web.Request) -> web.Response:
         if cur.rowcount == 0:
             # Already approved/rejected (or unknown id) — don't notify twice
             return web.json_response({"error": "Already processed or not found"}, status=409, headers=_CORS)
-        # Notify user via bot if available
-        async with db.execute("SELECT telegram_id, amount, currency FROM transactions WHERE id = ?", (tx_id,)) as cur2:
+        # Fetch transaction + user details for the notification
+        async with db.execute("""
+            SELECT t.telegram_id, t.amount, t.currency, t.address,
+                   u.first_name, u.username
+            FROM transactions t
+            LEFT JOIN users u ON t.telegram_id = u.telegram_id
+            WHERE t.id = ?
+        """, (tx_id,)) as cur2:
             tx_row = await cur2.fetchone()
         await db.commit()
 
     tx_link = f"https://tonscan.org/tx/{tx_hash}" if tx_hash else ""
     if bot and tx_row:
+        first_name = tx_row[4] or "cher utilisateur"
+        username_part = f" (@{tx_row[5]})" if tx_row[5] else ""
+        addr_short = tx_row[3][:8] + "…" + tx_row[3][-6:] if tx_row[3] and len(tx_row[3]) > 14 else (tx_row[3] or "")
+        tx_hash_short = (tx_hash[:16] + "…") if len(tx_hash) > 16 else tx_hash
         try:
             await bot.send_message(
                 tx_row[0],
                 f"✅ <b>Retrait approuvé !</b>\n\n"
-                f"💰 Montant : <b>{tx_row[1]:.2f} {tx_row[2]}</b>\n"
-                + (f'🔗 <a href="{tx_link}">Voir la transaction</a>' if tx_link else ""),
+                f"Félicitations <b>{first_name}</b>{username_part} 🎉\n\n"
+                f"Votre retrait a été traité avec succès et envoyé à votre adresse.\n\n"
+                f"━━━━━━━━━━━━━━━━━━━━\n"
+                f"💎 Montant envoyé : <b>{tx_row[1]:.4f} {tx_row[2]}</b>\n"
+                f"📍 Adresse : <code>{addr_short}</code>\n"
+                + (f"🔗 TX Hash : <code>{tx_hash_short}</code>\n"
+                   f'<a href="{tx_link}">👁 Voir sur TonScan</a>\n' if tx_link else "")
+                + f"━━━━━━━━━━━━━━━━━━━━\n\n"
+                f"Merci de votre confiance en TonCipher ! 🙏\n"
+                f"Continuez à accomplir des tâches et profitez de nos jeux pour gagner encore plus de TON ! 🚀",
                 parse_mode="HTML",
-                disable_web_page_preview=True,
+                disable_web_page_preview=False,
             )
         except Exception:
             pass
 
     if tx_row:
+        user_label = f"@{tx_row[5]}" if tx_row[5] else (tx_row[4] or f"ID:{tx_row[0]}")
         await _notify_channel(
             await _configured_withdrawal_channel(),
             f"✅ <b>Retrait approuvé</b>\n"
-            f"🆔 TX ID: <code>{tx_id}</code>\n"
-            f"💰 {tx_row[1]:.2f} {tx_row[2]}\n"
-            + (f'🔗 <a href="{tx_link}">Voir sur TonScan</a>' if tx_link else ""),
+            f"👤 {user_label} (<code>{tx_row[0]}</code>)\n"
+            f"💰 {tx_row[1]:.4f} {tx_row[2]}\n"
+            f"🆔 TX: <code>{tx_id}</code>\n"
+            + (f'🔗 <a href="{tx_link}">Voir sur TonScan</a>' if tx_link else "📭 Aucun TX Hash"),
         )
 
     return web.json_response({"success": True}, headers=_CORS)
@@ -1468,7 +1488,13 @@ async def api_admin_reject_withdrawal(request: web.Request) -> web.Response:
         if cur.rowcount == 0:
             # Already approved/rejected (or unknown id) — don't notify twice
             return web.json_response({"error": "Already processed or not found"}, status=409, headers=_CORS)
-        async with db.execute("SELECT telegram_id, amount, currency FROM transactions WHERE id = ?", (tx_id,)) as cur2:
+        async with db.execute("""
+            SELECT t.telegram_id, t.amount, t.currency,
+                   u.first_name, u.username
+            FROM transactions t
+            LEFT JOIN users u ON t.telegram_id = u.telegram_id
+            WHERE t.id = ?
+        """, (tx_id,)) as cur2:
             tx_row = await cur2.fetchone()
         if tx_row:
             # Keep the server-side balance backup consistent: the amount was
@@ -1480,14 +1506,21 @@ async def api_admin_reject_withdrawal(request: web.Request) -> web.Response:
         await db.commit()
 
     if bot and tx_row:
+        first_name = tx_row[3] or "cher utilisateur"
+        username_part = f" (@{tx_row[4]})" if tx_row[4] else ""
         try:
             await bot.send_message(
                 tx_row[0],
-                f"❌ <b>Retrait refusé</b>\n\n"
-                f"💰 Montant : {tx_row[1]:.2f} {tx_row[2]}\n"
-                f"{'📝 Motif : ' + note if note else 'Aucun motif précisé.'}\n\n"
-                f"🔄 Votre solde de <b>{tx_row[1]:.2f} {tx_row[2]}</b> sera recrédité "
-                f"automatiquement à la prochaine ouverture de l'application.",
+                f"❌ <b>Retrait non traité</b>\n\n"
+                f"Bonjour <b>{first_name}</b>{username_part},\n\n"
+                f"Votre demande de retrait n'a pas pu être traitée pour le moment.\n\n"
+                f"━━━━━━━━━━━━━━━━━━━━\n"
+                f"💎 Montant : <b>{tx_row[1]:.4f} {tx_row[2]}</b>\n"
+                + (f"📝 Motif : {note}\n" if note else "📝 Aucun motif précisé.\n")
+                + f"━━━━━━━━━━━━━━━━━━━━\n\n"
+                f"✅ <b>Bonne nouvelle :</b> votre solde de <b>{tx_row[1]:.4f} {tx_row[2]}</b> "
+                f"a été automatiquement recrédité sur votre compte.\n\n"
+                f"Si vous pensez qu'il s'agit d'une erreur, contactez notre support : @TonCipher_bot 💬",
                 parse_mode="HTML",
             )
         except Exception:
