@@ -43,14 +43,20 @@ export const AdminStatistics: React.FC = () => {
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState('');
 
-  React.useEffect(() => {
+  const loadStats = React.useCallback(() => {
     setLoading(true);
     adminFetch('/api/admin/stats')
       .then(r => r.ok ? r.json() : Promise.reject(r.status))
       .then((data: ServerStats) => { setStats(data); setError(''); })
-      .catch((e) => setError(e === 401 ? 'Clé admin invalide — reconnectez-vous.' : 'Erreur serveur'))
+      .catch((e: unknown) => setError(e === 401 ? 'Clé admin invalide — reconnectez-vous.' : 'Erreur serveur'))
       .finally(() => setLoading(false));
   }, []);
+
+  React.useEffect(() => {
+    loadStats();
+    const poll = setInterval(loadStats, 30_000);
+    return () => clearInterval(poll);
+  }, [loadStats]);
 
   const userGrowth = React.useMemo(() => {
     const months = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
