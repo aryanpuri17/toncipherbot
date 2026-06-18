@@ -2,12 +2,14 @@ import React, { useState } from 'react';
 import { useAppStore } from '../../store/appStore';
 import { AlertCircle, Info, Loader2, Clock } from 'lucide-react';
 
-type TaskType = 'join_channel' | 'join_group' | 'start_bot';
+type TaskType = 'join_channel' | 'join_group' | 'start_bot' | 'watch_video' | 'social';
 
-const TASK_TYPES: { value: TaskType; icon: string; label: string }[] = [
-  { value: 'join_channel', icon: '📢', label: 'Canal Telegram' },
-  { value: 'join_group',   icon: '👥', label: 'Groupe Telegram' },
-  { value: 'start_bot',    icon: '🤖', label: 'Démarrer un bot' },
+const TASK_TYPES: { value: TaskType; icon: string; label: string; urlLabel: string; urlPlaceholder: string; isTelegram: boolean }[] = [
+  { value: 'join_channel', icon: '📢', label: 'Canal Telegram',  urlLabel: 'Lien du canal',   urlPlaceholder: 'https://t.me/votre_canal',  isTelegram: true  },
+  { value: 'join_group',   icon: '👥', label: 'Groupe Telegram', urlLabel: 'Lien du groupe',  urlPlaceholder: 'https://t.me/votre_groupe', isTelegram: true  },
+  { value: 'start_bot',    icon: '🤖', label: 'Démarrer un bot', urlLabel: 'Lien du bot',     urlPlaceholder: 'https://t.me/votre_bot',    isTelegram: true  },
+  { value: 'watch_video',  icon: '▶️', label: 'Vidéo YouTube',   urlLabel: 'URL de la vidéo', urlPlaceholder: 'https://youtube.com/watch?v=...', isTelegram: false },
+  { value: 'social',       icon: '🌐', label: 'Réseau social',   urlLabel: 'URL du profil',   urlPlaceholder: 'https://instagram.com/... ou https://x.com/...', isTelegram: false },
 ];
 
 export const MiniAppCreateTask: React.FC = () => {
@@ -32,14 +34,19 @@ export const MiniAppCreateTask: React.FC = () => {
   const totalCost    = execCount * priceFixed;
   const workerReward = parseFloat((priceFixed * (1 - feeRate)).toFixed(6));
   const platformFee  = totalCost * feeRate;
-  const needsAdmin   = type === 'join_channel' || type === 'join_group';
+  const currentTypeConf = TASK_TYPES.find(t => t.value === type)!;
+  const needsAdmin      = currentTypeConf.isTelegram && (type === 'join_channel' || type === 'join_group');
 
   const handleSubmit = async () => {
     setError('');
     if (!title.trim())      { setError('Le titre est requis'); return; }
-    if (!targetUrl.trim())  { setError("L'URL Telegram est requise"); return; }
-    if (!targetUrl.startsWith('https://t.me/')) {
-      setError("L'URL doit commencer par https://t.me/");
+    if (!targetUrl.trim())  { setError("L'URL est requise"); return; }
+    if (!targetUrl.startsWith('https://')) {
+      setError("L'URL doit commencer par https://");
+      return;
+    }
+    if (currentTypeConf.isTelegram && !targetUrl.startsWith('https://t.me/')) {
+      setError("Pour une tâche Telegram, l'URL doit commencer par https://t.me/");
       return;
     }
     if (execCount < minExec) { setError(`Minimum ${minExec} exécutions`); return; }
@@ -158,7 +165,7 @@ export const MiniAppCreateTask: React.FC = () => {
             return (
               <button
                 key={opt.value}
-                onClick={() => setType(opt.value)}
+                onClick={() => { setType(opt.value); setTargetUrl(''); setError(''); }}
                 className="py-2.5 px-3 rounded-xl text-xs font-semibold text-left transition-all flex items-center gap-2 border"
                 style={
                   isActive
@@ -180,6 +187,22 @@ export const MiniAppCreateTask: React.FC = () => {
               Pour vérifier les abonnements, ajoutez{' '}
               <span className="font-semibold text-amber-200">@{botName}</span>{' '}
               comme administrateur de votre {type === 'join_channel' ? 'canal' : 'groupe'}.
+            </p>
+          </div>
+        )}
+        {type === 'watch_video' && (
+          <div className="flex items-start gap-2.5 p-3 rounded-xl bg-red-500/10 border border-red-500/20">
+            <Info className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
+            <p className="text-xs text-red-300 leading-relaxed">
+              Les utilisateurs devront regarder la vidéo pendant au moins <span className="font-semibold">20 secondes</span> avant de valider.
+            </p>
+          </div>
+        )}
+        {type === 'social' && (
+          <div className="flex items-start gap-2.5 p-3 rounded-xl bg-orange-500/10 border border-orange-500/20">
+            <Info className="w-4 h-4 text-orange-400 flex-shrink-0 mt-0.5" />
+            <p className="text-xs text-orange-300 leading-relaxed">
+              Supporte Instagram, TikTok, X (Twitter), Discord, YouTube. Entrez l'URL exacte de votre profil ou page.
             </p>
           </div>
         )}
@@ -210,14 +233,12 @@ export const MiniAppCreateTask: React.FC = () => {
         </div>
 
         <div>
-          <p className="text-xs text-slate-400 mb-2">
-            Lien {type === 'join_channel' ? 'du canal' : type === 'join_group' ? 'du groupe' : 'du bot'} *
-          </p>
+          <p className="text-xs text-slate-400 mb-2">{currentTypeConf.urlLabel} *</p>
           <input
             type="url"
             value={targetUrl}
             onChange={e => setTargetUrl(e.target.value)}
-            placeholder="https://t.me/votre_canal"
+            placeholder={currentTypeConf.urlPlaceholder}
             className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white text-sm font-mono placeholder:text-slate-600 focus:outline-none focus:border-[#0098EA]/50"
           />
         </div>

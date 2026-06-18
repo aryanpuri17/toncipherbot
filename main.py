@@ -1794,7 +1794,7 @@ async def api_user_task_create(request: web.Request) -> web.Response:
 
     if not creator_id or not task_type or not title or not target_url:
         return web.json_response({"error": "Missing required fields"}, status=400, headers=_CORS)
-    if task_type not in ("join_channel", "join_group", "start_bot"):
+    if task_type not in ("join_channel", "join_group", "start_bot", "watch_video", "social"):
         return web.json_response({"error": "Invalid task type"}, status=400, headers=_CORS)
     if reward is None or total_budget is None:
         return web.json_response({"error": "Invalid reward or budget"}, status=400, headers=_CORS)
