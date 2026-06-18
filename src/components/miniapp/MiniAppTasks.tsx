@@ -112,6 +112,7 @@ export const MiniAppTasks: React.FC = () => {
 
   const [taskStates, setTaskStates] = useState<Record<string, { phase: TaskPhase }>>({});
   const timerRefs                   = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const [tick, setTick]             = useState(0); // 1-second ticker for countdown display
 
   const [apiTasks,            setApiTasks]            = useState<ApiTask[]>([]);
   const [completedApiTaskIds, setCompletedApiTaskIds] = useState<string[]>([]);
@@ -170,6 +171,12 @@ export const MiniAppTasks: React.FC = () => {
   useEffect(() => {
     const snap = timerRefs.current;
     return () => { Object.values(snap).forEach(clearTimeout); };
+  }, []);
+
+  // 1-second ticker so too_early cards show a live countdown
+  useEffect(() => {
+    const interval = setInterval(() => setTick(t => t + 1), 1000);
+    return () => clearInterval(interval);
   }, []);
 
   // Restore departure timers on mount + listen for app return
@@ -281,7 +288,14 @@ export const MiniAppTasks: React.FC = () => {
     if (card.isInstant) {
       setPhase(card.id, 'completing');
       completeTask(card.id);
-      timerRefs.current[card.id] = setTimeout(() => { setPhase(card.id, 'done'); haptic.success(); }, 1200);
+      timerRefs.current[card.id] = setTimeout(() => {
+        setPhase(card.id, 'done');
+        haptic.success();
+        // Remove phase after animation so card disappears from list
+        timerRefs.current[`rm_${card.id}`] = setTimeout(() => {
+          setTaskStates(prev => { const n = { ...prev }; delete n[card.id]; return n; });
+        }, 2000);
+      }, 1200);
       return;
     }
 
@@ -324,7 +338,13 @@ export const MiniAppTasks: React.FC = () => {
     } else {
       completeTask(card.id);
     }
-    timerRefs.current[card.id] = setTimeout(() => { setPhase(card.id, 'done'); haptic.success(); }, 1500);
+    timerRefs.current[card.id] = setTimeout(() => {
+      setPhase(card.id, 'done');
+      haptic.success();
+      timerRefs.current[`rm_${card.id}`] = setTimeout(() => {
+        setTaskStates(prev => { const n = { ...prev }; delete n[card.id]; return n; });
+      }, 2000);
+    }, 1500);
   };
 
   // ── Promo proof ──────────────────────────────────────────────────────────────
@@ -375,9 +395,18 @@ export const MiniAppTasks: React.FC = () => {
     const phase       = getPhase(card.id);
     const isCompleted = (card.source === 'platform' && completedTaskIds.includes(card.id)) ||
                         (card.source === 'api'      && completedApiTaskIds.includes(card.id));
+
+    // Hide cards that were already completed before this session (no animation pending)
+    if (isCompleted && phase !== 'completing' && phase !== 'done') return null;
+
     const isDone      = isCompleted || phase === 'done';
     const displayReward = card.reward * (card.promoMultiplier ?? 1);
     const avatarBg    = card.source === 'api' ? taskAvatarColor(card.title) : null;
+
+    // Remaining seconds for too_early countdown
+    const _dEntry = phase === 'too_early' ? parseDeparture(localStorage.getItem(departKey(card.id))) : null;
+    void tick; // ensure re-render each second
+    const remainingSec = _dEntry ? Math.max(0, Math.ceil((_dEntry.ms - (Date.now() - _dEntry.ts)) / 1000)) : 0;
 
     const actionLabel = card.type === 'join_channel' || card.type === 'join_group'
       ? 'Rejoindre'
@@ -463,17 +492,24 @@ export const MiniAppTasks: React.FC = () => {
           </div>
         </div>
 
-        {/* Too early — waiting for departure timer to expire */}
+        {/* Too early — countdown + disabled Vérifier */}
         {phase === 'too_early' && (
           <div className="border-t border-white/5 pt-3 space-y-2">
             <div className="flex items-start gap-2.5 p-3 rounded-xl bg-orange-500/10 border border-orange-500/20">
               <Clock className="w-4 h-4 text-orange-400 flex-shrink-0 mt-0.5" />
-              <p className="text-xs text-orange-300">
-                {card.type === 'start_bot'
-                  ? <>Restez dans le bot ou mini app pendant <span className="font-bold">30 secondes</span> puis revenez ici pour valider.</>
-                  : <>Rejoignez le {card.type === 'join_channel' ? 'canal' : 'groupe'} puis revenez ici pour vérifier votre abonnement.</>
-                }
-              </p>
+              <div className="flex-1">
+                <p className="text-xs text-orange-300">
+                  {card.type === 'start_bot'
+                    ? 'Restez dans le bot pendant au moins 30 secondes, puis revenez valider.'
+                    : `Rejoignez le ${card.type === 'join_channel' ? 'canal' : 'groupe'} puis revenez vérifier votre abonnement.`
+                  }
+                </p>
+                {remainingSec > 0 && (
+                  <p className="text-xs font-bold text-orange-400 mt-1">
+                    Vérifier disponible dans {remainingSec}s
+                  </p>
+                )}
+              </div>
             </div>
             {card.targetUrl && (
               <button
@@ -484,6 +520,15 @@ export const MiniAppTasks: React.FC = () => {
                 {card.type === 'start_bot' ? 'Retourner au bot' : card.type === 'join_channel' ? 'Retourner au canal' : 'Retourner au groupe'}
               </button>
             )}
+            {/* Vérifier button — disabled until countdown reaches 0 */}
+            <button
+              disabled={remainingSec > 0}
+              onClick={remainingSec === 0 ? () => void handleVerify(card) : undefined}
+              className="tap-scale w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-blue-500/15 border border-blue-500/30 text-blue-400 text-xs font-semibold transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              <ShieldCheck className="w-3.5 h-3.5" />
+              {remainingSec > 0 ? `Vérifier (${remainingSec}s)` : 'Vérifier'}
+            </button>
           </div>
         )}
 

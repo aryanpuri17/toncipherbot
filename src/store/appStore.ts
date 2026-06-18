@@ -510,6 +510,10 @@ const _savedRefBoost: string | null = (() => {
     return v && new Date(v) > new Date() ? v : null;
   } catch { return null; }
 })();
+const _savedTransactions: Transaction[] = (() => {
+  try { return JSON.parse(localStorage.getItem('tc_transactions') || '[]') as Transaction[]; }
+  catch { return []; }
+})();
 
 const mockUsers: User[] = [
   {
@@ -522,7 +526,7 @@ const mockUsers: User[] = [
   },
 ];
 
-const mockTasks: Task[] = [
+const _defaultTasks: Task[] = [
   { id: '1', type: 'daily', title: 'Mission Quotidienne', description: 'Connectez-vous chaque jour pour gagner', reward: 0.10, rewardType: 'main', cooldownHours: 24, isActive: true, totalCompletions: 0, createdAt: new Date().toISOString(), verificationMethod: 'auto', priority: 0, maxPerUser: 1, icon: '📅', createdByUserId: 'platform' },
   { id: '2', type: 'join_channel', title: 'Rejoindre TonCipher Officiel', description: 'Abonnez-vous à notre canal officiel pour rester informé', reward: 0.0425, rewardType: 'main', targetUrl: 'https://t.me/TonCipher_Official', isActive: true, totalCompletions: 0, maxCompletions: 1000, createdAt: new Date(Date.now() - 5 * 86400000).toISOString(), verificationMethod: 'auto', priority: 8, icon: '📢', createdByUserId: 'platform' },
   { id: '3', type: 'join_channel', title: 'Rejoindre TonCipher Paiements', description: 'Rejoignez notre canal de suivi des paiements', reward: 0.0425, rewardType: 'main', targetUrl: 'https://t.me/TonCipher_Pays', isActive: true, totalCompletions: 0, maxCompletions: 500, createdAt: new Date(Date.now() - 3 * 86400000).toISOString(), verificationMethod: 'auto', priority: 7, icon: '💸', createdByUserId: 'platform' },
@@ -530,6 +534,16 @@ const mockTasks: Task[] = [
   { id: '5', type: 'special', title: '🏆 Challenge Parrainage', description: 'Invitez 3 amis à rejoindre TonCipher. La vérification est automatique dès que vous avez 3 filleuls.', reward: 1.50, rewardType: 'main', isActive: true, totalCompletions: 0, createdAt: new Date(Date.now() - 2 * 86400000).toISOString(), verificationMethod: 'auto_referral', requiredCount: 3, priority: 10, isPromoTask: true, icon: '🏆', createdByUserId: 'platform' },
   { id: '6', type: 'special', title: '📢 Partage Communauté', description: 'Partagez TonCipher dans un groupe Telegram de 100+ membres. Soumettez un lien ou une description de votre preuve — l\'équipe validera sous 24h.', reward: 0.80, rewardType: 'main', isActive: true, totalCompletions: 0, createdAt: new Date(Date.now() - 1 * 86400000).toISOString(), verificationMethod: 'manual', priority: 9, isPromoTask: true, icon: '📢', createdByUserId: 'platform' },
 ];
+// Merge saved tasks (user/admin-created) with defaults; defaults fill any missing IDs
+const mockTasks: Task[] = (() => {
+  try {
+    const saved = JSON.parse(localStorage.getItem('tc_tasks') || '[]') as Task[];
+    if (saved.length === 0) return _defaultTasks;
+    const savedIds = new Set(saved.map((t: Task) => t.id));
+    const missingDefaults = _defaultTasks.filter(t => !savedIds.has(t.id));
+    return [...saved, ...missingDefaults];
+  } catch { return _defaultTasks; }
+})();
 
 const mockPromoCodes: PromoCode[] = [
   { id: '1', code: 'LAUNCH50', reward: 0.50, currency: 'main', maxUses: 500, currentUses: 127, isActive: true, description: 'Code de lancement officiel', createdAt: new Date(Date.now() - 10 * 86400000).toISOString() },
@@ -538,7 +552,7 @@ const mockPromoCodes: PromoCode[] = [
 
 const mockTaskSubmissions: TaskSubmission[] = [];
 
-const mockTransactions: Transaction[] = [];
+const mockTransactions: Transaction[] = _savedTransactions;
 
 const mockCampaigns: Campaign[] = [];
 
@@ -1636,6 +1650,8 @@ useAppStore.subscribe((state) => {
     }));
     localStorage.setItem('tc_platform_config', JSON.stringify(state.platformConfig));
     localStorage.setItem('tc_completed_tasks', JSON.stringify(state.completedTaskIds));
+    localStorage.setItem('tc_tasks', JSON.stringify(state.tasks.slice(-500)));
+    localStorage.setItem('tc_transactions', JSON.stringify(state.transactions.slice(-300)));
     localStorage.setItem('tc_boosters', JSON.stringify(state.activeBoosters));
     if (state.referralBoostExpiresAt) {
       localStorage.setItem('tc_ref_boost', state.referralBoostExpiresAt);
