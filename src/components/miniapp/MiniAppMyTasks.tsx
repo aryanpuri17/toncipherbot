@@ -11,6 +11,18 @@ const typeConfig: Record<string, { icon: React.ReactNode; bg: string; text: stri
   start_bot:    { icon: <Bot className="w-4 h-4" />,   bg: 'bg-cyan-500/20',   text: 'text-cyan-400',   label: 'Bot'    },
 };
 
+interface PendingProof {
+  id: number;
+  taskId: string;
+  workerId: number;
+  fileId: string;
+  status: string;
+  createdAt: string;
+  taskTitle: string;
+  workerName: string;
+  workerUsername: string | null;
+}
+
 interface ApiUserTask {
   id: string;
   type: string;
@@ -60,6 +72,9 @@ export const MiniAppMyTasks: React.FC = () => {
   const [addExecs,      setAddExecs]      = useState('');
   const [budgetError,   setBudgetError]   = useState('');
   const [apiError,      setApiError]      = useState('');
+  const [pendingProofs,    setPendingProofs]    = useState<PendingProof[]>([]);
+  const [proofActionId,    setProofActionId]    = useState<number | null>(null);
+  const [proofError,       setProofError]       = useState('');
 
   const fetchTasks = useCallback(async () => {
     const telegramId = currentUser.telegramId;
@@ -99,7 +114,19 @@ export const MiniAppMyTasks: React.FC = () => {
     }
   }, [currentUser.telegramId]);
 
-  useEffect(() => { void fetchTasks(); }, [fetchTasks]);
+  const fetchPendingProofs = useCallback(async () => {
+    if (!currentUser.telegramId) return;
+    try {
+      const res  = await fetch(`/api/user-tasks/pending-proofs?telegramId=${currentUser.telegramId}`);
+      const data = await res.json() as PendingProof[];
+      setPendingProofs(data);
+    } catch { /* no server in local dev */ }
+  }, [currentUser.telegramId]);
+
+  useEffect(() => {
+    void fetchTasks();
+    void fetchPendingProofs();
+  }, [fetchTasks, fetchPendingProofs]);
 
   const callApi = async (url: string, body: object): Promise<{ success: boolean; refund?: number; status?: string }> => {
     const res  = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -166,6 +193,28 @@ export const MiniAppMyTasks: React.FC = () => {
     finally { setActionLoading(null); }
   };
 
+  const handleReviewProof = async (proof: PendingProof, action: 'approve' | 'reject') => {
+    setProofActionId(proof.id);
+    setProofError('');
+    try {
+      const res = await fetch(`/api/social-proof/${proof.id}/review`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ telegramId: currentUser.telegramId, action }),
+      });
+      const data = await res.json() as { success: boolean };
+      if (data.success) {
+        setPendingProofs(prev => prev.filter(p => p.id !== proof.id));
+      } else {
+        setProofError('Erreur lors de la validation.');
+      }
+    } catch {
+      setProofError('Erreur réseau.');
+    } finally {
+      setProofActionId(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center py-20 gap-3">
@@ -185,7 +234,14 @@ export const MiniAppMyTasks: React.FC = () => {
             className="p-2 rounded-lg hover:bg-white/5 text-slate-400 transition-colors"
           >←</button>
           <div>
-            <h1 className="text-xl font-bold text-white">Mes campagnes</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-bold text-white">Mes campagnes</h1>
+              {pendingProofs.length > 0 && (
+                <span className="px-2 py-0.5 rounded-full bg-orange-500/20 text-orange-400 text-[10px] font-bold border border-orange-500/25 animate-pulse">
+                  {pendingProofs.length}
+                </span>
+              )}
+            </div>
             {tasks.length > 0 && (
               <p className="text-xs font-medium" style={{ color: '#0098EA' }}>
                 {tasks.length} campagne{tasks.length !== 1 ? 's' : ''}
@@ -205,6 +261,75 @@ export const MiniAppMyTasks: React.FC = () => {
         <div className="flex items-center gap-2 p-3 rounded-xl bg-red-500/5 border border-red-500/20">
           <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
           <p className="text-xs text-red-400">{apiError}</p>
+        </div>
+      )}
+
+      {/* Pending proofs section */}
+      {pendingProofs.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-semibold text-white">Preuves en attente</span>
+            <span className="px-2 py-0.5 rounded-full bg-orange-500/20 text-orange-400 text-[10px] font-bold border border-orange-500/25">
+              {pendingProofs.length}
+            </span>
+          </div>
+          {proofError && (
+            <p className="text-xs text-red-400">{proofError}</p>
+          )}
+          {pendingProofs.map(proof => {
+            const isActing = proofActionId === proof.id;
+            const workerDisplay = proof.workerUsername ? `@${proof.workerUsername}` : proof.workerName;
+            return (
+              <div key={proof.id} style={{
+                background: 'rgba(249,115,22,0.05)',
+                border: '1px solid rgba(249,115,22,0.2)',
+                borderRadius: 16, overflow: 'hidden',
+              }}>
+                {/* Screenshot */}
+                <img
+                  src={`/api/proof-image/${proof.id}?telegramId=${currentUser.telegramId}`}
+                  alt="Preuve"
+                  style={{ width: '100%', maxHeight: 200, objectFit: 'cover', display: 'block' }}
+                  onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                />
+                <div style={{ padding: '10px 12px' }}>
+                  <p style={{ fontSize: 11, fontWeight: 700, color: '#f8fafc', marginBottom: 2 }}>
+                    {proof.taskTitle}
+                  </p>
+                  <p style={{ fontSize: 10, color: '#64748b', marginBottom: 8 }}>
+                    par {workerDisplay} · {new Date(proof.createdAt).toLocaleDateString('fr-FR')}
+                  </p>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button
+                      onClick={() => void handleReviewProof(proof, 'approve')}
+                      disabled={isActing}
+                      style={{
+                        flex: 1, padding: '8px 0', borderRadius: 10,
+                        background: 'rgba(52,211,153,0.15)', border: '1px solid rgba(52,211,153,0.3)',
+                        color: '#34d399', fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                        opacity: isActing ? 0.5 : 1,
+                      }}
+                    >
+                      ✅ Approuver
+                    </button>
+                    <button
+                      onClick={() => void handleReviewProof(proof, 'reject')}
+                      disabled={isActing}
+                      style={{
+                        flex: 1, padding: '8px 0', borderRadius: 10,
+                        background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.25)',
+                        color: '#f87171', fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                        opacity: isActing ? 0.5 : 1,
+                      }}
+                    >
+                      ❌ Refuser
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+          <div style={{ height: 1, background: 'rgba(255,255,255,0.05)' }} />
         </div>
       )}
 

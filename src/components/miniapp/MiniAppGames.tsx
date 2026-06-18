@@ -1,8 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useAppStore } from '../../store/appStore';
-import { ArrowLeft, RotateCcw, Trophy, Zap } from 'lucide-react';
+import { ArrowLeft, RotateCcw, Zap } from 'lucide-react';
 import { CountUp } from '../ui/CountUp';
-import { ConfettiEffect } from '../ui/ConfettiEffect';
 
 // ══════════════════════════════════════════════════════════════════
 // AUDIO ENGINE (Web Audio API — aucun fichier externe)
@@ -460,7 +459,12 @@ const DiceGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResul
         </button>
         <div className="flex-1">
           <div className="flex items-center gap-2">
-            <h2 className="text-base font-bold text-white">Dice</h2>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+              <div style={{ width: 28, height: 28, borderRadius: 8, background: 'rgba(245,158,11,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <GameIcon id="dice" color="#f59e0b" size={16} />
+              </div>
+              <h2 className="text-base font-bold text-white">Dice</h2>
+            </div>
             <StreakChip streak={streak} />
           </div>
           <p className="text-[11px] text-slate-500">Choisissez votre seuil · misez · lancez</p>
@@ -586,35 +590,6 @@ const DiceGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResul
   );
 };
 
-const ALL_FAKE_NAMES = [
-  'Marco T.','Léa R.','Yusuf K.','Chen W.','Amira S.','Dmytro P.',
-  'Fatou D.','Nicolás V.','Sofia M.','Jamal B.','Elena G.','Pierre L.',
-  'Aisha N.','Viktor S.','Mina H.','Diego F.','Anya K.','Tariq M.',
-  'Hana P.','Reza A.','Priya S.','Omar F.','Julia B.','Kwame O.',
-  'Nadia V.','Ivan C.','Mei L.','Lucas R.','Sara D.','Ali H.',
-  'Ekaterina B.','Tomás G.','Layla J.','Patrick N.','Yuna K.','Carlos M.',
-  'Nour A.','Sergei P.','Zara T.','Matteo F.','Ingrid L.','Hamid R.',
-  'Chiara V.','Tunde A.','Sofía C.','Arjun M.','Lena S.','David K.',
-  'Blessing O.','Kenji T.','Irina D.','Rafael S.','Fatima Z.','Max W.',
-  'Nathalie B.','Seo-Yeon P.','Ibrahim H.','Valentina R.','Tobias L.','Akira N.',
-  'Camille D.','Emeka C.','Anastasia K.','Gabriel M.','Hira S.','Finn O.',
-  'Amara D.','Nikolai V.','Jasmine T.','Ricardo B.','Olga M.','Khalid A.',
-  'Moana K.','Sven H.','Yasmin F.','Andrei S.','Chloé N.','Bashir O.',
-  'Elisa P.','Darius C.','Naomi W.','Lukas J.','Rania H.','Felipe A.',
-  'Marta G.','Yousef K.','Petra L.','Emmanuel T.','Adaeze N.','Hugo R.',
-  'Oksana B.','Rahim J.','Vivienne C.','Kiran S.','Theo M.','Zainab A.',
-  'Bianca F.','Kwabena O.','Miriam L.','Tamar K.','Simone B.','Javier H.',
-];
-
-function randomFakeBet(): number {
-  const r = Math.random();
-  if (r < 0.40) return +(0.01 + Math.random() * 0.04).toFixed(2);   // 40%: 0.01–0.05
-  if (r < 0.65) return +(0.05 + Math.random() * 0.15).toFixed(2);   // 25%: 0.05–0.20
-  if (r < 0.82) return +(0.20 + Math.random() * 0.80).toFixed(2);   // 17%: 0.20–1.00
-  if (r < 0.94) return +(1.00 + Math.random() * 4.00).toFixed(2);   // 12%: 1.00–5.00
-  return +(5.00 + Math.random() * 10.00).toFixed(2);                 //  6%: 5.00–15.00
-}
-
 // ══════════════════════════════════════════════════════════════════
 // CRASH — courbe de multiplicateur animée
 // ══════════════════════════════════════════════════════════════════
@@ -680,17 +655,6 @@ function _genCrashPt(): number {
   return Math.max(1.01, +(0.92 / r).toFixed(2));
 }
 
-function _fakeCashTarget(cp: number): number | null {
-  if (Math.random() < 0.28) return null;
-  const r = Math.random();
-  let t: number;
-  if      (r < 0.42) t = 1.05 + Math.random() * 0.45;
-  else if (r < 0.70) t = 1.50 + Math.random() * 0.80;
-  else if (r < 0.88) t = 2.30 + Math.random() * 1.70;
-  else if (r < 0.96) t = 4.00 + Math.random() * 4.00;
-  else               t = 8.00 + Math.random() * 12.0;
-  return +(Math.min(t, cp - 0.01)).toFixed(2);
-}
 
 const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResult }> = ({ onBack, onResult }) => {
   const { currentUser, placeGameBet, recordGameResult, demoMode, demoBalance } = useAppStore();
@@ -709,7 +673,6 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
   const [cashedOut, setCashedOut] = useState<number|null>(null);
   const [autoCash,  setAutoCash]  = useState('');
   const [roundId,   setRoundId]   = useState(1);
-  const [fakes,     setFakes]     = useState<{name:string; bet:number; cashedAt:number|null}[]>([]);
   const [betTab,     setBetTab]     = useState<'all' | 'my' | 'top'>('all');
   const [showBet2,   setShowBet2]   = useState(false);
   const [bet2,       setBet2]       = useState(0.10);
@@ -731,7 +694,6 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
   const queuedBet2R  = useRef<number|null>(null);
   const rafR         = useRef(0);
   const resetTimerR  = useRef<ReturnType<typeof setTimeout>>(0 as unknown as ReturnType<typeof setTimeout>);
-  const fakeDataR    = useRef<{name:string; bet:number; cashTarget:number|null; cashedAt:number|null}[]>([]);
   const startFlightR = useRef<() => void>(() => {});
 
   useEffect(() => { phaseR.current = phase; }, [phase]);
@@ -776,16 +738,6 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
     cancelAnimationFrame(rafR.current);
     const cp = _genCrashPt();
     crashR.current = cp;
-
-    const count = 20 + Math.floor(Math.random() * 8);
-    const fd = Array.from({ length: count }, (_, i) => ({
-      name: ALL_FAKE_NAMES[i % ALL_FAKE_NAMES.length],
-      bet: +(0.05 + Math.random() * 2.5).toFixed(2),
-      cashTarget: _fakeCashTarget(cp),
-      cashedAt: null as number|null,
-    }));
-    fakeDataR.current = fd;
-    setFakes(fd.map(f => ({ name: f.name, bet: f.bet, cashedAt: null })));
 
     const qb = queuedBetR.current;
     if (qb !== null) {
@@ -834,17 +786,6 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
       const ac2 = parseFloat(autoCash2R.current);
       if (myBet2R.current !== null && cashedOut2R.current === null && !isNaN(ac2) && ac2 >= 1.01 && m >= ac2) {
         doCashout2R.current(m);
-      }
-
-      if (fc % 8 === 0) {
-        let changed = false;
-        fakeDataR.current.forEach(f => {
-          if (f.cashTarget !== null && f.cashedAt === null && m >= f.cashTarget) {
-            f.cashedAt = f.cashTarget;
-            changed = true;
-          }
-        });
-        if (changed) setFakes(fakeDataR.current.map(f => ({ name: f.name, bet: f.bet, cashedAt: f.cashedAt })));
       }
 
       setMult(m);
@@ -997,26 +938,12 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
         }}>←</button>
 
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-          <svg viewBox="0 0 108 28" width="72" height="19" style={{ flexShrink: 0, display: 'block' }} aria-label="Aviator">
-            <g fill="#E50539">
-              <path d="M35.8316259,8.46081696 L32.6511471,21.1003182 C32.3861297,22.1108319 31.7898404,22.9804878 30.8579701,23.7052459 C29.9260998,24.430004 28.9406334,24.794403 27.9091122,24.794403 L32.0257706,8.46081696 L26.9360349,8.46081696 L26.4100399,10.9372758 L22.330818,27.2708618 L27.2796958,27.2708618 C29.6942095,27.2708618 31.9886035,26.3764279 34.1669177,24.5916 C36.3452319,22.8067721 37.7284938,20.7068319 38.324783,18.2923182 L40.1634763,10.9372758 L40.7845436,8.46081696 L35.8316259,8.46081696 Z"/>
-              <path d="M49.5521237,0.741321696 C49.1378993,0.248453865 48.5871262,0.000134663342 47.8995352,0.000134663342 C47.2081736,0.000134663342 46.5784878,0.248453865 46.0029367,0.741321696 C45.4314254,1.23418953 45.0877646,1.8264389 44.9757247,2.5137606 C44.855605,3.2304389 45.004812,3.83076808 45.4190364,4.32363591 C45.8289516,4.81650374 46.3797247,5.06509227 47.0673157,5.06509227 C47.7589466,5.06509227 48.392403,4.81219451 48.9682234,4.30720698 C49.5397347,3.8016808 49.8877047,3.20539152 49.999206,2.5137606 C50.1112459,1.8264389 49.9620389,1.23418953 49.5521237,0.741321696 M44.9094703,22.9473067 C44.9180888,22.8977506 44.9345177,22.8355362 44.9592958,22.7609327 C44.9840738,22.6863292 45.0007721,22.640813 45.004812,22.6117257 L48.5456499,8.46076309 L40.3416898,8.46076309 L39.7163132,10.9372219 L43.0002135,10.9372219 L40.0518943,22.6117257 C40.010418,22.7154165 39.9772908,22.8603142 39.9441636,23.0590773 C39.7327421,24.3389177 40.0599741,25.3534713 40.9212808,26.1073167 C41.7828569,26.8568529 43.0624279,27.2336409 44.7648419,27.2336409 L45.5017197,27.2336409 L46.1311362,24.757182 C45.1456698,24.6122843 44.7354853,24.0076459 44.9094703,22.9473067"/>
-              <path d="M58.5553377,21.9865915 C58.3565746,22.7485167 57.9175721,23.4029805 57.2385995,23.9454045 C56.5593576,24.4880978 55.8345995,24.7571551 55.072405,24.7571551 C53.6436269,24.7571551 53.0432978,24.0695641 53.2668389,22.6863022 C53.2711481,22.6658334 53.2875771,22.603619 53.3166643,22.5042374 C53.3454823,22.4048559 53.3621805,22.3302524 53.3702603,22.2806963 L55.7432978,12.7842374 C56.0664898,11.5544918 56.7454623,10.937195 57.7810234,10.937195 L61.3302105,10.937195 L58.5553377,21.9865915 Z M63.1645945,23.3905915 C63.1729436,23.3407661 63.1896419,23.29121 63.21038,23.2413845 C63.2311182,23.1918284 63.2435072,23.1460429 63.251587,23.0964868 L66.9085047,8.46073616 L58.3732728,8.46073616 C56.5965247,8.46073616 54.9442055,8.96195312 53.4157766,9.96007781 C51.8835771,10.9579332 50.9352778,12.2086863 50.5665696,13.7080279 L48.5043352,21.9865915 C48.458819,22.1107511 48.4216519,22.2680379 48.3922953,22.4670703 C48.1647142,23.8460229 48.5662803,24.9850055 49.6015721,25.8834793 C50.6368638,26.7822224 51.9913077,27.233614 53.6686743,27.233614 L54.4432579,27.233614 C55.8965446,27.233614 57.2466793,26.7286264 58.4974324,25.7178434 C59.122809,26.7286264 60.2949187,27.233614 62.0178015,27.233614 L63.7568439,27.233614 L64.3824898,24.7571551 C63.4298813,24.7073297 63.024006,24.2518983 63.1645945,23.3905915 Z"/>
-              <path d="M87.1846564,13.3020988 L87.118402,13.7079741 L85.0602075,21.9865377 C84.8407062,22.8728918 84.4803471,23.5561736 83.9834394,24.0366524 C83.4865317,24.5168618 82.9688858,24.7571012 82.4264618,24.7571012 C81.933594,24.7571012 81.5565367,24.5376 81.2958284,24.0902484 C81.0348509,23.647206 80.9645566,23.0840439 81.0760579,22.392413 C81.084407,22.3425875 81.1011052,22.2763332 81.1301925,22.18961 C81.1549706,22.1023481 81.1716688,22.0363631 81.1797486,21.9865377 L83.2379431,13.7079741 C83.4450554,12.8962234 83.7887162,12.2377197 84.2651551,11.7324628 C84.7413247,11.2274753 85.2753995,10.9745776 85.8676489,10.9745776 C86.3605167,10.9745776 86.7332648,11.1776499 86.9858933,11.5835252 C87.2385217,11.9934404 87.3090853,12.5649516 87.1846564,13.3020988 M90.9533446,9.81081696 C89.9304419,8.91234314 88.5846165,8.46068229 86.9072499,8.46068229 L86.1326663,8.46068229 C84.3066314,8.46068229 82.6416539,8.96620848 81.1342324,9.97672219 C79.6265416,10.9872359 78.6909007,12.2336798 78.3265017,13.7079741 L76.2265616,21.9865377 C76.1853546,22.1106973 76.1438783,22.2682534 76.114791,22.4670165 C75.8829007,23.8707471 76.2844668,25.0140389 77.3240678,25.9044329 C78.3596289,26.7905177 79.7302324,27.2338294 81.4280678,27.2338294 L82.1654843,27.2338294 C83.9670105,27.2338294 85.6236389,26.7202234 87.1474893,25.7013606 C88.671609,24.6784579 89.6115591,23.4400938 89.9759581,21.9865377 L92.071589,13.7079741 L92.1502324,13.2318045 C92.3740429,11.8485426 91.9762474,10.7098294 90.9533446,9.81081696"/>
-              <path d="M106.1978,8.46081696 C104.20182,8.46081696 102.474628,8.99085187 101.021072,10.051191 L101.39382,8.46081696 L96.4656808,8.46081696 L91.7360349,27.2336948 L96.6892219,27.2336948 L99.2610224,16.963191 C99.5882544,15.7040888 100.23006,14.5279392 101.186708,13.4347421 C102.143357,12.3372359 103.220125,11.5793506 104.425362,11.1610863 L103.837152,13.6003781 L106.537421,13.6003781 L107.858469,8.46081696 L106.1978,8.46081696 Z"/>
-              <path d="M12.664387,13.9475132 L12.6724668,13.8917626 L14.9436988,5.02902943 C15.11122,4.28784239 15.4618833,3.67404688 15.9956888,3.19572269 C16.5300329,2.71793716 17.1354793,2.47850574 17.7969456,2.47850574 C18.4188209,2.47850574 18.8729057,2.68588728 19.1758983,3.10819152 C19.470811,3.52268529 19.5742324,4.05649077 19.470811,4.69452569 L19.4150603,5.02902943 L17.1435591,13.8917626 L17.1276688,13.9475132 L12.664387,13.9475132 Z M23.0014145,1.40254564 C21.8697037,0.470136658 20.3474693,0.00016159601 18.4266314,0.00016159601 C16.3307312,0.00016159601 14.489614,0.526156608 12.8876589,1.57033616 C11.2857037,2.61424638 10.2733047,4.00100948 9.8429207,5.73035611 L7.78661147,13.8917626 C6.04918504,13.8917626 4.43915012,13.8995731 3.18785835,13.8995731 C1.4189207,13.8995731 0.000107730673,15.3423561 0.000107730673,17.1118324 L6.97378354,17.1118324 L4.43133965,27.2333985 L9.34089576,27.2333985 L11.8914195,17.1118324 L16.3625117,17.1118324 L14.7764469,23.391992 C14.7287761,23.5115731 14.6967262,23.6710145 14.6649456,23.8703162 C14.489614,24.930386 14.6967262,25.7588349 15.2943621,26.3489297 C15.8841875,26.9384858 16.784816,27.2333985 17.9881676,27.2333985 L19.9491352,27.2333985 L20.5785516,24.754785 C19.8691451,24.7071142 19.5742324,24.324401 19.6940828,23.6149945 L24.1810653,5.73035611 C24.1888758,5.67487481 24.2050354,5.57899451 24.2448958,5.43544339 C24.2847561,5.2840818 24.3006464,5.1882015 24.3084569,5.1327202 C24.5635092,3.58651571 24.1250454,2.34303441 23.0014145,1.40254564 Z"/>
-              <path d="M76.0941067,8.46081696 L77.216391,4.10418853 L72.263204,4.10418853 L71.1783561,8.46081696 L68.7474135,8.46081696 L68.1177277,10.9372758 L70.5529796,10.9372758 L67.5960419,22.649216 C67.5876928,22.6990414 67.5672239,22.7860339 67.5338274,22.9101935 C67.5007002,23.0343531 67.4842713,23.1173057 67.4759222,23.1709017 C67.26881,24.4256948 67.5130893,25.4157397 68.2047202,26.1445377 C68.9006603,26.8692958 69.9483411,27.2336948 71.3520718,27.2336948 L73.0916529,27.2336948 L73.7251092,24.7197995 C72.7065157,24.6247272 72.2839421,24.0448668 72.4581965,22.984797 C72.4662763,22.9349716 72.4827052,22.8727571 72.5074833,22.7984229 C72.5284908,22.7235501 72.545189,22.6780339 72.5492289,22.649216 L75.5018574,10.9372758 L77.6098773,10.9372758 L78.2395631,8.46081696 L76.0941067,8.46081696 Z"/>
-            </g>
-          </svg>
-          <span style={{
-            display: 'inline-flex', alignItems: 'center', gap: 4,
-            background: 'rgba(239,68,68,.15)', padding: '2px 8px 2px 6px',
-            borderRadius: 99, fontSize: 9, fontWeight: 800, color: '#ef4444',
-            letterSpacing: '0.08em', textTransform: 'uppercase',
-          }}>
-            <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#ef4444', animation: 'livePulse 1.5s ease-in-out infinite' }} />
-            LIVE
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+            <div style={{ width: 28, height: 28, borderRadius: 8, background: 'rgba(129,140,248,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <GameIcon id="crash" color="#818cf8" size={16} />
+            </div>
+            <h2 className="text-base font-bold text-white">Crash</h2>
+          </div>
         </div>
 
         <span style={{ fontSize: 11, color: '#475569', fontWeight: 700, background: 'rgba(255,255,255,.04)', padding: '3px 8px', borderRadius: 6 }}>
@@ -1248,21 +1175,9 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
                     </span>
                   </div>
                 )}
-                {fakes.length === 0 && (
-                  <p style={{ padding: '12px', textAlign: 'center', fontSize: 11, color: '#475569' }}>Players joining…</p>
+                {(activeBet === null && queuedBet === null) && (
+                  <p style={{ padding: '12px', textAlign: 'center', fontSize: 11, color: '#475569' }}>Aucune mise pour l'instant</p>
                 )}
-                {fakes.map((f, i) => (
-                  <div key={f.name} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', padding: '5px 12px', alignItems: 'center', borderBottom: i < fakes.length - 1 ? '1px solid rgba(30,40,71,0.3)' : 'none' }}>
-                    <span style={{ fontSize: 11, color: '#94a3b8' }}>{f.name}</span>
-                    <span style={{ fontSize: 11, color: '#cbd5e1' }}>{f.bet.toFixed(2)}</span>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: f.cashedAt !== null ? '#4ade80' : phase === 'crashed' ? '#f87171' : '#475569' }}>
-                      {f.cashedAt !== null ? `×${f.cashedAt.toFixed(2)}` : phase === 'crashed' ? 'CRASH' : '—'}
-                    </span>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: f.cashedAt !== null ? '#4ade80' : phase === 'crashed' ? '#f87171' : '#475569' }}>
-                      {f.cashedAt !== null ? `+${(f.bet*f.cashedAt-f.bet).toFixed(2)}` : phase === 'crashed' ? `-${f.bet.toFixed(2)}` : '—'}
-                    </span>
-                  </div>
-                ))}
               </>
             )}
             {betTab === 'my' && (
@@ -1572,7 +1487,12 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
           </button>
           <div className="flex-1">
             <div className="flex items-center gap-2">
-              <h2 className="text-base font-bold" style={{ color: '#f8fafc' }}>Mines 💣</h2>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                <div style={{ width: 28, height: 28, borderRadius: 8, background: 'rgba(139,92,246,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <GameIcon id="mines" color="#8b5cf6" size={16} />
+                </div>
+                <h2 className="text-base font-bold" style={{ color: '#f8fafc' }}>Mines</h2>
+              </div>
               <StreakChip streak={streak} />
             </div>
             <p className="text-[11px]" style={{ color: '#64748b' }}>Évitez les mines · Encaissez au bon moment</p>
@@ -1991,7 +1911,12 @@ const TowerGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
         </button>
         <div className="flex-1">
           <div className="flex items-center gap-2">
-            <h2 className="text-base font-bold text-white">Tower</h2>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+              <div style={{ width: 28, height: 28, borderRadius: 8, background: 'rgba(16,185,129,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <GameIcon id="tower" color="#10b981" size={16} />
+              </div>
+              <h2 className="text-base font-bold text-white">Tower</h2>
+            </div>
             <StreakChip streak={streak} />
           </div>
           <p className="text-[11px] text-slate-500">Grimpez les étages · évitez le piège · encaissez</p>
@@ -2568,7 +2493,12 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
           </button>
           <div className="flex-1">
             <div className="flex items-center gap-2">
-              <h2 className="text-base font-bold" style={{ color: '#f8fafc' }}>Plinko 🎯</h2>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                <div style={{ width: 28, height: 28, borderRadius: 8, background: 'rgba(251,191,36,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <GameIcon id="plinko" color="#fbbf24" size={16} />
+                </div>
+                <h2 className="text-base font-bold" style={{ color: '#f8fafc' }}>Plinko</h2>
+              </div>
               <StreakChip streak={streak} />
             </div>
             <p className="text-[11px]" style={{ color: '#64748b' }}>Lâchez la balle · Visez les multiplicateurs élevés</p>
@@ -2796,25 +2726,69 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
 };
 
 // ══════════════════════════════════════════════════════════════════
-// LIVE FEED
-// ══════════════════════════════════════════════════════════════════
-
-type FeedEntry = { username: string; bet: number; win: number; mult: number; game: string; createdAt: number };
-
-function formatFeedTime(ts: number): string {
-  const s = Math.floor((Date.now() - ts) / 1000);
-  if (s < 5)    return 'maintenant';
-  if (s < 60)   return `il y a ${s}s`;
-  if (s < 3600) return `il y a ${Math.floor(s / 60)}m`;
-  return `il y a ${Math.floor(s / 3600)}h`;
-}
-
-
-// ══════════════════════════════════════════════════════════════════
 // GAMES HUB
 // ══════════════════════════════════════════════════════════════════
 
 type ActiveGame = 'dice' | 'crash' | 'mines' | 'tower' | 'plinko' | null;
+
+const GameIcon: React.FC<{ id: string; size?: number; color?: string }> = ({ id, size = 24, color = 'currentColor' }) => {
+  const s: React.CSSProperties = { width: size, height: size, display: 'block', flexShrink: 0 };
+  switch (id) {
+    case 'dice': return (
+      <svg viewBox="0 0 24 24" fill="none" style={s}>
+        <rect x="2" y="2" width="20" height="20" rx="4.5" stroke={color} strokeWidth="1.8"/>
+        <circle cx="8" cy="8" r="1.7" fill={color}/>
+        <circle cx="16" cy="8" r="1.7" fill={color}/>
+        <circle cx="12" cy="12" r="1.7" fill={color}/>
+        <circle cx="8" cy="16" r="1.7" fill={color}/>
+        <circle cx="16" cy="16" r="1.7" fill={color}/>
+      </svg>
+    );
+    case 'crash': return (
+      <svg viewBox="0 0 24 24" fill="none" style={s}>
+        <path d="M12 2C9 2 6.5 4.5 6 8L5 13h14l-1-5C17.5 4.5 15 2 12 2Z" stroke={color} strokeWidth="1.8" strokeLinejoin="round"/>
+        <circle cx="12" cy="7.5" r="2" stroke={color} strokeWidth="1.6"/>
+        <path d="M9 13v4l3 3 3-3v-4" stroke={color} strokeWidth="1.8" strokeLinejoin="round"/>
+        <path d="M6 11l-2 1-1 3 2.5-1M18 11l2 1 1 3-2.5-1" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
+    );
+    case 'mines': return (
+      <svg viewBox="0 0 24 24" fill="none" style={s}>
+        <path d="M12 2L21 7.5V16.5L12 22L3 16.5V7.5L12 2Z" stroke={color} strokeWidth="1.8" strokeLinejoin="round"/>
+        <line x1="12" y1="2" x2="12" y2="7" stroke={color} strokeWidth="1.2" opacity="0.55"/>
+        <line x1="21" y1="7.5" x2="16.5" y2="10.5" stroke={color} strokeWidth="1.2" opacity="0.55"/>
+        <line x1="21" y1="16.5" x2="16.5" y2="13.5" stroke={color} strokeWidth="1.2" opacity="0.55"/>
+        <line x1="12" y1="22" x2="12" y2="17" stroke={color} strokeWidth="1.2" opacity="0.55"/>
+        <line x1="3" y1="16.5" x2="7.5" y2="13.5" stroke={color} strokeWidth="1.2" opacity="0.55"/>
+        <line x1="3" y1="7.5" x2="7.5" y2="10.5" stroke={color} strokeWidth="1.2" opacity="0.55"/>
+        <circle cx="12" cy="12" r="2.8" stroke={color} strokeWidth="1.8"/>
+        <circle cx="12" cy="12" r="1" fill={color}/>
+      </svg>
+    );
+    case 'tower': return (
+      <svg viewBox="0 0 24 24" fill={color} style={s}>
+        <rect x="9" y="2" width="6" height="3.5" rx="1.5"/>
+        <rect x="6.5" y="7.5" width="11" height="3.5" rx="1.5"/>
+        <rect x="3.5" y="13" width="17" height="3.5" rx="1.5"/>
+        <rect x="1" y="18.5" width="22" height="3.5" rx="1.5"/>
+      </svg>
+    );
+    case 'plinko': return (
+      <svg viewBox="0 0 24 24" fill={color} style={s}>
+        <circle cx="12" cy="2.5" r="2.2"/>
+        <circle cx="7.5" cy="8.5" r="1.5" opacity="0.75"/>
+        <circle cx="16.5" cy="8.5" r="1.5" opacity="0.75"/>
+        <circle cx="4" cy="14.5" r="1.5" opacity="0.6"/>
+        <circle cx="12" cy="14.5" r="1.5" opacity="0.6"/>
+        <circle cx="20" cy="14.5" r="1.5" opacity="0.6"/>
+        <rect x="2" y="20" width="4.5" height="3.5" rx="1.2"/>
+        <rect x="9.5" y="20" width="5" height="3.5" rx="1.2" opacity="0.85"/>
+        <rect x="17.5" y="20" width="4.5" height="3.5" rx="1.2"/>
+      </svg>
+    );
+    default: return null;
+  }
+};
 
 const CATALOG = [
   {
@@ -2891,13 +2865,8 @@ export const MiniAppGames: React.FC = () => {
     return 0;
   });
   const [muted, setMuted]           = useState(_soundMuted);
-  const [showConfetti, setShowConfetti] = useState(false);
-  const [liveFeed, setLiveFeed]     = useState<FeedEntry[]>([]);
-  const [, setTick]                 = useState(0);
-  const feedIdxRef                  = useRef(0);
 
   const handleResult = (won: boolean) => {
-    if (won) setShowConfetti(true);
     setStreak(s => {
       const next = won ? s + 1 : 0;
       try { localStorage.setItem('tc_game_streak', JSON.stringify({ count: next, ts: Date.now() })); } catch {}
@@ -2915,36 +2884,6 @@ export const MiniAppGames: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Tick every 10s to refresh relative timestamps in live feed
-  useEffect(() => {
-    const id = setInterval(() => setTick(t => t + 1), 10000);
-    return () => clearInterval(id);
-  }, []);
-
-  // Live feed auto-rotation — new fake entry every 8–18 seconds
-  useEffect(() => {
-    const GAME_NAMES = ['Crash', 'Plinko', 'Tower', 'Mines', 'Dice'];
-    const scheduleNext = () => {
-      const ms = 8000 + Math.floor(Math.random() * 10000);
-      return setTimeout(() => {
-        const name = ALL_FAKE_NAMES[feedIdxRef.current % ALL_FAKE_NAMES.length];
-        feedIdxRef.current++;
-        const game = GAME_NAMES[Math.floor(Math.random() * GAME_NAMES.length)];
-        const bet  = randomFakeBet();
-        const r    = Math.random();
-        const mult = r < 0.42 ? 0 : r < 0.65 ? 1.5 : r < 0.78 ? 2 : r < 0.89 ? 3 : r < 0.96 ? 5 : 10;
-        const win  = +(bet * mult).toFixed(4);
-        setLiveFeed(prev => [
-          { username: name, bet, win, mult, game, createdAt: Date.now() },
-          ...prev.slice(0, 9),
-        ]);
-        timerRef.current = scheduleNext();
-      }, ms);
-    };
-    const timerRef = { current: scheduleNext() };
-    return () => clearTimeout(timerRef.current);
-  }, []);
-
   if (activeGame === 'dice')     return <DiceGame     onBack={() => setActiveGame(null)} streak={streak} onResult={handleResult} />;
   if (activeGame === 'tower')    return <TowerGame    onBack={() => setActiveGame(null)} streak={streak} onResult={handleResult} />;
   if (activeGame === 'plinko')   return <PlinkoGame   onBack={() => setActiveGame(null)} streak={streak} onResult={handleResult} />;
@@ -2953,7 +2892,7 @@ export const MiniAppGames: React.FC = () => {
 
   return (
     <div className="space-y-5 animate-slide-up pb-4">
-      {showConfetti && <ConfettiEffect onComplete={() => setShowConfetti(false)} />}
+
       <div className="flex items-center justify-between">
         <div>
           <div className="flex items-center gap-2">
@@ -3029,7 +2968,7 @@ export const MiniAppGames: React.FC = () => {
                 className="game-icon-wrap w-11 h-11 rounded-xl flex items-center justify-center mb-2.5"
                 style={{ background: `linear-gradient(135deg,${game.accentFrom}33,${game.accentTo}22)`, boxShadow: `0 4px 12px ${game.glow}` }}
               >
-                <span className="text-2xl">{game.emoji}</span>
+                <GameIcon id={game.id as string} color={game.accentFrom} size={26} />
               </div>
               <p className="text-white font-bold text-sm leading-tight">{game.title}</p>
               <p className="text-slate-400 text-[11px] mt-0.5 leading-tight">{game.desc}</p>
@@ -3133,49 +3072,6 @@ export const MiniAppGames: React.FC = () => {
           </div>
         );
       })()}
-
-      {/* Live activity feed */}
-      <style>{`@keyframes feedIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}} @keyframes liveDot{0%,100%{opacity:1}50%{opacity:0.2}}`}</style>
-      <div style={{ background: '#0d1021', border: '1px solid #1e2847', borderRadius: 16 }} className="p-4">
-        <div className="flex items-center gap-2 mb-3">
-          <Trophy className="w-4 h-4" style={{ color: '#f59e0b' }} />
-          <h3 className="text-sm font-semibold" style={{ color: '#f8fafc' }}>Activité récente</h3>
-          <span style={{ marginLeft: 'auto', width: 7, height: 7, borderRadius: '50%', background: '#22c55e', animation: 'liveDot 2s ease-in-out infinite' }} title="En direct" />
-        </div>
-        <div className="space-y-2">
-          {liveFeed.map((f, i) => (
-            <div key={f.createdAt} className="flex items-center justify-between py-1.5" style={{
-              borderBottom: i < liveFeed.length - 1 ? '1px solid rgba(30,40,71,0.6)' : 'none',
-              animation: 'feedIn 0.35s ease',
-            }}>
-              <div className="flex items-center gap-2.5">
-                <span style={{
-                  width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 11, fontWeight: 700,
-                  background: f.mult >= 3 ? 'rgba(34,197,94,0.2)' : f.mult > 0 ? 'rgba(245,158,11,0.2)' : 'rgba(239,68,68,0.15)',
-                  color: f.mult >= 3 ? '#22c55e' : f.mult > 0 ? '#f59e0b' : '#ef4444',
-                }}>
-                  {f.mult > 0 ? `×${f.mult}` : '✗'}
-                </span>
-                <div>
-                  <p style={{ fontSize: 13, color: '#f8fafc', lineHeight: 1 }}>{f.username}</p>
-                  <p style={{ fontSize: 10, color: '#64748b' }}>{f.game}</p>
-                </div>
-              </div>
-              <div className="text-right">
-                <span style={{
-                  fontSize: 13, fontWeight: 600,
-                  color: f.win > f.bet ? '#22c55e' : f.win > 0 ? '#f59e0b' : '#64748b',
-                }}>
-                  {f.win > 0 ? <><TonLogo size={11} />+{f.win.toFixed(2)}</> : <>−{f.bet.toFixed(2)}</>}
-                </span>
-                <p style={{ fontSize: 10, color: '#64748b' }}>{formatFeedTime(f.createdAt)}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
 
       {/* Info bar */}
       <div style={{ background: '#0d1021', border: '1px solid #1e2847', borderRadius: 16 }} className="p-4">

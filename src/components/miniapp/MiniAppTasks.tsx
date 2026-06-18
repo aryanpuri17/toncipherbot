@@ -150,15 +150,19 @@ const typeConfig: Record<string, { icon: React.ReactNode; color: string; label: 
 };
 
 
-type TaskPhase = 'idle' | 'too_early' | 'ready' | 'verifying' | 'not_subscribed' | 'completing' | 'done';
+type TaskPhase = 'idle' | 'too_early' | 'ready' | 'verifying' | 'not_subscribed' | 'completing' | 'done'
+  | 'needs_bot_confirm'  // start_bot API tasks: timer done, awaiting bot deep-link confirmation
+  | 'needs_proof'        // social API tasks: timer done, awaiting screenshot via bot
+  | 'proof_pending';     // social: screenshot sent, awaiting admin approval
 
 const REQUIRED_MS         = 30_000; // bots: 30s
 const CHANNEL_REQUIRED_MS = 5_000;  // channels/groups: 5s
 const VIDEO_REQUIRED_MS   = 20_000; // videos: 20s
 const SOCIAL_REQUIRED_MS  = 5_000;  // social follow/like: 5s
+const MAX_VERIFY_GRACE_MS = 30 * 60_000; // 30-min window after timer expires to verify
 const departKey = (id: string) => `tc_task_depart_${id}`;
 
-type DepartEntry = { ts: number; ms: number };
+type DepartEntry = { ts: number; ms: number; type?: string; source?: 'platform' | 'api' };
 
 function openUrl(url: string) {
   const tg = (window as unknown as { Telegram?: { WebApp?: { openTelegramLink?: (u: string) => void; openLink?: (u: string) => void } } }).Telegram?.WebApp;
@@ -195,12 +199,15 @@ export const MiniAppTasks: React.FC = () => {
     setMiniAppPage, currentUser, taskSubmissions, submitTaskProof, platformConfig,
   } = useAppStore();
 
+  const botName = platformConfig.botUsername || 'TonCipher_bot';
+
   const eventPromo = platformConfig.promoEvent;
   const isEventActive = eventPromo?.active && new Date(eventPromo.endsAt) > new Date();
   const eventMult = isEventActive ? eventPromo!.multiplier : 1;
 
   const [taskStates, setTaskStates] = useState<Record<string, { phase: TaskPhase }>>({});
   const timerRefs                   = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const allCardsRef                 = useRef<CardTask[]>([]);
   const [tick, setTick]             = useState(0); // 1-second ticker for countdown display
 
   const [apiTasks,            setApiTasks]            = useState<ApiTask[]>([]);
@@ -237,18 +244,29 @@ export const MiniAppTasks: React.FC = () => {
     keys.forEach(key => {
       const id      = key.replace('tc_task_depart_', '');
       const entry   = parseDeparture(localStorage.getItem(key));
-      if (!entry) return;
-      const remainingMs = entry.ms - (now - entry.ts);
+      if (!entry) { localStorage.removeItem(key); return; }
+      const elapsed     = now - entry.ts;
+      const remainingMs = entry.ms - elapsed;
+
+      const afterPhase = (e: DepartEntry): TaskPhase =>
+        e.source === 'api' && e.type === 'start_bot' ? 'needs_bot_confirm'
+        : e.source === 'api' && e.type === 'social'   ? 'needs_proof'
+        : 'ready';
 
       if (remainingMs <= 0) {
-        setTaskStates(prev => ({ ...prev, [id]: { phase: 'ready' } }));
+        // Stale entry from a previous session — clear it, force re-join
+        if (elapsed > entry.ms + MAX_VERIFY_GRACE_MS) {
+          localStorage.removeItem(key);
+          return;
+        }
+        setTaskStates(prev => ({ ...prev, [id]: { phase: afterPhase(entry) } }));
       } else {
         setTaskStates(prev => ({ ...prev, [id]: { phase: 'too_early' } }));
         const autoKey = `depart_auto_${id}`;
         if (!timerRefs.current[autoKey]) {
           timerRefs.current[autoKey] = setTimeout(() => {
             delete timerRefs.current[autoKey];
-            setTaskStates(prev => ({ ...prev, [id]: { phase: 'ready' } }));
+            setTaskStates(prev => ({ ...prev, [id]: { phase: afterPhase(entry) } }));
           }, remainingMs);
         }
       }
@@ -362,6 +380,7 @@ export const MiniAppTasks: React.FC = () => {
     }));
 
   const allCards = [...platformCards, ...apiCards];
+  allCardsRef.current = allCards;
 
   // ── Completion helpers ───────────────────────────────────────────────────────
 
@@ -455,21 +474,96 @@ export const MiniAppTasks: React.FC = () => {
     const waitMs  = card.type === 'start_bot' ? REQUIRED_MS : card.type === 'watch_video' ? VIDEO_REQUIRED_MS : card.type === 'social' ? SOCIAL_REQUIRED_MS : CHANNEL_REQUIRED_MS;
     const autoKey = `depart_auto_${card.id}`;
     if (timerRefs.current[autoKey]) { clearTimeout(timerRefs.current[autoKey]); delete timerRefs.current[autoKey]; }
-    localStorage.setItem(departKey(card.id), JSON.stringify({ ts: Date.now(), ms: waitMs }));
+    localStorage.setItem(departKey(card.id), JSON.stringify({ ts: Date.now(), ms: waitMs, type: card.type, source: card.source }));
     setPhase(card.id, 'too_early');
+
+    // Determine target phase after timer
+    const afterTimerPhase = (type: string, source: string): TaskPhase =>
+      source === 'api' && type === 'start_bot' ? 'needs_bot_confirm'
+      : source === 'api' && type === 'social'   ? 'needs_proof'
+      : 'ready';
+
     timerRefs.current[autoKey] = setTimeout(() => {
       delete timerRefs.current[autoKey];
-      setPhase(card.id, 'ready');
+      setPhase(card.id, afterTimerPhase(card.type, card.source));
     }, waitMs);
   };
+
+  // ── Direct complete — no timer check (used after external verification) ─────
+  const directComplete = async (card: CardTask) => {
+    localStorage.removeItem(departKey(card.id));
+    const autoKey = `depart_auto_${card.id}`;
+    if (timerRefs.current[autoKey]) { clearTimeout(timerRefs.current[autoKey]); delete timerRefs.current[autoKey]; }
+    setPhase(card.id, 'completing');
+    if (card.source === 'api') {
+      const ok = await creditApiTask(card.id, card.reward);
+      if (!ok) return;
+    } else {
+      completeTask(card.id);
+    }
+    timerRefs.current[card.id] = setTimeout(() => {
+      setPhase(card.id, 'done');
+      haptic.success();
+      timerRefs.current[`rm_${card.id}`] = setTimeout(() => {
+        setTaskStates(prev => { const n = { ...prev }; delete n[card.id]; return n; });
+      }, 2000);
+    }, 1500);
+  };
+
+  // ── Bot confirmation check (start_bot API tasks) ──────────────────────────
+  const handleBotConfirm = async (card: CardTask) => {
+    haptic.impact('light');
+    setPhase(card.id, 'verifying');
+    try {
+      const res = await fetch(`/api/check-bot-verify?telegramId=${currentUser.telegramId}&taskId=${card.id}`);
+      const { verified } = await res.json() as { verified: boolean };
+      if (verified) {
+        await directComplete(card);
+      } else {
+        setPhase(card.id, 'needs_bot_confirm');
+        haptic.error();
+      }
+    } catch {
+      setPhase(card.id, 'needs_bot_confirm');
+    }
+  };
+
+  // ── Poll for approved social proofs every 6 s ─────────────────────────────
+  useEffect(() => {
+    const poll = setInterval(async () => {
+      const keys = Object.keys(localStorage).filter(k => k.startsWith('tc_proof_sent_'));
+      if (keys.length === 0) return;
+      const tid = useAppStore.getState().currentUser.telegramId;
+      for (const key of keys) {
+        const taskId = key.replace('tc_proof_sent_', '');
+        try {
+          const res = await fetch(`/api/check-social-proof?telegramId=${tid}&taskId=${taskId}`);
+          const { status } = await res.json() as { status: string };
+          if (status === 'approved') {
+            localStorage.removeItem(key);
+            const card = allCardsRef.current.find(c => c.id === taskId);
+            if (card) await directComplete(card);
+          } else if (status === 'rejected') {
+            localStorage.removeItem(key);
+            localStorage.setItem(`tc_proof_rejected_${taskId}`, '1');
+            setPhase(taskId, 'not_subscribed');
+          }
+        } catch { /* ignore — no server in local dev */ }
+      }
+    }, 6000);
+    return () => clearInterval(poll);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleVerify = async (card: CardTask) => {
     haptic.impact('light');
     setPhase(card.id, 'verifying');
     await new Promise<void>(r => setTimeout(r, 800));
 
-    const entry = parseDeparture(localStorage.getItem(departKey(card.id)));
-    const verified = entry != null && (Date.now() - entry.ts) >= entry.ms;
+    const entry   = parseDeparture(localStorage.getItem(departKey(card.id)));
+    const elapsed  = entry ? Date.now() - entry.ts : 0;
+    const verified = entry != null
+      && elapsed >= entry.ms
+      && elapsed <= entry.ms + MAX_VERIFY_GRACE_MS;
 
     if (!verified) {
       setPhase(card.id, 'not_subscribed');
@@ -537,6 +631,18 @@ export const MiniAppTasks: React.FC = () => {
     }, 700);
   };
 
+  const handleReportAbuse = async (taskId: string) => {
+    try {
+      await fetch('/api/report-proof-abuse', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ telegramId: currentUser.telegramId, taskId }),
+      });
+      localStorage.removeItem(`tc_proof_rejected_${taskId}`);
+      setPhase(taskId, 'needs_proof');
+    } catch { /* ignore */ }
+  };
+
   // ── Filter state ─────────────────────────────────────────────────────────────
 
   const [activeFilter, setActiveFilter] = React.useState<'all' | 'daily' | 'special' | 'channel' | 'bot' | 'video' | 'social'>('all');
@@ -576,12 +682,12 @@ export const MiniAppTasks: React.FC = () => {
       : 'Faire';
 
     const notSubbedMsg = card.type === 'start_bot'
-      ? "Bot non démarré — envoyez /start d'abord."
+      ? 'Confirmation non reçue. Ouvrez le bot via le lien de confirmation, attendez quelques secondes, puis réessayez.'
       : card.type === 'watch_video'
-      ? 'Non détecté — regardez la vidéo jusqu\'à la fin.'
+      ? 'Temps insuffisant — regardez la vidéo jusqu\'à la fin (20s min).'
       : card.type === 'social'
-      ? 'Action non détectée — effectuez l\'action puis réessayez.'
-      : 'Abonnement non détecté — rejoignez d\'abord.';
+      ? 'Preuve refusée. Effectuez l\'action, puis renvoyez un screenshot plus clair.'
+      : 'Temps insuffisant — rejoignez et restez quelques secondes.';
 
     const notSubbed = phase === 'not_subscribed';
 
@@ -813,6 +919,89 @@ export const MiniAppTasks: React.FC = () => {
             </button>
           )}
 
+          {/* NEEDS BOT CONFIRM — start_bot API tasks */}
+          {phase === 'needs_bot_confirm' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{
+                padding: '10px 12px', borderRadius: 12,
+                background: 'rgba(6,182,212,0.07)', border: '1px solid rgba(6,182,212,0.22)',
+                fontSize: 11, color: '#67e8f9', lineHeight: 1.5,
+              }}>
+                ✅ Timer validé. Confirmez votre visite via notre bot pour recevoir la récompense.
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  onClick={() => openUrl(`https://t.me/${botName}?start=vb_${card.id}_${currentUser.telegramId}`)}
+                  style={{
+                    flex: 1, padding: '10px 0', borderRadius: 12,
+                    background: 'rgba(6,182,212,0.12)', border: '1px solid rgba(6,182,212,0.3)',
+                    color: '#22d3ee', fontSize: 11, fontWeight: 700,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Confirmer dans le bot
+                </button>
+                <button
+                  onClick={() => void handleBotConfirm(card)}
+                  style={{
+                    flex: 1, padding: '10px 0', borderRadius: 12,
+                    background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.35)',
+                    color: '#60a5fa', fontSize: 11, fontWeight: 700,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+                    cursor: 'pointer',
+                  }}
+                >
+                  <ShieldCheck style={{ width: 12, height: 12 }} /> Vérifier
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* NEEDS PROOF — social API tasks */}
+          {phase === 'needs_proof' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{
+                padding: '10px 12px', borderRadius: 12,
+                background: 'rgba(249,115,22,0.07)', border: '1px solid rgba(249,115,22,0.22)',
+                fontSize: 11, color: '#fb923c', lineHeight: 1.5,
+              }}>
+                📸 Action effectuée ? Envoyez un screenshot au bot pour valider votre preuve.
+              </div>
+              <button
+                onClick={() => {
+                  openUrl(`https://t.me/${botName}?start=sp_${card.id}_${currentUser.telegramId}`);
+                  localStorage.setItem(`tc_proof_sent_${card.id}`, '1');
+                  setPhase(card.id, 'proof_pending');
+                }}
+                style={{
+                  width: '100%', padding: '10px 0', borderRadius: 12,
+                  background: 'rgba(249,115,22,0.12)', border: '1px solid rgba(249,115,22,0.3)',
+                  color: '#fb923c', fontSize: 12, fontWeight: 700,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                  cursor: 'pointer',
+                }}
+              >
+                📸 Envoyer la preuve au bot
+              </button>
+            </div>
+          )}
+
+          {/* PROOF PENDING — waiting for admin */}
+          {phase === 'proof_pending' && (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 10,
+              padding: '11px 14px', borderRadius: 12,
+              background: 'rgba(249,115,22,0.06)', border: '1px solid rgba(249,115,22,0.2)',
+            }}>
+              <Loader2 style={{ width: 14, height: 14, color: '#fb923c', animation: 'spin 1s linear infinite', flexShrink: 0 }} />
+              <div>
+                <p style={{ fontSize: 11, fontWeight: 700, color: '#fb923c', margin: 0 }}>En attente de validation</p>
+                <p style={{ fontSize: 10, color: '#78350f', margin: 0 }}>Notre équipe vérifie votre preuve — notification par bot</p>
+              </div>
+            </div>
+          )}
+
           {/* NOT SUBSCRIBED */}
           {notSubbed && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -854,6 +1043,24 @@ export const MiniAppTasks: React.FC = () => {
                   <ShieldCheck style={{ width: 12, height: 12 }} /> Réessayer
                 </button>
               </div>
+              {card.type === 'social' && (() => {
+                const wasRejected = !!localStorage.getItem(`tc_proof_rejected_${card.id}`);
+                return wasRejected ? (
+                  <button
+                    onClick={() => void handleReportAbuse(card.id)}
+                    style={{
+                      marginTop: 6,
+                      width: '100%', padding: '9px 0', borderRadius: 12,
+                      background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.25)',
+                      color: '#fbbf24', fontSize: 11, fontWeight: 700,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    🚨 Contester ce refus
+                  </button>
+                ) : null;
+              })()}
             </div>
           )}
 

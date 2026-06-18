@@ -6,16 +6,7 @@ import { haptic } from '../../lib/haptics';
 
 export const MiniAppDashboard: React.FC = () => {
   const { currentUser: u, setMiniAppPage, tasks, completedTaskIds, redeemPromoCode, platformConfig } = useAppStore();
-  const STREAK_MILESTONES = platformConfig.streakMilestones ?? [];
   const activeTasks = tasks.filter(t => t.isActive && !completedTaskIds.includes(t.id) && !t.isPromoTask);
-
-  // Streak calculation
-  const streak = u.loginStreak ?? 0;
-  const nextMilestone = STREAK_MILESTONES.find(m => m.day > streak);
-  const prevMilestoneDay = [...STREAK_MILESTONES].reverse().find(m => m.day <= streak)?.day ?? 0;
-  const streakPct = nextMilestone
-    ? Math.round(((streak - prevMilestoneDay) / (nextMilestone.day - prevMilestoneDay)) * 100)
-    : 100;
 
   const [promoCode, setPromoCode] = useState('');
   const [promoLoading, setPromoLoading] = useState(false);
@@ -136,59 +127,6 @@ export const MiniAppDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Login Streak */}
-      {streak === 0 ? (
-        <div className="glass-card-light p-3.5 flex items-center gap-3 border border-white/5">
-          <span className="text-xl flex-shrink-0">🔥</span>
-          <p className="text-xs text-slate-400">Revenez chaque jour pour cumuler un streak et débloquer des bonus !</p>
-        </div>
-      ) : streak === 1 ? (
-        <div className="glass-card-light p-3.5 flex items-center gap-3 border border-orange-500/15">
-          <div className="w-10 h-10 rounded-xl bg-orange-500/20 flex items-center justify-center flex-shrink-0 text-lg">🔥</div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-bold text-white">Streak démarré !</p>
-            <p className="text-xs text-slate-400 mt-0.5">
-              Revenez demain → +{platformConfig.streakBonusPerDay.toFixed(2)} GRAM · Palier Jour 3 → +0.05 GRAM bonus
-            </p>
-          </div>
-        </div>
-      ) : (
-        <div className="glass-card-light p-4 border border-orange-500/20">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="relative flex-shrink-0">
-              <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-orange-500/30 to-amber-500/20 flex items-center justify-center text-lg">🔥</div>
-              <span className="absolute -top-1.5 -right-1.5 min-w-[20px] h-5 px-1 rounded-full bg-orange-500 text-white text-[9px] font-bold flex items-center justify-center">
-                {streak}
-              </span>
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-bold text-white">{streak} jour{streak > 1 ? 's' : ''} de suite</p>
-                <span className="text-xs font-semibold text-orange-400">+{platformConfig.streakBonusPerDay.toFixed(2)} TON/jour</span>
-              </div>
-              <p className="text-[10px] text-slate-500 mt-0.5">
-                {nextMilestone
-                  ? `Palier Jour ${nextMilestone.day} → +${nextMilestone.bonus.toFixed(2)} GRAM bonus`
-                  : '🏆 Tous les paliers débloqués !'}
-              </p>
-            </div>
-          </div>
-          {/* Progress bar */}
-          <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
-            <div
-              className="h-full rounded-full bg-gradient-to-r from-orange-500 to-amber-400 transition-all duration-500"
-              style={{ width: `${streakPct}%` }}
-            />
-          </div>
-          {nextMilestone && (
-            <div className="flex justify-between mt-1">
-              <span className="text-[9px] text-slate-600">Jour {prevMilestoneDay || 1}</span>
-              <span className="text-[9px] text-slate-600">Jour {nextMilestone.day}</span>
-            </div>
-          )}
-        </div>
-      )}
-
       {/* Referral invite banner */}
       <button
         onClick={() => setMiniAppPage('referral')}
@@ -206,7 +144,7 @@ export const MiniAppDashboard: React.FC = () => {
           </p>
         </div>
         <div className="shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-lg bg-purple-500/20 border border-purple-500/30">
-          <span className="text-xs font-bold text-purple-300">+{platformConfig.referralBonusSignup.toFixed(0)} TON</span>
+          <span className="text-xs font-bold text-purple-300">+{platformConfig.referralBonusSignup.toFixed(0)} GRAM</span>
           <ChevronRight className="w-3.5 h-3.5 text-purple-400" />
         </div>
       </button>
@@ -294,7 +232,7 @@ export const MiniAppDashboard: React.FC = () => {
                     {isPromoActive && <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 text-[9px] font-bold flex-shrink-0"><Flame className="w-2.5 h-2.5" />×{task.promotion!.multiplier}</span>}
                   </div>
                 </div>
-                <span className="text-sm font-bold text-emerald-400 flex-shrink-0">+{displayReward.toFixed(2)} TON</span>
+                <span className="text-sm font-bold text-emerald-400 flex-shrink-0">+{displayReward.toFixed(2)} GRAM</span>
               </div>
             );
           })}

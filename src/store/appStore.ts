@@ -555,9 +555,13 @@ const _defaultTasks: Task[] = [
   { id: '1', type: 'daily', title: 'Mission Quotidienne', description: 'Connectez-vous chaque jour pour gagner', reward: 0.10, rewardType: 'main', cooldownHours: 24, isActive: true, totalCompletions: 0, createdAt: new Date().toISOString(), verificationMethod: 'auto', priority: 0, maxPerUser: 1, icon: '📅', createdByUserId: 'platform' },
   { id: '2', type: 'join_channel', title: 'Rejoindre TonCipher Officiel', description: 'Abonnez-vous à notre canal officiel pour rester informé', reward: 0.0425, rewardType: 'main', targetUrl: 'https://t.me/TonCipher_Official', isActive: true, totalCompletions: 0, maxCompletions: 1000, createdAt: new Date(Date.now() - 5 * 86400000).toISOString(), verificationMethod: 'auto', priority: 8, icon: '📢', createdByUserId: 'platform' },
   { id: '3', type: 'join_channel', title: 'Rejoindre TonCipher Paiements', description: 'Rejoignez notre canal de suivi des paiements', reward: 0.0425, rewardType: 'main', targetUrl: 'https://t.me/TonCipher_Pays', isActive: true, totalCompletions: 0, maxCompletions: 500, createdAt: new Date(Date.now() - 3 * 86400000).toISOString(), verificationMethod: 'auto', priority: 7, icon: '💸', createdByUserId: 'platform' },
-  { id: '4', type: 'start_bot', title: 'Démarrer @TonCipher_bot', description: 'Lancez le bot TonCipher et cliquez sur Start', reward: 0.0212, rewardType: 'main', targetUrl: 'https://t.me/TonCipher_bot', isActive: true, totalCompletions: 0, maxCompletions: 200, createdAt: new Date(Date.now() - 1 * 86400000).toISOString(), verificationMethod: 'auto', priority: 5, icon: '🤖', createdByUserId: 'platform' },
+  { id: '4', type: 'start_bot', title: 'Démarrer @TonCipher_bot', description: 'Ouvrez le bot TonCipher et appuyez sur le bouton Start', reward: 0.0212, rewardType: 'main', targetUrl: 'https://t.me/TonCipher_bot', isActive: true, totalCompletions: 0, maxCompletions: 200, createdAt: new Date(Date.now() - 1 * 86400000).toISOString(), verificationMethod: 'auto', priority: 5, icon: '🤖', createdByUserId: 'platform' },
   { id: '5', type: 'special', title: '🏆 Challenge Parrainage', description: 'Invitez 3 amis à rejoindre TonCipher. La vérification est automatique dès que vous avez 3 filleuls.', reward: 1.50, rewardType: 'main', isActive: true, totalCompletions: 0, createdAt: new Date(Date.now() - 2 * 86400000).toISOString(), verificationMethod: 'auto_referral', requiredCount: 3, priority: 10, isPromoTask: true, icon: '🏆', createdByUserId: 'platform' },
   { id: '6', type: 'special', title: '📢 Partage Communauté', description: 'Partagez TonCipher dans un groupe Telegram de 100+ membres. Soumettez un lien ou une description de votre preuve — l\'équipe validera sous 24h.', reward: 0.80, rewardType: 'main', isActive: true, totalCompletions: 0, createdAt: new Date(Date.now() - 1 * 86400000).toISOString(), verificationMethod: 'manual', priority: 9, isPromoTask: true, icon: '📢', createdByUserId: 'platform' },
+  { id: '7', type: 'watch_video', title: 'Regarder notre vidéo YouTube', description: 'Regardez la vidéo pendant au moins 20 secondes pour valider', reward: 0.0300, rewardType: 'main', targetUrl: '', isActive: false, totalCompletions: 0, maxCompletions: 500, createdAt: new Date(Date.now() - 4 * 86400000).toISOString(), verificationMethod: 'auto', priority: 6, icon: '▶️', createdByUserId: 'platform' },
+  { id: '8', type: 'social', title: 'Nous suivre sur X (Twitter)', description: 'Suivez notre compte officiel sur X et restez informé des dernières news', reward: 0.0200, rewardType: 'main', targetUrl: '', isActive: false, totalCompletions: 0, maxCompletions: 800, createdAt: new Date(Date.now() - 3 * 86400000).toISOString(), verificationMethod: 'auto', priority: 4, icon: '🐦', createdByUserId: 'platform' },
+  { id: '9', type: 'social', title: 'Nous suivre sur Instagram', description: 'Suivez notre compte Instagram pour voir nos dernières publications', reward: 0.0200, rewardType: 'main', targetUrl: '', isActive: false, totalCompletions: 0, maxCompletions: 800, createdAt: new Date(Date.now() - 3 * 86400000).toISOString(), verificationMethod: 'auto', priority: 3, icon: '📸', createdByUserId: 'platform' },
+  { id: '10', type: 'social', title: 'Nous suivre sur TikTok', description: 'Abonnez-vous à notre TikTok et regardez nos vidéos exclusives', reward: 0.0200, rewardType: 'main', targetUrl: '', isActive: false, totalCompletions: 0, maxCompletions: 800, createdAt: new Date(Date.now() - 2 * 86400000).toISOString(), verificationMethod: 'auto', priority: 2, icon: '🎵', createdByUserId: 'platform' },
 ];
 // Merge saved tasks (user/admin-created) with defaults; defaults fill any missing IDs
 const mockTasks: Task[] = (() => {
@@ -1106,48 +1110,19 @@ export const useAppStore = create<AppState>((set, get) => ({
   }),
 
   checkLoginStreak: () => {
-    const state = get();
     const today = new Date().toISOString().slice(0, 10);
     const lastDate = localStorage.getItem('tc_streak_date');
-    if (lastDate === today) return; // already processed today
+    if (lastDate === today) return;
 
     const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
-    const MILESTONES: Record<number, number> = Object.fromEntries(
-      (state.platformConfig.streakMilestones ?? []).map(m => [m.day, m.bonus])
-    );
-
-    const newStreak = lastDate === yesterday ? (state.currentUser.loginStreak ?? 0) + 1 : 1;
-    // No base reward on day 1 — reward starts day 2 to encourage return
-    const base = newStreak > 1 ? state.platformConfig.streakBonusPerDay : 0;
-    const milestoneBonus = MILESTONES[newStreak] ?? 0;
-    const totalReward = +(base + milestoneBonus).toFixed(6);
+    const newStreak = lastDate === yesterday ? (get().currentUser.loginStreak ?? 0) + 1 : 1;
 
     localStorage.setItem('tc_streak_date', today);
 
-    set(s => {
-      const upd = {
-        loginStreak:   newStreak,
-        balanceMain:   s.currentUser.balanceMain   + totalReward,
-        totalEarnings: s.currentUser.totalEarnings + totalReward,
-        todayEarnings: s.currentUser.todayEarnings + totalReward,
-      };
-      return {
-        currentUser: { ...s.currentUser, ...upd },
-        users: s.users.map(u => u.id === s.currentUser.id ? { ...u, ...upd } : u),
-      };
-    });
-
-    if (totalReward > 0) {
-      const isMilestone = milestoneBonus > 0;
-      get().addNotification({
-        type: 'reward',
-        title: isMilestone
-          ? `🏆 Palier Jour ${newStreak} atteint !`
-          : `🔥 Streak Jour ${newStreak}`,
-        message: `+${totalReward.toFixed(isMilestone ? 2 : 3)} TON${isMilestone ? ` — bonus palier inclus !` : ' pour votre connexion quotidienne.'}`,
-        isRead: false,
-      });
-    }
+    set(s => ({
+      currentUser: { ...s.currentUser, loginStreak: newStreak },
+      users: s.users.map(u => u.id === s.currentUser.id ? { ...u, loginStreak: newStreak } : u),
+    }));
   },
 
   completeTask: (taskId) => {
