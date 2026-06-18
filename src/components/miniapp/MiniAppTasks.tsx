@@ -693,54 +693,81 @@ export const MiniAppTasks: React.FC = () => {
             </button>
           )}
 
-          {/* TOO EARLY */}
+          {/* TOO EARLY — prominent countdown */}
           {phase === 'too_early' && (
             <div>
               <div style={{
-                display: 'flex', alignItems: 'center', gap: 10,
-                padding: '10px 12px', borderRadius: 12, marginBottom: 8,
-                background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)',
+                borderRadius: 14, marginBottom: 8, overflow: 'hidden',
+                background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.22)',
               }}>
-                {/* Circular countdown */}
-                <div style={{ position: 'relative', width: 35, height: 35, flexShrink: 0 }}>
-                  <svg width="35" height="35" viewBox="0 0 35 35" style={{ transform: 'rotate(-90deg)' }}>
-                    <circle cx="17.5" cy="17.5" r="14" fill="none" stroke="rgba(245,158,11,0.15)" strokeWidth="2.5" />
-                    <circle
-                      cx="17.5" cy="17.5" r="14" fill="none" stroke="#f59e0b" strokeWidth="2.5"
-                      strokeDasharray={`${2 * Math.PI * 14}`}
-                      strokeDashoffset={`${2 * Math.PI * 14 * (remainingSec / totalSec)}`}
-                      strokeLinecap="round"
-                    />
-                  </svg>
-                  <span style={{
-                    position: 'absolute', inset: 0,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 9, fontWeight: 800, color: '#f59e0b',
-                  }}>{remainingSec}s</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px' }}>
+                  {/* Large circular countdown */}
+                  <div style={{ position: 'relative', width: 58, height: 58, flexShrink: 0 }}>
+                    <svg width="58" height="58" viewBox="0 0 58 58" style={{ transform: 'rotate(-90deg)' }}>
+                      <circle cx="29" cy="29" r="25" fill="none" stroke="rgba(245,158,11,0.12)" strokeWidth="3.5" />
+                      <circle
+                        cx="29" cy="29" r="25" fill="none"
+                        stroke={remainingSec === 0 ? '#34d399' : '#f59e0b'} strokeWidth="3.5"
+                        strokeDasharray={`${2 * Math.PI * 25}`}
+                        strokeDashoffset={`${2 * Math.PI * 25 * (remainingSec / Math.max(totalSec, 1))}`}
+                        strokeLinecap="round"
+                        style={{ transition: 'stroke-dashoffset 0.9s linear, stroke 0.3s' }}
+                      />
+                    </svg>
+                    <div style={{
+                      position: 'absolute', inset: 0,
+                      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                    }}>
+                      <span style={{ fontSize: remainingSec >= 100 ? 13 : 17, fontWeight: 900, color: remainingSec === 0 ? '#34d399' : '#f59e0b', lineHeight: 1 }}>
+                        {remainingSec === 0 ? '✓' : remainingSec}
+                      </span>
+                      {remainingSec > 0 && (
+                        <span style={{ fontSize: 7, fontWeight: 700, color: 'rgba(245,158,11,0.55)', letterSpacing: '0.08em', marginTop: 1 }}>SEC</span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div style={{ flex: 1 }}>
+                    <p style={{ fontSize: 12, fontWeight: 700, color: '#fbbf24', margin: 0, marginBottom: 4 }}>
+                      {card.type === 'start_bot'
+                        ? 'Restez dans le bot…'
+                        : card.type === 'watch_video'
+                        ? 'Regardez la vidéo…'
+                        : card.type === 'social'
+                        ? 'Effectuez l\'action…'
+                        : `Rejoignez le ${card.type === 'join_channel' ? 'canal' : 'groupe'}…`}
+                    </p>
+                    {remainingSec > 0 ? (
+                      <p style={{ fontSize: 10, color: '#92400e', margin: 0 }}>
+                        Vérification dans <strong style={{ color: '#f59e0b' }}>{remainingSec}s</strong>
+                      </p>
+                    ) : (
+                      <p style={{ fontSize: 10, fontWeight: 700, color: '#34d399', margin: 0 }}>
+                        ✓ Prêt — cliquez sur Vérifier
+                      </p>
+                    )}
+                  </div>
                 </div>
-                <div style={{ flex: 1 }}>
-                  <p style={{ fontSize: 11, color: '#fbbf24', fontWeight: 600, margin: 0, marginBottom: 2 }}>
-                    {card.type === 'start_bot'
-                      ? 'Restez dans le bot au moins 30s'
-                      : card.type === 'watch_video'
-                      ? 'Regardez la vidéo puis revenez'
-                      : card.type === 'social'
-                      ? 'Effectuez l\'action puis revenez'
-                      : `Rejoignez le ${card.type === 'join_channel' ? 'canal' : 'groupe'} puis revenez`}
-                  </p>
-                  <p style={{ fontSize: 10, color: '#92400e', margin: 0 }}>
-                    Vérification disponible dans {remainingSec}s
-                  </p>
+
+                {/* Progress bar */}
+                <div style={{ height: 2, background: 'rgba(245,158,11,0.1)' }}>
+                  <div style={{
+                    height: '100%',
+                    background: remainingSec === 0 ? '#34d399' : 'linear-gradient(90deg, #f59e0b, #fbbf24)',
+                    width: `${((totalSec - remainingSec) / Math.max(totalSec, 1)) * 100}%`,
+                    transition: 'width 0.9s linear, background 0.3s',
+                  }} />
                 </div>
               </div>
+
               <div style={{ display: 'flex', gap: 8 }}>
                 {card.targetUrl && (
                   <button
                     onClick={() => handleJoin(card)}
                     style={{
-                      flex: 1, padding: '9px 0', borderRadius: 12,
-                      background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
-                      color: '#94a3b8', fontSize: 11, fontWeight: 600,
+                      flex: 1, padding: '10px 0', borderRadius: 12,
+                      background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)',
+                      color: '#64748b', fontSize: 11, fontWeight: 600,
                       display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
                       cursor: 'pointer',
                     }}
@@ -752,18 +779,18 @@ export const MiniAppTasks: React.FC = () => {
                   disabled={remainingSec > 0}
                   onClick={remainingSec === 0 ? () => void handleVerify(card) : undefined}
                   style={{
-                    flex: 2, padding: '9px 0', borderRadius: 12,
-                    background: remainingSec > 0 ? 'rgba(245,158,11,0.08)' : 'rgba(59,130,246,0.15)',
-                    border: remainingSec > 0 ? '1px solid rgba(245,158,11,0.2)' : '1px solid rgba(59,130,246,0.35)',
-                    color: remainingSec > 0 ? '#f59e0b' : '#60a5fa',
-                    fontSize: 11, fontWeight: 700,
-                    opacity: remainingSec > 0 ? 0.6 : 1,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+                    flex: 2, padding: '10px 0', borderRadius: 12,
+                    background: remainingSec > 0 ? 'rgba(245,158,11,0.07)' : 'rgba(59,130,246,0.18)',
+                    border: remainingSec > 0 ? '1px solid rgba(245,158,11,0.18)' : '1px solid rgba(59,130,246,0.4)',
+                    color: remainingSec > 0 ? 'rgba(245,158,11,0.5)' : '#60a5fa',
+                    fontSize: 12, fontWeight: 700,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                     cursor: remainingSec > 0 ? 'not-allowed' : 'pointer',
+                    transition: 'all 0.3s',
                   }}
                 >
-                  <ShieldCheck style={{ width: 12, height: 12 }} />
-                  {remainingSec > 0 ? `Vérifier (${remainingSec}s)` : 'Vérifier'}
+                  <ShieldCheck style={{ width: 13, height: 13 }} />
+                  {remainingSec > 0 ? `Vérifier dans ${remainingSec}s` : 'Vérifier maintenant'}
                 </button>
               </div>
             </div>
@@ -774,27 +801,28 @@ export const MiniAppTasks: React.FC = () => {
             <button
               onClick={() => void handleVerify(card)}
               style={{
-                width: '100%', padding: '10px 0', borderRadius: 12,
-                background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.35)',
+                width: '100%', padding: '11px 0', borderRadius: 12,
+                background: 'linear-gradient(135deg, rgba(59,130,246,0.2), rgba(99,102,241,0.2))',
+                border: '1px solid rgba(59,130,246,0.4)',
                 color: '#60a5fa', fontSize: 12, fontWeight: 700,
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                 cursor: 'pointer',
               }}
             >
-              <ShieldCheck style={{ width: 14, height: 14 }} /> Vérifier
+              <ShieldCheck style={{ width: 14, height: 14 }} /> Vérifier maintenant
             </button>
           )}
 
           {/* NOT SUBSCRIBED */}
           {notSubbed && (
-            <div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <div style={{
-                display: 'flex', alignItems: 'center', gap: 8,
-                padding: '8px 10px', borderRadius: 10, marginBottom: 8,
-                background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.2)',
+                display: 'flex', alignItems: 'flex-start', gap: 8,
+                padding: '10px 12px', borderRadius: 12,
+                background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.22)',
               }}>
-                <AlertCircle style={{ width: 13, height: 13, color: '#f87171', flexShrink: 0 }} />
-                <p style={{ fontSize: 10, color: '#f87171', margin: 0 }}>
+                <AlertCircle style={{ width: 14, height: 14, color: '#f87171', flexShrink: 0, marginTop: 1 }} />
+                <p style={{ fontSize: 11, color: '#f87171', margin: 0, lineHeight: 1.4 }}>
                   {notSubbedMsg}
                 </p>
               </div>
@@ -803,9 +831,9 @@ export const MiniAppTasks: React.FC = () => {
                   <button
                     onClick={() => handleJoin(card)}
                     style={{
-                      flex: 1, padding: '9px 0', borderRadius: 12,
-                      background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
-                      color: '#94a3b8', fontSize: 11, fontWeight: 600,
+                      flex: 1, padding: '10px 0', borderRadius: 12,
+                      background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)',
+                      color: '#64748b', fontSize: 11, fontWeight: 600,
                       display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
                       cursor: 'pointer',
                     }}
@@ -816,14 +844,14 @@ export const MiniAppTasks: React.FC = () => {
                 <button
                   onClick={() => void handleVerify(card)}
                   style={{
-                    flex: 2, padding: '9px 0', borderRadius: 12,
+                    flex: 2, padding: '10px 0', borderRadius: 12,
                     background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.35)',
                     color: '#60a5fa', fontSize: 11, fontWeight: 700,
                     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
                     cursor: 'pointer',
                   }}
                 >
-                  <ShieldCheck style={{ width: 12, height: 12 }} /> Vérifier
+                  <ShieldCheck style={{ width: 12, height: 12 }} /> Réessayer
                 </button>
               </div>
             </div>
@@ -833,11 +861,15 @@ export const MiniAppTasks: React.FC = () => {
           {phase === 'verifying' && (
             <div style={{
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-              padding: '10px 0', borderRadius: 12,
-              background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.2)',
+              padding: '11px 0', borderRadius: 12,
+              background: 'rgba(59,130,246,0.07)', border: '1px solid rgba(59,130,246,0.18)',
             }}>
               <Loader2 style={{ width: 14, height: 14, color: '#60a5fa', animation: 'spin 1s linear infinite' }} />
-              <span style={{ fontSize: 12, fontWeight: 600, color: '#60a5fa' }}>Vérification...</span>
+              <span style={{ fontSize: 12, fontWeight: 600, color: '#60a5fa' }}>
+                {card.type === 'watch_video' ? 'Vérification YouTube…'
+                  : card.type === 'social' ? 'Vérification réseau social…'
+                  : 'Vérification Telegram…'}
+              </span>
             </div>
           )}
 
@@ -845,22 +877,28 @@ export const MiniAppTasks: React.FC = () => {
           {phase === 'completing' && (
             <div style={{
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-              padding: '10px 0', borderRadius: 12,
-              background: 'rgba(52,211,153,0.08)', border: '1px solid rgba(52,211,153,0.2)',
+              padding: '11px 0', borderRadius: 12,
+              background: 'rgba(52,211,153,0.07)', border: '1px solid rgba(52,211,153,0.18)',
             }}>
               <Loader2 style={{ width: 14, height: 14, color: '#34d399', animation: 'spin 1s linear infinite' }} />
-              <span style={{ fontSize: 12, fontWeight: 600, color: '#34d399' }}>Crédit en cours...</span>
+              <span style={{ fontSize: 12, fontWeight: 600, color: '#34d399' }}>
+                Crédit de <strong>+{displayReward.toFixed(4)} GRAM</strong> en cours…
+              </span>
             </div>
           )}
 
           {/* DONE */}
           {phase === 'done' && (
             <div style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-              padding: '6px 0',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+              padding: '10px 14px', borderRadius: 12,
+              background: 'rgba(52,211,153,0.07)', border: '1px solid rgba(52,211,153,0.2)',
             }}>
               <TaskDoneCheck />
-              <span style={{ fontSize: 13, fontWeight: 700, color: '#34d399' }}>Récompense créditée !</span>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#34d399' }}>Récompense créditée !</div>
+                <div style={{ fontSize: 12, fontWeight: 800, color: '#4ade80' }}>+{displayReward.toFixed(4)} GRAM</div>
+              </div>
             </div>
           )}
         </div>
@@ -870,7 +908,7 @@ export const MiniAppTasks: React.FC = () => {
 
   // ── Render ───────────────────────────────────────────────────────────────────
 
-  const totalAvailable = allCards.length;
+  const totalAvailable = allCards.length + promoTasks.length;
 
   const getFilteredCards = (): CardTask[] => {
     switch (activeFilter) {
