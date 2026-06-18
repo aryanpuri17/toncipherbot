@@ -129,7 +129,7 @@ export const MiniAppProfile: React.FC = () => {
           {
             value: u.totalEarnings,
             label: 'Total gagné',
-            format: (v: number) => `${v.toFixed(2)} TON`,
+            format: (v: number) => `${v.toFixed(2)} GRAM`,
             color: 'text-white',
             accent: 'rgba(0,152,234,0.08)',
             border: 'rgba(0,152,234,0.15)',
@@ -139,7 +139,7 @@ export const MiniAppProfile: React.FC = () => {
           {
             value: u.todayEarnings,
             label: "Aujourd'hui",
-            format: (v: number) => `${v.toFixed(2)} TON`,
+            format: (v: number) => `${v.toFixed(2)} GRAM`,
             color: 'text-emerald-400',
             accent: 'rgba(16,185,129,0.08)',
             border: 'rgba(16,185,129,0.15)',

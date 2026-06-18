@@ -6,6 +6,81 @@ import {
 } from 'lucide-react';
 import { haptic } from '../../lib/haptics';
 
+// ── Platform logo SVGs ─────────────────────────────────────────────────────────
+
+const TelegramLogo: React.FC<{ size?: number }> = ({ size = 32 }) => (
+  <svg width={size} height={size} viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="50" cy="50" r="50" fill="#29B6F6"/>
+    <path fill="white" d="M14 49l16 6 6 19c.4 1.3 2 1.7 2.9.8l9-7.5 17.5 12.8c1.2.9 2.9.2 3.2-1.2L84 21c.4-1.8-1.3-3.3-3-2.6L14 46.5c-1.7.6-1.7 3 0 2.5z"/>
+  </svg>
+);
+
+const YouTubeLogo: React.FC<{ size?: number }> = ({ size = 32 }) => (
+  <svg width={size} height={size} viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+    <rect width="100" height="100" rx="22" fill="#FF0000"/>
+    <path fill="white" d="M71 36.5c-.8-3-3.2-5.4-6.2-6.2C59.5 29 50 29 50 29s-9.5 0-14.8 1.3c-3 .8-5.4 3.2-6.2 6.2C27.7 41.8 27.7 50 27.7 50s0 8.2 1.3 13.5c.8 3 3.2 5.4 6.2 6.2C40.5 71 50 71 50 71s9.5 0 14.8-1.3c3-.8 5.4-3.2 6.2-6.2 1.3-5.3 1.3-13.5 1.3-13.5s0-8.2-1.3-13.5zM44 60V40l18 10-18 10z"/>
+  </svg>
+);
+
+const XLogo: React.FC<{ size?: number }> = ({ size = 32 }) => (
+  <svg width={size} height={size} viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+    <rect width="100" height="100" rx="22" fill="#000000"/>
+    <path fill="white" d="M18 18h23l11.5 16.5L66 18h16L57.5 46 82 82H59L46 64.5 30 82H14l26-30.5L18 18zm8 7l38 48h8L34 25h-8zm35 0L28 75h-8l33-41.5L52 25h9z"/>
+  </svg>
+);
+
+const InstagramLogo: React.FC<{ size?: number }> = ({ size = 32 }) => (
+  <svg width={size} height={size} viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <linearGradient id="ig-g" x1="0%" y1="100%" x2="100%" y2="0%">
+        <stop offset="0%" stopColor="#FFDC80"/>
+        <stop offset="20%" stopColor="#FCAF45"/>
+        <stop offset="40%" stopColor="#F77737"/>
+        <stop offset="60%" stopColor="#F56040"/>
+        <stop offset="80%" stopColor="#C13584"/>
+        <stop offset="100%" stopColor="#405DE6"/>
+      </linearGradient>
+    </defs>
+    <rect width="100" height="100" rx="22" fill="url(#ig-g)"/>
+    <circle cx="50" cy="50" r="19" fill="none" stroke="white" strokeWidth="6"/>
+    <circle cx="72" cy="28" r="5" fill="white"/>
+  </svg>
+);
+
+const TikTokLogo: React.FC<{ size?: number }> = ({ size = 32 }) => (
+  <svg width={size} height={size} viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+    <rect width="100" height="100" rx="22" fill="#010101"/>
+    <path fill="#69C9D0" d="M63 20c1 8 7 13 16 14v10c-6 0-11-2-16-6v28c0 13-10 24-23 24S17 79 17 66s10-24 23-24c2 0 3 .2 5 .5v11C43 53 42 53 40 53c-7 0-13 6-13 13s6 13 13 13 13-6 13-13V20h10z"/>
+    <path fill="#EE1D52" d="M60 17c2 9 8 15 17 16v9c-5 0-10-2-15-5v28c0 14-11 25-24 25S14 78 14 64s11-25 24-25c2 0 4 .2 5 .4V54c-2-.3-3-.4-5-.4-8 0-14 7-14 15s6 14 14 14 14-6 14-15V17h8z"/>
+    <path fill="white" d="M61 18c2 9 8 15 17 16v9c-5 0-10-2-14-5v28c0 14-11 25-24 25S16 80 16 66s11-25 24-25c2 0 3 .2 5 .4V52c-1-.2-3-.3-5-.3-8 0-14 7-14 15s6 14 14 14 14-6 14-14V18h7z"/>
+  </svg>
+);
+
+const DiscordLogo: React.FC<{ size?: number }> = ({ size = 32 }) => (
+  <svg width={size} height={size} viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+    <rect width="100" height="100" rx="22" fill="#5865F2"/>
+    <path fill="white" d="M74 29c-7-3-14-4-14-4l-1 2c5 1 9 3 14 6-6-3-13-6-23-6s-17 3-23 6c5-3 9-5 14-6l-1-2s-7 1-14 4C19 44 16 61 16 61c8 9 20 9 20 9l4-5c-6-2-11-5-14-9 6 4 15 7 24 7s18-3 24-7c-3 4-8 7-14 9l4 5s12 0 20-9c0 0-3-17-10-32zm-31 27c-3 0-6-3-6-7s3-7 6-7 6 3 6 7-3 7-6 7zm21 0c-3 0-6-3-6-7s3-7 6-7 6 3 6 7-3 7-6 7z"/>
+  </svg>
+);
+
+function getPlatformLogo(url: string, type: string, size = 30): React.ReactNode {
+  const u = (url ?? '').toLowerCase();
+  if (type === 'join_channel' || type === 'join_group' || type === 'start_bot' ||
+      u.includes('t.me/') || u.includes('telegram.me') || u.includes('telegram.org'))
+    return <TelegramLogo size={size} />;
+  if (u.includes('youtube.com') || u.includes('youtu.be'))
+    return <YouTubeLogo size={size} />;
+  if (u.includes('twitter.com') || u.includes('x.com'))
+    return <XLogo size={size} />;
+  if (u.includes('instagram.com'))
+    return <InstagramLogo size={size} />;
+  if (u.includes('tiktok.com'))
+    return <TikTokLogo size={size} />;
+  if (u.includes('discord.gg') || u.includes('discord.com'))
+    return <DiscordLogo size={size} />;
+  return null;
+}
+
 const TaskDoneCheck: React.FC = () => (
   <div className="relative w-9 h-9 flex items-center justify-center flex-shrink-0">
     {/* Ring pulse */}
@@ -304,7 +379,7 @@ export const MiniAppTasks: React.FC = () => {
     creditReferralBonus(reward);
     state.addNotification({
       type: 'reward', title: 'Tâche complétée !',
-      message: `+${reward.toFixed(4)} TON crédité.`, isRead: false,
+      message: `+${reward.toFixed(4)} GRAM crédité.`, isRead: false,
     });
     setCompletedApiTaskIds(prev => [...prev, taskId]);
     setApiTasks(prev => prev.filter(t => t.id !== taskId));
@@ -523,20 +598,17 @@ export const MiniAppTasks: React.FC = () => {
               background: avatarBg ? `${avatarBg}33` : bg,
               border: `1px solid ${avatarBg ?? glow}30`,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
+              overflow: 'hidden',
             }}>
               {isDone ? (
                 <CheckCircle style={{ width: 22, height: 22, color: '#34d399' }} />
-              ) : card.icon ? (
-                <span style={{ fontSize: 22 }}>{card.icon}</span>
-              ) : avatarBg ? (
-                <span style={{ fontSize: 18, fontWeight: 700, color: avatarBg }}>
-                  {card.title.charAt(0).toUpperCase()}
-                </span>
-              ) : (
-                <span style={{ color: glow }}>
-                  {React.cloneElement(config.icon as React.ReactElement<{ style?: React.CSSProperties }>, { style: { width: 22, height: 22 } })}
-                </span>
-              )}
+              ) : (() => {
+                const logo = getPlatformLogo(card.targetUrl ?? '', card.type, 36);
+                if (logo) return logo;
+                if (card.icon) return <span style={{ fontSize: 22 }}>{card.icon}</span>;
+                if (avatarBg) return <span style={{ fontSize: 18, fontWeight: 700, color: avatarBg }}>{card.title.charAt(0).toUpperCase()}</span>;
+                return <span style={{ color: glow }}>{React.cloneElement(config.icon as React.ReactElement<{ style?: React.CSSProperties }>, { style: { width: 22, height: 22 } })}</span>;
+              })()}
             </div>
 
             {/* Content */}
@@ -562,7 +634,7 @@ export const MiniAppTasks: React.FC = () => {
               <div style={{ fontSize: 16, fontWeight: 800, color: card.promoMultiplier ? '#fbbf24' : '#4ade80' }}>
                 +{displayReward.toFixed(4)}
               </div>
-              <div style={{ fontSize: 9, color: '#475569', marginTop: 1 }}>TON</div>
+              <div style={{ fontSize: 9, color: '#475569', marginTop: 1 }}>GRAM</div>
               {card.promoMultiplier && (
                 <div style={{ fontSize: 10, color: '#475569', textDecoration: 'line-through', marginTop: 2 }}>
                   +{card.reward.toFixed(4)}
@@ -813,7 +885,7 @@ export const MiniAppTasks: React.FC = () => {
               }}>
                 <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#34d399', display: 'inline-block' }} />
                 <span style={{ fontSize: 11, fontWeight: 700, color: '#34d399' }}>
-                  +{currentUser.todayEarnings.toFixed(2)} TON
+                  +{currentUser.todayEarnings.toFixed(2)} GRAM
                 </span>
               </div>
             )}
@@ -904,7 +976,7 @@ export const MiniAppTasks: React.FC = () => {
                     </div>
                     <div style={{ flexShrink: 0, textAlign: 'right' }}>
                       <div style={{ fontSize: 16, fontWeight: 800, color: '#4ade80' }}>+{task.reward.toFixed(4)}</div>
-                      <div style={{ fontSize: 9, color: '#475569', marginTop: 1 }}>TON</div>
+                      <div style={{ fontSize: 9, color: '#475569', marginTop: 1 }}>GRAM</div>
                     </div>
                   </div>
 
@@ -1014,7 +1086,7 @@ export const MiniAppTasks: React.FC = () => {
                   </div>
                   <div style={{ flexShrink: 0, textAlign: 'right' }}>
                     <div style={{ fontSize: 16, fontWeight: 800, color: '#4ade80' }}>+{task.reward.toFixed(4)}</div>
-                    <div style={{ fontSize: 9, color: '#475569', marginTop: 1 }}>TON</div>
+                    <div style={{ fontSize: 9, color: '#475569', marginTop: 1 }}>GRAM</div>
                   </div>
                 </div>
               </div>

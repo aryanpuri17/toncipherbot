@@ -158,7 +158,7 @@ export const MiniAppReferral: React.FC = () => {
   };
 
   const handleShare = () => {
-    const msg = `🎯 Rejoins TonCipher et gagne du TON en complétant des tâches simples!\n${referralLink}`;
+    const msg = `🎯 Rejoins TonCipher et gagne du GRAM en complétant des tâches simples!\n${referralLink}`;
     const tg = (window as unknown as { Telegram?: { WebApp?: { openTelegramLink?: (u: string) => void } } }).Telegram?.WebApp;
     const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(referralLink)}&text=${encodeURIComponent(msg)}`;
     if (tg?.openTelegramLink) tg.openTelegramLink(shareUrl);
@@ -216,7 +216,7 @@ export const MiniAppReferral: React.FC = () => {
               <p className="text-[#7DD4FC] text-xs font-medium uppercase tracking-widest mb-1">Programme de parrainage</p>
               <h2 className="text-2xl font-bold text-white mb-4">
                 Invitez vos amis<br />
-                <span style={{ color: '#0098EA' }}>gagnez du TON</span> 💎
+                <span style={{ color: '#0098EA' }}>gagnez du GRAM</span> 💎
               </h2>
               <div className="grid grid-cols-2 gap-2">
                 <div className="rounded-xl bg-white/10 px-3 py-2.5">
@@ -225,11 +225,11 @@ export const MiniAppReferral: React.FC = () => {
                 </div>
                 <div className="rounded-xl bg-white/10 px-3 py-2.5">
                   <p className="text-2xl font-bold text-emerald-300 leading-none">{totalEarned.toFixed(2)}</p>
-                  <p className="text-[11px] text-blue-200 mt-0.5">TON gagnés</p>
+                  <p className="text-[11px] text-blue-200 mt-0.5">GRAM gagnés</p>
                 </div>
                 <div className="rounded-xl bg-white/10 px-3 py-2.5">
                   <p className="text-xl font-bold text-amber-300 leading-none">+{SIGNUP_BONUS.toFixed(2)}</p>
-                  <p className="text-[11px] text-blue-200 mt-0.5">TON / ami inscrit</p>
+                  <p className="text-[11px] text-blue-200 mt-0.5">GRAM / ami inscrit</p>
                 </div>
                 <div className="rounded-xl bg-white/10 px-3 py-2.5">
                   <p className="text-xl font-bold text-sky-300 leading-none">{DEPOSIT_PCT}%</p>
@@ -275,7 +275,7 @@ export const MiniAppReferral: React.FC = () => {
               {[
                 { icon: <Share2 className="w-4 h-4" />, color: 'bg-blue-500/20 text-blue-400',     label: 'Partagez',      sub: 'Envoyez votre lien à un ami' },
                 { icon: <Users  className="w-4 h-4" />, color: 'bg-purple-500/20 text-purple-400', label: "Il s'inscrit",  sub: 'Via votre lien Telegram' },
-                { icon: <Gift   className="w-4 h-4" />, color: 'bg-emerald-500/20 text-emerald-400', label: 'Vous gagnez', sub: `+${SIGNUP_BONUS.toFixed(2)} TON + ${DEPOSIT_PCT}% tâches` },
+                { icon: <Gift   className="w-4 h-4" />, color: 'bg-emerald-500/20 text-emerald-400', label: 'Vous gagnez', sub: `+${SIGNUP_BONUS.toFixed(2)} GRAM + ${DEPOSIT_PCT}% tâches` },
               ].map((step, i) => (
                 <React.Fragment key={i}>
                   <div className="flex flex-col items-center text-center flex-1 gap-2">
@@ -313,7 +313,7 @@ export const MiniAppReferral: React.FC = () => {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between mb-1.5">
                           <p className="text-sm font-semibold text-white">{milestone.description}</p>
-                          <span className="text-sm font-bold text-emerald-400 shrink-0 ml-2">+{milestone.reward.toFixed(2)} TON</span>
+                          <span className="text-sm font-bold text-emerald-400 shrink-0 ml-2">+{milestone.reward.toFixed(2)} GRAM</span>
                         </div>
                         <div className="flex items-center gap-2">
                           <div className="flex-1 h-1.5 rounded-full bg-white/10 overflow-hidden">

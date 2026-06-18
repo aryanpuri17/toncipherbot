@@ -1298,7 +1298,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (state.currentUser.balanceMain < amount) return { success: false, error: 'Solde insuffisant' };
     const maxWithdrawable = state.currentUser.balanceMain - state.currentUser.taskCredits;
     if (amount > maxWithdrawable) {
-      return { success: false, error: `${state.currentUser.taskCredits.toFixed(2)} TON sont réservés à la création de campagnes et ne peuvent pas être retirés.` };
+      return { success: false, error: `${state.currentUser.taskCredits.toFixed(2)} GRAM sont réservés à la création de campagnes et ne peuvent pas être retirés.` };
     }
     if (!address || address.trim().length < 20) return { success: false, error: 'Adresse invalide (trop courte)' };
     // Per-user daily withdrawal limit
@@ -1556,7 +1556,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       users: s.users.map(u => u.id === state.currentUser.id ? { ...u, ...balanceUpdate } : u),
     }));
     get().addTransaction({ userId: state.currentUser.id, type: 'bonus', amount: earned, currency: 'TON', status: 'completed', completedAt: new Date().toISOString() });
-    get().addNotification({ userId: state.currentUser.id, type: 'reward', title: 'Code promo activé! 🎉', message: `+${earned.toFixed(2)} TON crédité via le code "${promo.code}".`, isRead: false });
+    get().addNotification({ userId: state.currentUser.id, type: 'reward', title: 'Code promo activé! 🎉', message: `+${earned.toFixed(2)} GRAM crédité via le code "${promo.code}".`, isRead: false });
     return { success: true, reward: earned };
   },
 
@@ -1606,7 +1606,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         currentUser: s.currentUser.id === submission.userId ? { ...s.currentUser, ...balanceUpdate } : s.currentUser,
       }));
       get().addTransaction({ userId: submission.userId, type: 'reward', amount: task.reward, currency: 'TON', status: 'completed', completedAt: new Date().toISOString() });
-      get().addNotification({ userId: submission.userId, type: 'reward', title: 'Tâche promo validée! 🎉', message: `+${task.reward.toFixed(2)} TON crédité pour "${task.title}".`, isRead: false });
+      get().addNotification({ userId: submission.userId, type: 'reward', title: 'Tâche promo validée! 🎉', message: `+${task.reward.toFixed(2)} GRAM crédité pour "${task.title}".`, isRead: false });
     } else if (status === 'rejected') {
       get().addNotification({ userId: submission.userId, type: 'alert', title: 'Preuve refusée', message: `Votre soumission pour "${task?.title}" a été refusée.${adminNote ? ` Motif: ${adminNote}` : ''}`, isRead: false });
     }
