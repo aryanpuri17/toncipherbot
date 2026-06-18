@@ -818,28 +818,71 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
     btnLabel = 'Prochain tour…'; btnDis = true;
   }
 
+  const isActiveCashout = phase === 'flying' && activeBet !== null && cashedOut === null;
+
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 50, background: '#080c1a', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 16px 10px', borderBottom: '1px solid #1e2847', flexShrink: 0 }}>
-        <button onClick={onBack} style={{ width: 34, height: 34, borderRadius: 10, border: 'none', background: 'rgba(255,255,255,.06)', color: '#94a3b8', fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>←</button>
-        <span style={{ flex: 1, textAlign: 'center', fontWeight: 900, fontSize: 15, color: '#f8fafc', letterSpacing: '0.08em', textTransform: 'uppercase' }}>CRASH</span>
+    <div style={{ position: 'fixed', inset: 0, zIndex: 60, background: '#080c1a', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+
+      {/* ── HEADER ── */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px 8px', borderBottom: '1px solid #1e2847', flexShrink: 0 }}>
+        <button onClick={onBack} style={{ width: 32, height: 32, borderRadius: 9, border: 'none', background: 'rgba(255,255,255,.06)', color: '#94a3b8', fontSize: 17, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>←</button>
+        <span style={{ flex: 1, textAlign: 'center', fontWeight: 900, fontSize: 14, color: '#f8fafc', letterSpacing: '0.08em', textTransform: 'uppercase' }}>CRASH</span>
         <span style={{ fontSize: 11, color: '#475569', fontWeight: 700 }}>#{roundId}</span>
       </div>
 
-      {/* History */}
-      <div style={{ display: 'flex', gap: 5, padding: '7px 14px', overflowX: 'auto', flexShrink: 0, borderBottom: '1px solid rgba(30,40,71,.5)' }}>
-        {history.length === 0 && <span style={{ fontSize: 11, color: '#334155' }}>Historique…</span>}
-        {history.slice(0, 10).map((h, i) => (
-          <span key={i} style={{ flexShrink: 0, padding: '2px 9px', borderRadius: 99, fontSize: 11, fontWeight: 800,
-            background: h < 1.5 ? 'rgba(239,68,68,.15)' : h < 5 ? 'rgba(129,140,248,.15)' : 'rgba(74,222,128,.15)',
-            color: h < 1.5 ? '#f87171' : h < 5 ? '#818cf8' : '#4ade80',
-          }}>{h.toFixed(2)}×</span>
-        ))}
+      {/* ── BET PANEL (haut — toujours visible) ── */}
+      <div style={{ flexShrink: 0, padding: '8px 12px 8px', borderBottom: '1px solid #1e2847', background: '#0a0e1c' }}>
+        {/* Ligne mise + auto */}
+        <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
+          <div style={{ flex: 1, background: '#0d1021', border: `1px solid ${isActiveCashout ? 'rgba(52,211,153,.25)' : '#1e2847'}`, borderRadius: 10, display: 'flex', alignItems: 'center', padding: '7px 12px', opacity: activeBet !== null ? 0.55 : 1, transition: 'border-color .2s' }}>
+            <input type="text" inputMode="decimal" pattern="[0-9]*[.,]?[0-9]*" value={bet} disabled={activeBet !== null}
+              onChange={e => { const v = parseFloat(e.target.value.replace(',', '.')); if (!isNaN(v)) setBet(Math.max(0.01, Math.min(50, v))); }}
+              style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: '#f8fafc', fontSize: 15, fontWeight: 700 }} />
+            <span style={{ fontSize: 11, color: '#475569' }}>TON</span>
+          </div>
+          <div style={{ width: 80, background: '#0d1021', border: '1px solid #1e2847', borderRadius: 10, display: 'flex', alignItems: 'center', padding: '6px 8px', gap: 2 }}>
+            <span style={{ fontSize: 9, color: '#475569', fontWeight: 700, flexShrink: 0 }}>AUTO×</span>
+            <input type="number" value={autoCash} placeholder="2.00" min={1.01} step={0.01}
+              onChange={e => setAutoCash(e.target.value)}
+              style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', color: '#f8fafc', fontSize: 12, fontWeight: 700 }} />
+          </div>
+        </div>
+
+        {/* Raccourcis mise */}
+        <div style={{ display: 'flex', gap: 4, marginBottom: 6 }}>
+          {[0.10, 0.50, 1.00, 5.00].map(v => (
+            <button key={v} onClick={() => setBet(v)} disabled={activeBet !== null}
+              style={{ flex: 1, padding: '5px 0', borderRadius: 8, border: `1px solid ${bet === v ? 'rgba(59,130,246,.45)' : '#1e2847'}`,
+                background: bet === v ? 'rgba(59,130,246,.2)' : 'rgba(255,255,255,.03)',
+                color: bet === v ? '#60a5fa' : '#475569', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+              {v.toFixed(2)}
+            </button>
+          ))}
+        </div>
+
+        {/* Bouton principal */}
+        <button onClick={btnFn} disabled={btnDis}
+          style={{
+            border: 'none', borderRadius: 12, fontWeight: 900, letterSpacing: '0.04em', textTransform: 'uppercase', width: '100%',
+            cursor: btnDis ? 'not-allowed' : 'pointer', opacity: btnDis ? 0.6 : 1, background: btnBg, color: btnColor,
+            padding: isActiveCashout ? '15px 0' : '13px 0',
+            fontSize: isActiveCashout ? 15 : 13,
+            animation: isActiveCashout ? 'cashoutPulse 0.9s ease-in-out infinite' : 'none',
+            transition: 'padding .15s, font-size .15s',
+          }}>
+          {btnLabel}
+        </button>
+
+        {queuedBet !== null && (
+          <div style={{ textAlign: 'center', fontSize: 10, color: '#475569', marginTop: 4 }}>
+            ✋ En attente : {queuedBet.toFixed(2)} TON ·{' '}
+            <span onClick={() => { setQueuedBet(null); queuedBetR.current = null; }} style={{ color: '#3b82f6', cursor: 'pointer' }}>Annuler</span>
+          </div>
+        )}
       </div>
 
-      {/* Graph */}
-      <div style={{ flex: '1 1 0%', minHeight: 0, position: 'relative', padding: '4px 6px 0', borderBottom: '1px solid #1e2847' }}>
+      {/* ── GRAPHE (prend tout l'espace restant) ── */}
+      <div style={{ flex: '1 1 0%', minHeight: 0, position: 'relative' }}>
         <svg width="100%" height="100%" viewBox={`0 0 ${PL + GW + 6} ${GH + PB}`} preserveAspectRatio="xMidYMid meet" style={{ display: 'block' }}>
           {yTk.map((m, i) => (
             <g key={i}>
@@ -851,42 +894,38 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
             <text key={i} x={toX(t)} y={GH + PB - 2} fontSize="7.5" fill="#334155" textAnchor="middle">{t}s</text>
           ))}
           {!isNaN(parseFloat(autoCash)) && parseFloat(autoCash) >= 1.01 && (
-            <line
-              x1={PL} x2={PL + GW}
-              y1={toY(parseFloat(autoCash))} y2={toY(parseFloat(autoCash))}
-              stroke="#fbbf24" strokeWidth="1" strokeDasharray="4,3" opacity="0.6"
-            />
+            <line x1={PL} x2={PL + GW} y1={toY(parseFloat(autoCash))} y2={toY(parseFloat(autoCash))} stroke="#fbbf24" strokeWidth="1" strokeDasharray="4,3" opacity="0.6" />
           )}
           {pathD && phase !== 'crashed' && (
             <path d={`${pathD} L ${toX(tCur).toFixed(1)},${GH} L ${PL},${GH} Z`} fill={`${lineC}12`} />
           )}
           {pathD && <path d={pathD} fill="none" stroke={lineC} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />}
           {phase === 'flying' && tEl > 0.1 && (
-            <circle cx={toX(tEl)} cy={toY(mult)} r="4" fill="#818cf8" stroke="#fff" strokeWidth="1.5" />
+            <circle cx={toX(tEl)} cy={toY(mult)} r="4" fill="#c7d2fe" stroke="#fff" strokeWidth="1.5" />
           )}
           {phase === 'crashed' && crashedAt >= 1 && (
             <circle cx={toX(tCur)} cy={toY(crashedAt)} r="5" fill="#ef4444" stroke="#fff" strokeWidth="1.5" />
           )}
         </svg>
 
-        {/* Center multiplier display */}
+        {/* Multiplicateur centré */}
         <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-55%)', textAlign: 'center', pointerEvents: 'none', animation: phase === 'crashed' ? 'crashShake 0.35s ease-out' : 'none' }}>
           {phase === 'waiting' && (
             <>
               <div style={{ fontSize: 10, color: '#475569', fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase' }}>PROCHAIN TOUR</div>
-              <div style={{ fontSize: 56, fontWeight: 900, color: '#f8fafc', lineHeight: 1 }}>{countdown}</div>
+              <div style={{ fontSize: 58, fontWeight: 900, color: '#f8fafc', lineHeight: 1 }}>{countdown}</div>
             </>
           )}
           {phase === 'flying' && (
-            <div style={{ fontSize: 50, fontWeight: 900, color: '#c7d2fe', lineHeight: 1, textShadow: '0 0 40px rgba(165,180,252,.8)' }}>
-              {mult.toFixed(2)}<span style={{ fontSize: 28 }}>×</span>
+            <div style={{ fontSize: 52, fontWeight: 900, color: '#c7d2fe', lineHeight: 1, textShadow: '0 0 40px rgba(165,180,252,.8)' }}>
+              {mult.toFixed(2)}<span style={{ fontSize: 29 }}>×</span>
             </div>
           )}
           {phase === 'crashed' && (
             <>
               <div style={{ fontSize: 11, fontWeight: 900, color: '#ef4444', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 2 }}>CRASH !</div>
-              <div style={{ fontSize: 46, fontWeight: 900, color: '#ef4444', lineHeight: 1, textShadow: '0 0 30px rgba(239,68,68,.55)' }}>
-                {crashedAt.toFixed(2)}<span style={{ fontSize: 24 }}>×</span>
+              <div style={{ fontSize: 48, fontWeight: 900, color: '#ef4444', lineHeight: 1, textShadow: '0 0 30px rgba(239,68,68,.55)' }}>
+                {crashedAt.toFixed(2)}<span style={{ fontSize: 25 }}>×</span>
               </div>
             </>
           )}
@@ -894,70 +933,38 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
             <div style={{ marginTop: 8, fontSize: 13, fontWeight: 800, color: '#4ade80' }}>✓ Encaissé ×{cashedOut.toFixed(2)}</div>
           )}
         </div>
+
         {phase === 'crashed' && (
-          <div style={{ position: 'absolute', inset: 0, background: 'rgba(239,68,68,0.15)', pointerEvents: 'none', animation: 'crashFlash 0.4s ease-out forwards', borderRadius: 0 }} />
+          <div style={{ position: 'absolute', inset: 0, background: 'rgba(239,68,68,0.15)', pointerEvents: 'none', animation: 'crashFlash 0.4s ease-out forwards' }} />
         )}
       </div>
 
-      {/* Players list */}
-      <div style={{ margin: '4px 12px 4px', background: '#0d1021', border: '1px solid #1e2847', borderRadius: 12, flexShrink: 0, maxHeight: 68, overflow: 'hidden' }}>
-        <div style={{ overflowY: 'auto', maxHeight: 68 }}>
-          {fakes.map((f, i) => (
-            <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 58px 62px', padding: '4px 12px', alignItems: 'center', borderBottom: i < fakes.length - 1 ? '1px solid rgba(30,40,71,.25)' : 'none' }}>
-              <span style={{ fontSize: 11, color: '#64748b' }}>{f.name}</span>
-              <span style={{ fontSize: 11, color: '#94a3b8', textAlign: 'right' }}>{f.bet.toFixed(2)}</span>
-              <span style={{ fontSize: 11, fontWeight: 700, textAlign: 'right',
-                color: f.cashedAt ? '#4ade80' : isCrash ? '#f87171' : '#334155' }}>
-                {f.cashedAt ? `×${f.cashedAt.toFixed(2)}` : isCrash ? 'CRASH' : '…'}
-              </span>
-            </div>
+      {/* ── JOUEURS (compact, 2 lignes visibles) ── */}
+      <div style={{ flexShrink: 0, maxHeight: 56, overflow: 'hidden', borderTop: '1px solid #1e2847' }}>
+        {fakes.slice(0, 3).map((f, i) => (
+          <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 52px 60px', padding: '3px 14px', alignItems: 'center', borderBottom: i < 2 ? '1px solid rgba(30,40,71,.2)' : 'none' }}>
+            <span style={{ fontSize: 11, color: '#64748b' }}>{f.name}</span>
+            <span style={{ fontSize: 11, color: '#94a3b8', textAlign: 'right' }}>{f.bet.toFixed(2)}</span>
+            <span style={{ fontSize: 11, fontWeight: 700, textAlign: 'right', color: f.cashedAt ? '#4ade80' : isCrash ? '#f87171' : '#334155' }}>
+              {f.cashedAt ? `×${f.cashedAt.toFixed(2)}` : isCrash ? 'CRASH' : '…'}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      {/* ── HISTORIQUE (bas, scroll horizontal) ── */}
+      <div style={{ flexShrink: 0, borderTop: '1px solid #1e2847', background: '#080c1a' }}>
+        <div style={{ display: 'flex', gap: 5, padding: '6px 14px', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+          {history.length === 0 && <span style={{ fontSize: 11, color: '#1e2847', fontStyle: 'italic' }}>Historique des tours…</span>}
+          {history.map((h, i) => (
+            <span key={i} style={{ flexShrink: 0, padding: '3px 10px', borderRadius: 99, fontSize: 11, fontWeight: 800,
+              background: h < 1.5 ? 'rgba(239,68,68,.15)' : h < 5 ? 'rgba(129,140,248,.15)' : 'rgba(74,222,128,.15)',
+              color: h < 1.5 ? '#f87171' : h < 5 ? '#818cf8' : '#4ade80',
+            }}>{h.toFixed(2)}×</span>
           ))}
         </div>
       </div>
 
-      {/* Bet panel */}
-      <div style={{ flexShrink: 0, padding: '5px 12px 18px', display: 'flex', flexDirection: 'column', gap: 6 }}>
-        <div style={{ display: 'flex', gap: 5 }}>
-          <div style={{ flex: 1, background: '#0d1021', border: '1px solid #1e2847', borderRadius: 10, display: 'flex', alignItems: 'center', padding: '8px 12px', opacity: activeBet !== null ? 0.55 : 1 }}>
-            <input type="text" inputMode="decimal" pattern="[0-9]*[.,]?[0-9]*" value={bet} disabled={activeBet !== null}
-              onChange={e => { const v = parseFloat(e.target.value.replace(',', '.')); if (!isNaN(v)) setBet(Math.max(0.01, Math.min(50, v))); }}
-              style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: '#f8fafc', fontSize: 16, fontWeight: 700 }} />
-            <span style={{ fontSize: 11, color: '#475569' }}>TON</span>
-          </div>
-          <div style={{ width: 82, background: '#0d1021', border: '1px solid #1e2847', borderRadius: 10, display: 'flex', alignItems: 'center', padding: '6px 8px', gap: 2 }}>
-            <span style={{ fontSize: 9, color: '#475569', fontWeight: 700, flexShrink: 0 }}>AUTO×</span>
-            <input type="number" value={autoCash} placeholder="2.00" min={1.01} step={0.01}
-              onChange={e => setAutoCash(e.target.value)}
-              style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', color: '#f8fafc', fontSize: 12, fontWeight: 700 }} />
-          </div>
-        </div>
-        <div style={{ display: 'flex', gap: 4 }}>
-          {[0.10, 0.50, 1.00, 5.00].map(v => (
-            <button key={v} onClick={() => setBet(v)} disabled={activeBet !== null}
-              style={{ flex: 1, padding: '5px 0', borderRadius: 8, border: `1px solid ${bet === v ? 'rgba(59,130,246,.45)' : '#1e2847'}`,
-                background: bet === v ? 'rgba(59,130,246,.2)' : 'rgba(255,255,255,.03)',
-                color: bet === v ? '#60a5fa' : '#475569', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
-              {v.toFixed(2)}
-            </button>
-          ))}
-        </div>
-        <button onClick={btnFn} disabled={btnDis}
-          style={{
-            border: 'none', borderRadius: 14, fontWeight: 900, letterSpacing: '0.04em', textTransform: 'uppercase', width: '100%',
-            cursor: btnDis ? 'not-allowed' : 'pointer', opacity: btnDis ? 0.65 : 1, background: btnBg, color: btnColor,
-            padding: (phase === 'flying' && activeBet !== null && cashedOut === null) ? '16px 0' : '14px 0',
-            fontSize: (phase === 'flying' && activeBet !== null && cashedOut === null) ? 15 : 14,
-            animation: (phase === 'flying' && activeBet !== null && cashedOut === null) ? 'cashoutPulse 0.9s ease-in-out infinite' : 'none',
-          }}>
-          {btnLabel}
-        </button>
-        {queuedBet !== null && (
-          <div style={{ textAlign: 'center', fontSize: 11, color: '#475569' }}>
-            ✋ En attente : {queuedBet.toFixed(2)} TON ·{' '}
-            <span onClick={() => { setQueuedBet(null); queuedBetR.current = null; }} style={{ color: '#3b82f6', cursor: 'pointer' }}>Annuler</span>
-          </div>
-        )}
-      </div>
     </div>
   );
 };
