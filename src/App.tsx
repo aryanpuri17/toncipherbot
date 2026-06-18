@@ -15,7 +15,6 @@ import { AdminConfig, AdminNotifications } from './components/admin/AdminConfig'
 import { ModalManager } from './components/admin/modals';
 
 // Mini App Components
-import { MiniAppOnboarding } from './components/miniapp/MiniAppOnboarding';
 import { MiniAppNav } from './components/miniapp/MiniAppNav';
 import { MiniAppDashboard } from './components/miniapp/MiniAppDashboard';
 import { MiniAppWallet, MiniAppDeposit, MiniAppWithdraw, MiniAppHistory } from './components/miniapp/MiniAppWallet';
@@ -293,30 +292,66 @@ const MiniAppHeader: React.FC = () => {
 const MiniApp: React.FC = () => {
   useDepositMonitor(); // polls TonAPI every 30s to auto-confirm pending deposits
   const miniAppPage = useAppStore(s => s.miniAppPage);
-  const [showOnboarding, setShowOnboarding] = React.useState(
-    () => !localStorage.getItem('tc_onboarded')
-  );
   return (
     <div className="mini-app-bg min-h-screen max-w-lg mx-auto relative">
-      {showOnboarding ? (
-        <MiniAppOnboarding onDone={() => setShowOnboarding(false)} />
-      ) : (
-        <>
-          <MiniAppHeader />
-          <div key={miniAppPage} className="px-4 pt-4 pb-24 page-enter">
-            <MiniAppPageContent />
-          </div>
-          <MiniAppNav />
-        </>
-      )}
+      <MiniAppHeader />
+      <div key={miniAppPage} className="px-4 pt-4 pb-24 page-enter">
+        <MiniAppPageContent />
+      </div>
+      <MiniAppNav />
     </div>
   );
 };
+
+// ── Splash screen — shown while the server wakes up / while fetching init data ──
+
+const SplashScreen: React.FC<{ visible: boolean }> = ({ visible }) => (
+  <div style={{
+    position: 'fixed', inset: 0, zIndex: 9999,
+    background: 'linear-gradient(160deg, #0f0c29 0%, #1a1a2e 50%, #16213e 100%)',
+    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+    transition: 'opacity 0.55s ease, transform 0.55s ease',
+    opacity: visible ? 1 : 0,
+    transform: visible ? 'scale(1)' : 'scale(1.05)',
+    pointerEvents: visible ? 'all' : 'none',
+  }}>
+    {/* Logo */}
+    <div style={{
+      width: 84, height: 84, borderRadius: 22, overflow: 'hidden', marginBottom: 22,
+      boxShadow: '0 0 0 1px rgba(59,130,246,0.25), 0 0 48px rgba(59,130,246,0.3)',
+      animation: 'float 3s ease-in-out infinite',
+    }}>
+      <img src="/images/logo.png" alt="TonCipher" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+    </div>
+
+    {/* Name */}
+    <h1 style={{ fontSize: 26, fontWeight: 900, color: '#fff', letterSpacing: '-0.3px', marginBottom: 5 }}>
+      TonCipher
+    </h1>
+    <p style={{ fontSize: 12, color: '#475569', marginBottom: 44, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+      Earn · Play · Win
+    </p>
+
+    {/* 3 bouncing dots */}
+    <div style={{ display: 'flex', gap: 7, alignItems: 'center' }}>
+      {[0, 1, 2].map(i => (
+        <div key={i} style={{
+          width: 7, height: 7, borderRadius: '50%', background: '#3b82f6',
+          animation: 'bounce 1.1s ease-in-out infinite',
+          animationDelay: `${i * 0.18}s`,
+        }} />
+      ))}
+    </div>
+  </div>
+);
 
 const API = '';  // same origin — calls go to toncipherbot.onrender.com
 
 export default function App() {
   const { currentView, setCurrentView, initFromTelegram, syncUserFromApi, resetDailyTasks, resetDailyRefTask, checkLoginStreak } = useAppStore();
+  // Splash screen: hide once init completes (or after 4s max so it never blocks)
+  const [splashVisible, setSplashVisible] = React.useState(true);
+  const hideSplash = React.useCallback(() => setSplashVisible(false), []);
 
   useEffect(() => {
     // Midnight reset — resets daily tasks and withdrawal counter
@@ -363,6 +398,9 @@ export default function App() {
       setCurrentView(window.location.hash === '#admin' ? 'admin' : 'miniapp');
     };
     window.addEventListener('hashchange', handleHashChange);
+
+    // Safety: hide splash after 4s regardless (if server is slow or offline)
+    const splashTimeout = setTimeout(hideSplash, 4000);
 
     void (async () => {
       const isAdminRoute = window.location.hash === '#admin';
@@ -470,23 +508,32 @@ export default function App() {
           }
         }
       }
+      // Init complete — hide the splash screen
+      clearTimeout(splashTimeout);
+      hideSplash();
     })();
 
     return () => {
+      clearTimeout(splashTimeout);
       clearInterval(configPoll);
       clearInterval(withdrawalPoll);
       appEs.close();
       document.removeEventListener('visibilitychange', onVisibleWd);
       window.removeEventListener('hashchange', handleHashChange);
     };
-  }, []);
+  }, [hideSplash]);
 
-  return currentView === 'admin' ? (
+  return (
     <>
-      <AdminPanel />
-      <ModalManager />
+      <SplashScreen visible={splashVisible} />
+      {currentView === 'admin' ? (
+        <>
+          <AdminPanel />
+          <ModalManager />
+        </>
+      ) : (
+        <MiniApp />
+      )}
     </>
-  ) : (
-    <MiniApp />
   );
 }
