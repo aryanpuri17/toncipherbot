@@ -1704,7 +1704,10 @@ type TowerDiff = 'easy' | 'medium' | 'hard';
 type TowerPhase = 'waiting' | 'playing' | 'won' | 'lost';
 
 const TOWER_FLOORS = 7;
-const TOWER_CELLS: Record<TowerDiff, number> = { easy: 4, medium: 3, hard: 2 };
+// easy: 6 cells/1 trap → P=83.3% → floor 1 ≈×1.10 (like Stake/BC.Game)
+// medium: 4 cells/1 trap → P=75%  → floor 1 ≈×1.23
+// hard:   3 cells/1 trap → P=66.7%→ floor 1 ≈×1.38
+const TOWER_CELLS: Record<TowerDiff, number> = { easy: 6, medium: 4, hard: 3 };
 const TOWER_RTP = 0.92; // 8% house edge
 const TOWER_LABEL: Record<TowerDiff, string> = { easy: 'Facile', medium: 'Moyen', hard: 'Difficile' };
 
@@ -2693,7 +2696,7 @@ const CATALOG = [
     id: 'tower' as ActiveGame,
     title: 'Tower',
     desc: 'Grimpez les étages, évitez le piège',
-    stats: 'jusqu\'à ×40 · encaissez à tout moment',
+    stats: 'jusqu\'à ×16 · encaissez à tout moment',
     emoji: '🗼',
     badge: 'NOUVEAU',
     accentFrom: '#10b981', accentTo: '#34d399',
