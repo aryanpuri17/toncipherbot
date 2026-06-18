@@ -98,6 +98,18 @@ function taskAvatarColor(name: string): string {
   return `hsl(${hue}, 60%, 45%)`;
 }
 
+// ── Color map per task type ────────────────────────────────────────────────────
+
+const COLORS: Record<string, { glow: string; bg: string }> = {
+  join_channel: { glow: '#3b82f6', bg: 'rgba(59,130,246,0.12)' },
+  join_group:   { glow: '#8b5cf6', bg: 'rgba(139,92,246,0.12)' },
+  start_bot:    { glow: '#06b6d4', bg: 'rgba(6,182,212,0.12)' },
+  daily:        { glow: '#f59e0b', bg: 'rgba(245,158,11,0.12)' },
+  special:      { glow: '#ec4899', bg: 'rgba(236,72,153,0.12)' },
+};
+
+const getColors = (type: string) => COLORS[type] ?? { glow: '#8b5cf6', bg: 'rgba(139,92,246,0.12)' };
+
 // ── Component ──────────────────────────────────────────────────────────────────
 
 export const MiniAppTasks: React.FC = () => {
@@ -209,13 +221,12 @@ export const MiniAppTasks: React.FC = () => {
     es.addEventListener('task_approved', (e: MessageEvent) => {
       try {
         const task = JSON.parse(e.data) as ApiTask;
-        // Only add if this user hasn't completed it and isn't the creator
         const myId = useAppStore.getState().currentUser.telegramId;
         setApiTasks(prev => {
           if (prev.some(t => t.id === task.id)) return prev;
           return [task, ...prev];
         });
-        void myId; // type-check used ref
+        void myId;
       } catch { /* ignore malformed */ }
     });
 
@@ -302,7 +313,6 @@ export const MiniAppTasks: React.FC = () => {
   const creditApiTask = async (taskId: string, reward: number): Promise<boolean> => {
     const telegramId = useAppStore.getState().currentUser.telegramId;
     if (!telegramId) {
-      // Dev/demo mode — no real Telegram ID, credit locally
       _creditLocally(taskId, reward);
       return true;
     }
@@ -317,12 +327,10 @@ export const MiniAppTasks: React.FC = () => {
         _creditLocally(taskId, typeof data.reward === 'number' ? data.reward : reward);
         return true;
       }
-      // Server says not a member or another error
       setPhase(taskId, 'not_subscribed');
       haptic.error();
       return false;
     } catch {
-      // Network error — credit locally so user doesn't lose progress
       _creditLocally(taskId, reward);
       return true;
     }
@@ -330,7 +338,6 @@ export const MiniAppTasks: React.FC = () => {
 
   // ── Action handlers ──────────────────────────────────────────────────────────
 
-  // Reopen URL and reset departure timer (from too_early or not_subscribed)
   const handleJoin = (card: CardTask) => {
     if (!card.targetUrl) return;
     const waitMs  = card.type === 'start_bot' ? REQUIRED_MS : CHANNEL_REQUIRED_MS;
@@ -359,7 +366,6 @@ export const MiniAppTasks: React.FC = () => {
       timerRefs.current[card.id] = setTimeout(() => {
         setPhase(card.id, 'done');
         haptic.success();
-        // Remove phase after animation so card disappears from list
         timerRefs.current[`rm_${card.id}`] = setTimeout(() => {
           setTaskStates(prev => { const n = { ...prev }; delete n[card.id]; return n; });
         }, 2000);
@@ -369,7 +375,6 @@ export const MiniAppTasks: React.FC = () => {
 
     if (card.targetUrl) openUrl(card.targetUrl);
 
-    // All external tasks require a minimum wait before verifying
     const waitMs  = card.type === 'start_bot' ? REQUIRED_MS : CHANNEL_REQUIRED_MS;
     const autoKey = `depart_auto_${card.id}`;
     if (timerRefs.current[autoKey]) { clearTimeout(timerRefs.current[autoKey]); delete timerRefs.current[autoKey]; }
@@ -384,10 +389,8 @@ export const MiniAppTasks: React.FC = () => {
   const handleVerify = async (card: CardTask) => {
     haptic.impact('light');
     setPhase(card.id, 'verifying');
-    // Brief simulated check delay for UX
     await new Promise<void>(r => setTimeout(r, 800));
 
-    // Verify departure timer
     const entry = parseDeparture(localStorage.getItem(departKey(card.id)));
     const verified = entry != null && (Date.now() - entry.ts) >= entry.ms;
 
@@ -403,7 +406,7 @@ export const MiniAppTasks: React.FC = () => {
     setPhase(card.id, 'completing');
     if (card.source === 'api') {
       const ok = await creditApiTask(card.id, card.reward);
-      if (!ok) return; // server rejected — phase already set to not_subscribed
+      if (!ok) return;
     } else {
       completeTask(card.id);
     }
@@ -438,7 +441,7 @@ export const MiniAppTasks: React.FC = () => {
       img.src = ev.target?.result as string;
     };
     reader.readAsDataURL(file);
-    e.target.value = ''; // allow re-selecting same file
+    e.target.value = '';
   };
 
   const handleSubmitProof = (taskId: string) => {
@@ -457,6 +460,10 @@ export const MiniAppTasks: React.FC = () => {
     }, 700);
   };
 
+  // ── Filter state ─────────────────────────────────────────────────────────────
+
+  const [activeFilter, setActiveFilter] = React.useState<'all' | 'daily' | 'special' | 'channel' | 'bot'>('all');
+
   // ── Card renderer ────────────────────────────────────────────────────────────
 
   const renderCard = (card: CardTask) => {
@@ -465,17 +472,17 @@ export const MiniAppTasks: React.FC = () => {
     const isCompleted = (card.source === 'platform' && completedTaskIds.includes(card.id)) ||
                         (card.source === 'api'      && completedApiTaskIds.includes(card.id));
 
-    // Hide cards that were already completed before this session (no animation pending)
     if (isCompleted && phase !== 'completing' && phase !== 'done') return null;
 
-    const isDone      = isCompleted || phase === 'done';
-    const displayReward = card.reward * (card.promoMultiplier ?? 1);
-    const avatarBg    = card.source === 'api' ? taskAvatarColor(card.title) : null;
+    const isDone         = isCompleted || phase === 'done';
+    const displayReward  = card.reward * (card.promoMultiplier ?? 1);
+    const avatarBg       = card.source === 'api' ? taskAvatarColor(card.title) : null;
+    const { glow, bg }   = getColors(card.type);
 
-    // Remaining seconds for too_early countdown
     const _dEntry = phase === 'too_early' ? parseDeparture(localStorage.getItem(departKey(card.id))) : null;
-    void tick; // ensure re-render each second
+    void tick;
     const remainingSec = _dEntry ? Math.max(0, Math.ceil((_dEntry.ms - (Date.now() - _dEntry.ts)) / 1000)) : 0;
+    const totalSec = _dEntry ? Math.ceil(_dEntry.ms / 1000) : 30;
 
     const actionLabel = card.type === 'join_channel' || card.type === 'join_group'
       ? 'Rejoindre'
@@ -486,158 +493,281 @@ export const MiniAppTasks: React.FC = () => {
     const isBot     = card.type === 'start_bot';
     const notSubbed = phase === 'not_subscribed';
 
+    const hasProgress = card.maxCompletions != null && card.maxCompletions > 0;
+    const progressPct = hasProgress
+      ? Math.min((card.totalCompletions / card.maxCompletions!) * 100, 100)
+      : 0;
+
     return (
       <div
         key={card.id}
-        className={`glass-card p-4 transition-all space-y-3 ${isDone ? 'border border-emerald-500/20 bg-emerald-500/[0.03]' : card.promoMultiplier ? 'border border-amber-500/30' : ''}`}
+        style={{
+          borderRadius: 18,
+          border: `1px solid ${glow}28`,
+          overflow: 'hidden',
+          background: isDone ? 'rgba(52,211,153,0.04)' : 'rgba(255,255,255,0.03)',
+        }}
       >
-        <div className="flex items-start gap-3">
-          {/* Avatar */}
-          {avatarBg ? (
-            <div
-              className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 text-sm font-bold"
-              style={{ backgroundColor: avatarBg + '33', color: avatarBg }}
-            >
-              {card.title.charAt(0).toUpperCase()}
-            </div>
-          ) : (
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${config.color}`}>
-              {card.icon ? <span className="text-base">{card.icon}</span> : config.icon}
-            </div>
-          )}
+        {/* Promo accent stripe */}
+        {card.promoMultiplier && (
+          <div style={{ height: 2, background: 'linear-gradient(90deg, #f59e0b, #fbbf24)' }} />
+        )}
 
-          {/* Content */}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-              <h3 className="text-sm font-semibold text-white">{card.title}</h3>
-              {card.promoMultiplier && (
-                <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 text-[9px] font-bold">
-                  <Flame className="w-2.5 h-2.5" /> ×{card.promoMultiplier}
+        {/* Card body */}
+        <div style={{ padding: 14 }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+
+            {/* Icon */}
+            <div style={{
+              width: 52, height: 52, borderRadius: 14, flexShrink: 0,
+              background: avatarBg ? `${avatarBg}33` : bg,
+              border: `1px solid ${avatarBg ?? glow}30`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              {isDone ? (
+                <CheckCircle style={{ width: 22, height: 22, color: '#34d399' }} />
+              ) : card.icon ? (
+                <span style={{ fontSize: 22 }}>{card.icon}</span>
+              ) : avatarBg ? (
+                <span style={{ fontSize: 18, fontWeight: 700, color: avatarBg }}>
+                  {card.title.charAt(0).toUpperCase()}
+                </span>
+              ) : (
+                <span style={{ color: glow }}>
+                  {React.cloneElement(config.icon as React.ReactElement<{ style?: React.CSSProperties }>, { style: { width: 22, height: 22 } })}
                 </span>
               )}
             </div>
-            <p className="text-xs text-slate-400 mb-2">{card.description}</p>
 
-            <div className="flex items-center gap-2">
-              {card.promoMultiplier ? (
-                <>
-                  <span className="text-lg font-bold text-amber-400">+{displayReward.toFixed(4)} TON</span>
-                  <span className="text-xs text-slate-500 line-through">+{card.reward.toFixed(4)}</span>
-                </>
-              ) : (
-                <span className="text-lg font-bold text-emerald-400">+{displayReward.toFixed(4)} TON</span>
+            {/* Content */}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 2 }}>
+                <span style={{ fontSize: 14, fontWeight: 700, color: '#f8fafc' }}>{card.title}</span>
+                {card.promoMultiplier && (
+                  <span style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 3,
+                    padding: '2px 6px', borderRadius: 6,
+                    background: 'rgba(245,158,11,0.15)', color: '#fbbf24',
+                    fontSize: 9, fontWeight: 700,
+                  }}>
+                    <Flame style={{ width: 9, height: 9 }} /> &times;{card.promoMultiplier}
+                  </span>
+                )}
+              </div>
+              <p style={{ fontSize: 11, color: '#64748b', margin: 0, lineHeight: 1.4 }}>{card.description}</p>
+            </div>
+
+            {/* Reward */}
+            <div style={{ flexShrink: 0, textAlign: 'right' }}>
+              <div style={{ fontSize: 16, fontWeight: 800, color: card.promoMultiplier ? '#fbbf24' : '#4ade80' }}>
+                +{displayReward.toFixed(4)}
+              </div>
+              <div style={{ fontSize: 9, color: '#475569', marginTop: 1 }}>TON</div>
+              {card.promoMultiplier && (
+                <div style={{ fontSize: 10, color: '#475569', textDecoration: 'line-through', marginTop: 2 }}>
+                  +{card.reward.toFixed(4)}
+                </div>
               )}
             </div>
           </div>
 
-          {/* Top-right action */}
-          <div className="flex-shrink-0">
-            {phase === 'done' ? (
-              <TaskDoneCheck />
-            ) : isCompleted ? (
-              <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400">
-                <CheckCircle className="w-5 h-5" />
-              </div>
-            ) : phase === 'completing' ? (
-              <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-500/10 text-emerald-400 text-xs font-medium">
-                <Loader2 className="w-3.5 h-3.5 animate-spin" /> Crédit...
-              </div>
-            ) : phase === 'verifying' ? (
-              <div className="px-3 py-2 rounded-xl bg-blue-500/10 text-blue-400">
-                <Loader2 className="w-4 h-4 animate-spin" />
-              </div>
-            ) : phase === 'too_early' ? (
-              <div className="p-2 rounded-xl bg-orange-500/10 text-orange-400">
-                <Clock className="w-4 h-4" />
-              </div>
-            ) : phase === 'ready' || phase === 'not_subscribed' ? null : (
-              <button
-                onClick={() => handleStart(card)}
-                className="tap-scale px-4 py-2 rounded-xl btn-primary text-xs font-semibold text-white flex items-center gap-1.5"
-              >
-                {actionLabel} <ExternalLink className="w-3 h-3" />
-              </button>
-            )}
-          </div>
+          {/* Progress bar */}
+          {hasProgress && (
+            <div style={{ marginTop: 10, height: 3, borderRadius: 99, background: 'rgba(255,255,255,0.06)' }}>
+              <div style={{
+                height: '100%', borderRadius: 99, background: glow,
+                width: `${progressPct}%`, transition: 'width 0.3s ease',
+              }} />
+            </div>
+          )}
         </div>
 
-        {/* Too early — countdown + disabled Vérifier */}
-        {phase === 'too_early' && (
-          <div className="border-t border-white/5 pt-3 space-y-2">
-            <div className="flex items-start gap-2.5 p-3 rounded-xl bg-orange-500/10 border border-orange-500/20">
-              <Clock className="w-4 h-4 text-orange-400 flex-shrink-0 mt-0.5" />
-              <div className="flex-1">
-                <p className="text-xs text-orange-300">
-                  {card.type === 'start_bot'
-                    ? 'Restez dans le bot pendant au moins 30 secondes, puis revenez valider.'
-                    : `Rejoignez le ${card.type === 'join_channel' ? 'canal' : 'groupe'} puis revenez vérifier votre abonnement.`
-                  }
-                </p>
-                {remainingSec > 0 && (
-                  <p className="text-xs font-bold text-orange-400 mt-1">
-                    Vérifier disponible dans {remainingSec}s
-                  </p>
-                )}
-              </div>
-            </div>
-            {card.targetUrl && (
-              <button
-                onClick={() => handleJoin(card)}
-                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-white/5 border border-white/10 text-slate-300 text-xs font-medium hover:bg-white/10 transition-all"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-                {card.type === 'start_bot' ? 'Retourner au bot' : card.type === 'join_channel' ? 'Retourner au canal' : 'Retourner au groupe'}
-              </button>
-            )}
-            {/* Vérifier button — disabled until countdown reaches 0 */}
-            <button
-              disabled={remainingSec > 0}
-              onClick={remainingSec === 0 ? () => void handleVerify(card) : undefined}
-              className="tap-scale w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-blue-500/15 border border-blue-500/30 text-blue-400 text-xs font-semibold transition-all disabled:opacity-30 disabled:cursor-not-allowed"
-            >
-              <ShieldCheck className="w-3.5 h-3.5" />
-              {remainingSec > 0 ? `Vérifier (${remainingSec}s)` : 'Vérifier'}
-            </button>
-          </div>
-        )}
+        {/* Action zone */}
+        <div style={{ padding: '0 14px 14px' }}>
 
-        {/* Ready — can verify */}
-        {(phase === 'ready' || notSubbed) && (
-          <div className="border-t border-white/5 pt-3 space-y-2">
-            {!notSubbed && (
-              <div className="flex items-center gap-2 p-2.5 rounded-lg bg-blue-500/5 border border-blue-500/15">
-                <ShieldCheck className="w-4 h-4 text-blue-400 flex-shrink-0" />
-                <p className="text-xs text-blue-300">
-                  {isBot ? 'Envoyez /start au bot, puis vérifiez.' : 'Abonnez-vous puis vérifiez votre abonnement.'}
-                </p>
-              </div>
-            )}
-            {notSubbed && (
-              <div className="space-y-1.5">
-                <div className="flex items-center gap-2 p-2.5 rounded-lg bg-red-500/5 border border-red-500/20">
-                  <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
-                  <p className="text-xs text-red-400">
-                    {isBot ? 'Bot non démarré — envoyez /start d\'abord.' : 'Abonnement non détecté — rejoignez d\'abord.'}
+          {/* IDLE */}
+          {phase === 'idle' && !isDone && (
+            <button
+              onClick={() => handleStart(card)}
+              style={{
+                width: '100%', padding: '10px 0', borderRadius: 12,
+                background: bg, border: `1px solid ${glow}45`,
+                color: glow, fontSize: 12, fontWeight: 700,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                cursor: 'pointer',
+              }}
+            >
+              {actionLabel} <ExternalLink style={{ width: 13, height: 13 }} />
+            </button>
+          )}
+
+          {/* TOO EARLY */}
+          {phase === 'too_early' && (
+            <div>
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                padding: '10px 12px', borderRadius: 12, marginBottom: 8,
+                background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)',
+              }}>
+                {/* Circular countdown */}
+                <div style={{ position: 'relative', width: 35, height: 35, flexShrink: 0 }}>
+                  <svg width="35" height="35" viewBox="0 0 35 35" style={{ transform: 'rotate(-90deg)' }}>
+                    <circle cx="17.5" cy="17.5" r="14" fill="none" stroke="rgba(245,158,11,0.15)" strokeWidth="2.5" />
+                    <circle
+                      cx="17.5" cy="17.5" r="14" fill="none" stroke="#f59e0b" strokeWidth="2.5"
+                      strokeDasharray={`${2 * Math.PI * 14}`}
+                      strokeDashoffset={`${2 * Math.PI * 14 * (remainingSec / totalSec)}`}
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                  <span style={{
+                    position: 'absolute', inset: 0,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 9, fontWeight: 800, color: '#f59e0b',
+                  }}>{remainingSec}s</span>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <p style={{ fontSize: 11, color: '#fbbf24', fontWeight: 600, margin: 0, marginBottom: 2 }}>
+                    {isBot
+                      ? 'Restez dans le bot au moins 30s'
+                      : `Rejoignez le ${card.type === 'join_channel' ? 'canal' : 'groupe'} puis revenez`}
+                  </p>
+                  <p style={{ fontSize: 10, color: '#92400e', margin: 0 }}>
+                    Vérification disponible dans {remainingSec}s
                   </p>
                 </div>
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
                 {card.targetUrl && (
                   <button
                     onClick={() => handleJoin(card)}
-                    className="w-full flex items-center justify-center gap-2 py-2 rounded-xl bg-white/5 border border-white/10 text-slate-300 text-xs font-medium hover:bg-white/10 transition-all"
+                    style={{
+                      flex: 1, padding: '9px 0', borderRadius: 12,
+                      background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
+                      color: '#94a3b8', fontSize: 11, fontWeight: 600,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+                      cursor: 'pointer',
+                    }}
                   >
-                    <RotateCcw className="w-3.5 h-3.5" /> Retourner au {isBot ? 'bot' : card.type === 'join_channel' ? 'canal' : 'groupe'}
+                    <RotateCcw style={{ width: 12, height: 12 }} /> Retourner
                   </button>
                 )}
+                <button
+                  disabled={remainingSec > 0}
+                  onClick={remainingSec === 0 ? () => void handleVerify(card) : undefined}
+                  style={{
+                    flex: 2, padding: '9px 0', borderRadius: 12,
+                    background: remainingSec > 0 ? 'rgba(245,158,11,0.08)' : 'rgba(59,130,246,0.15)',
+                    border: remainingSec > 0 ? '1px solid rgba(245,158,11,0.2)' : '1px solid rgba(59,130,246,0.35)',
+                    color: remainingSec > 0 ? '#f59e0b' : '#60a5fa',
+                    fontSize: 11, fontWeight: 700,
+                    opacity: remainingSec > 0 ? 0.6 : 1,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+                    cursor: remainingSec > 0 ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  <ShieldCheck style={{ width: 12, height: 12 }} />
+                  {remainingSec > 0 ? `Vérifier (${remainingSec}s)` : 'Vérifier'}
+                </button>
               </div>
-            )}
+            </div>
+          )}
+
+          {/* READY */}
+          {phase === 'ready' && !notSubbed && (
             <button
               onClick={() => void handleVerify(card)}
-              className="tap-scale w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-blue-500/15 border border-blue-500/30 text-blue-400 text-xs font-semibold hover:bg-blue-500/25 transition-all"
+              style={{
+                width: '100%', padding: '10px 0', borderRadius: 12,
+                background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.35)',
+                color: '#60a5fa', fontSize: 12, fontWeight: 700,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                cursor: 'pointer',
+              }}
             >
-              <ShieldCheck className="w-3.5 h-3.5" /> Vérifier
+              <ShieldCheck style={{ width: 14, height: 14 }} /> Vérifier
             </button>
-          </div>
-        )}
+          )}
+
+          {/* NOT SUBSCRIBED */}
+          {notSubbed && (
+            <div>
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                padding: '8px 10px', borderRadius: 10, marginBottom: 8,
+                background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.2)',
+              }}>
+                <AlertCircle style={{ width: 13, height: 13, color: '#f87171', flexShrink: 0 }} />
+                <p style={{ fontSize: 10, color: '#f87171', margin: 0 }}>
+                  {isBot ? "Bot non démarré — envoyez /start d'abord." : "Abonnement non détecté — rejoignez d'abord."}
+                </p>
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {card.targetUrl && (
+                  <button
+                    onClick={() => handleJoin(card)}
+                    style={{
+                      flex: 1, padding: '9px 0', borderRadius: 12,
+                      background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
+                      color: '#94a3b8', fontSize: 11, fontWeight: 600,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <RotateCcw style={{ width: 12, height: 12 }} /> Retourner
+                  </button>
+                )}
+                <button
+                  onClick={() => void handleVerify(card)}
+                  style={{
+                    flex: 2, padding: '9px 0', borderRadius: 12,
+                    background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.35)',
+                    color: '#60a5fa', fontSize: 11, fontWeight: 700,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+                    cursor: 'pointer',
+                  }}
+                >
+                  <ShieldCheck style={{ width: 12, height: 12 }} /> Vérifier
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* VERIFYING */}
+          {phase === 'verifying' && (
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+              padding: '10px 0', borderRadius: 12,
+              background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.2)',
+            }}>
+              <Loader2 style={{ width: 14, height: 14, color: '#60a5fa', animation: 'spin 1s linear infinite' }} />
+              <span style={{ fontSize: 12, fontWeight: 600, color: '#60a5fa' }}>Vérification...</span>
+            </div>
+          )}
+
+          {/* COMPLETING */}
+          {phase === 'completing' && (
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+              padding: '10px 0', borderRadius: 12,
+              background: 'rgba(52,211,153,0.08)', border: '1px solid rgba(52,211,153,0.2)',
+            }}>
+              <Loader2 style={{ width: 14, height: 14, color: '#34d399', animation: 'spin 1s linear infinite' }} />
+              <span style={{ fontSize: 12, fontWeight: 600, color: '#34d399' }}>Crédit en cours...</span>
+            </div>
+          )}
+
+          {/* DONE */}
+          {phase === 'done' && (
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+              padding: '6px 0',
+            }}>
+              <TaskDoneCheck />
+              <span style={{ fontSize: 13, fontWeight: 700, color: '#34d399' }}>Récompense créditée !</span>
+            </div>
+          )}
+        </div>
       </div>
     );
   };
@@ -646,229 +776,289 @@ export const MiniAppTasks: React.FC = () => {
 
   const totalAvailable = allCards.length;
 
+  const getFilteredCards = (): CardTask[] => {
+    switch (activeFilter) {
+      case 'daily':   return allCards.filter(c => c.type === 'daily');
+      case 'special': return allCards.filter(c => c.type === 'special');
+      case 'channel': return allCards.filter(c => c.type === 'join_channel' || c.type === 'join_group');
+      case 'bot':     return allCards.filter(c => c.type === 'start_bot');
+      default:        return allCards;
+    }
+  };
+
+  const filteredCards = getFilteredCards();
+  const showPromo = activeFilter === 'all' || activeFilter === 'special';
+
+  // Keep SECTIONS defined for completeness, suppress unused warning
+  void SECTIONS;
+
   return (
-    <div className="space-y-6 animate-slide-up">
+    <div className="animate-slide-up" style={{ paddingBottom: 8 }}>
 
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-white">Tâches</h1>
-          <p className="text-sm text-slate-400">
-            {totalAvailable} tâche{totalAvailable !== 1 ? 's' : ''} disponible{totalAvailable !== 1 ? 's' : ''}
-          </p>
+      <div style={{ marginBottom: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+          <div>
+            <h1 style={{ fontSize: 22, fontWeight: 900, color: '#f8fafc', letterSpacing: '-0.3px', margin: 0 }}>Tâches</h1>
+            <p style={{ fontSize: 12, color: '#475569', marginTop: 2, marginBottom: 0 }}>
+              {totalAvailable} disponible{totalAvailable > 1 ? 's' : ''}
+            </p>
+          </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            {currentUser.todayEarnings > 0 && (
+              <div style={{
+                padding: '5px 10px', borderRadius: 10,
+                background: 'rgba(52,211,153,0.1)', border: '1px solid rgba(52,211,153,0.2)',
+                display: 'flex', alignItems: 'center', gap: 5,
+              }}>
+                <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#34d399', display: 'inline-block' }} />
+                <span style={{ fontSize: 11, fontWeight: 700, color: '#34d399' }}>
+                  +{currentUser.todayEarnings.toFixed(2)} TON
+                </span>
+              </div>
+            )}
+            <button
+              onClick={() => setMiniAppPage('myTasks')}
+              style={{
+                padding: '6px 12px', borderRadius: 10,
+                background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)',
+                color: '#64748b', fontSize: 11, fontWeight: 600, cursor: 'pointer',
+              }}
+            >
+              Mes campagnes
+            </button>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          {currentUser.todayEarnings > 0 && (
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              <span className="text-xs font-bold text-emerald-400">
-                +{currentUser.todayEarnings.toFixed(2)} TON
-              </span>
-            </div>
-          )}
-          <button
-            onClick={() => setMiniAppPage('myTasks')}
-            className="px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-xs font-medium text-slate-400 hover:text-white transition-colors"
-          >
-            Mes campagnes
-          </button>
+
+        {/* Filter tabs */}
+        <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 2 }}>
+          {([
+            { key: 'all',     label: 'Toutes',       count: allCards.length },
+            { key: 'daily',   label: '📅 Quotidien', count: allCards.filter(c => c.type === 'daily').length },
+            { key: 'special', label: '⭐ Spécial',   count: allCards.filter(c => c.type === 'special').length + promoTasks.length },
+            { key: 'channel', label: '📢 Canaux',    count: allCards.filter(c => c.type === 'join_channel' || c.type === 'join_group').length },
+            { key: 'bot',     label: '🤖 Bots',      count: allCards.filter(c => c.type === 'start_bot').length },
+          ] as { key: typeof activeFilter; label: string; count: number }[]).map(f => (
+            <button
+              key={f.key}
+              onClick={() => setActiveFilter(f.key)}
+              style={{
+                padding: '6px 14px', borderRadius: 20, fontSize: 11, fontWeight: 700,
+                whiteSpace: 'nowrap', flexShrink: 0, cursor: 'pointer',
+                background: activeFilter === f.key ? 'rgba(59,130,246,0.2)' : 'rgba(255,255,255,0.04)',
+                border: activeFilter === f.key ? '1px solid rgba(59,130,246,0.4)' : '1px solid rgba(255,255,255,0.07)',
+                color: activeFilter === f.key ? '#60a5fa' : '#64748b',
+              }}
+            >
+              {f.label}{f.count > 0 ? ` (${f.count})` : ''}
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* Sections */}
-      {SECTIONS.map(section => {
-        const cards = allCards.filter(c => c.type === section.type);
-        if (!section.creatable && cards.length === 0) return null;
+      {/* Task list */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {filteredCards.map(card => renderCard(card))}
 
-        return (
-          <div key={section.type} className="space-y-3">
-            {section.groupBefore && (
-              <div className="flex items-center gap-2 pt-1">
-                <div className="flex-1 h-px bg-white/[0.06]" />
-                <span className="text-[10px] text-slate-500 font-medium uppercase tracking-wider">{section.groupBefore}</span>
-                <div className="flex-1 h-px bg-white/[0.06]" />
-              </div>
-            )}
-            <div className="flex items-center justify-between">
-              <h2 className="text-sm font-bold text-white flex items-center gap-2">
-                <span className={section.color}>{section.icon}</span>
-                {section.label}
-                <span className="text-[10px] font-normal text-slate-500 ml-1">{cards.length}</span>
-              </h2>
-              {section.creatable && (
-                <button
-                  onClick={() => setMiniAppPage('createTask')}
-                  className="w-7 h-7 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/10 transition-all"
-                  title="Créer une tâche"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
+        {/* Promo tasks (shown in 'all' and 'special' filters) */}
+        {showPromo && promoTasks.map(task => {
+          const isAutoReferral = task.verificationMethod === 'auto_referral';
 
-            {cards.length === 0 ? (
-              <div className="p-4 rounded-2xl border border-dashed border-white/8 flex items-center gap-3">
-                <span className={`text-xl ${section.color}`}>{section.icon}</span>
-                <div>
-                  <p className="text-xs font-medium text-slate-400">
-                    {section.type === 'daily'
-                      ? 'Tâches quotidiennes épuisées'
-                      : section.type === 'special'
-                      ? 'Aucune tâche spéciale active'
-                      : 'Aucune tâche dans cette catégorie'}
-                  </p>
-                  {section.creatable && (
-                    <button
-                      onClick={() => setMiniAppPage('createTask')}
-                      className="text-[11px] text-blue-400 hover:underline mt-0.5"
-                    >
-                      Créer une tâche →
-                    </button>
-                  )}
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {cards.map(card => renderCard(card))}
-              </div>
-            )}
-          </div>
-        );
-      })}
+          // ── AUTO-REFERRAL task ──────────────────────────────────────────────
+          if (isAutoReferral) {
+            const required   = task.requiredCount ?? 3;
+            const count      = currentUser.referralDailyCount;
+            const isComplete = completedTaskIds.includes(task.id);
+            const isEligible = count >= required;
+            const pct        = Math.min((count / required) * 100, 100);
 
-      {/* Promo tasks */}
-      {promoTasks.length > 0 && (
-        <div className="space-y-3">
-          <div className="flex items-center gap-3">
-            <div className="flex-1 h-px bg-white/8" />
-            <span className="text-[10px] text-slate-600 font-medium tracking-wider uppercase">Tâches Promo</span>
-            <div className="flex-1 h-px bg-white/8" />
-          </div>
-
-          {promoTasks.map(task => {
-            const isAutoReferral = task.verificationMethod === 'auto_referral';
-
-            // ── AUTO-REFERRAL task (e.g. Challenge Parrainage) ──────────────
-            if (isAutoReferral) {
-              const required   = task.requiredCount ?? 3;
-              const count      = currentUser.referralDailyCount;
-              const isComplete = completedTaskIds.includes(task.id);
-              const isEligible = count >= required;
-              const pct        = Math.min((count / required) * 100, 100);
-
-              return (
-                <div
-                  key={task.id}
-                  className={`glass-card p-4 space-y-3 border ${isComplete ? 'border-emerald-500/25' : 'border-purple-500/20'}`}
-                >
-                  <div className="flex items-start gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center flex-shrink-0 text-base">
+            return (
+              <div
+                key={task.id}
+                style={{
+                  borderRadius: 18,
+                  border: isComplete ? '1px solid rgba(52,211,153,0.25)' : '1px solid rgba(139,92,246,0.25)',
+                  overflow: 'hidden',
+                  background: 'rgba(139,92,246,0.04)',
+                }}
+              >
+                <div style={{ padding: 14 }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                    <div style={{
+                      width: 52, height: 52, borderRadius: 14, flexShrink: 0,
+                      background: 'rgba(139,92,246,0.15)', border: '1px solid rgba(139,92,246,0.25)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22,
+                    }}>
                       {task.icon ?? '🏆'}
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap mb-0.5">
-                        <h3 className="text-sm font-semibold text-white">{task.title}</h3>
-                        <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-purple-500/20 text-purple-400">PROMO</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 2 }}>
+                        <span style={{ fontSize: 14, fontWeight: 700, color: '#f8fafc' }}>{task.title}</span>
+                        <span style={{
+                          padding: '2px 6px', borderRadius: 6,
+                          background: 'rgba(139,92,246,0.2)', color: '#a78bfa',
+                          fontSize: 9, fontWeight: 700,
+                        }}>PROMO</span>
                       </div>
-                      <p className="text-xs text-slate-400 leading-relaxed">{task.description}</p>
+                      <p style={{ fontSize: 11, color: '#64748b', lineHeight: 1.4, margin: 0 }}>{task.description}</p>
                     </div>
-                    <span className="text-sm font-bold text-emerald-400 flex-shrink-0">+{task.reward.toFixed(4)} TON</span>
+                    <div style={{ flexShrink: 0, textAlign: 'right' }}>
+                      <div style={{ fontSize: 16, fontWeight: 800, color: '#4ade80' }}>+{task.reward.toFixed(4)}</div>
+                      <div style={{ fontSize: 9, color: '#475569', marginTop: 1 }}>TON</div>
+                    </div>
                   </div>
 
-                  {/* Referral progress — counts only today's new referrals */}
-                  <div>
-                    <div className="flex justify-between text-xs mb-1.5">
-                      <span className="text-slate-500">Filleuls aujourd'hui</span>
-                      <span className={isEligible ? 'text-emerald-400 font-semibold' : 'text-slate-400'}>
+                  {/* Referral progress */}
+                  <div style={{ marginTop: 12 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                      <span style={{ fontSize: 11, color: '#64748b' }}>Filleuls aujourd'hui</span>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: isEligible ? '#34d399' : '#94a3b8' }}>
                         {count} / {required}
                       </span>
                     </div>
-                    <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
-                      <div
-                        className={`h-full rounded-full transition-all ${isEligible ? 'bg-gradient-to-r from-emerald-500 to-teal-400' : 'bg-gradient-to-r from-purple-500 to-pink-500'}`}
-                        style={{ width: `${pct}%` }}
-                      />
+                    <div style={{ height: 4, borderRadius: 99, background: 'rgba(255,255,255,0.08)' }}>
+                      <div style={{
+                        height: '100%', borderRadius: 99,
+                        background: isEligible
+                          ? 'linear-gradient(90deg, #10b981, #34d399)'
+                          : 'linear-gradient(90deg, #8b5cf6, #ec4899)',
+                        width: `${pct}%`, transition: 'width 0.3s ease',
+                      }} />
                     </div>
                   </div>
+                </div>
 
+                <div style={{ padding: '0 14px 14px' }}>
                   {isComplete ? (
-                    <div className="flex items-center gap-2 p-2.5 rounded-lg bg-emerald-500/5 border border-emerald-500/20">
-                      <CheckCircle className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-                      <p className="text-xs font-semibold text-emerald-400">Validée — récompense créditée</p>
+                    <div style={{
+                      display: 'flex', alignItems: 'center', gap: 8,
+                      padding: '9px 12px', borderRadius: 12,
+                      background: 'rgba(52,211,153,0.07)', border: '1px solid rgba(52,211,153,0.2)',
+                    }}>
+                      <CheckCircle style={{ width: 14, height: 14, color: '#34d399', flexShrink: 0 }} />
+                      <span style={{ fontSize: 12, fontWeight: 600, color: '#34d399' }}>Validée — récompense créditée</span>
                     </div>
                   ) : isEligible ? (
                     <button
                       onClick={() => completeTask(task.id)}
-                      className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl btn-primary text-xs font-semibold text-white"
+                      style={{
+                        width: '100%', padding: '10px 0', borderRadius: 12,
+                        background: 'linear-gradient(135deg, #3b82f6, #6366f1)',
+                        border: 'none', color: '#fff', fontSize: 12, fontWeight: 700,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                        cursor: 'pointer',
+                      }}
                     >
-                      <CheckCircle className="w-3.5 h-3.5" />
+                      <CheckCircle style={{ width: 14, height: 14 }} />
                       Récupérer ma récompense
                     </button>
                   ) : (
                     <button
                       onClick={() => setMiniAppPage('referral')}
-                      className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-purple-500/15 border border-purple-500/30 text-purple-400 text-xs font-semibold hover:bg-purple-500/25 transition-all"
+                      style={{
+                        width: '100%', padding: '10px 0', borderRadius: 12,
+                        background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.3)',
+                        color: '#a78bfa', fontSize: 12, fontWeight: 700,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                        cursor: 'pointer',
+                      }}
                     >
-                      <Users className="w-3.5 h-3.5" />
+                      <Users style={{ width: 14, height: 14 }} />
                       Inviter des amis ({required - count} restant{required - count > 1 ? 's' : ''})
                     </button>
                   )}
                 </div>
-              );
-            }
-
-            // ── MANUAL task (e.g. Partage Communauté) ───────────────────────
-            const userSubmission = taskSubmissions.find(
-              s => s.taskId === task.id && s.userId === currentUser.id
+              </div>
             );
-            const isApproved = userSubmission?.status === 'approved';
-            const isPending  = userSubmission?.status === 'pending';
-            const isRejected = userSubmission?.status === 'rejected';
-            const isOpen     = proofOpen === task.id;
-            const thisResult = proofResult?.taskId === task.id ? proofResult : null;
+          }
 
-            return (
-              <div
-                key={task.id}
-                className={`glass-card p-4 space-y-3 border ${isApproved ? 'border-emerald-500/25' : 'border-purple-500/20'}`}
-              >
-                <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center flex-shrink-0 text-base">
+          // ── MANUAL task ─────────────────────────────────────────────────────
+          const userSubmission = taskSubmissions.find(
+            s => s.taskId === task.id && s.userId === currentUser.id
+          );
+          const isApproved = userSubmission?.status === 'approved';
+          const isPending  = userSubmission?.status === 'pending';
+          const isRejected = userSubmission?.status === 'rejected';
+          const isOpen     = proofOpen === task.id;
+          const thisResult = proofResult?.taskId === task.id ? proofResult : null;
+
+          return (
+            <div
+              key={task.id}
+              style={{
+                borderRadius: 18,
+                border: isApproved ? '1px solid rgba(52,211,153,0.25)' : '1px solid rgba(139,92,246,0.25)',
+                overflow: 'hidden',
+                background: isApproved ? 'rgba(52,211,153,0.04)' : 'rgba(139,92,246,0.04)',
+              }}
+            >
+              <div style={{ padding: 14 }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                  <div style={{
+                    width: 52, height: 52, borderRadius: 14, flexShrink: 0,
+                    background: 'rgba(139,92,246,0.15)', border: '1px solid rgba(139,92,246,0.25)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22,
+                  }}>
                     {task.icon ?? '🎯'}
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap mb-0.5">
-                      <h3 className="text-sm font-semibold text-white">{task.title}</h3>
-                      <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-purple-500/20 text-purple-400">PROMO</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 2 }}>
+                      <span style={{ fontSize: 14, fontWeight: 700, color: '#f8fafc' }}>{task.title}</span>
+                      <span style={{
+                        padding: '2px 6px', borderRadius: 6,
+                        background: 'rgba(139,92,246,0.2)', color: '#a78bfa',
+                        fontSize: 9, fontWeight: 700,
+                      }}>PROMO</span>
                     </div>
-                    <p className="text-xs text-slate-400 leading-relaxed">{task.description}</p>
+                    <p style={{ fontSize: 11, color: '#64748b', lineHeight: 1.4, margin: 0 }}>{task.description}</p>
                   </div>
-                  <span className="text-sm font-bold text-emerald-400 flex-shrink-0">+{task.reward.toFixed(4)} TON</span>
+                  <div style={{ flexShrink: 0, textAlign: 'right' }}>
+                    <div style={{ fontSize: 16, fontWeight: 800, color: '#4ade80' }}>+{task.reward.toFixed(4)}</div>
+                    <div style={{ fontSize: 9, color: '#475569', marginTop: 1 }}>TON</div>
+                  </div>
                 </div>
+              </div>
+
+              <div style={{ padding: '0 14px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
 
                 {isApproved && (
-                  <div className="flex items-center gap-2 p-2.5 rounded-lg bg-emerald-500/5 border border-emerald-500/20">
-                    <CheckCircle className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-                    <p className="text-xs font-semibold text-emerald-400">Validée — récompense créditée</p>
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: 8,
+                    padding: '9px 12px', borderRadius: 12,
+                    background: 'rgba(52,211,153,0.07)', border: '1px solid rgba(52,211,153,0.2)',
+                  }}>
+                    <CheckCircle style={{ width: 14, height: 14, color: '#34d399', flexShrink: 0 }} />
+                    <span style={{ fontSize: 12, fontWeight: 600, color: '#34d399' }}>Validée — récompense créditée</span>
                   </div>
                 )}
+
                 {isPending && (
-                  <div className="flex items-center gap-2 p-2.5 rounded-lg bg-amber-500/5 border border-amber-500/20">
-                    <Clock className="w-4 h-4 text-amber-400 flex-shrink-0" />
-                    <p className="text-xs font-semibold text-amber-400">En attente de validation par l'équipe</p>
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: 8,
+                    padding: '9px 12px', borderRadius: 12,
+                    background: 'rgba(245,158,11,0.07)', border: '1px solid rgba(245,158,11,0.2)',
+                  }}>
+                    <Clock style={{ width: 14, height: 14, color: '#fbbf24', flexShrink: 0 }} />
+                    <span style={{ fontSize: 12, fontWeight: 600, color: '#fbbf24' }}>En attente de validation par l'équipe</span>
                   </div>
                 )}
+
                 {isRejected && (
-                  <div className="p-2.5 rounded-lg bg-red-500/5 border border-red-500/20 space-y-1">
-                    <p className="text-xs font-semibold text-red-400">Preuve refusée</p>
+                  <div style={{
+                    padding: '9px 12px', borderRadius: 12,
+                    background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.2)',
+                  }}>
+                    <p style={{ fontSize: 12, fontWeight: 600, color: '#f87171', margin: 0, marginBottom: userSubmission?.adminNote ? 3 : 0 }}>
+                      Preuve refusée
+                    </p>
                     {userSubmission?.adminNote && (
-                      <p className="text-[10px] text-red-400/70">Motif : {userSubmission.adminNote}</p>
+                      <p style={{ fontSize: 10, color: 'rgba(248,113,113,0.7)', margin: 0 }}>Motif : {userSubmission.adminNote}</p>
                     )}
                   </div>
                 )}
 
                 {thisResult && (
-                  <p className={`text-xs font-medium ${thisResult.success ? 'text-emerald-400' : 'text-red-400'}`}>
+                  <p style={{ fontSize: 11, fontWeight: 600, color: thisResult.success ? '#34d399' : '#f87171', margin: 0 }}>
                     {thisResult.success ? '✓' : '✗'} {thisResult.message}
                   </p>
                 )}
@@ -876,72 +1066,120 @@ export const MiniAppTasks: React.FC = () => {
                 {!isApproved && !isPending && !isOpen && (
                   <button
                     onClick={() => { setProofOpen(task.id); setProofText(''); setProofResult(null); }}
-                    className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-purple-500/15 border border-purple-500/30 text-purple-400 text-xs font-semibold hover:bg-purple-500/25 transition-all"
+                    style={{
+                      width: '100%', padding: '10px 0', borderRadius: 12,
+                      background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.3)',
+                      color: '#a78bfa', fontSize: 12, fontWeight: 700,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                      cursor: 'pointer',
+                    }}
                   >
-                    <FileText className="w-3.5 h-3.5" />
+                    <FileText style={{ width: 14, height: 14 }} />
                     {isRejected ? 'Soumettre à nouveau' : 'Soumettre ma preuve'}
                   </button>
                 )}
 
                 {isOpen && (
-                  <div className="space-y-3 border-t border-white/5 pt-3">
-                    <div className="flex items-center justify-between">
-                      <p className="text-xs font-semibold text-white">Votre preuve</p>
-                      <button onClick={() => { setProofOpen(null); setProofText(''); setProofImage(null); }} className="text-slate-500 hover:text-white">
-                        <X className="w-4 h-4" />
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10, borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 12 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: '#f8fafc' }}>Votre preuve</span>
+                      <button
+                        onClick={() => { setProofOpen(null); setProofText(''); setProofImage(null); }}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', display: 'flex', padding: 0 }}
+                      >
+                        <X style={{ width: 16, height: 16 }} />
                       </button>
                     </div>
 
-                    {/* Screenshot upload */}
                     {proofImage ? (
-                      <div className="relative rounded-xl overflow-hidden">
-                        <img src={proofImage} alt="Capture d'écran" className="w-full max-h-48 object-contain rounded-xl bg-white/5" />
+                      <div style={{ position: 'relative', borderRadius: 12, overflow: 'hidden' }}>
+                        <img
+                          src={proofImage} alt="Capture d'écran"
+                          style={{ width: '100%', maxHeight: 192, objectFit: 'contain', display: 'block', background: 'rgba(255,255,255,0.04)' }}
+                        />
                         <button
                           onClick={() => setProofImage(null)}
-                          className="absolute top-2 right-2 bg-black/60 hover:bg-black/80 text-white rounded-full p-1 transition-colors"
+                          style={{
+                            position: 'absolute', top: 8, right: 8,
+                            background: 'rgba(0,0,0,0.6)', border: 'none', borderRadius: '50%',
+                            width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            cursor: 'pointer', color: '#fff',
+                          }}
                         >
-                          <X className="w-3 h-3" />
+                          <X style={{ width: 12, height: 12 }} />
                         </button>
                       </div>
                     ) : (
-                      <label className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl border-2 border-dashed border-white/15 hover:border-purple-500/40 cursor-pointer transition-colors">
-                        <span className="text-2xl">📸</span>
-                        <p className="text-xs font-semibold text-slate-300">Ajouter une capture d'écran</p>
-                        <p className="text-[10px] text-slate-500">Appuyez pour choisir ou prendre une photo</p>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          className="hidden"
-                          onChange={handleImageSelect}
-                        />
+                      <label style={{
+                        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                        gap: 6, padding: 16, borderRadius: 12,
+                        border: '2px dashed rgba(255,255,255,0.12)', cursor: 'pointer',
+                      }}>
+                        <span style={{ fontSize: 24 }}>📸</span>
+                        <p style={{ fontSize: 12, fontWeight: 600, color: '#cbd5e1', margin: 0 }}>Ajouter une capture d'écran</p>
+                        <p style={{ fontSize: 10, color: '#64748b', margin: 0 }}>Appuyez pour choisir ou prendre une photo</p>
+                        <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImageSelect} />
                       </label>
                     )}
 
-                    {/* Optional text description */}
                     <textarea
                       value={proofText}
                       onChange={e => setProofText(e.target.value)}
                       placeholder="Description optionnelle ou lien…"
                       rows={2}
-                      className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white text-xs resize-none focus:outline-none focus:border-purple-500/50 placeholder:text-slate-600"
+                      style={{
+                        width: '100%', padding: '10px 12px', boxSizing: 'border-box',
+                        background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)',
+                        borderRadius: 10, color: '#f8fafc', fontSize: 12, resize: 'none',
+                        outline: 'none', fontFamily: 'inherit',
+                      }}
                     />
 
                     <button
                       onClick={() => handleSubmitProof(task.id)}
                       disabled={(!proofText.trim() && !proofImage) || proofSubmitting}
-                      className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl btn-primary text-xs font-semibold text-white disabled:opacity-40 disabled:cursor-not-allowed"
+                      style={{
+                        width: '100%', padding: '10px 0', borderRadius: 12,
+                        background: 'linear-gradient(135deg, #3b82f6, #6366f1)',
+                        border: 'none', color: '#fff', fontSize: 12, fontWeight: 700,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                        cursor: (!proofText.trim() && !proofImage) || proofSubmitting ? 'not-allowed' : 'pointer',
+                        opacity: (!proofText.trim() && !proofImage) || proofSubmitting ? 0.45 : 1,
+                      }}
                     >
                       {proofSubmitting
-                        ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Envoi...</>
-                        : <><Send className="w-3.5 h-3.5" /> Envoyer ma preuve</>}
+                        ? <><Loader2 style={{ width: 13, height: 13, animation: 'spin 1s linear infinite' }} /> Envoi...</>
+                        : <><Send style={{ width: 13, height: 13 }} /> Envoyer ma preuve</>}
                     </button>
                   </div>
                 )}
               </div>
-            );
-          })}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Empty state */}
+      {filteredCards.length === 0 && !(showPromo && promoTasks.length > 0) && (
+        <div style={{ textAlign: 'center', padding: '40px 20px' }}>
+          <div style={{ fontSize: 36, marginBottom: 12 }}>✅</div>
+          <p style={{ color: '#475569', fontSize: 13, fontWeight: 600 }}>Aucune tâche dans cette catégorie</p>
         </div>
       )}
+
+      {/* Create task CTA */}
+      <button
+        onClick={() => setMiniAppPage('createTask')}
+        style={{
+          width: '100%', padding: '12px 0', borderRadius: 14,
+          background: 'rgba(59,130,246,0.06)', border: '1px dashed rgba(59,130,246,0.25)',
+          color: '#3b82f6', fontSize: 12, fontWeight: 700,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+          marginTop: 16, cursor: 'pointer',
+        }}
+      >
+        <Plus style={{ width: 14, height: 14 }} /> Créer une tâche sponsorisée
+      </button>
 
     </div>
   );
