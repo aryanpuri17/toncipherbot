@@ -194,6 +194,15 @@ const snd = {
 
 type OnResult = (won: boolean) => void;
 
+// ── Official TON logo (blue circle #0098EA + white downward diamond) ──
+const TonLogo = ({ size = 12 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 56 56" fill="none"
+    style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}>
+    <circle cx="28" cy="28" r="28" fill="#0098EA" />
+    <path d="M37.5603 15.6277H18.4386C14.9228 15.6277 12.7243 19.3821 14.4815 22.4018L26.2229 42.9881C27.0137 44.3909 29.0049 44.3909 29.7956 42.9881L41.5289 22.4018C43.2779 19.3739 41.0715 15.6277 37.5603 15.6277Z" fill="white" />
+  </svg>
+);
+
 // ══════════════════════════════════════════════════════════════════
 // SHARED UI COMPONENTS
 // ══════════════════════════════════════════════════════════════════
@@ -256,8 +265,8 @@ const GameBalanceChip: React.FC<{ bal: number; demo: boolean }> = ({ bal, demo }
     <p style={{ fontSize: 10, textTransform: 'uppercase', color: demo ? '#f59e0b' : '#64748b', letterSpacing: '0.05em' }}>
       {demo ? '🎮 Démo' : 'Solde'}
     </p>
-    <p style={{ fontSize: 14, fontWeight: 700, color: demo ? '#fbbf24' : '#f8fafc', marginTop: 1 }}>
-      <CountUp value={bal} decimals={3} suffix=" TON" />
+    <p style={{ fontSize: 14, fontWeight: 700, color: demo ? '#fbbf24' : '#f8fafc', marginTop: 1, display: 'flex', alignItems: 'center', gap: 3 }}>
+      <TonLogo size={13} /><CountUp value={bal} decimals={3} />
     </p>
   </div>
 );
@@ -552,7 +561,7 @@ const DiceGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResul
           <input type="number" value={bet} min={0.01} max={50} step={0.01}
             onChange={e => { const v = +e.target.value; if (!isNaN(v)) setBet(Math.max(0.01, Math.min(50, v))); }}
             className="flex-1 bg-transparent text-2xl font-bold text-white outline-none" />
-          <span className="text-base font-bold text-slate-500">TON</span>
+          <span className="text-base font-bold text-slate-500 flex items-center gap-1"><TonLogo size={14} />TON</span>
         </div>
         <BetQuickButtons setBet={setBet} maxBal={bal} />
         <button onClick={roll} disabled={!canRoll}
@@ -602,23 +611,6 @@ function randomFakeBet(): number {
 // ══════════════════════════════════════════════════════════════════
 // CRASH — courbe de multiplicateur animée
 // ══════════════════════════════════════════════════════════════════
-
-// ─── TonLogo Component ───
-const TonLogo = ({ size = 12 }: { size?: number }) => (
-  <svg
-    width={size}
-    height={size}
-    viewBox="0 0 56 56"
-    fill="none"
-    style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: 2, flexShrink: 0 }}
-  >
-    <circle cx="28" cy="28" r="28" fill="#0098EA" />
-    <path
-      d="M37.5603 15.6277H18.4386C14.9228 15.6277 12.7243 19.3821 14.4815 22.4018L26.2229 42.9881C27.0137 44.3909 29.0049 44.3909 29.7956 42.9881L41.5289 22.4018C43.2779 19.3739 41.0715 15.6277 37.5603 15.6277Z"
-      fill="white"
-    />
-  </svg>
-);
 
 // ─── Injected Keyframes ───
 const CrashStyleSheet = () => (
@@ -673,12 +665,6 @@ const CrashStyleSheet = () => (
 );
 
 const _CRASH_RATE = 0.10;
-const _CRASH_NAMES = [
-  'AlexK','Maria','Yosef','Emma_','LucaB','Dani_','Sasha','KimLo',
-  'RajPK','LiuWW','OmarS','SofiT','BenAR','YukiM','CarloZ','NinaP',
-  'MaxTR','ZaraN','TomH_','LeaR_','AmiS_','FatoD','PriyS','HanaP',
-  'KwamO','NicoV','ChenW','YusuK','MarkT','DmytP',
-];
 
 function _genCrashPt(): number {
   const r = Math.random();
@@ -718,21 +704,8 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
   const [fakes,     setFakes]     = useState<{name:string; bet:number; cashedAt:number|null}[]>([]);
 
   type LiveEntry = { name: string; bet: number; cashedAt: number | null; k: number };
-  const [liveFeed, setLiveFeed] = useState<LiveEntry[]>(() => {
-    let k = 0;
-    return Array.from({ length: 28 }, (_, i) => {
-      const r = Math.random();
-      let cashedAt: number | null = null;
-      if (Math.random() > 0.28) {
-        if      (r < 0.42) cashedAt = +(1.05 + Math.random() * 0.45).toFixed(2);
-        else if (r < 0.70) cashedAt = +(1.50 + Math.random() * 0.80).toFixed(2);
-        else if (r < 0.88) cashedAt = +(2.30 + Math.random() * 1.70).toFixed(2);
-        else                cashedAt = +(4.00 + Math.random() * 8.00).toFixed(2);
-      }
-      return { name: _CRASH_NAMES[i % _CRASH_NAMES.length], bet: +(0.05 + Math.random() * 2.5).toFixed(2), cashedAt, k: k++ };
-    });
-  });
-  const feedKeyR = useRef(28);
+  const [liveFeed, setLiveFeed] = useState<LiveEntry[]>([]);
+  const feedKeyR = useRef(0);
 
   const phaseR       = useRef<CPhase>('waiting');
   const startR       = useRef(0);
@@ -773,7 +746,7 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
 
     const count = 20 + Math.floor(Math.random() * 8);
     const fd = Array.from({ length: count }, (_, i) => ({
-      name: _CRASH_NAMES[i % _CRASH_NAMES.length],
+      name: ALL_FAKE_NAMES[i % ALL_FAKE_NAMES.length],
       bet: +(0.05 + Math.random() * 2.5).toFixed(2),
       cashTarget: _fakeCashTarget(cp),
       cashedAt: null as number|null,
@@ -1262,15 +1235,6 @@ type MinesPhase = 'waiting' | 'playing' | 'won' | 'lost';
 
 type MinesFeedEntry = { username: string; bet: number; payout: number; profit: number; mines: number };
 
-const MINES_FEED_INIT: MinesFeedEntry[] = [
-  { username: 'Marco T.',  bet: 1.0,  payout: 2.43,  profit: 1.43,  mines: 3 },
-  { username: 'Léa R.',    bet: 0.5,  payout: 0,     profit: -0.5,  mines: 5 },
-  { username: 'Yusuf K.',  bet: 2.0,  payout: 5.12,  profit: 3.12,  mines: 3 },
-  { username: 'Chen W.',   bet: 0.1,  payout: 0,     profit: -0.1,  mines: 10 },
-  { username: 'Amira S.',  bet: 5.0,  payout: 9.85,  profit: 4.85,  mines: 5 },
-  { username: 'Dmytro P.', bet: 0.05, payout: 0,     profit: -0.05, mines: 3 },
-  { username: 'Fatou D.',  bet: 0.2,  payout: 0.44,  profit: 0.24,  mines: 3 },
-];
 
 const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResult }> = ({ onBack, streak, onResult }) => {
   const { currentUser, placeGameBet, recordGameResult, demoMode, demoBalance } = useAppStore();
@@ -1282,7 +1246,7 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
   const [revealed, setRevealed]   = useState<Set<number>>(new Set());
   const [safeCount, setSafeCount] = useState(0);
   const [feedTab, setFeedTab]     = useState<'all' | 'mine'>('all');
-  const [feed, setFeed]           = useState<MinesFeedEntry[]>(MINES_FEED_INIT);
+  const [feed, setFeed]           = useState<MinesFeedEntry[]>([]);
   const [myFeed, setMyFeed]       = useState<MinesFeedEntry[]>([]);
   const activeBetRef              = useRef(0);
   const effMinesRef               = useRef<number>(mineCount);
@@ -1600,7 +1564,7 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
                 <input type="number" value={bet} min={0.01} max={50} step={0.01}
                   onChange={e => { const v = +e.target.value; if (!isNaN(v)) setBet(Math.max(0.01, Math.min(50, v))); }}
                   style={{ flex: 1, background: 'transparent', color: '#f8fafc', fontSize: 20, fontWeight: 700, outline: 'none', border: 'none' }} />
-                <span style={{ fontSize: 13, fontWeight: 700, color: '#64748b' }}>TON</span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: '#64748b', display: 'flex', alignItems: 'center', gap: 3 }}><TonLogo size={13} />TON</span>
               </div>
             </div>
             <BetQuickButtons setBet={setBet} maxBal={bal} />
@@ -1969,7 +1933,7 @@ const TowerGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
               <input type="number" value={bet} min={0.01} max={50} step={0.01}
                 onChange={e => { const v = +e.target.value; if (!isNaN(v)) setBet(Math.max(0.01, Math.min(50, v))); }}
                 className="flex-1 bg-transparent text-2xl font-bold text-white outline-none" />
-              <span className="text-base font-bold text-slate-500">TON</span>
+              <span className="text-base font-bold text-slate-500 flex items-center gap-1"><TonLogo size={14} />TON</span>
             </div>
             <BetQuickButtons setBet={setBet} maxBal={bal} />
             <button onClick={start} disabled={effBet < 0.01 || bal < 0.01}
@@ -2608,7 +2572,7 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
               <input type="number" value={bet} min={0.01} max={50} step={0.01} disabled={dropping || autoPlay}
                 onChange={e => { const v = +e.target.value; if (!isNaN(v)) setBet(Math.max(0.01, Math.min(50, v))); }}
                 style={{ flex: 1, background: 'transparent', color: '#f8fafc', fontSize: 20, fontWeight: 700, outline: 'none', border: 'none' }} />
-              <span style={{ fontSize: 13, fontWeight: 700, color: '#64748b' }}>TON</span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: '#64748b', display: 'flex', alignItems: 'center', gap: 3 }}><TonLogo size={13} />TON</span>
             </div>
           </div>
           <BetQuickButtons setBet={setBet} maxBal={bal} />
@@ -2673,19 +2637,6 @@ function formatFeedTime(ts: number): string {
   return `il y a ${Math.floor(s / 3600)}h`;
 }
 
-const _NOW = Date.now();
-const FEED_DATA: FeedEntry[] = [
-  { username: 'Léa R.',      bet: 0.05, win: 0.00, mult: 0,    game: 'Crash',           createdAt: _NOW -  1 * 60000 },
-  { username: 'Yusuf K.',    bet: 0.10, win: 2.80, mult: 2.80, game: 'Plinko',   createdAt: _NOW -  3 * 60000 },
-  { username: 'Marco T.',    bet: 1.0,  win: 0.00, mult: 0,    game: 'Tower',    createdAt: _NOW -  6 * 60000 },
-  { username: 'Chen W.',     bet: 0.02, win: 0.04, mult: 2,    game: 'Tower',    createdAt: _NOW -  9 * 60000 },
-  { username: 'Amira S.',    bet: 0.50, win: 1.28, mult: 2.56, game: 'Crash',           createdAt: _NOW - 14 * 60000 },
-  { username: 'Priya S.',    bet: 0.05, win: 0.00, mult: 0,    game: 'Mines',    createdAt: _NOW - 19 * 60000 },
-  { username: 'Fatou D.',    bet: 0.10, win: 0.19, mult: 2,    game: 'Tower',    createdAt: _NOW - 25 * 60000 },
-  { username: 'Nicolás V.',  bet: 0.03, win: 1.08, mult: 36,   game: 'Tower',    createdAt: _NOW - 33 * 60000 },
-  { username: 'Kwame O.',    bet: 0.20, win: 0.00, mult: 0,    game: 'Plinko',   createdAt: _NOW - 41 * 60000 },
-  { username: 'Hana P.',     bet: 0.01, win: 0.02, mult: 2,    game: 'Dice',     createdAt: _NOW - 48 * 60000 },
-];
 
 // ══════════════════════════════════════════════════════════════════
 // GAMES HUB
@@ -2769,7 +2720,7 @@ export const MiniAppGames: React.FC = () => {
   });
   const [muted, setMuted]           = useState(_soundMuted);
   const [showConfetti, setShowConfetti] = useState(false);
-  const [liveFeed, setLiveFeed]     = useState<FeedEntry[]>(FEED_DATA);
+  const [liveFeed, setLiveFeed]     = useState<FeedEntry[]>([]);
   const [, setTick]                 = useState(0);
   const feedIdxRef                  = useRef(0);
 
@@ -2852,8 +2803,8 @@ export const MiniAppGames: React.FC = () => {
           <p className="text-[10px] uppercase" style={{ color: '#64748b' }}>
             {demoMode ? '🎮 Démo' : 'Solde'}
           </p>
-          <p className="text-sm font-bold" style={{ color: demoMode ? '#f59e0b' : '#f8fafc' }}>
-            <CountUp value={bal} decimals={3} suffix=" TON" />
+          <p className="text-sm font-bold" style={{ color: demoMode ? '#f59e0b' : '#f8fafc', display: 'flex', alignItems: 'center', gap: 3 }}>
+            <TonLogo size={13} /><CountUp value={bal} decimals={3} />
           </p>
         </div>
       </div>
@@ -3045,7 +2996,7 @@ export const MiniAppGames: React.FC = () => {
                   fontSize: 13, fontWeight: 600,
                   color: f.win > f.bet ? '#22c55e' : f.win > 0 ? '#f59e0b' : '#64748b',
                 }}>
-                  {f.win > 0 ? `+${f.win.toFixed(2)} TON` : `−${f.bet.toFixed(2)} TON`}
+                  {f.win > 0 ? <><TonLogo size={11} />+{f.win.toFixed(2)}</> : <>−{f.bet.toFixed(2)}</>}
                 </span>
                 <p style={{ fontSize: 10, color: '#64748b' }}>{formatFeedTime(f.createdAt)}</p>
               </div>
