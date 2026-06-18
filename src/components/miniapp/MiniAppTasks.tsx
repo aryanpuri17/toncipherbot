@@ -156,6 +156,7 @@ const REQUIRED_MS         = 30_000; // bots: 30s
 const CHANNEL_REQUIRED_MS = 5_000;  // channels/groups: 5s
 const VIDEO_REQUIRED_MS   = 20_000; // videos: 20s
 const SOCIAL_REQUIRED_MS  = 5_000;  // social follow/like: 5s
+const MAX_VERIFY_GRACE_MS = 30 * 60_000; // 30-min window after timer expires to verify
 const departKey = (id: string) => `tc_task_depart_${id}`;
 
 type DepartEntry = { ts: number; ms: number };
@@ -237,10 +238,16 @@ export const MiniAppTasks: React.FC = () => {
     keys.forEach(key => {
       const id      = key.replace('tc_task_depart_', '');
       const entry   = parseDeparture(localStorage.getItem(key));
-      if (!entry) return;
-      const remainingMs = entry.ms - (now - entry.ts);
+      if (!entry) { localStorage.removeItem(key); return; }
+      const elapsed     = now - entry.ts;
+      const remainingMs = entry.ms - elapsed;
 
       if (remainingMs <= 0) {
+        // Stale entry from a previous session — clear it, force re-join
+        if (elapsed > entry.ms + MAX_VERIFY_GRACE_MS) {
+          localStorage.removeItem(key);
+          return;
+        }
         setTaskStates(prev => ({ ...prev, [id]: { phase: 'ready' } }));
       } else {
         setTaskStates(prev => ({ ...prev, [id]: { phase: 'too_early' } }));
@@ -468,8 +475,11 @@ export const MiniAppTasks: React.FC = () => {
     setPhase(card.id, 'verifying');
     await new Promise<void>(r => setTimeout(r, 800));
 
-    const entry = parseDeparture(localStorage.getItem(departKey(card.id)));
-    const verified = entry != null && (Date.now() - entry.ts) >= entry.ms;
+    const entry   = parseDeparture(localStorage.getItem(departKey(card.id)));
+    const elapsed  = entry ? Date.now() - entry.ts : 0;
+    const verified = entry != null
+      && elapsed >= entry.ms
+      && elapsed <= entry.ms + MAX_VERIFY_GRACE_MS;
 
     if (!verified) {
       setPhase(card.id, 'not_subscribed');
@@ -576,12 +586,12 @@ export const MiniAppTasks: React.FC = () => {
       : 'Faire';
 
     const notSubbedMsg = card.type === 'start_bot'
-      ? "Bot non démarré — envoyez /start d'abord."
+      ? 'Temps insuffisant dans le bot — retournez-y et restez 30 secondes.'
       : card.type === 'watch_video'
-      ? 'Non détecté — regardez la vidéo jusqu\'à la fin.'
+      ? 'Temps insuffisant — regardez la vidéo jusqu\'à la fin (20s min).'
       : card.type === 'social'
-      ? 'Action non détectée — effectuez l\'action puis réessayez.'
-      : 'Abonnement non détecté — rejoignez d\'abord.';
+      ? 'Action non détectée — effectuez l\'action puis revenez.'
+      : 'Temps insuffisant — rejoignez et restez quelques secondes.';
 
     const notSubbed = phase === 'not_subscribed';
 
