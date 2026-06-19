@@ -645,7 +645,7 @@ export const MiniAppTasks: React.FC = () => {
 
   // ── Filter state ─────────────────────────────────────────────────────────────
 
-  const [activeFilter, setActiveFilter] = React.useState<'all' | 'daily' | 'special' | 'channel' | 'bot' | 'socials'>('all');
+  const [activeFilter, setActiveFilter] = React.useState<'all' | 'special' | 'channel' | 'bot' | 'socials'>('all');
 
   // ── Card renderer ────────────────────────────────────────────────────────────
 
@@ -1122,7 +1122,6 @@ export const MiniAppTasks: React.FC = () => {
 
   const getFilteredCards = (): CardTask[] => {
     switch (activeFilter) {
-      case 'daily':   return allCards.filter(c => c.type === 'daily');
       case 'special': return allCards.filter(c => c.type === 'special');
       case 'channel': return allCards.filter(c => c.type === 'join_channel' || c.type === 'join_group');
       case 'bot':     return allCards.filter(c => c.type === 'start_bot');
@@ -1177,12 +1176,9 @@ export const MiniAppTasks: React.FC = () => {
         {/* Filter tabs */}
         <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 2 }}>
           {([
-            { key: 'all',     label: 'Toutes',             count: allCards.length,                                                                  always: true },
-            { key: 'daily',   label: '📅 Quotidien',      count: allCards.filter(c => c.type === 'daily').length,                                    always: true },
-            { key: 'special', label: '⭐ Spécial',        count: allCards.filter(c => c.type === 'special').length + promoTasks.length,              always: true },
-            { key: 'channel', label: '📢 Canaux',         count: allCards.filter(c => c.type === 'join_channel' || c.type === 'join_group').length,   always: true },
-            { key: 'bot',     label: '🤖 Bots',           count: allCards.filter(c => c.type === 'start_bot').length,                               always: true },
-            { key: 'socials', label: '📱 Réseaux sociaux', count: socialsCount,                                                                       always: false },
+            { key: 'all',     label: 'Toutes',             count: allCards.length + promoTasks.length, always: true },
+            { key: 'special', label: '⭐ Spécial',         count: promoTasks.length,                   always: false },
+            { key: 'socials', label: '📱 Réseaux sociaux', count: socialsCount,                        always: false },
           ] as { key: typeof activeFilter; label: string; count: number; always: boolean }[])
           .filter(f => f.always || f.count > 0)
           .map(f => (
@@ -1208,35 +1204,56 @@ export const MiniAppTasks: React.FC = () => {
         {activeFilter === 'all' ? (() => {
           const telegramCards = filteredCards.filter(isTelegramCard);
           const socialCards   = filteredCards.filter(isSocialCard);
-          const otherCards    = filteredCards.filter(c => !isTelegramCard(c) && !isSocialCard(c));
+
+          const SectionHeader = ({ label, count, hint }: { label: string; count: number; hint: string }) => (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0 4px' }}>
+              <span style={{ fontSize: 10, fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.12em' }}>{label}</span>
+              <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.06)' }} />
+              {count > 0 && <span style={{ fontSize: 10, color: '#334155', fontWeight: 700 }}>{count}</span>}
+              <button
+                onClick={() => { localStorage.setItem('tc_create_type_hint', hint); setMiniAppPage('createTask'); }}
+                style={{
+                  width: 22, height: 22, borderRadius: 6,
+                  background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.25)',
+                  color: '#60a5fa', fontSize: 15, fontWeight: 800, lineHeight: 1,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  cursor: 'pointer', padding: 0, flexShrink: 0,
+                }}
+              >+</button>
+            </div>
+          );
+
+          const EmptyHint = ({ text }: { text: string }) => (
+            <div style={{
+              padding: '12px 14px', borderRadius: 12, textAlign: 'center',
+              background: 'rgba(255,255,255,0.02)', border: '1px dashed rgba(255,255,255,0.06)',
+            }}>
+              <p style={{ fontSize: 11, color: '#334155', margin: 0 }}>{text}</p>
+            </div>
+          );
+
           return (
             <>
-              {otherCards.map(card => renderCard(card))}
-              {telegramCards.length > 0 && (
-                <>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0' }}>
-                    <span style={{ fontSize: 10, fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Telegram</span>
-                    <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.06)' }} />
-                    <span style={{ fontSize: 10, color: '#334155', fontWeight: 700 }}>{telegramCards.length}</span>
-                  </div>
-                  {telegramCards.map(card => renderCard(card))}
-                </>
-              )}
-              {socialCards.length > 0 && (
-                <>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', marginTop: 4 }}>
-                    <span style={{ fontSize: 10, fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Réseaux sociaux</span>
-                    <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.06)' }} />
-                    <span style={{ fontSize: 10, color: '#334155', fontWeight: 700 }}>{socialCards.length}</span>
-                  </div>
-                  {socialCards.map(card => renderCard(card))}
-                </>
-              )}
+              <SectionHeader label="Telegram" count={telegramCards.length} hint="join_channel" />
+              {telegramCards.length === 0
+                ? <EmptyHint text="Aucune tâche Telegram · appuyez sur + pour en créer une" />
+                : telegramCards.map(card => renderCard(card))}
+              <SectionHeader label="Réseaux sociaux" count={socialCards.length} hint="social" />
+              {socialCards.length === 0
+                ? <EmptyHint text="Aucune tâche sur les réseaux sociaux · appuyez sur + pour en créer une" />
+                : socialCards.map(card => renderCard(card))}
             </>
           );
         })() : filteredCards.map(card => renderCard(card))}
 
-        {/* Promo tasks (shown in 'all' and 'special' filters) */}
+        {/* Promo / Spécial tasks */}
+        {showPromo && promoTasks.length > 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0 4px', marginTop: 4 }}>
+            <span style={{ fontSize: 10, fontWeight: 800, color: '#ec4899', textTransform: 'uppercase', letterSpacing: '0.12em' }}>⭐ Spécial</span>
+            <div style={{ flex: 1, height: 1, background: 'rgba(236,72,153,0.15)' }} />
+            <span style={{ fontSize: 10, color: '#ec4899', fontWeight: 700 }}>{promoTasks.length}</span>
+          </div>
+        )}
         {showPromo && promoTasks.map(task => {
           const isAutoReferral = task.verificationMethod === 'auto_referral';
 

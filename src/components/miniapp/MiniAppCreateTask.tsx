@@ -36,6 +36,12 @@ export const MiniAppCreateTask: React.FC = () => {
   const botName    = platformConfig.botUsername           || 'TonCipher_bot';
 
   const [type,        setType]        = useState<TaskType>('join_channel');
+
+  React.useEffect(() => {
+    const hint = localStorage.getItem('tc_create_type_hint') as TaskType | null;
+    if (hint && TASK_TYPES.some(t => t.value === hint)) setType(hint);
+    localStorage.removeItem('tc_create_type_hint');
+  }, []);
   const [title,       setTitle]       = useState('');
   const [description, setDescription] = useState('');
   const [targetUrl,   setTargetUrl]   = useState('');
