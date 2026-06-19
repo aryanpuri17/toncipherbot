@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useAppStore } from '../../store/appStore';
 import { useTonConnectUI, useTonWallet } from '@tonconnect/ui-react';
 import { ArrowDownLeft, ArrowUpRight, TrendingUp, Copy, CheckCircle, ChevronRight, AlertCircle, Wallet, Unlink } from 'lucide-react';
@@ -188,6 +188,7 @@ export const MiniAppDeposit: React.FC = () => {
     return nets[0]?.id ?? '1';
   });
   const [copied, setCopied] = useState(false);
+  const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [depositAmount, setDepositAmount] = useState('');
   const [txStatus, setTxStatus] = useState<'idle' | 'pending' | 'success' | 'error'>('idle');
   const [txError, setTxError] = useState('');
@@ -198,10 +199,12 @@ export const MiniAppDeposit: React.FC = () => {
     [currentUser.telegramId, currentUser.id]
   );
   const [codeCopied, setCodeCopied] = useState(false);
+  const codeCopyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleCopyCode = () => {
     navigator.clipboard.writeText(depositCode).catch(() => {});
+    if (codeCopyTimeoutRef.current) clearTimeout(codeCopyTimeoutRef.current);
     setCodeCopied(true);
-    setTimeout(() => setCodeCopied(false), 2000);
+    codeCopyTimeoutRef.current = setTimeout(() => setCodeCopied(false), 2000);
   };
 
   const depositNetworks = cryptoNetworks.filter(n => n.isActive && n.isDepositEnabled);
@@ -228,8 +231,9 @@ export const MiniAppDeposit: React.FC = () => {
     if (!hasAddress) return;
     navigator.clipboard.writeText(address).catch(() => {});
     haptic.impact('light');
+    if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
     setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    copyTimeoutRef.current = setTimeout(() => setCopied(false), 2000);
   };
 
   const networkIcon = (symbol: string) => {

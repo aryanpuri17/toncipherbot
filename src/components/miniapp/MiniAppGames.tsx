@@ -674,6 +674,7 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
   const [autoCash,  setAutoCash]  = useState('');
   const [roundId,   setRoundId]   = useState(1);
   const [betTab,     setBetTab]     = useState<'all' | 'my' | 'top'>('all');
+  const [crashFlash, setCrashFlash] = useState(false);
 
   const phaseR       = useRef<CPhase>('waiting');
   const startR       = useRef(0);
@@ -749,6 +750,7 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
         cancelAnimationFrame(rafR.current);
         phaseR.current = 'crashed';
         setPhase('crashed');
+        setCrashFlash(true);
         setCrashedAt(crashR.current);
         setMult(crashR.current);
         setTEl(Math.log(Math.max(1.0001, crashR.current)) / _CRASH_RATE);
@@ -777,6 +779,12 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
   }, [placeGameBet, recordGameResult, onResult]);
 
   useEffect(() => { startFlightR.current = startFlight; }, [startFlight]);
+
+  useEffect(() => {
+    if (!crashFlash) return;
+    const id = setTimeout(() => setCrashFlash(false), 600);
+    return () => clearTimeout(id);
+  }, [crashFlash]);
 
   useEffect(() => {
     if (phase !== 'waiting') return;
@@ -1008,9 +1016,12 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
           )}
         </div>
 
-        {phase === 'crashed' && (
-          <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at center, rgba(239,68,68,0.2), transparent 70%)', pointerEvents: 'none', animation: 'crashFlash 0.6s ease-out forwards' }} />
-        )}
+        <div style={{
+          position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 10,
+          background: 'rgba(239,68,68,0.35)',
+          opacity: crashFlash ? 1 : 0,
+          transition: crashFlash ? 'none' : 'opacity 0.6s ease-out',
+        }} />
       </div>
 
       {/* ═══ SCROLLABLE AREA ═══ */}
@@ -1255,6 +1266,7 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
 
   const revealTile = (idx: number) => {
     if (phase !== 'playing' || revealed.has(idx)) return;
+    snd.tick();
 
     const isMine = minePos.has(idx);
 
@@ -1602,11 +1614,20 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
           }} className="p-4 text-center space-y-2">
             <p className="text-3xl">{phase === 'won' ? '💎' : '💥'}</p>
             <p className="text-lg font-black" style={{ color: '#f8fafc' }}>
-              {phase === 'won' ? `+${curWin.toFixed(4)} GRAM` : `−${activeBetRef.current.toFixed(4)} GRAM`}
+              {phase === 'won'
+                ? <><span style={{ color: '#4ade80' }}>+</span><CountUp value={curWin} decimals={4} duration={600} /> GRAM</>
+                : `−${activeBetRef.current.toFixed(4)} GRAM`}
             </p>
             <p className="text-sm" style={{ color: '#64748b' }}>
               {phase === 'won' ? `${safeCount} cases sûres · ×${curMult.toFixed(2)}` : 'Mine ! Dommage…'}
             </p>
+            <button
+              onClick={() => { reset(); }}
+              style={{ marginTop: 8, width: '100%', padding: '10px 0', borderRadius: 12,
+                border: '1px solid #1e2847', background: 'transparent',
+                color: '#64748b', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+              ↺ Rejouer ({activeBetRef.current?.toFixed(2)} GRAM)
+            </button>
           </div>
         )}
 
@@ -2460,7 +2481,9 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
               padding: '4px 16px', borderRadius: 20, pointerEvents: 'none', whiteSpace: 'nowrap',
             }}>
               <p style={{ fontSize: 14, fontWeight: 900, color: '#fff' }}>
-                ×{lastWin.mult} — {lastWin.win > effBet ? `+${(lastWin.win - effBet).toFixed(4)} GRAM` : `−${(effBet - lastWin.win).toFixed(4)} GRAM`}
+                ×{lastWin.mult} — {lastWin.win > effBet
+                  ? <><span>+</span><CountUp value={+(lastWin.win - effBet).toFixed(4)} decimals={4} duration={600} /> GRAM</>
+                  : `−${(effBet - lastWin.win).toFixed(4)} GRAM`}
               </p>
             </div>
           )}
