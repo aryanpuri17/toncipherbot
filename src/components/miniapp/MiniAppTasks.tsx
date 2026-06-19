@@ -157,8 +157,8 @@ type TaskPhase = 'idle' | 'too_early' | 'ready' | 'verifying' | 'not_subscribed'
 
 const REQUIRED_MS         = 30_000; // bots: 30s
 const CHANNEL_REQUIRED_MS = 5_000;  // channels/groups: 5s
-const VIDEO_REQUIRED_MS   = 20_000; // videos: 20s
-const SOCIAL_REQUIRED_MS  = 5_000;  // social follow/like: 5s
+const VIDEO_REQUIRED_MS   = 30_000; // videos: 30s
+const SOCIAL_REQUIRED_MS  = 30_000; // social/YouTube: 30s minimum
 const MAX_VERIFY_GRACE_MS = 30 * 60_000; // 30-min window after timer expires to verify
 const departKey = (id: string) => `tc_task_depart_${id}`;
 
@@ -250,7 +250,6 @@ export const MiniAppTasks: React.FC = () => {
 
       const afterPhase = (e: DepartEntry): TaskPhase =>
         e.source === 'api' && e.type === 'start_bot' ? 'needs_bot_confirm'
-        : e.source === 'api' && e.type === 'social'   ? 'needs_proof'
         : 'ready';
 
       if (remainingMs <= 0) {
@@ -434,7 +433,7 @@ export const MiniAppTasks: React.FC = () => {
     const waitMs  = card.type === 'start_bot' ? REQUIRED_MS : card.type === 'watch_video' ? VIDEO_REQUIRED_MS : card.type === 'social' ? SOCIAL_REQUIRED_MS : CHANNEL_REQUIRED_MS;
     const autoKey = `depart_auto_${card.id}`;
     if (timerRefs.current[autoKey]) { clearTimeout(timerRefs.current[autoKey]); delete timerRefs.current[autoKey]; }
-    localStorage.setItem(departKey(card.id), JSON.stringify({ ts: Date.now(), ms: waitMs }));
+    localStorage.setItem(departKey(card.id), JSON.stringify({ ts: Date.now(), ms: waitMs, type: card.type, source: card.source }));
     setPhase(card.id, 'too_early');
     timerRefs.current[autoKey] = setTimeout(() => {
       delete timerRefs.current[autoKey];
@@ -835,7 +834,9 @@ export const MiniAppTasks: React.FC = () => {
 
                   <div style={{ flex: 1 }}>
                     <p style={{ fontSize: 12, fontWeight: 700, color: '#fbbf24', margin: 0, marginBottom: 4 }}>
-                      {card.type === 'start_bot'
+                      {remainingSec > 0 && (card.type === 'watch_video' || card.type === 'social')
+                        ? '⚠️ Revenu trop tôt !'
+                        : card.type === 'start_bot'
                         ? 'Restez dans le bot…'
                         : card.type === 'watch_video'
                         ? 'Regardez la vidéo…'
@@ -845,7 +846,9 @@ export const MiniAppTasks: React.FC = () => {
                     </p>
                     {remainingSec > 0 ? (
                       <p style={{ fontSize: 10, color: '#92400e', margin: 0 }}>
-                        Vérification dans <strong style={{ color: '#f59e0b' }}>{remainingSec}s</strong>
+                        {(card.type === 'watch_video' || card.type === 'social')
+                          ? <>Retournez et attendez encore <strong style={{ color: '#f59e0b' }}>{remainingSec}s</strong></>
+                          : <>Vérification dans <strong style={{ color: '#f59e0b' }}>{remainingSec}s</strong></>}
                       </p>
                     ) : (
                       <p style={{ fontSize: 10, fontWeight: 700, color: '#34d399', margin: 0 }}>
