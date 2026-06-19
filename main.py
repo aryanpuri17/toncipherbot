@@ -26,7 +26,13 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 BOT_TOKEN         = os.getenv("BOT_TOKEN", "")
 WEBAPP_URL        = os.getenv("WEBAPP_URL", "https://toncipherbot.onrender.com")
 PORT              = int(os.getenv("PORT", 8080))
-DB_PATH           = os.path.join(os.path.dirname(__file__), "data", "toncipherbot.db")
+# DATABASE_PATH env var → set to a persistent volume path on Railway/Render
+# e.g. DATABASE_PATH=/data/toncipherbot.db  (with volume mounted at /data)
+# Falls back to ./data/ (ephemeral — data is lost on restarts) if not set.
+DB_PATH = os.getenv(
+    "DATABASE_PATH",
+    os.path.join(os.path.dirname(__file__), "data", "toncipherbot.db"),
+)
 ADMIN_SECRET      = os.getenv("ADMIN_SECRET", "")
 ADMIN_TELEGRAM_ID = int(os.getenv("ADMIN_TELEGRAM_ID", "0"))
 # Canal Telegram obligatoire (ex: @TonCipher_official ou -100xxxxxxxxxx)
