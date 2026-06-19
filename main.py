@@ -151,6 +151,7 @@ def _validate_init_data(init_data: str, bot_token: str) -> bool:
 
 def _check_admin_auth(request: web.Request) -> bool:
     if not ADMIN_SECRET:
+        log.warning("ADMIN_SECRET is not set — admin API is publicly accessible!")
         return True
     return request.headers.get("X-Admin-Key", "") == ADMIN_SECRET
 
@@ -1305,6 +1306,12 @@ async def api_user_withdrawal_status(request: web.Request) -> web.Response:
     if not telegram_id:
         return web.json_response([], headers=_CORS)
 
+    # Verify the request comes from the same user via initData
+    init_data = request.headers.get("X-Init-Data", "")
+    caller_id = _init_data_user_id(init_data)
+    if caller_id and caller_id != telegram_id:
+        return web.json_response({"error": "Forbidden"}, status=403, headers=_CORS)
+
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute("""
             SELECT id, amount, currency, status, processed_at, admin_note,
@@ -1340,6 +1347,12 @@ async def api_user_transactions(request: web.Request) -> web.Response:
         return web.json_response([], headers=_CORS)
     if not telegram_id:
         return web.json_response([], headers=_CORS)
+
+    # Verify the request comes from the same user via initData
+    init_data = request.headers.get("X-Init-Data", "")
+    caller_id = _init_data_user_id(init_data)
+    if caller_id and caller_id != telegram_id:
+        return web.json_response({"error": "Forbidden"}, status=403, headers=_CORS)
 
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute("""
@@ -2844,11 +2857,11 @@ async def api_proof_image(request: web.Request) -> web.Response:
             row = await cur.fetchone()
 
     if not row:
-        return web.Response(status=404)
+        return web.Response(status=404, headers=_CORS)
 
     file_id, creator_id = row
     if telegram_id != creator_id and telegram_id != ADMIN_TELEGRAM_ID:
-        return web.Response(status=403)
+        return web.Response(status=403, headers=_CORS)
 
     try:
         tg_file = await bot.get_file(file_id)
@@ -2858,7 +2871,7 @@ async def api_proof_image(request: web.Request) -> web.Response:
     except web.HTTPFound:
         raise
     except Exception:
-        return web.Response(status=500)
+        return web.Response(status=500, headers=_CORS)
 
 
 async def api_report_proof_abuse(request: web.Request) -> web.Response:
@@ -3080,7 +3093,7 @@ async def main() -> None:
 
     tasks: list = [start_web()]
     if bot:
-        tasks.append(dp.start_polling(bot, allowed_updates=["message"]))
+        tasks.append(dp.start_polling(bot, allowed_updates=["message", "callback_query"]))
     if GITHUB_TOKEN and DB_BACKUP_KEY:
         tasks.append(_periodic_backup())
         log.info("GitHub DB backup enabled (every 10 min)")

@@ -148,7 +148,7 @@ export const MiniAppReferral: React.FC = () => {
     else if (miniAppPage === 'referral') setTab('invite');
   }, [miniAppPage]);
 
-  const referralLink = `https://t.me/${platformConfig.botUsername}/${platformConfig.appShortName}?startapp=r_${currentUser.telegramId || currentUser.referralCode}`;
+  const referralLink = `https://t.me/${platformConfig.botUsername}/${platformConfig.appShortName}?startapp=r_${currentUser.telegramId !== 0 ? currentUser.telegramId : currentUser.referralCode}`;
 
   const handleCopy = () => {
     navigator.clipboard.writeText(referralLink).catch(() => {});

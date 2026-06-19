@@ -228,6 +228,7 @@ export const MiniAppDeposit: React.FC = () => {
 
   // TON market price (for USDT→GRAM conversion)
   const [tonPrice, setTonPrice] = useState<number | null>(null);
+  const [tonPriceError, setTonPriceError] = useState(false);
   useEffect(() => {
     fetch('https://api.binance.com/api/v3/ticker/price?symbol=TONUSDT')
       .then(r => r.json())
@@ -239,8 +240,9 @@ export const MiniAppDeposit: React.FC = () => {
           .then((d: { 'the-open-network'?: { usd?: number } }) => {
             const p = d['the-open-network']?.usd;
             if (p) setTonPrice(p);
+            else setTonPriceError(true);
           })
-          .catch(() => {});
+          .catch(() => { setTonPriceError(true); });
       });
   }, []);
   const [codeCopied, setCodeCopied] = useState(false);
@@ -589,12 +591,17 @@ export const MiniAppDeposit: React.FC = () => {
                 </p>
               )}
 
+              {tonPriceError && (
+                <p className="text-[11px] text-red-400 text-center">
+                  Impossible de récupérer le prix du marché. Réessayez plus tard.
+                </p>
+              )}
               <button onClick={handleRegisterUSDT}
                 disabled={!depositAmount || !hasAddress || !tonPrice}
                 className="w-full btn-primary py-3.5 rounded-xl text-sm font-semibold text-white disabled:opacity-40 disabled:cursor-not-allowed">
                 {tonPrice
                   ? `J'ai envoyé ${depositAmount || '0'} USDT → Convertir en GRAM`
-                  : 'Chargement du prix marché…'}
+                  : tonPriceError ? 'Prix indisponible' : 'Chargement du prix marché…'}
               </button>
             </>
           )}
@@ -779,7 +786,7 @@ export const MiniAppWithdraw: React.FC = () => {
             <div className="flex items-center justify-between p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-emerald-400" />
-                <span className="text-xs text-emerald-400 font-mono">{connectedAddress.slice(0, 8)}...{connectedAddress.slice(-4)}</span>
+                <span className="text-xs text-emerald-400 font-mono">{rawToFriendly(connectedAddress).slice(0, 8)}...{rawToFriendly(connectedAddress).slice(-4)}</span>
               </div>
               <button onClick={() => tonConnectUI.disconnect()} className="text-[10px] text-slate-400 hover:text-red-400 flex items-center gap-1 transition-colors">
                 <Unlink className="w-3 h-3" /> Déconnecter

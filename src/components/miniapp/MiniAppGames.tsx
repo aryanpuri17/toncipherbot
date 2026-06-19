@@ -718,9 +718,6 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
     cashedOutR.current = m;
   }, [placeGameBet, recordGameResult, onResult]);
 
-  const doCashoutR = useRef(doCashout);
-  useEffect(() => { doCashoutR.current = doCashout; }, [doCashout]);
-
   const doCashout2 = useCallback((m: number) => {
     const mb = myBet2R.current;
     if (mb === null || cashedOut2R.current !== null) return;
@@ -731,8 +728,6 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
     setCashedOut2(m);
     cashedOut2R.current = m;
   }, [placeGameBet, recordGameResult, onResult]);
-  const doCashout2R = useRef(doCashout2);
-  useEffect(() => { doCashout2R.current = doCashout2; }, [doCashout2]);
 
   const startFlight = useCallback(() => {
     cancelAnimationFrame(rafR.current);
@@ -767,12 +762,10 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
     setPhase('flying');
     startR.current = performance.now();
 
-    let fc = 0;
     const tick = (now: number) => {
       if (phaseR.current !== 'flying') return;
       const t = (now - startR.current) / 1000;
       const m = Math.exp(_CRASH_RATE * t);
-      fc++;
 
       setMult(m);
       setTEl(t);
@@ -793,13 +786,24 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
           setActiveBet(null);
           activeBetR.current = null;
         }
+        const ab2 = myBet2R.current;
+        if (ab2 !== null && cashedOut2R.current === null) {
+          placeGameBet(ab2, 0);
+          recordGameResult('Crash', ab2, 0);
+          onResult(false);
+          setMyBet2(null);
+          myBet2R.current = null;
+        }
+        setCashedOut2(null);
+        cashedOut2R.current = null;
+        setQueuedBet2(null);
+        queuedBet2R.current = null;
         setHistory(h => [+(crashR.current).toFixed(2), ...h].slice(0, 20));
         clearTimeout(resetTimerR.current);
         resetTimerR.current = setTimeout(() => {
           setRoundId(r => r + 1);
           phaseR.current = 'waiting';
           setPhase('waiting');
-          setBetTab('all');
         }, 3000);
         return;
       }
@@ -1189,7 +1193,7 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
                 {[...history].sort((a, b) => b - a).slice(0, 8).map((h, i) => (
                   <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', padding: '5px 12px', alignItems: 'center', borderBottom: i < 7 ? '1px solid rgba(30,40,71,0.3)' : 'none' }}>
                     <span style={{ fontSize: 12, fontWeight: 800, color: h >= 10 ? '#4ade80' : h >= 5 ? '#f59e0b' : '#818cf8' }}>{h.toFixed(2)}×</span>
-                    <span style={{ fontSize: 11, color: '#64748b' }}>Round #{roundId - i}</span>
+                    <span style={{ fontSize: 11, color: '#64748b' }}>Top #{i + 1}</span>
                   </div>
                 ))}
               </>

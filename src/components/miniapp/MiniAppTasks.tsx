@@ -152,22 +152,6 @@ function taskAvatarColor(name: string): string {
   return `hsl(${hue}, 60%, 45%)`;
 }
 
-// ── Color map per task type ────────────────────────────────────────────────────
-
-const COLORS: Record<string, { glow: string; bg: string }> = {
-  join_channel: { glow: '#3b82f6', bg: 'rgba(59,130,246,0.12)' },
-  join_group:   { glow: '#8b5cf6', bg: 'rgba(139,92,246,0.12)' },
-  start_bot:    { glow: '#06b6d4', bg: 'rgba(6,182,212,0.12)' },
-  daily:        { glow: '#f59e0b', bg: 'rgba(245,158,11,0.12)' },
-  special:      { glow: '#ec4899', bg: 'rgba(236,72,153,0.12)' },
-  watch_video:    { glow: '#ef4444', bg: 'rgba(239,68,68,0.12)' },
-  social:         { glow: '#f97316', bg: 'rgba(249,115,22,0.12)' },
-  invite_friends: { glow: '#a855f7', bg: 'rgba(168,85,247,0.12)' },
-};
-
-const _getColors = (type: string) => COLORS[type] ?? { glow: '#8b5cf6', bg: 'rgba(139,92,246,0.12)' };
-void _getColors;
-
 // ── Component ──────────────────────────────────────────────────────────────────
 
 export const MiniAppTasks: React.FC = () => {
@@ -229,6 +213,7 @@ export const MiniAppTasks: React.FC = () => {
 
       const afterPhase = (e: DepartEntry): TaskPhase =>
         e.source === 'api' && e.type === 'start_bot' ? 'needs_bot_confirm'
+        : e.source === 'api' && e.type === 'social' ? 'needs_proof'
         : 'ready';
 
       if (remainingMs <= 0) {
@@ -720,7 +705,7 @@ export const MiniAppTasks: React.FC = () => {
             )}
             {!isDone && phase === 'too_early' && !isSocialOrVideo && arrowBtn(() => {}, true)}
             {!isDone && phase === 'too_early' && isSocialOrVideo && arrowBtn(() => handleJoin(card))}
-            {!isDone && (phase === 'not_subscribed' || phase === 'needs_bot_confirm' || phase === 'needs_proof' || phase === 'proof_pending') && arrowBtn(() => void handleVerify(card))}
+            {!isDone && (phase === 'not_subscribed' || phase === 'needs_bot_confirm') && arrowBtn(() => void handleVerify(card))}
           </div>
         </div>
 
@@ -802,7 +787,8 @@ export const MiniAppTasks: React.FC = () => {
 
   const telegramCards = allCards.filter(c => c.type === 'join_channel' || c.type === 'join_group' || c.type === 'start_bot');
   const socialCards   = allCards.filter(c => c.type === 'social' || c.type === 'watch_video');
-  const totalAvailable = allCards.length + promoTasks.length;
+  const totalAvailable = allCards.filter(c => !completedTaskIds.includes(c.id) && !completedApiTaskIds.includes(c.id)).length
+    + promoTasks.filter(c => !completedTaskIds.includes(c.id)).length;
 
   const SectionHead = ({ title, hint, infoOnly }: { title: string; hint?: string; infoOnly?: boolean }) => (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, marginTop: 4 }}>

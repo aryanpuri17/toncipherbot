@@ -1025,8 +1025,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   promoCodes: mockPromoCodes,
   taskSubmissions: mockTaskSubmissions,
 
-  claimedReferralMilestoneIds: [],
-  usedPromoCodeIds: [],
+  claimedReferralMilestoneIds: (() => { try { return JSON.parse(localStorage.getItem('tc_claimed_milestones') || '[]'); } catch { return []; } })(),
+  usedPromoCodeIds: (() => { try { return JSON.parse(localStorage.getItem('tc_used_promos') || '[]'); } catch { return []; } })(),
   // Persisted across sessions — without this the full referral balance would
   // be re-credited as a "delta" on every app open (balance growing on its own).
   lastSyncedReferralBalance: _savedBalance.lastSyncedReferralBalance ?? 0,
@@ -1259,6 +1259,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       balanceMain: state.currentUser.balanceMain + milestone.reward,
       totalEarnings: state.currentUser.totalEarnings + milestone.reward,
     };
+    const newIds = [...state.claimedReferralMilestoneIds, id];
+    localStorage.setItem('tc_claimed_milestones', JSON.stringify(newIds));
     set(s => ({
       claimedReferralMilestoneIds: [...s.claimedReferralMilestoneIds, id],
       currentUser: { ...s.currentUser, ...milestoneUpdate },
@@ -1530,6 +1532,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (state.usedPromoCodeIds.includes(promo.id)) return { success: false, error: 'Vous avez déjà utilisé ce code.' };
     const earned = promo.reward;
     const balanceUpdate = { balanceMain: state.currentUser.balanceMain + earned, totalEarnings: state.currentUser.totalEarnings + earned };
+    const newPromoIds = [...state.usedPromoCodeIds, promo.id];
+    localStorage.setItem('tc_used_promos', JSON.stringify(newPromoIds));
     set(s => ({
       usedPromoCodeIds: [...s.usedPromoCodeIds, promo.id],
       promoCodes: s.promoCodes.map(p => p.id === promo.id ? { ...p, currentUses: p.currentUses + 1 } : p),
