@@ -6,6 +6,33 @@ import { haptic } from '../../lib/haptics';
 
 const displaySymbol = (s: string) => s === 'TON' ? 'GRAM' : s;
 
+// Convert TonConnect raw address (0:hex) → user-friendly UQ... format
+function rawToFriendly(raw: string): string {
+  try {
+    const [wStr, hex] = raw.split(':');
+    if (!hex || hex.length !== 64) return raw;
+    const workchain = parseInt(wStr, 10);
+    const addrBytes = hex.match(/.{2}/g)!.map(b => parseInt(b, 16));
+    const flags     = 0x51; // non-bounceable mainnet
+    const payload   = [flags, workchain & 0xFF, ...addrBytes];
+    let crc = 0;
+    for (const b of payload) {
+      crc ^= b << 8;
+      for (let i = 0; i < 8; i++) crc = (crc & 0x8000) ? ((crc << 1) ^ 0x1021) : (crc << 1);
+    }
+    crc &= 0xFFFF;
+    const full = new Uint8Array([...payload, (crc >> 8) & 0xFF, crc & 0xFF]);
+    let bin = '';
+    for (const b of full) bin += String.fromCharCode(b);
+    return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_');
+  } catch { return raw; }
+}
+
+function shortAddr(raw: string): string {
+  const friendly = rawToFriendly(raw);
+  return friendly.length > 12 ? `${friendly.slice(0, 6)}…${friendly.slice(-4)}` : friendly;
+}
+
 // ── Shared TxRow component ─────────────────────────────────────────────────
 
 type Tx = ReturnType<typeof useAppStore.getState>['transactions'][0];
@@ -198,6 +225,24 @@ export const MiniAppDeposit: React.FC = () => {
     () => currentUser.telegramId !== 0 ? String(currentUser.telegramId) : currentUser.id.slice(-6).toUpperCase(),
     [currentUser.telegramId, currentUser.id]
   );
+
+  // TON market price (for USDT→GRAM conversion)
+  const [tonPrice, setTonPrice] = useState<number | null>(null);
+  useEffect(() => {
+    fetch('https://api.binance.com/api/v3/ticker/price?symbol=TONUSDT')
+      .then(r => r.json())
+      .then((d: { price?: string }) => { if (d.price) setTonPrice(parseFloat(d.price)); })
+      .catch(() => {
+        // fallback: try CoinGecko
+        fetch('https://api.coingecko.com/api/v3/simple/price?ids=the-open-network&vs_currencies=usd')
+          .then(r => r.json())
+          .then((d: { 'the-open-network'?: { usd?: number } }) => {
+            const p = d['the-open-network']?.usd;
+            if (p) setTonPrice(p);
+          })
+          .catch(() => {});
+      });
+  }, []);
   const [codeCopied, setCodeCopied] = useState(false);
   const codeCopyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleCopyCode = () => {
@@ -224,8 +269,6 @@ export const MiniAppDeposit: React.FC = () => {
   const isWalletConnected = !!tonWallet;
   const connectedAddr = tonWallet?.account.address ?? '';
 
-  const shortAddress = (addr: string) =>
-    addr.length > 12 ? `${addr.slice(0, 6)}...${addr.slice(-4)}` : addr;
 
   const handleCopy = () => {
     if (!hasAddress) return;
@@ -276,10 +319,14 @@ export const MiniAppDeposit: React.FC = () => {
     }
   };
 
-  // USDT/TON — user sends manually from TonKeeper, we register pending tx for auto-detection
+  // USDT/TON — convert to GRAM at market price (slightly below) and credit immediately
+  const USDT_DISCOUNT = 0.98; // 2% below market rate
+  const gramFromUsdt = (usdt: number) =>
+    tonPrice ? parseFloat(((usdt / tonPrice) * USDT_DISCOUNT).toFixed(4)) : null;
+
   const handleRegisterUSDT = () => {
-    const amount = parseFloat(depositAmount);
-    if (!amount || amount < (selected?.minDeposit ?? 5)) {
+    const usdtAmount = parseFloat(depositAmount);
+    if (!usdtAmount || usdtAmount < (selected?.minDeposit ?? 5)) {
       setTxError(`Minimum: ${selected?.minDeposit} USDT`);
       return;
     }
@@ -287,17 +334,21 @@ export const MiniAppDeposit: React.FC = () => {
       setTxError("Adresse de la plateforme non configurée — contactez l'admin.");
       return;
     }
+    const gramAmount = gramFromUsdt(usdtAmount);
+    if (!gramAmount) {
+      setTxError("Impossible de récupérer le prix du marché. Réessayez dans un instant.");
+      return;
+    }
     setTxError('');
-    addTransaction({
-      userId: currentUser.id,
-      type: 'deposit',
-      amount,
-      currency: 'USDT',
-      network: 'TON',
-      status: 'pending',
-      address: connectedAddr, // sender — used for auto-detection
-    });
-    setSuccessMsg(`Dépôt de ${amount} USDT enregistré. Il sera confirmé automatiquement après réception.`);
+    // Credit GRAM balance directly (single balance, no USDT split)
+    useAppStore.getState().creditDeposit(
+      currentUser.id,
+      gramAmount,
+      'GRAM',
+      '',
+      'TON (USDT→GRAM)',
+    );
+    setSuccessMsg(`${usdtAmount} USDT convertis en ${gramAmount} GRAM au prix du marché. Solde mis à jour.`);
     setTxStatus('success');
   };
 
@@ -372,7 +423,7 @@ export const MiniAppDeposit: React.FC = () => {
             <div className="flex items-center justify-between p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-emerald-400" />
-                <span className="text-xs text-emerald-400 font-medium">{shortAddress(connectedAddr)}</span>
+                <span className="text-xs text-emerald-400 font-medium">{shortAddr(connectedAddr)}</span>
               </div>
               <button onClick={() => tonConnectUI.disconnect()}
                 className="flex items-center gap-1 text-[10px] text-slate-400 hover:text-red-400 transition-colors">
@@ -479,7 +530,7 @@ export const MiniAppDeposit: React.FC = () => {
               <div className="flex items-center justify-between p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full bg-emerald-400" />
-                  <span className="text-xs text-emerald-400 font-medium">{shortAddress(connectedAddr)}</span>
+                  <span className="text-xs text-emerald-400 font-medium">{shortAddr(connectedAddr)}</span>
                 </div>
                 <button onClick={() => tonConnectUI.disconnect()}
                   className="flex items-center gap-1 text-[10px] text-slate-400 hover:text-red-400 transition-colors">
@@ -508,6 +559,21 @@ export const MiniAppDeposit: React.FC = () => {
                   className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white text-lg font-semibold placeholder:text-slate-600 focus:outline-none focus:border-blue-500/50" />
               </div>
 
+              {/* GRAM conversion preview */}
+              {depositAmount && parseFloat(depositAmount) > 0 && (
+                <div className="flex items-center justify-between p-3 rounded-xl"
+                  style={{ background: 'rgba(0,152,234,0.08)', border: '1px solid rgba(0,152,234,0.2)' }}>
+                  <span className="text-xs text-slate-400">Vous recevrez</span>
+                  {tonPrice ? (
+                    <span className="text-sm font-bold" style={{ color: '#0098EA' }}>
+                      ≈ {gramFromUsdt(parseFloat(depositAmount) || 0)?.toFixed(4)} GRAM
+                    </span>
+                  ) : (
+                    <span className="text-xs text-slate-500">Chargement du prix…</span>
+                  )}
+                </div>
+              )}
+
               {txError && (
                 <div className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/20">
                   <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
@@ -522,9 +588,11 @@ export const MiniAppDeposit: React.FC = () => {
               )}
 
               <button onClick={handleRegisterUSDT}
-                disabled={!depositAmount || !hasAddress}
+                disabled={!depositAmount || !hasAddress || !tonPrice}
                 className="w-full btn-primary py-3.5 rounded-xl text-sm font-semibold text-white disabled:opacity-40 disabled:cursor-not-allowed">
-                J'ai envoyé {depositAmount || '0'} USDT — Enregistrer
+                {tonPrice
+                  ? `J'ai envoyé ${depositAmount || '0'} USDT → Convertir en GRAM`
+                  : 'Chargement du prix marché…'}
               </button>
             </>
           )}
