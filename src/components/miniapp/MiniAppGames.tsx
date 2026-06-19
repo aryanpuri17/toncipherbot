@@ -341,8 +341,8 @@ const SessionStatsBar: React.FC<{ totalWon: number; best: number; wagered: numbe
 const BetQuickButtons: React.FC<{ setBet: React.Dispatch<React.SetStateAction<number>>; maxBal: number }> = ({ setBet, maxBal }) => {
   const labels = ['MIN', '½', '2×', 'MAX'] as const;
   const handlers: Record<string, () => void> = {
-    MIN: () => setBet(0.01),
-    '½':  () => setBet(p => Math.max(0.01, +(p / 2).toFixed(3))),
+    MIN: () => setBet(0.005),
+    '½':  () => setBet(p => Math.max(0.005, +(p / 2).toFixed(3))),
     '2×': () => setBet(p => Math.min(50, +(p * 2).toFixed(3))),
     MAX:  () => setBet(Math.min(50, maxBal)),
   };
@@ -378,8 +378,8 @@ function rollDice(target: number, dir: DiceDir): { roll: number; win: boolean } 
   // 10% house override: force a losing result
   if (Math.random() < 0.10) {
     const loss = dir === 'under'
-      ? +(target + 0.01 + Math.random() * (99.98 - target)).toFixed(2)
-      : +(Math.random() * (target - 0.01)).toFixed(2);
+      ? +(target + 0.005 + Math.random() * (99.98 - target)).toFixed(2)
+      : +(Math.random() * (target - 0.005)).toFixed(2);
     return { roll: Math.max(0, Math.min(99.99, +loss)), win: false };
   }
   const roll = +(Math.random() * 100).toFixed(2);
@@ -390,7 +390,7 @@ function rollDice(target: number, dir: DiceDir): { roll: number; win: boolean } 
 const DiceGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResult }> = ({ onBack, streak, onResult }) => {
   const { currentUser, placeGameBet, recordGameResult, demoMode, demoBalance } = useAppStore();
   const bal = demoMode ? demoBalance : currentUser.balanceMain;
-  const [bet, setBet]         = useState(0.01);
+  const [bet, setBet]         = useState(0.005);
   const [target, setTarget]   = useState(50);
   const [dir, setDir]         = useState<DiceDir>('under');
   const [rolling, setRolling] = useState(false);
@@ -416,7 +416,7 @@ const DiceGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResul
   const effBet      = Math.min(bet, bal);
   const winChance    = diceWinChance(target, dir);
   const multiplier   = diceMultiplier(target, dir);
-  const canRoll      = !rolling && effBet >= 0.01 && bal >= 0.01;
+  const canRoll      = !rolling && effBet >= 0.005 && bal >= 0.005;
   const potentialWin = +(effBet * multiplier).toFixed(4);
 
   const roll = () => {
@@ -569,8 +569,8 @@ const DiceGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResul
       <div className="glass-card p-4 space-y-3">
         <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Montant de la mise</p>
         <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-xl px-4 py-3">
-          <input type="number" value={bet} min={0.01} max={50} step={0.01}
-            onChange={e => { const v = +e.target.value; if (!isNaN(v)) setBet(Math.max(0.01, Math.min(50, v))); }}
+          <input type="number" value={bet} min={0.005} max={50} step={0.005}
+            onChange={e => { const v = +e.target.value; if (!isNaN(v)) setBet(Math.max(0.005, Math.min(50, v))); }}
             className="flex-1 bg-transparent text-2xl font-bold text-white outline-none" />
           <span className="text-base font-bold text-slate-500 flex items-center gap-1"><TonLogo size={14} />GRAM</span>
         </div>
@@ -582,7 +582,7 @@ const DiceGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResul
               : 'bg-white/5 text-slate-600 cursor-not-allowed'
           }`}>
           {rolling ? <><RotateCcw className="w-4 h-4 animate-spin" /> Lancement…</>
-            : bal < 0.01 ? (demoMode ? '🎮 Démo épuisé' : '💸 Solde insuffisant')
+            : bal < 0.005 ? (demoMode ? '🎮 Démo épuisé' : '💸 Solde insuffisant')
             : <><Zap className="w-4 h-4" /> Lancer ({effBet.toFixed(2)} GRAM)</>}
         </button>
       </div>
@@ -862,7 +862,7 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
       btnFn = () => { setQueuedBet(null); queuedBetR.current = null; };
     } else {
       btnLabel = `Miser ${bet.toFixed(2)} GRAM`; btnBg = 'linear-gradient(135deg,#3b82f6,#6366f1)'; btnColor = '#fff';
-      if (bet > bal || bet < 0.01) btnDis = true;
+      if (bet > bal || bet < 0.005) btnDis = true;
       btnFn = () => { setQueuedBet(bet); queuedBetR.current = bet; };
     }
   } else if (phase === 'flying') {
@@ -1081,7 +1081,7 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
             <div style={{ flex: 1, background: '#0d1021', border: `1px solid ${isActiveCashout ? 'rgba(52,211,153,.3)' : '#1e2847'}`, borderRadius: 10, display: 'flex', alignItems: 'center', padding: '8px 12px', opacity: activeBet !== null ? 0.55 : 1, transition: 'opacity 0.2s' }}>
               <TonLogo size={14} />
               <input type="text" inputMode="decimal" pattern="[0-9]*[.,]?[0-9]*" value={bet} disabled={activeBet !== null}
-                onChange={e => { const v = parseFloat(e.target.value.replace(',', '.')); if (!isNaN(v)) setBet(Math.max(0.01, Math.min(50, v))); }}
+                onChange={e => { const v = parseFloat(e.target.value.replace(',', '.')); if (!isNaN(v)) setBet(Math.max(0.005, Math.min(50, v))); }}
                 style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: '#f8fafc', fontSize: 16, fontWeight: 700, marginLeft: 4 }} />
               <span style={{ fontSize: 11, color: '#475569', fontWeight: 600 }}>GRAM</span>
             </div>
@@ -1093,7 +1093,7 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
                 <TonLogo size={9} />{v.toFixed(2)}
               </button>
             ))}
-            <button onClick={() => setBet(Math.max(0.01, +(bet / 2).toFixed(2)))} disabled={activeBet !== null}
+            <button onClick={() => setBet(Math.max(0.005, +(bet / 2).toFixed(2)))} disabled={activeBet !== null}
               style={{ width: 36, padding: '6px 0', borderRadius: 8, border: '1px solid #1e2847', background: 'rgba(255,255,255,.03)', color: '#475569', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>½</button>
             <button onClick={() => setBet(Math.min(50, +(bet * 2).toFixed(2)))} disabled={activeBet !== null}
               style={{ width: 36, padding: '6px 0', borderRadius: 8, border: '1px solid #1e2847', background: 'rgba(255,255,255,.03)', color: '#475569', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>2×</button>
@@ -1243,9 +1243,9 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
             </div>
             <div style={{ background: '#080c1e', border: '1px solid #1e2847', borderRadius: 10, display: 'flex', alignItems: 'center', padding: '8px 12px', marginBottom: 8, opacity: myBet2 !== null ? 0.5 : 1 }}>
               <TonLogo size={14} />
-              <input type="number" value={bet2} min={0.01} max={50} step={0.01}
+              <input type="number" value={bet2} min={0.005} max={50} step={0.005}
                 disabled={myBet2 !== null}
-                onChange={e => { const v = +e.target.value; if (!isNaN(v)) setBet2(Math.max(0.01, Math.min(50, v))); }}
+                onChange={e => { const v = +e.target.value; if (!isNaN(v)) setBet2(Math.max(0.005, Math.min(50, v))); }}
                 style={{ flex: 1, background: 'transparent', color: '#f8fafc', fontSize: 16, fontWeight: 700, outline: 'none', border: 'none', marginLeft: 4 }} />
               <span style={{ fontSize: 11, color: '#475569', fontWeight: 600 }}>GRAM</span>
             </div>
@@ -1296,7 +1296,7 @@ type MinesFeedEntry = { username: string; bet: number; payout: number; profit: n
 const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResult }> = ({ onBack, streak, onResult }) => {
   const { currentUser, placeGameBet, recordGameResult, demoMode, demoBalance } = useAppStore();
   const bal = demoMode ? demoBalance : currentUser.balanceMain;
-  const [bet, setBet]             = useState(0.01);
+  const [bet, setBet]             = useState(0.005);
   const [mineCount, setMineCount] = useState<number>(3);
   const [phase, setPhase]         = useState<MinesPhase>('waiting');
   const [minePos, setMinePos]     = useState<Set<number>>(new Set());
@@ -1326,7 +1326,7 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
   const maxPossibleMult = minesMult(effMinesCalc, GRID_SIZE - effMinesCalc);
 
   const startGame = () => {
-    if (effBet < 0.01 || bal < 0.01) return;
+    if (effBet < 0.005 || bal < 0.005) return;
     snd.bet();
     const effM = mineCount;
     effMinesRef.current = effM;
@@ -1624,8 +1624,8 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
             <div>
               <p style={{ fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>Montant de la mise</p>
               <div style={{ background: '#080c1e', border: '1px solid #1e2847', borderRadius: 12 }} className="flex items-center px-3 py-2.5">
-                <input type="number" value={bet} min={0.01} max={50} step={0.01}
-                  onChange={e => { const v = +e.target.value; if (!isNaN(v)) setBet(Math.max(0.01, Math.min(50, v))); }}
+                <input type="number" value={bet} min={0.005} max={50} step={0.005}
+                  onChange={e => { const v = +e.target.value; if (!isNaN(v)) setBet(Math.max(0.005, Math.min(50, v))); }}
                   style={{ flex: 1, background: 'transparent', color: '#f8fafc', fontSize: 20, fontWeight: 700, outline: 'none', border: 'none' }} />
                 <span style={{ fontSize: 13, fontWeight: 700, color: '#64748b', display: 'flex', alignItems: 'center', gap: 3 }}><TonLogo size={13} />GRAM</span>
               </div>
@@ -1663,13 +1663,13 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
             </div>
 
             <button onClick={startGame}
-              disabled={effBet < 0.01 || bal < 0.01}
-              style={effBet >= 0.01 && bal >= 0.01 ? {
+              disabled={effBet < 0.005 || bal < 0.005}
+              style={effBet >= 0.005 && bal >= 0.005 ? {
                 background: 'linear-gradient(135deg,#ef4444,#dc2626)',
                 boxShadow: '0 4px 16px rgba(239,68,68,0.3)',
               } : { background: 'rgba(255,255,255,0.05)', cursor: 'not-allowed' }}
               className="w-full py-3.5 rounded-xl font-black text-sm text-white active:scale-[0.98] transition-all tracking-widest uppercase">
-              {bal < 0.01 ? (demoMode ? '🎮 Démo épuisé' : '💸 Solde insuffisant') : `💣 Commencer · ${effBet.toFixed(2)} GRAM`}
+              {bal < 0.005 ? (demoMode ? '🎮 Démo épuisé' : '💸 Solde insuffisant') : `💣 Commencer · ${effBet.toFixed(2)} GRAM`}
             </button>
           </div>
         )}
@@ -1792,7 +1792,7 @@ function towerStep(diff: TowerDiff): boolean {
 const TowerGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResult }> = ({ onBack, streak, onResult }) => {
   const { currentUser, placeGameBet, recordGameResult, demoMode, demoBalance } = useAppStore();
   const bal = demoMode ? demoBalance : currentUser.balanceMain;
-  const [bet, setBet]           = useState(0.01);
+  const [bet, setBet]           = useState(0.005);
   const [diff, setDiff]         = useState<TowerDiff>('medium');
   const [phase, setPhase]       = useState<TowerPhase>('waiting');
   const [floor, setFloor]       = useState(0);
@@ -1819,7 +1819,7 @@ const TowerGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
   const maxMult         = towerMult(activeDiff, TOWER_FLOORS);
 
   const start = () => {
-    if (effBet < 0.01 || bal < 0.01) return;
+    if (effBet < 0.005 || bal < 0.005) return;
     snd.bet();
     diffRef.current = diff;
     activeBetRef.current = effBet;
@@ -2010,19 +2010,19 @@ const TowerGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
             <p className="text-[10px] text-slate-500">{TOWER_CELLS[diff]} cases/étage · ×{maxMult.toFixed(2)} au sommet</p>
             <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest pt-1">Montant de la mise</p>
             <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-xl px-4 py-3">
-              <input type="number" value={bet} min={0.01} max={50} step={0.01}
-                onChange={e => { const v = +e.target.value; if (!isNaN(v)) setBet(Math.max(0.01, Math.min(50, v))); }}
+              <input type="number" value={bet} min={0.005} max={50} step={0.005}
+                onChange={e => { const v = +e.target.value; if (!isNaN(v)) setBet(Math.max(0.005, Math.min(50, v))); }}
                 className="flex-1 bg-transparent text-2xl font-bold text-white outline-none" />
               <span className="text-base font-bold text-slate-500 flex items-center gap-1"><TonLogo size={14} />GRAM</span>
             </div>
             <BetQuickButtons setBet={setBet} maxBal={bal} />
-            <button onClick={start} disabled={effBet < 0.01 || bal < 0.01}
+            <button onClick={start} disabled={effBet < 0.005 || bal < 0.005}
               className={`w-full py-4 rounded-xl font-bold text-base transition-all flex items-center justify-center gap-2 ${
-                effBet >= 0.01 && bal >= 0.01
+                effBet >= 0.005 && bal >= 0.005
                   ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-emerald-950 hover:from-emerald-400 hover:to-teal-400 active:scale-[0.98] shadow-lg shadow-emerald-500/25'
                   : 'bg-white/5 text-slate-600 cursor-not-allowed'
               }`}>
-              {bal < 0.01 ? (demoMode ? '🎮 Démo épuisé' : '💸 Solde insuffisant') : <><Zap className="w-4 h-4" /> Grimper ({effBet.toFixed(2)} GRAM)</>}
+              {bal < 0.005 ? (demoMode ? '🎮 Démo épuisé' : '💸 Solde insuffisant') : <><Zap className="w-4 h-4" /> Grimper ({effBet.toFixed(2)} GRAM)</>}
             </button>
           </>
         ) : phase === 'playing' ? (
@@ -2155,7 +2155,7 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
   const { currentUser, placeGameBet, recordGameResult, demoMode, demoBalance } = useAppStore();
   const bal = demoMode ? demoBalance : currentUser.balanceMain;
 
-  const [bet, setBet]                   = useState(0.01);
+  const [bet, setBet]                   = useState(0.005);
   const [rows, setRows]                 = useState<PlinkoRows>(12);
   const [risk, setRisk]                 = useState<PlinkoRisk>('medium');
   const [ballCount, setBallCount]       = useState<1 | 5 | 10 | 25 | 50 | 100>(1);
@@ -2439,7 +2439,7 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
 
   const dropMulti = (count: number) => {
     const snapBet = Math.min(bet, bal);
-    if (snapBet < 0.01 || bal < snapBet) return;
+    if (snapBet < 0.005 || bal < snapBet) return;
     snd.bet();
     sessionGainRef.current = 0;
     setSessionGain(0);
@@ -2657,8 +2657,8 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
           <div>
             <p style={{ fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>Montant de la mise</p>
             <div style={{ background: '#080c1e', border: '1px solid #1e2847', borderRadius: 12 }} className="flex items-center px-3 py-2.5">
-              <input type="number" value={bet} min={0.01} max={50} step={0.01} disabled={dropping || autoPlay}
-                onChange={e => { const v = +e.target.value; if (!isNaN(v)) setBet(Math.max(0.01, Math.min(50, v))); }}
+              <input type="number" value={bet} min={0.005} max={50} step={0.005} disabled={dropping || autoPlay}
+                onChange={e => { const v = +e.target.value; if (!isNaN(v)) setBet(Math.max(0.005, Math.min(50, v))); }}
                 style={{ flex: 1, background: 'transparent', color: '#f8fafc', fontSize: 20, fontWeight: 700, outline: 'none', border: 'none' }} />
               <span style={{ fontSize: 13, fontWeight: 700, color: '#64748b', display: 'flex', alignItems: 'center', gap: 3 }}><TonLogo size={13} />GRAM</span>
             </div>
@@ -2669,8 +2669,8 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
           <div className="flex gap-2">
             <button
               onClick={() => dropMulti(ballCount)}
-              disabled={autoPlay || dropping || effBet < 0.01 || bal < 0.01}
-              style={(!autoPlay && !dropping && effBet >= 0.01 && bal >= 0.01) ? {
+              disabled={autoPlay || dropping || effBet < 0.005 || bal < 0.005}
+              style={(!autoPlay && !dropping && effBet >= 0.005 && bal >= 0.005) ? {
                 flex: 1, background: 'linear-gradient(135deg,#f59e0b,#d97706)',
                 boxShadow: '0 4px 16px rgba(245,158,11,0.35)',
                 padding: '14px 8px', borderRadius: 12,
@@ -2680,7 +2680,7 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
                 padding: '14px 8px', borderRadius: 12, color: '#475569', fontWeight: 700, fontSize: 14, cursor: 'not-allowed',
               }}>
               {dropping ? '🎯 En chute…'
-                : bal < 0.01 ? (demoMode ? 'Démo épuisé' : 'Solde insuffisant')
+                : bal < 0.005 ? (demoMode ? 'Démo épuisé' : 'Solde insuffisant')
                 : ballCount > 1 ? `🎯 ×${ballCount} — ${(effBet * ballCount).toFixed(2)} GRAM`
                 : `🎯 LÂCHER · ${effBet.toFixed(2)} GRAM`}
             </button>
@@ -2695,7 +2695,7 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
                   dropMulti(1);
                 }
               }}
-              disabled={!autoPlay && (effBet < 0.01 || bal < 0.01)}
+              disabled={!autoPlay && (effBet < 0.005 || bal < 0.005)}
               className="py-3 px-3 rounded-xl text-xs font-semibold transition-all border flex items-center gap-1.5 flex-shrink-0"
               style={autoPlay
                 ? { background: 'rgba(239,68,68,0.12)', borderColor: 'rgba(239,68,68,0.3)', color: '#f87171' }
@@ -3064,7 +3064,7 @@ export const MiniAppGames: React.FC = () => {
         <h3 style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>Infos</h3>
         <div className="grid grid-cols-3 gap-3 text-center">
           <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 12 }} className="py-3">
-            <p style={{ fontSize: 15, fontWeight: 700, color: '#f59e0b' }}>0.01</p>
+            <p style={{ fontSize: 15, fontWeight: 700, color: '#f59e0b' }}>0.005</p>
             <p style={{ fontSize: 10, color: '#64748b', marginTop: 3 }}>Mise min (GRAM)</p>
           </div>
           <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 12 }} className="py-3">

@@ -19,6 +19,7 @@ import uuid
 from collections import defaultdict
 from urllib.parse import parse_qsl
 
+import aiohttp
 import aiosqlite
 from aiohttp import web
 from aiogram import Bot, Dispatcher, F, types
@@ -65,8 +66,20 @@ dp  = Dispatcher()
 _CORS = {
     "Access-Control-Allow-Origin":  "*",
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, X-Admin-Key",
+    "Access-Control-Allow-Headers": "Content-Type, X-Admin-Key, X-Init-Data",
 }
+
+# ── USDT Jetton monitor config ────────────────────────────────────────────────
+# HOT_WALLET_ADDRESS : The platform's TON wallet address that receives USDT deposits
+# TONCENTER_API_KEY  : Optional TonCenter API key for higher rate limits
+# USDT_JETTON_MASTER : Standard USDT Jetton contract on TON mainnet
+HOT_WALLET_ADDRESS  = os.getenv("HOT_WALLET_ADDRESS", "")
+TONCENTER_API_KEY   = os.getenv("TONCENTER_API_KEY", "")
+USDT_JETTON_MASTER  = "EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs"
+USDT_DISCOUNT       = 0.98   # 2 % below market rate credited to user
+USDT_MIN_AMOUNT     = 0.1    # minimum USDT deposit (in USDT, not nano)
+
+_ton_price_cache: dict = {"price": None, "ts": 0}
 
 # ── Server-Sent Events (real-time task updates) ───────────────────────────────
 
@@ -2988,6 +3001,223 @@ async def serve_image(request: web.Request) -> web.Response:
                         headers={"Access-Control-Allow-Origin": "*"})
 
 
+# ── USDT Jetton auto-detection ────────────────────────────────────────────────
+
+async def _fetch_ton_price_usd() -> float | None:
+    """Fetch TON/USD price from Binance, fall back to CoinGecko."""
+    now = time.time()
+    if _ton_price_cache["price"] and now - _ton_price_cache["ts"] < 300:
+        return _ton_price_cache["price"]
+    try:
+        async with aiohttp.ClientSession() as s:
+            async with s.get(
+                "https://api.binance.com/api/v3/ticker/price?symbol=TONUSDT",
+                timeout=aiohttp.ClientTimeout(total=8),
+            ) as r:
+                d = await r.json()
+                p = float(d.get("price", 0))
+                if p > 0:
+                    _ton_price_cache.update({"price": p, "ts": now})
+                    return p
+    except Exception:
+        pass
+    try:
+        async with aiohttp.ClientSession() as s:
+            async with s.get(
+                "https://api.coingecko.com/api/v3/simple/price?ids=the-open-network&vs_currencies=usd",
+                timeout=aiohttp.ClientTimeout(total=10),
+            ) as r:
+                d = await r.json()
+                p = float((d.get("the-open-network") or {}).get("usd", 0))
+                if p > 0:
+                    _ton_price_cache.update({"price": p, "ts": now})
+                    return p
+    except Exception:
+        pass
+    return _ton_price_cache.get("price")
+
+
+async def api_ton_price(request: web.Request) -> web.Response:
+    """Return current TON/USD price for the frontend."""
+    price = await _fetch_ton_price_usd()
+    if price:
+        return web.json_response({"price": price}, headers=_CORS)
+    return web.json_response({"error": "unavailable"}, status=503, headers=_CORS)
+
+
+async def api_usdt_deposit_register(request: web.Request) -> web.Response:
+    """Frontend calls this when a user declares they sent USDT — store the hint
+    so the on-chain monitor knows what to look for."""
+    try:
+        data = await request.json()
+    except Exception:
+        return web.json_response({"error": "Invalid JSON"}, status=400, headers=_CORS)
+
+    telegram_id   = _parse_telegram_id(data.get("telegramId"))
+    amount        = _parse_amount(data.get("amount"))
+    deposit_code  = str(data.get("depositCode", "")).strip()
+    sender_address = str(data.get("senderAddress", "")).strip()
+
+    if not telegram_id or amount is None:
+        return web.json_response({"error": "Invalid data"}, status=400, headers=_CORS)
+
+    # Light auth: if initData is provided, verify it matches
+    init_data = str(data.get("initData", "")).strip()
+    if BOT_TOKEN and init_data:
+        if not _validate_init_data(init_data, BOT_TOKEN):
+            return web.json_response({"error": "Auth failed"}, status=401, headers=_CORS)
+        if _init_data_user_id(init_data) != telegram_id:
+            return web.json_response({"error": "Identity mismatch"}, status=403, headers=_CORS)
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS usdt_pending (
+                id             INTEGER PRIMARY KEY AUTOINCREMENT,
+                telegram_id    INTEGER NOT NULL,
+                amount_usdt    REAL    NOT NULL,
+                sender_address TEXT    NOT NULL DEFAULT '',
+                deposit_code   TEXT    NOT NULL DEFAULT '',
+                created_at     TEXT    NOT NULL DEFAULT (datetime('now')),
+                status         TEXT    NOT NULL DEFAULT 'pending'
+            )
+        """)
+        await db.execute(
+            "INSERT INTO usdt_pending (telegram_id, amount_usdt, sender_address, deposit_code) VALUES (?, ?, ?, ?)",
+            (telegram_id, amount, sender_address, deposit_code or str(telegram_id))
+        )
+        await db.commit()
+
+    return web.json_response({"success": True, "message": "Deposit registered. We'll credit you once detected on-chain."}, headers=_CORS)
+
+
+async def _monitor_usdt_jetton() -> None:
+    """Background task: poll TonCenter every 2 minutes for incoming USDT Jetton
+    transfers to the platform wallet and auto-credit matched users."""
+    # Wait a bit for the app to fully start
+    await asyncio.sleep(30)
+
+    while True:
+        try:
+            if not HOT_WALLET_ADDRESS:
+                await asyncio.sleep(120)
+                continue
+
+            price = await _fetch_ton_price_usd()
+            if not price:
+                log.warning("USDT monitor: TON price unavailable, skipping cycle")
+                await asyncio.sleep(120)
+                continue
+
+            params: dict = {
+                "address":       HOT_WALLET_ADDRESS,
+                "jetton_master": USDT_JETTON_MASTER,
+                "direction":     "in",
+                "limit":         "50",
+            }
+            if TONCENTER_API_KEY:
+                params["api_key"] = TONCENTER_API_KEY
+
+            async with aiohttp.ClientSession() as session:
+                async with session.get(
+                    "https://toncenter.com/api/v3/jetton/transfers",
+                    params=params,
+                    timeout=aiohttp.ClientTimeout(total=15),
+                ) as resp:
+                    if resp.status != 200:
+                        log.warning("USDT monitor: TonCenter returned %d", resp.status)
+                        await asyncio.sleep(120)
+                        continue
+                    result = await resp.json()
+
+            transfers = result.get("jetton_transfers", [])
+            credited = 0
+
+            for t in transfers:
+                tx_hash = str(t.get("transaction_hash") or t.get("hash") or "").strip()
+                if not tx_hash:
+                    continue
+
+                # Amount in nano USDT (6 decimals)
+                try:
+                    usdt_amount = int(t.get("amount", 0)) / 1_000_000
+                except (TypeError, ValueError):
+                    continue
+
+                if usdt_amount < USDT_MIN_AMOUNT:
+                    continue
+
+                # Try to identify user: first by comment (= depositCode = telegramId),
+                # then by sender TON address vs usdt_pending table
+                comment = str(t.get("comment") or "").strip()
+                telegram_id = 0
+                try:
+                    telegram_id = int(comment)
+                except (ValueError, TypeError):
+                    pass
+
+                async with aiosqlite.connect(DB_PATH) as db:
+                    # If comment didn't give us a telegram_id, check pending table by sender address
+                    if not telegram_id:
+                        sender = str(t.get("source_wallet") or t.get("source") or "").strip()
+                        async with db.execute(
+                            "SELECT telegram_id FROM usdt_pending WHERE sender_address = ? AND status = 'pending' ORDER BY created_at DESC LIMIT 1",
+                            (sender,)
+                        ) as cur:
+                            row = await cur.fetchone()
+                        if row:
+                            telegram_id = row[0]
+
+                    if not telegram_id:
+                        continue
+
+                    # Verify user exists
+                    async with db.execute("SELECT 1 FROM users WHERE telegram_id = ?", (telegram_id,)) as cur:
+                        if not await cur.fetchone():
+                            continue
+
+                    # Compute GRAM equivalent (USDT ÷ TON_price × discount)
+                    gram_amount = round(usdt_amount / price * USDT_DISCOUNT, 6)
+
+                    try:
+                        tx_id = _short_id()
+                        await db.execute("""
+                            INSERT INTO transactions
+                                (id, telegram_id, type, amount, currency, network, status, tx_hash, processed_at)
+                            VALUES (?, ?, 'deposit', ?, 'USDT', 'TON', 'completed', ?, datetime('now'))
+                        """, (tx_id, telegram_id, gram_amount, tx_hash))
+                        # Mark any matching pending hints as done
+                        await db.execute(
+                            "UPDATE usdt_pending SET status = 'credited' WHERE telegram_id = ? AND status = 'pending'",
+                            (telegram_id,)
+                        )
+                        await db.commit()
+                        credited += 1
+                        log.info(
+                            "USDT deposit auto-credited: %.4f USDT → %.6f GRAM for telegram_id=%d (tx=%s…)",
+                            usdt_amount, gram_amount, telegram_id, tx_hash[:16]
+                        )
+                        if bot:
+                            try:
+                                await bot.send_message(
+                                    telegram_id,
+                                    f"✅ Dépôt USDT confirmé !\n"
+                                    f"{usdt_amount:.4f} USDT → *{gram_amount:.4f} GRAM* crédité sur votre compte.",
+                                    parse_mode="Markdown",
+                                )
+                            except Exception:
+                                pass
+                    except aiosqlite.IntegrityError:
+                        pass  # tx_hash already processed
+
+            if credited:
+                log.info("USDT monitor cycle: %d deposit(s) credited", credited)
+
+        except Exception as e:
+            log.warning("USDT monitor error: %s", e)
+
+        await asyncio.sleep(120)  # check every 2 minutes
+
+
 # ── Web Application ────────────────────────────────────────────────────────────
 
 async def start_web() -> None:
@@ -3016,6 +3246,8 @@ async def start_web() -> None:
 
     # Transaction API (called by frontend)
     app.router.add_post("/api/deposit/record",             api_deposit_record)
+    app.router.add_post("/api/deposit/usdt-register",      api_usdt_deposit_register)
+    app.router.add_get( "/api/ton-price",                  api_ton_price)
     app.router.add_get( "/api/transactions",               api_transactions)
     app.router.add_get( "/api/config",                     api_config_get)
     app.router.add_post("/api/admin/config",               api_admin_config_set)
@@ -3091,7 +3323,7 @@ async def main() -> None:
         asyncio.ensure_future(backup_db_to_github())
     loop.add_signal_handler(signal.SIGTERM, _on_sigterm)
 
-    tasks: list = [start_web()]
+    tasks: list = [start_web(), _monitor_usdt_jetton()]
     if bot:
         tasks.append(dp.start_polling(bot, allowed_updates=["message", "callback_query"]))
     if GITHUB_TOKEN and DB_BACKUP_KEY:

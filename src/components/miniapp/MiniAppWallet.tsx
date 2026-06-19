@@ -230,20 +230,26 @@ export const MiniAppDeposit: React.FC = () => {
   const [tonPrice, setTonPrice] = useState<number | null>(null);
   const [tonPriceError, setTonPriceError] = useState(false);
   useEffect(() => {
-    fetch('https://api.binance.com/api/v3/ticker/price?symbol=TONUSDT')
-      .then(r => r.json())
-      .then((d: { price?: string }) => { if (d.price) setTonPrice(parseFloat(d.price)); })
-      .catch(() => {
-        // fallback: try CoinGecko
-        fetch('https://api.coingecko.com/api/v3/simple/price?ids=the-open-network&vs_currencies=usd')
+    // Try backend price endpoint first (cached, no CORS issues)
+    fetch('/api/ton-price')
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then((d: { price?: number }) => { if (d.price) { setTonPrice(d.price); return; } return Promise.reject(); })
+      .catch(() =>
+        // Fallback: Binance directly
+        fetch('https://api.binance.com/api/v3/ticker/price?symbol=TONUSDT')
           .then(r => r.json())
-          .then((d: { 'the-open-network'?: { usd?: number } }) => {
-            const p = d['the-open-network']?.usd;
-            if (p) setTonPrice(p);
-            else setTonPriceError(true);
-          })
-          .catch(() => { setTonPriceError(true); });
-      });
+          .then((d: { price?: string }) => { if (d.price) setTonPrice(parseFloat(d.price)); else return Promise.reject(); })
+          .catch(() =>
+            // Last resort: CoinGecko
+            fetch('https://api.coingecko.com/api/v3/simple/price?ids=the-open-network&vs_currencies=usd')
+              .then(r => r.json())
+              .then((d: { 'the-open-network'?: { usd?: number } }) => {
+                const p = d['the-open-network']?.usd;
+                if (p) setTonPrice(p); else setTonPriceError(true);
+              })
+              .catch(() => { setTonPriceError(true); })
+          )
+      );
   }, []);
   const [codeCopied, setCodeCopied] = useState(false);
   const codeCopyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -289,8 +295,8 @@ export const MiniAppDeposit: React.FC = () => {
   // TON native — send via TonKeeper
   const handleTonDeposit = async () => {
     const amount = parseFloat(depositAmount);
-    if (!amount || amount < (selected?.minDeposit ?? 1)) {
-      setTxError(`Minimum: ${selected?.minDeposit} GRAM`);
+    if (!amount || amount < 0.1) {
+      setTxError('Minimum: 0.1 GRAM');
       return;
     }
     if (!hasAddress) {
@@ -328,8 +334,8 @@ export const MiniAppDeposit: React.FC = () => {
 
   const handleRegisterUSDT = () => {
     const usdtAmount = parseFloat(depositAmount);
-    if (!usdtAmount || usdtAmount < (selected?.minDeposit ?? 5)) {
-      setTxError(`Minimum: ${selected?.minDeposit} USDT`);
+    if (!usdtAmount || usdtAmount < 0.1) {
+      setTxError('Minimum: 0.1 USDT');
       return;
     }
     if (!hasAddress) {
@@ -337,7 +343,6 @@ export const MiniAppDeposit: React.FC = () => {
       return;
     }
     setTxError('');
-    // Register pending USDT tx so the on-chain monitor can detect it and convert to GRAM
     addTransaction({
       userId: currentUser.id,
       type: 'deposit',
@@ -345,13 +350,26 @@ export const MiniAppDeposit: React.FC = () => {
       currency: 'USDT',
       network: 'TON',
       status: 'pending',
-      address: connectedAddr, // raw address — used by monitor for matching
+      address: connectedAddr,
     });
+    // Notify backend so the on-chain Jetton monitor can track this deposit
+    const tg = (window as unknown as { Telegram?: { WebApp?: { initData?: string } } }).Telegram?.WebApp;
+    void fetch('/api/deposit/usdt-register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        telegramId:    currentUser.telegramId,
+        amount:        usdtAmount,
+        senderAddress: connectedAddr,
+        depositCode:   depositCode,
+        initData:      tg?.initData ?? '',
+      }),
+    }).catch(() => {});
     const gram = gramFromUsdt(usdtAmount);
     setSuccessMsg(
       gram
-        ? `Dépôt de ${usdtAmount} USDT enregistré. Vous recevrez ≈ ${gram} GRAM après confirmation on-chain.`
-        : `Dépôt de ${usdtAmount} USDT enregistré. Il sera converti en GRAM après confirmation blockchain.`
+        ? `Dépôt de ${usdtAmount} USDT enregistré. Vous recevrez ≈ ${gram} GRAM une fois la transaction détectée on-chain.`
+        : `Dépôt de ${usdtAmount} USDT enregistré. Il sera converti en GRAM après détection on-chain.`
     );
     setTxStatus('success');
   };
@@ -445,10 +463,10 @@ export const MiniAppDeposit: React.FC = () => {
             <>
               <div>
                 <p className="text-xs text-slate-400 mb-2">Montant (GRAM)</p>
-                <input type="number" step="0.1" min={selected?.minDeposit ?? 1}
+                <input type="number" step="0.1" min={0.1}
                   value={depositAmount}
                   onChange={e => { setDepositAmount(e.target.value); setTxError(''); }}
-                  placeholder={`Min: ${selected?.minDeposit ?? 1} GRAM`}
+                  placeholder="Min: 0.1 GRAM"
                   className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white text-lg font-semibold placeholder:text-slate-600 focus:outline-none focus:border-blue-500/50" />
               </div>
               {txError && (
@@ -556,10 +574,10 @@ export const MiniAppDeposit: React.FC = () => {
 
               <div>
                 <p className="text-xs text-slate-400 mb-2">Montant envoyé (USDT)</p>
-                <input type="number" step="1" min={selected?.minDeposit ?? 5}
+                <input type="number" step="0.1" min={0.1}
                   value={depositAmount}
                   onChange={e => { setDepositAmount(e.target.value); setTxError(''); }}
-                  placeholder={`Min: ${selected?.minDeposit ?? 5} USDT`}
+                  placeholder="Min: 0.1 USDT"
                   className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white text-lg font-semibold placeholder:text-slate-600 focus:outline-none focus:border-blue-500/50" />
               </div>
 
@@ -671,7 +689,8 @@ export const MiniAppWithdraw: React.FC = () => {
     }
   }, [isOnTONNetwork, connectedAddress]);
 
-  const withdrawNetworks = cryptoNetworks.filter(n => n.isActive && n.isWithdrawalEnabled);
+  // Only native TON (GRAM) is withdrawable — USDT withdrawals not supported
+  const withdrawNetworks = cryptoNetworks.filter(n => n.isActive && n.isWithdrawalEnabled && n.symbol === 'TON');
   const selected = withdrawNetworks.find(n => n.id === selectedId) ?? withdrawNetworks[0];
 
   const networkIcon = (symbol: string) => {

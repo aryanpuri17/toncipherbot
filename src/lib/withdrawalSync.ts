@@ -20,6 +20,20 @@ export interface ServerTx {
 // approval on every poll / app open.
 const PROCESSED_KEY = 'tc_wd_processed';
 
+// Deposit ids that have already been credited to balance — prevents re-crediting
+// on every app open (transactions are in-memory and reset on reload).
+const DEP_CREDITED_KEY = 'tc_dep_credited';
+
+function readDepCredited(): Set<string> {
+  try { return new Set(JSON.parse(localStorage.getItem(DEP_CREDITED_KEY) ?? '[]') as string[]); }
+  catch { return new Set(); }
+}
+
+function writeDepCredited(ids: Set<string>): void {
+  try { localStorage.setItem(DEP_CREDITED_KEY, JSON.stringify(Array.from(ids).slice(-1000))); }
+  catch { /* noop */ }
+}
+
 function readProcessed(): Set<string> {
   try { return new Set(JSON.parse(localStorage.getItem(PROCESSED_KEY) ?? '[]') as string[]); }
   catch { return new Set(); }
@@ -54,13 +68,27 @@ const SERVER_TO_LOCAL: Record<string, Transaction['status']> = {
 export function processServerTransactions(list: ServerTx[], suppressEffects = false): void {
   if (!Array.isArray(list) || list.length === 0) return;
 
-  const processed = readProcessed();
+  const processed    = readProcessed();
+  const depCredited  = readDepCredited();
   let restored = 0;
+  let depositCredit = 0;
   const newlyCompleted: ServerTx[] = [];
   const newlyRejected:  ServerTx[] = [];
+  const newDeposits:    ServerTx[] = [];
 
   for (const tx of list) {
-    if ((tx.type ?? 'withdrawal') !== 'withdrawal') continue;
+    const txType = tx.type ?? 'withdrawal';
+
+    if (txType === 'deposit' && tx.status === 'completed') {
+      if (!depCredited.has(tx.id) && !suppressEffects) {
+        depositCredit += tx.amount;
+        newDeposits.push(tx);
+        depCredited.add(tx.id);
+      }
+      continue;
+    }
+
+    if (txType !== 'withdrawal') continue;
     if (tx.status !== 'completed' && tx.status !== 'rejected') continue;
     if (processed.has(tx.id)) continue;
     processed.add(tx.id);
@@ -112,19 +140,19 @@ export function processServerTransactions(list: ServerTx[], suppressEffects = fa
       }
     }
 
-    if (!changed && restored === 0) return s;
+    if (!changed && restored === 0 && depositCredit === 0) return s;
 
     const transactions = Array.from(byId.values())
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-    if (restored === 0) return { ...s, transactions };
+    if (restored === 0 && depositCredit === 0) return { ...s, transactions };
 
-    const newBalance = +(s.currentUser.balanceMain + restored).toFixed(6);
+    const newBalance = +(s.currentUser.balanceMain + restored + depositCredit).toFixed(6);
     return {
       ...s,
       transactions,
-      currentUser: { ...s.currentUser, balanceMain: newBalance },
-      users: s.users.map(u => u.id === s.currentUser.id ? { ...u, balanceMain: newBalance } : u),
+      currentUser: { ...s.currentUser, balanceMain: newBalance, totalEarnings: +(s.currentUser.totalEarnings + depositCredit).toFixed(6) },
+      users: s.users.map(u => u.id === s.currentUser.id ? { ...u, balanceMain: newBalance, totalEarnings: +(u.totalEarnings + depositCredit).toFixed(6) } : u),
     };
   });
 
@@ -145,6 +173,17 @@ export function processServerTransactions(list: ServerTx[], suppressEffects = fa
   }
 
   writeProcessed(processed);
+  if (depCredited.size > 0) writeDepCredited(depCredited);
+
+  for (const tx of newDeposits) {
+    const { addNotification } = useAppStore.getState();
+    addNotification({
+      type: 'deposit',
+      title: 'Dépôt confirmé ! 🎉',
+      message: `+${tx.amount.toFixed(4)} GRAM crédité depuis ${tx.amount.toFixed(2)} USDT détecté on-chain.`,
+      isRead: false,
+    });
+  }
 }
 
 /** Fetch the caller's deposits + withdrawals and reconcile them locally. */
