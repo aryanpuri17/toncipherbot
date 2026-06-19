@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@ton/ton": "^16.3.0",
     "@tonconnect/ui-react": "^2.4.4",
     "@types/three": "^0.184.1",
     "clsx": "2.1.1",

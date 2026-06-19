@@ -1,8 +1,53 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useAppStore } from '../../store/appStore';
 import { useTonConnectUI, useTonWallet } from '@tonconnect/ui-react';
+import { beginCell, Address } from '@ton/ton';
 import { ArrowDownLeft, ArrowUpRight, TrendingUp, Copy, CheckCircle, ChevronRight, AlertCircle, Wallet, Unlink } from 'lucide-react';
 import { haptic } from '../../lib/haptics';
+
+const USDT_JETTON_MASTER = 'EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs';
+const USDT_DECIMALS      = 1_000_000; // USDT has 6 decimals on TON
+const USDT_GAS           = '60000000'; // 0.06 TON for gas fees
+const USDT_DISCOUNT      = 0.98;       // 2% below market rate
+
+/** Fetch the user's USDT Jetton wallet address from TonCenter */
+async function fetchJettonWallet(ownerRawAddr: string): Promise<string> {
+  const res = await fetch(
+    `https://toncenter.com/api/v3/jetton/wallets?owner_address=${encodeURIComponent(ownerRawAddr)}&jetton_address=${USDT_JETTON_MASTER}&limit=1`
+  );
+  if (!res.ok) throw new Error('TonCenter error');
+  const d = await res.json() as { jetton_wallets?: { address: string }[] };
+  const w = d.jetton_wallets?.[0]?.address;
+  if (!w) throw new Error('No USDT wallet found for this address');
+  return w;
+}
+
+/** Build the Jetton transfer payload cell */
+function buildJettonTransfer(opts: {
+  amount: bigint;         // in nano USDT
+  destination: string;   // platform wallet (friendly or raw)
+  responseAddress: string; // user wallet (raw 0:hex)
+  comment: string;
+}): string {
+  const forwardPayload = beginCell()
+    .storeUint(0, 32)
+    .storeStringTail(opts.comment)
+    .endCell();
+
+  const body = beginCell()
+    .storeUint(0xf8a7ea5, 32)
+    .storeUint(0n, 64)
+    .storeCoins(opts.amount)
+    .storeAddress(Address.parse(opts.destination))
+    .storeAddress(Address.parse(opts.responseAddress.includes(':') ? rawToFriendly(opts.responseAddress) : opts.responseAddress))
+    .storeBit(false)
+    .storeCoins(1n)
+    .storeBit(true)
+    .storeRef(forwardPayload)
+    .endCell();
+
+  return body.toBoc().toString('base64');
+}
 
 const displaySymbol = (s: string) => s === 'TON' ? 'GRAM' : s;
 
@@ -207,7 +252,7 @@ export const MiniAppWallet: React.FC = () => {
 };
 
 export const MiniAppDeposit: React.FC = () => {
-  const { cryptoNetworks, addTransaction, currentUser } = useAppStore();
+  const { cryptoNetworks, addTransaction, creditDeposit, currentUser } = useAppStore();
   const [tonConnectUI] = useTonConnectUI();
   const tonWallet = useTonWallet();
   const [selectedId, setSelectedId] = useState(() => {
@@ -251,14 +296,6 @@ export const MiniAppDeposit: React.FC = () => {
           )
       );
   }, []);
-  const [codeCopied, setCodeCopied] = useState(false);
-  const codeCopyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const handleCopyCode = () => {
-    navigator.clipboard.writeText(depositCode).catch(() => {});
-    if (codeCopyTimeoutRef.current) clearTimeout(codeCopyTimeoutRef.current);
-    setCodeCopied(true);
-    codeCopyTimeoutRef.current = setTimeout(() => setCodeCopied(false), 2000);
-  };
 
   const depositNetworks = cryptoNetworks.filter(n => n.isActive && n.isDepositEnabled);
   const selected = depositNetworks.find(n => n.id === selectedId) ?? depositNetworks[0];
@@ -327,51 +364,67 @@ export const MiniAppDeposit: React.FC = () => {
     }
   };
 
-  // USDT/TON — convert to GRAM at market price (slightly below) and credit immediately
-  const USDT_DISCOUNT = 0.98; // 2% below market rate
   const gramFromUsdt = (usdt: number) =>
     tonPrice ? parseFloat(((usdt / tonPrice) * USDT_DISCOUNT).toFixed(4)) : null;
 
-  const handleRegisterUSDT = () => {
+  const handleSendUSDT = async () => {
     const usdtAmount = parseFloat(depositAmount);
-    if (!usdtAmount || usdtAmount < 0.1) {
-      setTxError('Minimum: 0.1 USDT');
-      return;
-    }
-    if (!hasAddress) {
-      setTxError("Adresse de la plateforme non configurée — contactez l'admin.");
-      return;
-    }
+    if (!usdtAmount || usdtAmount < 0.1) { setTxError('Minimum: 0.1 USDT'); return; }
+    if (!hasAddress) { setTxError("Adresse non configurée — contactez l'admin."); return; }
+    if (!connectedAddr) { setTxError('Connectez votre wallet TonKeeper d\'abord.'); return; }
+    if (!tonPrice) { setTxError('Prix TON/USDT non disponible, réessayez.'); return; }
+
     setTxError('');
-    addTransaction({
-      userId: currentUser.id,
-      type: 'deposit',
-      amount: usdtAmount,
-      currency: 'USDT',
-      network: 'TON',
-      status: 'pending',
-      address: connectedAddr,
-    });
-    // Notify backend so the on-chain Jetton monitor can track this deposit
-    const tg = (window as unknown as { Telegram?: { WebApp?: { initData?: string } } }).Telegram?.WebApp;
-    void fetch('/api/deposit/usdt-register', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        telegramId:    currentUser.telegramId,
-        amount:        usdtAmount,
-        senderAddress: connectedAddr,
-        depositCode:   depositCode,
-        initData:      tg?.initData ?? '',
-      }),
-    }).catch(() => {});
-    const gram = gramFromUsdt(usdtAmount);
-    setSuccessMsg(
-      gram
-        ? `Dépôt de ${usdtAmount} USDT enregistré. Vous recevrez ≈ ${gram} GRAM une fois la transaction détectée on-chain.`
-        : `Dépôt de ${usdtAmount} USDT enregistré. Il sera converti en GRAM après détection on-chain.`
-    );
-    setTxStatus('success');
+    setTxStatus('pending');
+    try {
+      // 1. Get user's USDT Jetton wallet address
+      const jettonWallet = await fetchJettonWallet(connectedAddr);
+
+      // 2. Build Jetton transfer payload
+      const payload = buildJettonTransfer({
+        amount:          BigInt(Math.round(usdtAmount * USDT_DECIMALS)),
+        destination:     address,
+        responseAddress: connectedAddr,
+        comment:         depositCode,
+      });
+
+      // 3. Send via TonConnect (same UX as native TON)
+      await tonConnectUI.sendTransaction({
+        validUntil: Math.floor(Date.now() / 1000) + 600,
+        messages: [{ address: jettonWallet, amount: USDT_GAS, payload }],
+      });
+
+      // 4. Credit GRAM balance immediately (we know the rate, we control the balance)
+      const gram = gramFromUsdt(usdtAmount)!;
+      creditDeposit(currentUser.id, gram, 'TON', '', 'TON');
+
+      // 5. Log to backend for admin visibility
+      const tg = (window as unknown as { Telegram?: { WebApp?: { initData?: string } } }).Telegram?.WebApp;
+      void fetch('/api/deposit/record', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          telegramId: currentUser.telegramId,
+          amount:     gram,
+          currency:   'USDT',
+          network:    'TON',
+          initData:   tg?.initData ?? '',
+        }),
+      }).catch(() => {});
+
+      setSuccessMsg(`✅ ${usdtAmount} USDT envoyés → +${gram} GRAM crédités sur votre compte !`);
+      setTxStatus('success');
+    } catch (e: unknown) {
+      setTxStatus('error');
+      const msg = e instanceof Error ? e.message : '';
+      if (msg.toLowerCase().includes('no usdt wallet')) {
+        setTxError('Vous n\'avez pas de USDT dans ce wallet.');
+      } else if (msg.toLowerCase().includes('cancelled') || msg.toLowerCase().includes('cancel')) {
+        setTxError('Transaction annulée.');
+      } else {
+        setTxError('Erreur lors de l\'envoi. Vérifiez votre solde USDT et réessayez.');
+      }
+    }
   };
 
   const goBack = () => {
@@ -509,33 +562,16 @@ export const MiniAppDeposit: React.FC = () => {
             </span>
           </div>
 
-          {/* Deposit code — always shown */}
-          <div className="p-4 rounded-xl bg-gradient-to-r from-purple-500/10 to-blue-500/10 border border-purple-500/20 space-y-2">
-            <p className="text-xs font-semibold text-purple-300">📋 Votre code de dépôt</p>
-            <div className="flex items-center gap-2">
-              <span className="flex-1 text-lg font-mono font-bold text-white tracking-widest">{depositCode}</span>
-              <button onClick={handleCopyCode} className="p-2 rounded-lg bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 transition-colors">
-                {codeCopied ? <CheckCircle className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-              </button>
-            </div>
-            <p className="text-[10px] text-slate-400">⚠️ Incluez ce code dans le commentaire/mémo de votre transaction pour être crédité automatiquement.</p>
-          </div>
-
-          {/* When wallet NOT connected: simplified flow */}
-          {!isWalletConnected && hasAddress && (
+          {/* When wallet NOT connected: require TonKeeper */}
+          {!isWalletConnected && (
             <div className="space-y-3">
-              <p className="text-xs text-slate-400">
-                Envoyez vos USDT (Jetton TON) à l'adresse ci-dessous. Incluez votre code de dépôt dans le commentaire pour être crédité automatiquement.
+              <p className="text-xs text-slate-400 text-center">
+                Connectez TonKeeper pour envoyer vos USDT directement depuis l'app — instantané, comme un dépôt TON.
               </p>
-              <div className="flex items-center gap-2">
-                <div className="flex-1 px-3 py-2.5 bg-white/5 rounded-lg text-xs text-white font-mono truncate">{address}</div>
-                <button onClick={handleCopy} className="p-2.5 rounded-lg bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 transition-colors">
-                  {copied ? <CheckCircle className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                </button>
-              </div>
-              <div className="p-3 rounded-lg bg-amber-500/5 border border-amber-500/20">
-                <p className="text-xs text-amber-400">⚠️ Réseau TON uniquement. Incluez votre code de dépôt en commentaire sinon votre dépôt ne pourra pas être attribué.</p>
-              </div>
+              <button onClick={() => tonConnectUI.openModal()}
+                className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 text-sm font-semibold hover:bg-blue-500/20 transition-colors">
+                <Wallet className="w-4 h-4" /> Connecter TonKeeper
+              </button>
             </div>
           )}
 
@@ -614,11 +650,13 @@ export const MiniAppDeposit: React.FC = () => {
                   Impossible de récupérer le prix du marché. Réessayez plus tard.
                 </p>
               )}
-              <button onClick={handleRegisterUSDT}
-                disabled={!depositAmount || !hasAddress || !tonPrice}
+              <button onClick={() => void handleSendUSDT()}
+                disabled={txStatus === 'pending' || !depositAmount || !hasAddress || !tonPrice}
                 className="w-full btn-primary py-3.5 rounded-xl text-sm font-semibold text-white disabled:opacity-40 disabled:cursor-not-allowed">
-                {tonPrice
-                  ? `J'ai envoyé ${depositAmount || '0'} USDT → Convertir en GRAM`
+                {txStatus === 'pending'
+                  ? '⏳ En attente de signature…'
+                  : tonPrice
+                  ? `Envoyer ${depositAmount || '0'} USDT via TonKeeper`
                   : tonPriceError ? 'Prix indisponible' : 'Chargement du prix marché…'}
               </button>
             </>
