@@ -755,6 +755,7 @@ async def cmd_credit(msg: types.Message):
 @dp.message(F.photo)
 async def handle_proof_photo(msg: types.Message) -> None:
     uid = msg.from_user.id
+    proof_id = None
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(
             "SELECT task_id FROM waiting_proof WHERE telegram_id = ?", (uid,)
@@ -772,23 +773,42 @@ async def handle_proof_photo(msg: types.Message) -> None:
             trow = await cur.fetchone()
 
         creator_id = trow[0] if trow else None
-        task_title = trow[1] if trow else task_id
+        task_title = trow[1] if trow else f"Tâche #{task_id}"
 
-        await db.execute(
+        async with db.execute(
             "INSERT INTO social_proofs (telegram_id, task_id, file_id, creator_id) VALUES (?,?,?,?)",
             (uid, task_id, file_id, creator_id),
-        )
+        ) as cur_ins:
+            proof_id = cur_ins.lastrowid
         await db.execute("DELETE FROM waiting_proof WHERE telegram_id = ?", (uid,))
         await db.commit()
 
-    if creator_id:
+    # Notify admin (or task creator) with the photo + approve/reject buttons
+    notify_id = creator_id if creator_id else ADMIN_TELEGRAM_ID
+    if notify_id and proof_id is not None:
+        username = msg.from_user.username or ""
+        user_display = f"@{username}" if username else f"ID {uid}"
+        kb = InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(
+                text="✅ Approuver",
+                callback_data=f"proof_ok_{proof_id}_{uid}_{task_id}",
+            ),
+            InlineKeyboardButton(
+                text="❌ Refuser",
+                callback_data=f"proof_ko_{proof_id}_{uid}_{task_id}",
+            ),
+        ]])
         try:
-            await bot.send_message(
-                creator_id,
-                f"📸 <b>Nouvelle preuve à valider</b>\n\n"
-                f"Un utilisateur a soumis une preuve pour votre tâche <b>{task_title}</b>.\n\n"
-                f"Ouvrez <b>Mes campagnes</b> dans l'app pour approuver ou refuser.",
+            await bot.send_photo(
+                notify_id,
+                photo=file_id,
+                caption=(
+                    f"📸 <b>Preuve à valider</b>\n\n"
+                    f"Tâche : <b>{task_title}</b>\n"
+                    f"Utilisateur : {user_display} (<code>{uid}</code>)"
+                ),
                 parse_mode="HTML",
+                reply_markup=kb,
             )
         except Exception:
             pass

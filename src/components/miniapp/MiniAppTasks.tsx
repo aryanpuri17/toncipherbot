@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useTonWallet } from '@tonconnect/ui-react';
 import { useAppStore } from '../../store/appStore';
 import {
   Hash, Users, Bot, Calendar, Star, CheckCircle,
@@ -174,6 +175,12 @@ export const MiniAppTasks: React.FC = () => {
     tasks, completedTaskIds, completeTask, creditReferralBonus,
     setMiniAppPage, currentUser, platformConfig,
   } = useAppStore();
+
+  const tonWallet = useTonWallet();
+  const connectedAddress = tonWallet?.account.address ?? '';
+  const shortAddress = connectedAddress
+    ? `${connectedAddress.slice(0, 6)}…${connectedAddress.slice(-4)}`
+    : '';
 
   const botName = platformConfig.botUsername || 'TonCipher_bot';
 
@@ -839,6 +846,12 @@ export const MiniAppTasks: React.FC = () => {
             </p>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            {shortAddress && (
+              <div style={{ padding: '5px 10px', borderRadius: 10, background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.2)', display: 'flex', alignItems: 'center', gap: 5 }}>
+                <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#3b82f6', display: 'inline-block' }} />
+                <span style={{ fontSize: 11, fontWeight: 600, color: '#60a5fa', fontFamily: 'monospace' }}>{shortAddress}</span>
+              </div>
+            )}
             {currentUser.todayEarnings > 0 && (
               <div style={{ padding: '5px 10px', borderRadius: 10, background: 'rgba(52,211,153,0.1)', border: '1px solid rgba(52,211,153,0.2)', display: 'flex', alignItems: 'center', gap: 5 }}>
                 <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#34d399', display: 'inline-block' }} />
@@ -866,14 +879,14 @@ export const MiniAppTasks: React.FC = () => {
         </div>
 
         {/* Réseaux sociaux & YouTube (combined, bottom before promo) */}
-        {socialCards.length > 0 && (
-          <div>
-            <SectionHead title="Réseaux sociaux" hint="social" />
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {socialCards.map(c => renderCard(c))}
-            </div>
+        <div>
+          <SectionHead title="Réseaux sociaux" hint="social" />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {socialCards.length === 0
+              ? <EmptyCard text="No tasks" />
+              : socialCards.map(c => renderCard(c))}
           </div>
-        )}
+        </div>
 
         {/* Promo / Spécial */}
         {promoTasks.length > 0 && (
