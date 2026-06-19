@@ -657,8 +657,8 @@ export const MiniAppTasks: React.FC = () => {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <span style={{ fontSize: 15 }}>🪙</span>
-              <span style={{ fontSize: 13, fontWeight: 800, color: card.promoMultiplier ? '#fbbf24' : '#4ade80' }}>
-                {displayReward.toFixed(4)}
+              <span style={{ fontSize: 13, fontWeight: 800, color: card.promoMultiplier ? '#fbbf24' : '#60a5fa' }}>
+                {displayReward.toFixed(3)}
               </span>
               <span style={{ fontSize: 10, color: '#475569', fontWeight: 600 }}>GRAM</span>
               {hasProgress && (
@@ -896,7 +896,7 @@ export const MiniAppTasks: React.FC = () => {
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                             <span style={{ fontSize: 15 }}>🪙</span>
-                            <span style={{ fontSize: 13, fontWeight: 800, color: '#4ade80' }}>{task.reward.toFixed(4)}</span>
+                            <span style={{ fontSize: 13, fontWeight: 800, color: '#60a5fa' }}>{task.reward.toFixed(3)}</span>
                             <span style={{ fontSize: 10, color: '#475569', fontWeight: 600 }}>GRAM</span>
                           </div>
                           <span style={{ fontSize: 12, color: isEligible ? '#4ade80' : '#64748b', fontWeight: 700 }}>{count}/{required}</span>
