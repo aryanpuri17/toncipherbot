@@ -321,9 +321,9 @@ const SessionStatsBar: React.FC<{ totalWon: number; best: number; wagered: numbe
   return (
     <div className="grid grid-cols-3 px-1" style={{ gap: 8 }}>
       {[
-        { label: 'Total gagné', value: totalWon > 0 ? `+${totalWon.toFixed(4)}` : '—', color: totalWon > 0 ? '#4ade80' : '#475569' },
-        { label: 'Meilleur gain', value: best > 0 ? `+${best.toFixed(4)}` : '—', color: best > 0 ? '#fbbf24' : '#475569' },
-        { label: 'Misé', value: wagered.toFixed(4), color: '#94a3b8' },
+        { label: 'Total gagné', value: totalWon > 0 ? `+${totalWon.toFixed(2)}` : '—', color: totalWon > 0 ? '#4ade80' : '#475569' },
+        { label: 'Meilleur gain', value: best > 0 ? `+${best.toFixed(2)}` : '—', color: best > 0 ? '#fbbf24' : '#475569' },
+        { label: 'Misé', value: wagered.toFixed(2), color: '#94a3b8' },
       ].map(s => (
         <div key={s.label} className="text-center">
           <p style={{ fontSize: 9, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{s.label}</p>
@@ -497,7 +497,7 @@ const DiceGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResul
           </p>
           {lastRoll != null && !rolling && (
             <p className="text-xs mt-1" style={{ color: lastWin ? '#4ade80' : '#f87171' }}>
-              {lastWin ? `🎉 Gagné +${payout.toFixed(4)} GRAM` : '😔 Perdu — réessayez'}
+              {lastWin ? `🎉 Gagné +${payout.toFixed(2)} GRAM` : '😔 Perdu — réessayez'}
             </p>
           )}
         </div>
@@ -560,7 +560,7 @@ const DiceGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResul
           </div>
           <div style={{ background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.2)', borderRadius: 10 }} className="px-2 py-2 text-center">
             <p style={{ fontSize: 9, color: '#64748b', textTransform: 'uppercase', fontWeight: 600 }}>Gain possible</p>
-            <p style={{ fontSize: 14, fontWeight: 800, color: '#4ade80' }}>{potentialWin.toFixed(4)}</p>
+            <p style={{ fontSize: 14, fontWeight: 800, color: '#4ade80' }}>{potentialWin.toFixed(2)}</p>
           </div>
         </div>
       </div>
@@ -674,12 +674,7 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
   const [autoCash,  setAutoCash]  = useState('');
   const [roundId,   setRoundId]   = useState(1);
   const [betTab,     setBetTab]     = useState<'all' | 'my' | 'top'>('all');
-  const [showBet2,   setShowBet2]   = useState(false);
-  const [bet2,       setBet2]       = useState(0.10);
-  const [autoCash2,  setAutoCash2]  = useState('');
-  const [myBet2,     setMyBet2]     = useState<number|null>(null);
-  const [queuedBet2, setQueuedBet2] = useState<number|null>(null);
-  const [cashedOut2, setCashedOut2] = useState<number|null>(null);
+  const [crashFlash, setCrashFlash] = useState(false);
 
   const phaseR       = useRef<CPhase>('waiting');
   const startR       = useRef(0);
@@ -688,10 +683,6 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
   const cashedOutR   = useRef<number|null>(null);
   const autoCashR    = useRef('');
   const queuedBetR   = useRef<number|null>(null);
-  const myBet2R      = useRef<number|null>(null);
-  const cashedOut2R  = useRef<number|null>(null);
-  const autoCash2R   = useRef('');
-  const queuedBet2R  = useRef<number|null>(null);
   const rafR         = useRef(0);
   const resetTimerR  = useRef<ReturnType<typeof setTimeout>>(0 as unknown as ReturnType<typeof setTimeout>);
   const startFlightR = useRef<() => void>(() => {});
@@ -701,10 +692,6 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
   useEffect(() => { cashedOutR.current = cashedOut; }, [cashedOut]);
   useEffect(() => { autoCashR.current = autoCash; }, [autoCash]);
   useEffect(() => { queuedBetR.current = queuedBet; }, [queuedBet]);
-  useEffect(() => { myBet2R.current = myBet2; }, [myBet2]);
-  useEffect(() => { cashedOut2R.current = cashedOut2; }, [cashedOut2]);
-  useEffect(() => { autoCash2R.current = autoCash2; }, [autoCash2]);
-  useEffect(() => { queuedBet2R.current = queuedBet2; }, [queuedBet2]);
 
   const doCashout = useCallback((m: number) => {
     const ab = activeBetR.current;
@@ -719,20 +706,6 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
 
   const doCashoutR = useRef(doCashout);
   useEffect(() => { doCashoutR.current = doCashout; }, [doCashout]);
-
-  const doCashout2 = useCallback((m: number) => {
-    const ab = myBet2R.current;
-    if (ab === null || cashedOut2R.current !== null) return;
-    const win = +(ab * m).toFixed(4);
-    placeGameBet(ab, win);
-    recordGameResult('Crash', ab, win);
-    onResult(true);
-    setCashedOut2(m);
-    cashedOut2R.current = m;
-  }, [placeGameBet, recordGameResult, onResult]);
-
-  const doCashout2R = useRef(doCashout2);
-  useEffect(() => { doCashout2R.current = doCashout2; }, [doCashout2]);
 
   const startFlight = useCallback(() => {
     cancelAnimationFrame(rafR.current);
@@ -750,21 +723,8 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
       setQueuedBet(null);
       queuedBetR.current = null;
     }
-    const qb2 = queuedBet2R.current;
-    if (qb2 !== null) {
-      const state2 = useAppStore.getState();
-      const curBal2 = state2.demoMode ? state2.demoBalance : state2.currentUser.balanceMain;
-      if (qb2 <= curBal2) {
-        setMyBet2(qb2);
-        myBet2R.current = qb2;
-      }
-      setQueuedBet2(null);
-      queuedBet2R.current = null;
-    }
     setCashedOut(null);
     cashedOutR.current = null;
-    setCashedOut2(null);
-    cashedOut2R.current = null;
     setCrashedAt(0);
     setMult(1.0);
     setTEl(0);
@@ -783,11 +743,6 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
       if (activeBetR.current !== null && cashedOutR.current === null && !isNaN(ac) && ac >= 1.01 && m >= ac) {
         doCashoutR.current(m);
       }
-      const ac2 = parseFloat(autoCash2R.current);
-      if (myBet2R.current !== null && cashedOut2R.current === null && !isNaN(ac2) && ac2 >= 1.01 && m >= ac2) {
-        doCashout2R.current(m);
-      }
-
       setMult(m);
       setTEl(t);
 
@@ -795,6 +750,7 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
         cancelAnimationFrame(rafR.current);
         phaseR.current = 'crashed';
         setPhase('crashed');
+        setCrashFlash(true);
         setCrashedAt(crashR.current);
         setMult(crashR.current);
         setTEl(Math.log(Math.max(1.0001, crashR.current)) / _CRASH_RATE);
@@ -805,14 +761,6 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
           onResult(false);
           setActiveBet(null);
           activeBetR.current = null;
-        }
-        const ab2 = myBet2R.current;
-        if (ab2 !== null && cashedOut2R.current === null) {
-          placeGameBet(ab2, 0);
-          recordGameResult('Crash', ab2, 0);
-          onResult(false);
-          setMyBet2(null);
-          myBet2R.current = null;
         }
         setHistory(h => [+(crashR.current).toFixed(2), ...h].slice(0, 20));
         clearTimeout(resetTimerR.current);
@@ -831,6 +779,12 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
   }, [placeGameBet, recordGameResult, onResult]);
 
   useEffect(() => { startFlightR.current = startFlight; }, [startFlight]);
+
+  useEffect(() => {
+    if (!crashFlash) return;
+    const id = setTimeout(() => setCrashFlash(false), 600);
+    return () => clearTimeout(id);
+  }, [crashFlash]);
 
   useEffect(() => {
     if (phase !== 'waiting') return;
@@ -884,41 +838,14 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
       btnLabel = `💰 CASH OUT ×${mult.toFixed(2)}`; btnBg = 'linear-gradient(135deg,#059669,#34d399)'; btnColor = '#fff';
       btnFn = () => doCashout(mult);
     } else if (cashedOut !== null) {
-      btnLabel = `✓ Cashed out ×${cashedOut.toFixed(2)}`; btnBg = '#064e3b'; btnColor = '#4ade80'; btnDis = true;
+      btnLabel = `✓ Encaissé ×${cashedOut.toFixed(2)}`; btnBg = '#064e3b'; btnColor = '#4ade80'; btnDis = true;
     } else {
       btnLabel = `Miser au prochain tour`; btnBg = '#1e293b'; btnColor = '#64748b';
       btnFn = () => { setQueuedBet(bet); queuedBetR.current = bet; };
     }
   } else {
-    btnLabel = 'Next round…'; btnDis = true;
+    btnLabel = 'Prochain tour…'; btnDis = true;
   }
-
-  // ─── Bet 2 button logic ───
-  let btn2Label = '', btn2Bg = '#1e2847', btn2Color = '#475569', btn2Dis = false, btn2Fn: () => void = () => {};
-  const isActiveCashout2 = phase === 'flying' && myBet2 !== null && cashedOut2 === null;
-  if (phase === 'waiting') {
-    if (queuedBet2 !== null) {
-      btn2Label = `Cancel (${queuedBet2.toFixed(2)} GRAM)`; btn2Bg = '#334155'; btn2Color = '#94a3b8';
-      btn2Fn = () => { setQueuedBet2(null); queuedBet2R.current = null; };
-    } else {
-      btn2Label = `Bet ${bet2.toFixed(2)} GRAM`; btn2Bg = 'linear-gradient(135deg,#3b82f6,#6366f1)'; btn2Color = '#fff';
-      if (bet2 > bal || bet2 < 0.01) btn2Dis = true;
-      btn2Fn = () => { setQueuedBet2(bet2); queuedBet2R.current = bet2; };
-    }
-  } else if (phase === 'flying') {
-    if (myBet2 !== null && cashedOut2 === null) {
-      btn2Label = `💰 CASH OUT ×${mult.toFixed(2)}`; btn2Bg = 'linear-gradient(135deg,#059669,#34d399)'; btn2Color = '#fff';
-      btn2Fn = () => doCashout2(mult);
-    } else if (cashedOut2 !== null) {
-      btn2Label = `✓ Cashed out ×${cashedOut2.toFixed(2)}`; btn2Bg = '#064e3b'; btn2Color = '#4ade80'; btn2Dis = true;
-    } else {
-      btn2Label = `Bet next round`; btn2Bg = '#1e293b'; btn2Color = '#64748b';
-      btn2Fn = () => { setQueuedBet2(bet2); queuedBet2R.current = bet2; };
-    }
-  } else {
-    btn2Label = 'Next round…'; btn2Dis = true;
-  }
-  const btnStyle2: React.CSSProperties = { border: 'none', borderRadius: 14, fontWeight: 900, letterSpacing: '0.06em', textTransform: 'uppercase', cursor: btn2Dis ? 'not-allowed' : 'pointer', opacity: btn2Dis ? 0.6 : 1, background: btn2Bg, color: btn2Color, padding: isActiveCashout2 ? '16px 0' : '14px 0', height: isActiveCashout2 ? 52 : 48, fontSize: isActiveCashout2 ? 16 : 14, animation: isActiveCashout2 ? 'cashoutPulse 0.9s ease-in-out infinite' : 'none', transition: 'all 0.2s', boxShadow: isActiveCashout2 ? '0 4px 20px rgba(52,211,153,.3)' : 'none' };
 
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 60, background: '#080c1a', display: 'flex', flexDirection: 'column' }}>
@@ -1060,7 +987,7 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
         }}>
           {phase === 'waiting' && (
             <>
-              <div style={{ fontSize: 10, color: '#475569', fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 4 }}>WAITING FOR NEXT ROUND</div>
+              <div style={{ fontSize: 10, color: '#475569', fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 4 }}>PROCHAIN TOUR</div>
               <div key={countdown} style={{ fontSize: 62, fontWeight: 900, color: '#f8fafc', lineHeight: 1, animation: 'countdownPop 0.4s ease-out', textShadow: '0 0 30px rgba(129,140,248,.4)' }}>{countdown}</div>
               <div style={{ display: 'flex', justifyContent: 'center', gap: 6, marginTop: 8 }}>
                 {[0, 1, 2].map(i => (
@@ -1076,7 +1003,7 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
           )}
           {phase === 'crashed' && (
             <>
-              <div style={{ fontSize: 14, fontWeight: 900, color: '#ef4444', letterSpacing: '0.2em', textTransform: 'uppercase', marginBottom: 4, textShadow: '0 0 20px rgba(239,68,68,.6)' }}>FLEW AWAY!</div>
+              <div style={{ fontSize: 14, fontWeight: 900, color: '#ef4444', letterSpacing: '0.2em', textTransform: 'uppercase', marginBottom: 4, textShadow: '0 0 20px rgba(239,68,68,.6)' }}>CRASHÉ !</div>
               <div style={{ fontSize: 52, fontWeight: 900, color: '#ef4444', lineHeight: 1, textShadow: '0 0 30px rgba(239,68,68,.55), 0 0 60px rgba(239,68,68,.3)' }}>
                 {crashedAt.toFixed(2)}<span style={{ fontSize: 28 }}>×</span>
               </div>
@@ -1084,14 +1011,17 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
           )}
           {cashedOut !== null && activeBet !== null && phase !== 'waiting' && (
             <div style={{ marginTop: 10, fontSize: 14, fontWeight: 800, color: '#4ade80', background: 'rgba(74,222,128,.1)', padding: '4px 16px', borderRadius: 99, display: 'inline-block', animation: 'fadeSlideIn 0.3s ease-out', boxShadow: '0 0 12px rgba(74,222,128,.25)' }}>
-              ✓ Cashed out @×{cashedOut.toFixed(2)} → +{(activeBet * cashedOut).toFixed(2)} GRAM
+              ✓ Encaissé à ×{cashedOut.toFixed(2)} → +{(activeBet * cashedOut).toFixed(2)} GRAM
             </div>
           )}
         </div>
 
-        {phase === 'crashed' && (
-          <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at center, rgba(239,68,68,0.2), transparent 70%)', pointerEvents: 'none', animation: 'crashFlash 0.6s ease-out forwards' }} />
-        )}
+        <div style={{
+          position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 10,
+          background: 'rgba(239,68,68,0.35)',
+          opacity: crashFlash ? 1 : 0,
+          transition: crashFlash ? 'none' : 'opacity 0.6s ease-out',
+        }} />
       </div>
 
       {/* ═══ SCROLLABLE AREA ═══ */}
@@ -1149,7 +1079,7 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
                   background: 'none', letterSpacing: '0.05em', textTransform: 'uppercase',
                   borderTop: 'none', borderLeft: 'none', borderRight: 'none', cursor: 'pointer',
                   borderBottom: betTab === tab ? '2px solid #ef4444' : '2px solid transparent' }}>
-                {tab === 'all' ? 'All Bets' : tab === 'my' ? 'My Bets' : 'Top'}
+                {tab === 'all' ? 'Toutes' : tab === 'my' ? 'Mes mises' : 'Top'}
               </button>
             ))}
           </div>
@@ -1192,16 +1122,16 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
                     <span style={{ fontSize: 11, color: '#64748b' }}>#{roundId}</span>
                     <span style={{ fontSize: 11, color: '#cbd5e1' }}>{activeBet.toFixed(2)} GRAM</span>
                     <span style={{ fontSize: 11, fontWeight: 700, color: cashedOut !== null ? '#4ade80' : phase === 'crashed' ? '#f87171' : '#94a3b8' }}>
-                      {cashedOut !== null ? `×${cashedOut.toFixed(2)} 🏆` : phase === 'crashed' ? 'FLEW AWAY!' : 'In flight…'}
+                      {cashedOut !== null ? `×${cashedOut.toFixed(2)} 🏆` : phase === 'crashed' ? 'CRASHÉ !' : 'En vol…'}
                     </span>
                   </div>
                 )}
                 {history.length === 0 && activeBet === null && (
-                  <p style={{ padding: '12px', textAlign: 'center', fontSize: 11, color: '#475569' }}>No bets yet</p>
+                  <p style={{ padding: '12px', textAlign: 'center', fontSize: 11, color: '#475569' }}>Aucune mise</p>
                 )}
                 {history.slice(0, 8).map((h, i) => (
                   <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', padding: '5px 12px', alignItems: 'center', borderBottom: i < 7 ? '1px solid rgba(30,40,71,0.3)' : 'none' }}>
-                    <span style={{ fontSize: 11, color: '#64748b' }}>Past</span>
+                    <span style={{ fontSize: 11, color: '#64748b' }}>Passé</span>
                     <span style={{ fontSize: 11, color: '#64748b' }}>—</span>
                     <span style={{ fontSize: 11, fontWeight: 700, color: h < 2 ? '#f87171' : h < 10 ? '#818cf8' : '#4ade80' }}>{h.toFixed(2)}×</span>
                   </div>
@@ -1216,12 +1146,12 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
                   ))}
                 </div>
                 {history.length === 0 && (
-                  <p style={{ padding: '12px', textAlign: 'center', fontSize: 11, color: '#475569' }}>No history yet</p>
+                  <p style={{ padding: '12px', textAlign: 'center', fontSize: 11, color: '#475569' }}>Aucun historique</p>
                 )}
                 {[...history].sort((a, b) => b - a).slice(0, 8).map((h, i) => (
                   <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', padding: '5px 12px', alignItems: 'center', borderBottom: i < 7 ? '1px solid rgba(30,40,71,0.3)' : 'none' }}>
                     <span style={{ fontSize: 12, fontWeight: 800, color: h >= 10 ? '#4ade80' : h >= 5 ? '#f59e0b' : '#818cf8' }}>{h.toFixed(2)}×</span>
-                    <span style={{ fontSize: 11, color: '#64748b' }}>Round #{roundId - i}</span>
+                    <span style={{ fontSize: 11, color: '#64748b' }}>Tour #{roundId - i}</span>
                   </div>
                 ))}
               </>
@@ -1261,41 +1191,6 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
           </div>
         </div>
 
-        {/* SECOND BET PANEL */}
-        {showBet2 ? (
-          <div style={{ background: '#0d1021', border: '1px solid #1e2847', margin: '8px 12px 16px', borderRadius: 12, padding: 12 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-              <span style={{ fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Bet 2</span>
-              <button onClick={() => { setShowBet2(false); setMyBet2(null); myBet2R.current = null; setQueuedBet2(null); queuedBet2R.current = null; setCashedOut2(null); cashedOut2R.current = null; }}
-                style={{ color: '#475569', fontSize: 14, background: 'none', border: 'none', cursor: 'pointer', lineHeight: 1 }}>✕</button>
-            </div>
-            <div style={{ background: '#080c1e', border: '1px solid #1e2847', borderRadius: 10, display: 'flex', alignItems: 'center', padding: '8px 12px', marginBottom: 6, opacity: myBet2 !== null ? 0.5 : 1 }}>
-              <input type="number" value={bet2} min={0.01} max={50} step={0.01}
-                disabled={myBet2 !== null}
-                onChange={e => { const v = +e.target.value; if (!isNaN(v)) setBet2(Math.max(0.01, Math.min(50, v))); }}
-                style={{ flex: 1, background: 'transparent', color: '#f8fafc', fontSize: 16, fontWeight: 700, outline: 'none', border: 'none' }} />
-              <span style={{ fontSize: 12, color: '#64748b' }}>GRAM</span>
-            </div>
-            <div style={{ background: '#080c1e', border: '1px solid #1e2847', borderRadius: 10, display: 'flex', alignItems: 'center', padding: '6px 12px', gap: 6, marginBottom: 8 }}>
-              <span style={{ fontSize: 10, color: '#64748b' }}>AUTO ×</span>
-              <input type="number" value={autoCash2} placeholder="2.00" min={1.01} step={0.01}
-                onChange={e => setAutoCash2(e.target.value)}
-                style={{ flex: 1, background: 'transparent', color: '#f8fafc', fontSize: 14, fontWeight: 600, outline: 'none', border: 'none' }} />
-              {autoCash2 && <button onClick={() => setAutoCash2('')} style={{ color: '#64748b', fontSize: 12, background: 'none', border: 'none', cursor: 'pointer' }}>✕</button>}
-            </div>
-            <button onClick={btn2Fn} disabled={btn2Dis} style={{ ...btnStyle2, width: '100%', display: 'block' }}>
-              {btn2Label}
-            </button>
-          </div>
-        ) : (
-          <div style={{ padding: '8px 12px 16px' }}>
-            <button onClick={() => setShowBet2(true)}
-              style={{ width: '100%', padding: '8px 0', borderRadius: 10, border: '1px dashed #1e2847',
-                background: 'transparent', color: '#475569', fontSize: 12, fontWeight: 700, letterSpacing: '0.05em', cursor: 'pointer' }}>
-              + ADD BET
-            </button>
-          </div>
-        )}
 
       </div>
     </div>
@@ -1371,6 +1266,7 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
 
   const revealTile = (idx: number) => {
     if (phase !== 'playing' || revealed.has(idx)) return;
+    snd.tick();
 
     const isMine = minePos.has(idx);
 
@@ -1510,7 +1406,7 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
           <div style={{ background: '#0d1021', border: '1px solid #1e2847', borderRadius: 14 }} className="p-3 flex items-center justify-between">
             <div>
               <p style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', fontWeight: 600 }}>Gain actuel</p>
-              <p style={{ fontSize: 18, fontWeight: 900, color: '#22c55e' }}>{curWin.toFixed(4)} TON</p>
+              <p style={{ fontSize: 18, fontWeight: 900, color: '#22c55e' }}>{curWin.toFixed(2)} GRAM</p>
             </div>
             <div className="text-center">
               <p style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', fontWeight: 600 }}>Multiplicateur</p>
@@ -1684,7 +1580,7 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
               </div>
               <div style={{ background: '#080c1e', border: '1px solid #1e2847', borderRadius: 10 }} className="px-3 py-2.5">
                 <p style={{ fontSize: 10, color: '#64748b', fontWeight: 600, textTransform: 'uppercase', marginBottom: 3 }}>Profit max</p>
-                <p style={{ fontSize: 16, fontWeight: 900, color: '#22c55e' }}>+{(effBet * maxPossibleMult - effBet).toFixed(3)} TON</p>
+                <p style={{ fontSize: 16, fontWeight: 900, color: '#22c55e' }}>+{(effBet * maxPossibleMult - effBet).toFixed(2)} GRAM</p>
               </div>
             </div>
 
@@ -1718,11 +1614,20 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
           }} className="p-4 text-center space-y-2">
             <p className="text-3xl">{phase === 'won' ? '💎' : '💥'}</p>
             <p className="text-lg font-black" style={{ color: '#f8fafc' }}>
-              {phase === 'won' ? `+${curWin.toFixed(4)} GRAM` : `−${activeBetRef.current.toFixed(4)} GRAM`}
+              {phase === 'won'
+                ? <><span style={{ color: '#4ade80' }}>+</span><CountUp value={curWin} decimals={4} duration={600} /> GRAM</>
+                : `−${activeBetRef.current.toFixed(4)} GRAM`}
             </p>
             <p className="text-sm" style={{ color: '#64748b' }}>
               {phase === 'won' ? `${safeCount} cases sûres · ×${curMult.toFixed(2)}` : 'Mine ! Dommage…'}
             </p>
+            <button
+              onClick={() => { reset(); }}
+              style={{ marginTop: 8, width: '100%', padding: '10px 0', borderRadius: 12,
+                border: '1px solid #1e2847', background: 'transparent',
+                color: '#64748b', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+              ↺ Rejouer ({activeBetRef.current?.toFixed(2)} GRAM)
+            </button>
           </div>
         )}
 
@@ -1950,10 +1855,10 @@ const TowerGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
         <div className="glass-card p-4 text-center">
           {phase === 'won' ? (
             <p className="text-emerald-400 font-bold text-sm">
-              {floor >= TOWER_FLOORS ? '🏆 Sommet atteint !' : '🎉 Encaissé'} +{curWin.toFixed(4)} GRAM
+              {floor >= TOWER_FLOORS ? '🏆 Sommet atteint !' : '🎉 Encaissé'} +{curWin.toFixed(2)} GRAM
             </p>
           ) : (
-            <p className="text-red-400 font-bold text-sm">💥 Piège ! Perdu −{activeBetRef.current.toFixed(4)} TON</p>
+            <p className="text-red-400 font-bold text-sm">💥 Piège ! Perdu −{activeBetRef.current.toFixed(2)} GRAM</p>
           )}
         </div>
       )}
@@ -2576,7 +2481,9 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
               padding: '4px 16px', borderRadius: 20, pointerEvents: 'none', whiteSpace: 'nowrap',
             }}>
               <p style={{ fontSize: 14, fontWeight: 900, color: '#fff' }}>
-                ×{lastWin.mult} — {lastWin.win > effBet ? `+${(lastWin.win - effBet).toFixed(4)} GRAM` : `−${(effBet - lastWin.win).toFixed(4)} GRAM`}
+                ×{lastWin.mult} — {lastWin.win > effBet
+                  ? <><span>+</span><CountUp value={+(lastWin.win - effBet).toFixed(4)} decimals={4} duration={600} /> GRAM</>
+                  : `−${(effBet - lastWin.win).toFixed(4)} GRAM`}
               </p>
             </div>
           )}
@@ -2908,7 +2815,7 @@ export const MiniAppGames: React.FC = () => {
               </span>
             )}
           </div>
-          <p className="text-xs text-slate-400 mt-0.5">Misez des TON · Tentez votre chance</p>
+          <p className="text-xs text-slate-400 mt-0.5">Misez des GRAM · Tentez votre chance</p>
         </div>
         <div style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid #1e2847' }} className="px-3 py-2 rounded-xl text-right">
           <p className="text-[10px] uppercase" style={{ color: '#64748b' }}>
@@ -3028,7 +2935,7 @@ export const MiniAppGames: React.FC = () => {
             <div className="grid grid-cols-3 gap-2 text-center">
               <div style={{ background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.15)', borderRadius: 10 }} className="py-2.5">
                 <p style={{ fontSize: 15, fontWeight: 700, color: '#22c55e' }}>+{totalWon.toFixed(2)}</p>
-                <p style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>TON gagnés</p>
+                <p style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>GRAM gagnés</p>
               </div>
               <div style={{ background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.15)', borderRadius: 10 }} className="py-2.5">
                 <p style={{ fontSize: 15, fontWeight: 700, color: '#fbbf24' }}>+{bestWin.toFixed(2)}</p>
@@ -3054,7 +2961,7 @@ export const MiniAppGames: React.FC = () => {
                         }}>↑</span>
                         <div>
                           <p style={{ fontSize: 12, color: '#f8fafc', lineHeight: 1 }}>{r.game}</p>
-                          <p style={{ fontSize: 10, color: '#64748b' }}>Mise {r.bet.toFixed(2)} TON</p>
+                          <p style={{ fontSize: 10, color: '#64748b' }}>Mise {r.bet.toFixed(2)} GRAM</p>
                         </div>
                       </div>
                       <span style={{ fontSize: 13, fontWeight: 600, color: '#22c55e' }}>
@@ -3079,7 +2986,7 @@ export const MiniAppGames: React.FC = () => {
         <div className="grid grid-cols-3 gap-3 text-center">
           <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 12 }} className="py-3">
             <p style={{ fontSize: 15, fontWeight: 700, color: '#f59e0b' }}>0.01</p>
-            <p style={{ fontSize: 10, color: '#64748b', marginTop: 3 }}>Mise min (TON)</p>
+            <p style={{ fontSize: 10, color: '#64748b', marginTop: 3 }}>Mise min (GRAM)</p>
           </div>
           <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 12 }} className="py-3">
             <p style={{ fontSize: 15, fontWeight: 700, color: '#5eead4' }}>5 jeux</p>
@@ -3087,7 +2994,7 @@ export const MiniAppGames: React.FC = () => {
           </div>
           <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 12 }} className="py-3">
             <p style={{ fontSize: 15, fontWeight: 700, color: '#cbd5e1' }}>50</p>
-            <p style={{ fontSize: 10, color: '#64748b', marginTop: 3 }}>Mise max (TON)</p>
+            <p style={{ fontSize: 10, color: '#64748b', marginTop: 3 }}>Mise max (GRAM)</p>
           </div>
         </div>
       </div>

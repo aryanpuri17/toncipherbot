@@ -6,3 +6,8 @@ startCommand = "python main.py"
 healthcheckPath = "/health"
 healthcheckTimeout = 30
 restartPolicyType = "on_failure"
+
+# IMPORTANT — persistent storage:
+# Add a Volume in Railway dashboard, mount path: /data
+# Then set env var: DATABASE_PATH=/data/toncipherbot.db
+# Without this, the SQLite DB is on the ephemeral filesystem and resets on every restart.

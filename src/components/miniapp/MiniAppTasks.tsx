@@ -645,7 +645,7 @@ export const MiniAppTasks: React.FC = () => {
 
   // ── Filter state ─────────────────────────────────────────────────────────────
 
-  const [activeFilter, setActiveFilter] = React.useState<'all' | 'daily' | 'special' | 'channel' | 'bot' | 'video' | 'social'>('all');
+  const [activeFilter, setActiveFilter] = React.useState<'all' | 'daily' | 'special' | 'channel' | 'bot' | 'socials'>('all');
 
   // ── Card renderer ────────────────────────────────────────────────────────────
 
@@ -1117,20 +1117,23 @@ export const MiniAppTasks: React.FC = () => {
 
   const totalAvailable = allCards.length + promoTasks.length;
 
+  const isSocialCard = (c: CardTask) => c.type === 'watch_video' || c.type === 'social';
+  const isTelegramCard = (c: CardTask) => c.type === 'join_channel' || c.type === 'join_group' || c.type === 'start_bot';
+
   const getFilteredCards = (): CardTask[] => {
     switch (activeFilter) {
       case 'daily':   return allCards.filter(c => c.type === 'daily');
       case 'special': return allCards.filter(c => c.type === 'special');
       case 'channel': return allCards.filter(c => c.type === 'join_channel' || c.type === 'join_group');
       case 'bot':     return allCards.filter(c => c.type === 'start_bot');
-      case 'video':   return allCards.filter(c => c.type === 'watch_video');
-      case 'social':  return allCards.filter(c => c.type === 'social');
+      case 'socials': return allCards.filter(isSocialCard);
       default:        return allCards;
     }
   };
 
   const filteredCards = getFilteredCards();
   const showPromo = activeFilter === 'all' || activeFilter === 'special';
+  const socialsCount = allCards.filter(isSocialCard).length;
 
 
   return (
@@ -1174,13 +1177,12 @@ export const MiniAppTasks: React.FC = () => {
         {/* Filter tabs */}
         <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 2 }}>
           {([
-            { key: 'all',     label: 'Toutes',       count: allCards.length,                                                               always: true },
-            { key: 'daily',   label: '📅 Quotidien', count: allCards.filter(c => c.type === 'daily').length,                               always: true },
-            { key: 'special', label: '⭐ Spécial',   count: allCards.filter(c => c.type === 'special').length + promoTasks.length,         always: true },
-            { key: 'channel', label: '📢 Canaux',    count: allCards.filter(c => c.type === 'join_channel' || c.type === 'join_group').length, always: true },
-            { key: 'bot',     label: '🤖 Bots',      count: allCards.filter(c => c.type === 'start_bot').length,                          always: true },
-            { key: 'video',   label: '▶️ Vidéos',    count: allCards.filter(c => c.type === 'watch_video').length,                        always: false },
-            { key: 'social',  label: '🌐 Social',    count: allCards.filter(c => c.type === 'social').length,                             always: false },
+            { key: 'all',     label: 'Toutes',             count: allCards.length,                                                                  always: true },
+            { key: 'daily',   label: '📅 Quotidien',      count: allCards.filter(c => c.type === 'daily').length,                                    always: true },
+            { key: 'special', label: '⭐ Spécial',        count: allCards.filter(c => c.type === 'special').length + promoTasks.length,              always: true },
+            { key: 'channel', label: '📢 Canaux',         count: allCards.filter(c => c.type === 'join_channel' || c.type === 'join_group').length,   always: true },
+            { key: 'bot',     label: '🤖 Bots',           count: allCards.filter(c => c.type === 'start_bot').length,                               always: true },
+            { key: 'socials', label: '📱 Réseaux sociaux', count: socialsCount,                                                                       always: false },
           ] as { key: typeof activeFilter; label: string; count: number; always: boolean }[])
           .filter(f => f.always || f.count > 0)
           .map(f => (
@@ -1203,7 +1205,36 @@ export const MiniAppTasks: React.FC = () => {
 
       {/* Task list */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {filteredCards.map(card => renderCard(card))}
+        {activeFilter === 'all' ? (() => {
+          const telegramCards = filteredCards.filter(isTelegramCard);
+          const socialCards   = filteredCards.filter(isSocialCard);
+          const otherCards    = filteredCards.filter(c => !isTelegramCard(c) && !isSocialCard(c));
+          return (
+            <>
+              {otherCards.map(card => renderCard(card))}
+              {telegramCards.length > 0 && (
+                <>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0' }}>
+                    <span style={{ fontSize: 10, fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Telegram</span>
+                    <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.06)' }} />
+                    <span style={{ fontSize: 10, color: '#334155', fontWeight: 700 }}>{telegramCards.length}</span>
+                  </div>
+                  {telegramCards.map(card => renderCard(card))}
+                </>
+              )}
+              {socialCards.length > 0 && (
+                <>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', marginTop: 4 }}>
+                    <span style={{ fontSize: 10, fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Réseaux sociaux</span>
+                    <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.06)' }} />
+                    <span style={{ fontSize: 10, color: '#334155', fontWeight: 700 }}>{socialCards.length}</span>
+                  </div>
+                  {socialCards.map(card => renderCard(card))}
+                </>
+              )}
+            </>
+          );
+        })() : filteredCards.map(card => renderCard(card))}
 
         {/* Promo tasks (shown in 'all' and 'special' filters) */}
         {showPromo && promoTasks.map(task => {
