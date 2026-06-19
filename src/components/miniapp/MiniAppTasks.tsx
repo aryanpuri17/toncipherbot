@@ -108,6 +108,7 @@ interface CardTask {
   maxCompletions?: number;
   icon?: string;
   isInstant: boolean;
+  verificationMethod?: string;
 }
 
 // ── Static config ──────────────────────────────────────────────────────────────
@@ -183,6 +184,7 @@ export const MiniAppTasks: React.FC = () => {
   const [taskStates, setTaskStates] = useState<Record<string, { phase: TaskPhase }>>({});
   const timerRefs                   = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const allCardsRef                 = useRef<CardTask[]>([]);
+  const promoCardsRef               = useRef<CardTask[]>([]);
   const [tick, setTick]             = useState(0); // 1-second ticker for countdown display
 
   const [apiTasks,            setApiTasks]            = useState<ApiTask[]>([]);
@@ -351,6 +353,12 @@ export const MiniAppTasks: React.FC = () => {
 
   const allCards = [...platformCards, ...apiCards];
   allCardsRef.current = allCards;
+  promoCardsRef.current = promoTasks.map(t => ({
+    id: t.id, source: 'platform' as const, type: t.type, title: t.title,
+    description: t.description, targetUrl: t.targetUrl, reward: t.reward,
+    totalCompletions: t.totalCompletions, maxCompletions: t.maxCompletions,
+    icon: t.icon, isInstant: false, verificationMethod: t.verificationMethod,
+  }));
 
   // ── Completion helpers ───────────────────────────────────────────────────────
 
@@ -442,6 +450,12 @@ export const MiniAppTasks: React.FC = () => {
       return;
     }
 
+    // Manual verification tasks (e.g. "Partage Communauté"): skip timer, go to proof submission directly
+    if (card.verificationMethod === 'manual') {
+      setPhase(card.id, 'needs_proof');
+      return;
+    }
+
     if (card.targetUrl) openUrl(card.targetUrl);
 
     const waitMs  = card.type === 'start_bot' ? REQUIRED_MS : card.type === 'watch_video' ? VIDEO_REQUIRED_MS : card.type === 'social' ? SOCIAL_REQUIRED_MS : CHANNEL_REQUIRED_MS;
@@ -514,7 +528,7 @@ export const MiniAppTasks: React.FC = () => {
           const { status } = await res.json() as { status: string };
           if (status === 'approved') {
             localStorage.removeItem(key);
-            const card = allCardsRef.current.find(c => c.id === taskId);
+            const card = allCardsRef.current.find(c => c.id === taskId) ?? promoCardsRef.current.find(c => c.id === taskId);
             if (card) await directComplete(card);
           } else if (status === 'rejected') {
             localStorage.removeItem(key);
@@ -780,8 +794,7 @@ export const MiniAppTasks: React.FC = () => {
   // ── Render ───────────────────────────────────────────────────────────────────
 
   const telegramCards = allCards.filter(c => c.type === 'join_channel' || c.type === 'join_group' || c.type === 'start_bot');
-  const socialCards   = allCards.filter(c => c.type === 'social');
-  const videoCards    = allCards.filter(c => c.type === 'watch_video');
+  const socialCards   = allCards.filter(c => c.type === 'social' || c.type === 'watch_video');
   const totalAvailable = allCards.length + promoTasks.length;
 
   const SectionHead = ({ title, hint, infoOnly }: { title: string; hint?: string; infoOnly?: boolean }) => (
@@ -852,25 +865,15 @@ export const MiniAppTasks: React.FC = () => {
           </div>
         </div>
 
-        {/* Réseaux sociaux */}
-        <div>
-          <SectionHead title="Réseaux sociaux" hint="social" />
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {socialCards.length === 0
-              ? <EmptyCard text="No tasks" />
-              : socialCards.map(c => renderCard(c))}
+        {/* Réseaux sociaux & YouTube (combined, bottom before promo) */}
+        {socialCards.length > 0 && (
+          <div>
+            <SectionHead title="Réseaux sociaux" hint="social" />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {socialCards.map(c => renderCard(c))}
+            </div>
           </div>
-        </div>
-
-        {/* YouTube */}
-        <div>
-          <SectionHead title="YouTube" hint="watch_video" />
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {videoCards.length === 0
-              ? <EmptyCard text="No tasks" />
-              : videoCards.map(c => renderCard(c))}
-          </div>
-        </div>
+        )}
 
         {/* Promo / Spécial */}
         {promoTasks.length > 0 && (
