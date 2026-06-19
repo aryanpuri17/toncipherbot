@@ -369,14 +369,14 @@ function diceWinChance(target: number, dir: DiceDir): number {
   return dir === 'under' ? target : 100 - target;
 }
 function diceMultiplier(target: number, dir: DiceDir): number {
-  // 93% RTP: house retains 7% of every bet
+  // 90% RTP: house retains 10% of every bet
   const wc = Math.max(2, Math.min(98, diceWinChance(target, dir)));
-  return +(93 / wc).toFixed(4);
+  return +(90 / wc).toFixed(4);
 }
 
 function rollDice(target: number, dir: DiceDir): { roll: number; win: boolean } {
-  // 6% house override: force a losing result (hidden, like real RNG-based casinos)
-  if (Math.random() < 0.06) {
+  // 10% house override: force a losing result
+  if (Math.random() < 0.10) {
     const loss = dir === 'under'
       ? +(target + 0.01 + Math.random() * (99.98 - target)).toFixed(2)
       : +(Math.random() * (target - 0.01)).toFixed(2);
@@ -915,7 +915,7 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
 
       {/* ═══ GRAPH ═══ */}
       <div style={{
-        flexShrink: 0, height: '40dvh', minHeight: 200, position: 'relative',
+        flexShrink: 0, height: '32dvh', minHeight: 170, position: 'relative',
         background: 'radial-gradient(ellipse at 50% 80%, rgba(129,140,248,.04) 0%, transparent 60%)',
       }}>
         <svg width="100%" height="100%" viewBox={`0 0 ${PL + GW + 12} ${GH + PB}`} preserveAspectRatio="xMidYMid meet" style={{ display: 'block' }}>
@@ -2080,7 +2080,7 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
   const [bet, setBet]                   = useState(0.01);
   const [rows, setRows]                 = useState<PlinkoRows>(12);
   const [risk, setRisk]                 = useState<PlinkoRisk>('medium');
-  const [ballCount, setBallCount]       = useState<1 | 3 | 5 | 10>(1);
+  const [ballCount, setBallCount]       = useState<1 | 5 | 10 | 25 | 50 | 100>(1);
   const [autoPlay, setAutoPlay]         = useState(false);
   const [activeBalls, setActiveBalls]   = useState<ActiveBall[]>([]);
   const [sessionGain, setSessionGain]   = useState(0);
@@ -2367,6 +2367,7 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
     setSessionGain(0);
     setLastWin(null);
     setFinalSlot(null);
+    const delay = count <= 10 ? 280 : count <= 25 ? 180 : 100;
     for (let i = 0; i < count; i++) {
       setTimeout(() => {
         if (!mountedRef.current) return;
@@ -2381,7 +2382,7 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
         pendingWins.current.set(id, win);
         setActiveBalls(prev => [...prev, { id, path, row: 0, col: 0, bet: snapBet, win, mult: m, slot, trail: [] }]);
         launchBall(id, path, snapBet, win, m, slot);
-      }, i * 300);
+      }, i * delay);
     }
   };
 
@@ -2563,9 +2564,9 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
           <div>
             <p style={{ fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>Boules par lancer</p>
             <div className="flex gap-1.5">
-              {([1, 3, 5, 10] as const).map(n => (
+              {([1, 5, 10, 25, 50, 100] as const).map(n => (
                 <button key={n} onClick={() => { if (!dropping && !autoPlay) setBallCount(n); }}
-                  className="flex-1 py-2 rounded-lg text-xs font-semibold transition-all border"
+                  className="flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all border"
                   style={ballCount === n
                     ? { background: 'rgba(0,152,234,0.15)', borderColor: 'rgba(0,152,234,0.4)', color: '#0098EA', cursor: (dropping || autoPlay) ? 'not-allowed' : 'pointer' }
                     : { background: 'rgba(255,255,255,0.04)', borderColor: '#1e2847', color: '#64748b', cursor: (dropping || autoPlay) ? 'not-allowed' : 'pointer' }
