@@ -656,7 +656,11 @@ export const MiniAppTasks: React.FC = () => {
           {/* Bottom row: reward + action */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ fontSize: 15 }}>🪙</span>
+              <svg width="16" height="16" viewBox="0 0 56 56" fill="none" style={{ flexShrink: 0 }}>
+                <circle cx="28" cy="28" r="28" fill="#0098EA"/>
+                <path d="M37.5603 15.6277H18.4386C14.9228 15.6277 12.7547 19.4202 14.5145 22.4798L26.9572 44.1141C27.5004 45.0567 28.8567 45.0567 29.3999 44.1141L41.8427 22.4798C43.6025 19.4202 41.4344 15.6277 37.5603 15.6277Z" fill="white"/>
+                <path opacity="0.5" d="M28.0001 15.6277H18.4386C14.9228 15.6277 12.7547 19.4202 14.5145 22.4798L20.2931 32.4371L28.0001 15.6277Z" fill="white"/>
+              </svg>
               <span style={{ fontSize: 13, fontWeight: 800, color: card.promoMultiplier ? '#fbbf24' : '#60a5fa' }}>
                 {displayReward.toFixed(3)}
               </span>
@@ -895,7 +899,11 @@ export const MiniAppTasks: React.FC = () => {
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <span style={{ fontSize: 15 }}>🪙</span>
+                            <svg width="16" height="16" viewBox="0 0 56 56" fill="none" style={{ flexShrink: 0 }}>
+                <circle cx="28" cy="28" r="28" fill="#0098EA"/>
+                <path d="M37.5603 15.6277H18.4386C14.9228 15.6277 12.7547 19.4202 14.5145 22.4798L26.9572 44.1141C27.5004 45.0567 28.8567 45.0567 29.3999 44.1141L41.8427 22.4798C43.6025 19.4202 41.4344 15.6277 37.5603 15.6277Z" fill="white"/>
+                <path opacity="0.5" d="M28.0001 15.6277H18.4386C14.9228 15.6277 12.7547 19.4202 14.5145 22.4798L20.2931 32.4371L28.0001 15.6277Z" fill="white"/>
+              </svg>
                             <span style={{ fontSize: 13, fontWeight: 800, color: '#60a5fa' }}>{task.reward.toFixed(3)}</span>
                             <span style={{ fontSize: 10, color: '#475569', fontWeight: 600 }}>GRAM</span>
                           </div>
