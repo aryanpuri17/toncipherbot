@@ -6,12 +6,14 @@ self-referral detection, rate limiting, fraud alert logging.
 Transactions: deposit/withdrawal persistence with admin approve/reject flow.
 """
 import asyncio
+import base64
 import hashlib
 import json
 import hmac as hmac_lib
 import logging
 import math
 import os
+import signal
 import time
 import uuid
 from collections import defaultdict
@@ -22,6 +24,7 @@ from aiohttp import web
 from aiogram import Bot, Dispatcher, F, types
 from aiogram.filters import CommandStart, Command
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
+from cryptography.fernet import Fernet
 
 BOT_TOKEN         = os.getenv("BOT_TOKEN", "")
 WEBAPP_URL        = os.getenv("WEBAPP_URL", "https://toncipherbot.onrender.com")
@@ -44,6 +47,16 @@ REFERRAL_BONUS_TON  = float(os.getenv("REFERRAL_BONUS_TON", "1.0"))
 MAX_ACCOUNTS_PER_IP = int(os.getenv("MAX_ACCOUNTS_PER_IP", "3"))
 RATE_LIMIT_MAX      = int(os.getenv("RATE_LIMIT_MAX", "30"))  # requests / minute / IP
 RATE_LIMIT_WINDOW   = 60  # seconds
+
+# ── GitHub backup (free persistent storage) ────────────────────────────────────
+# GITHUB_TOKEN  : Personal Access Token with "repo" scope
+# GITHUB_REPO   : "owner/repo" (defaults to this repo)
+# DB_BACKUP_KEY : Random key — generate once with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+GITHUB_TOKEN  = os.getenv("GITHUB_TOKEN", "")
+GITHUB_REPO   = os.getenv("GITHUB_REPO", "aryanpuri17/toncipherbot")
+DB_BACKUP_KEY = os.getenv("DB_BACKUP_KEY", "")
+_BACKUP_TAG   = "db-backup"
+_BACKUP_NAME  = "toncipherbot.db.enc"
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
@@ -245,6 +258,128 @@ def _severity(score: int) -> str:
 
 def _short_id() -> str:
     return str(uuid.uuid4())[:9]
+
+
+# ── GitHub DB backup / restore ─────────────────────────────────────────────────
+
+def _fernet() -> Fernet | None:
+    if not DB_BACKUP_KEY:
+        return None
+    try:
+        return Fernet(DB_BACKUP_KEY.encode())
+    except Exception:
+        return None
+
+async def _gh_release_id(session: "aiohttp.ClientSession", create: bool = False) -> int | None:
+    """Return the GitHub release id for _BACKUP_TAG, optionally creating it."""
+    import aiohttp as _aiohttp
+    headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
+    url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/tags/{_BACKUP_TAG}"
+    async with session.get(url, headers=headers) as r:
+        if r.status == 200:
+            return (await r.json())["id"]
+    if not create:
+        return None
+    async with session.post(
+        f"https://api.github.com/repos/{GITHUB_REPO}/releases",
+        headers=headers,
+        json={"tag_name": _BACKUP_TAG, "name": "DB Backup", "body": "Auto backup — do not delete", "prerelease": True},
+    ) as r:
+        if r.status == 201:
+            return (await r.json())["id"]
+    return None
+
+async def restore_db_from_github() -> bool:
+    """Download and decrypt the latest DB backup from GitHub on startup."""
+    if not GITHUB_TOKEN or not DB_BACKUP_KEY:
+        return False
+    f = _fernet()
+    if not f:
+        return False
+    try:
+        import aiohttp as _aiohttp
+        headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
+        async with _aiohttp.ClientSession() as session:
+            release_id = await _gh_release_id(session)
+            if not release_id:
+                log.info("GitHub backup: no release found, starting fresh")
+                return False
+            async with session.get(
+                f"https://api.github.com/repos/{GITHUB_REPO}/releases/{release_id}/assets",
+                headers=headers,
+            ) as r:
+                assets = await r.json() if r.status == 200 else []
+            asset = next((a for a in assets if a["name"] == _BACKUP_NAME), None)
+            if not asset:
+                log.info("GitHub backup: no asset found")
+                return False
+            dl_headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/octet-stream"}
+            async with session.get(asset["url"], headers=dl_headers, allow_redirects=True) as r:
+                if r.status != 200:
+                    log.warning("GitHub backup: download failed %s", r.status)
+                    return False
+                enc_data = await r.read()
+        decrypted = f.decrypt(enc_data)
+        os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+        with open(DB_PATH, "wb") as fh:
+            fh.write(decrypted)
+        log.info("DB restored from GitHub backup (%d bytes)", len(decrypted))
+        return True
+    except Exception as e:
+        log.warning("GitHub restore failed: %s", e)
+        return False
+
+async def backup_db_to_github() -> bool:
+    """Encrypt and upload current DB to GitHub release (overwrites previous backup)."""
+    if not GITHUB_TOKEN or not DB_BACKUP_KEY or not os.path.exists(DB_PATH):
+        return False
+    f = _fernet()
+    if not f:
+        return False
+    try:
+        import aiohttp as _aiohttp
+        with open(DB_PATH, "rb") as fh:
+            raw = fh.read()
+        enc = f.encrypt(raw)
+        headers_json = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
+        async with _aiohttp.ClientSession() as session:
+            release_id = await _gh_release_id(session, create=True)
+            if not release_id:
+                log.warning("GitHub backup: could not get/create release")
+                return False
+            # Delete old asset if exists
+            async with session.get(
+                f"https://api.github.com/repos/{GITHUB_REPO}/releases/{release_id}/assets",
+                headers=headers_json,
+            ) as r:
+                assets = await r.json() if r.status == 200 else []
+            for a in assets:
+                if a["name"] == _BACKUP_NAME:
+                    await session.delete(
+                        f"https://api.github.com/repos/{GITHUB_REPO}/releases/assets/{a['id']}",
+                        headers=headers_json,
+                    )
+            # Upload new asset
+            upload_url = (
+                f"https://uploads.github.com/repos/{GITHUB_REPO}"
+                f"/releases/{release_id}/assets?name={_BACKUP_NAME}"
+            )
+            upload_headers = {"Authorization": f"token {GITHUB_TOKEN}", "Content-Type": "application/octet-stream"}
+            async with session.post(upload_url, headers=upload_headers, data=enc) as r:
+                if r.status == 201:
+                    log.info("DB backed up to GitHub (%d bytes encrypted)", len(enc))
+                    return True
+                log.warning("GitHub backup upload failed: %s", r.status)
+                return False
+    except Exception as e:
+        log.warning("GitHub backup failed: %s", e)
+        return False
+
+async def _periodic_backup() -> None:
+    """Back up DB every 10 minutes."""
+    while True:
+        await asyncio.sleep(600)
+        await backup_db_to_github()
 
 
 # ── Database ───────────────────────────────────────────────────────────────────
@@ -2884,10 +3019,28 @@ async def start_web() -> None:
 
 async def main() -> None:
     log.info("Starting TonCipher bot + web server…")
+
+    # Restore DB from GitHub backup before init (only if no local DB exists yet)
+    if not os.path.exists(DB_PATH):
+        log.info("No local DB found — attempting restore from GitHub backup…")
+        await restore_db_from_github()
+
     await init_db()
+
+    # Graceful shutdown: backup DB before exiting
+    loop = asyncio.get_running_loop()
+    def _on_sigterm():
+        log.info("SIGTERM received — backing up DB before exit…")
+        asyncio.ensure_future(backup_db_to_github())
+    loop.add_signal_handler(signal.SIGTERM, _on_sigterm)
+
     tasks: list = [start_web()]
     if bot:
         tasks.append(dp.start_polling(bot, allowed_updates=["message"]))
+    if GITHUB_TOKEN and DB_BACKUP_KEY:
+        tasks.append(_periodic_backup())
+        log.info("GitHub DB backup enabled (every 10 min)")
+
     await asyncio.gather(*tasks)
 
 
