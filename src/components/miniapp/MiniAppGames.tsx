@@ -671,13 +671,13 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
   const [activeBet, setActiveBet] = useState<number|null>(null);
   const [queuedBet, setQueuedBet] = useState<number|null>(null);
   const [cashedOut, setCashedOut] = useState<number|null>(null);
-  const [autoCash,  setAutoCash]  = useState('');
+
   const [roundId,   setRoundId]   = useState(1);
   const [betTab,     setBetTab]     = useState<'all' | 'my' | 'top'>('all');
   const [crashFlash, setCrashFlash] = useState(false);
   const [showBet2,   setShowBet2]   = useState(false);
   const [bet2,       setBet2]       = useState(0.10);
-  const [autoCash2,  setAutoCash2]  = useState('');
+
   const [myBet2,     setMyBet2]     = useState<number|null>(null);
   const [queuedBet2, setQueuedBet2] = useState<number|null>(null);
   const [cashedOut2, setCashedOut2] = useState<number|null>(null);
@@ -687,7 +687,7 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
   const crashR       = useRef(0);
   const activeBetR   = useRef<number|null>(null);
   const cashedOutR   = useRef<number|null>(null);
-  const autoCashR    = useRef('');
+
   const queuedBetR   = useRef<number|null>(null);
   const rafR         = useRef(0);
   const resetTimerR  = useRef<ReturnType<typeof setTimeout>>(0 as unknown as ReturnType<typeof setTimeout>);
@@ -695,17 +695,17 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
   const myBet2R      = useRef<number|null>(null);
   const cashedOut2R  = useRef<number|null>(null);
   const queuedBet2R  = useRef<number|null>(null);
-  const autoCash2R   = useRef('');
+
 
   useEffect(() => { phaseR.current = phase; }, [phase]);
   useEffect(() => { activeBetR.current = activeBet; }, [activeBet]);
   useEffect(() => { cashedOutR.current = cashedOut; }, [cashedOut]);
-  useEffect(() => { autoCashR.current = autoCash; }, [autoCash]);
+
   useEffect(() => { queuedBetR.current = queuedBet; }, [queuedBet]);
   useEffect(() => { myBet2R.current = myBet2; }, [myBet2]);
   useEffect(() => { cashedOut2R.current = cashedOut2; }, [cashedOut2]);
   useEffect(() => { queuedBet2R.current = queuedBet2; }, [queuedBet2]);
-  useEffect(() => { autoCash2R.current = autoCash2; }, [autoCash2]);
+
 
   const doCashout = useCallback((m: number) => {
     const ab = activeBetR.current;
@@ -774,14 +774,6 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
       const m = Math.exp(_CRASH_RATE * t);
       fc++;
 
-      const ac = parseFloat(autoCashR.current);
-      if (activeBetR.current !== null && cashedOutR.current === null && !isNaN(ac) && ac >= 1.01 && m >= ac) {
-        doCashoutR.current(m);
-      }
-      if (autoCash2R.current && myBet2R.current !== null && cashedOut2R.current === null) {
-        const threshold2 = parseFloat(autoCash2R.current);
-        if (!isNaN(threshold2) && m >= threshold2) doCashout2R.current(m);
-      }
       setMult(m);
       setTEl(t);
 
@@ -855,9 +847,6 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
   const lineC = phase === 'crashed' ? '#ef4444' : '#818cf8';
   const yTk = [1, ...Array.from({ length: 3 }, (_, i) => +(1 + (i + 1) * (mMax - 1) / 3).toFixed(1))];
   const xTk = [Math.round(tMax * 0.25), Math.round(tMax * 0.5), Math.round(tMax * 0.75), Math.round(tMax)];
-
-  const autoCashVal = parseFloat(autoCash);
-  const hasAutoCash = !isNaN(autoCashVal) && autoCashVal >= 1.01;
 
   // ─── Button logic ───
   const isActiveCashout = phase === 'flying' && activeBet !== null && cashedOut === null;
@@ -1000,13 +989,6 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
           {xTk.map((t, i) => (
             <text key={`x${i}`} x={toX(t)} y={GH + PB - 2} fontSize="7" fill="#475569" textAnchor="middle" fontWeight="600">{t}s</text>
           ))}
-          {hasAutoCash && (
-            <g>
-              <line x1={PL} x2={PL + GW} y1={toY(autoCashVal)} y2={toY(autoCashVal)} stroke="#fbbf24" strokeWidth="1.2" strokeDasharray="6,4" opacity="0.7" />
-              <rect x={PL + GW - 52} y={toY(autoCashVal) - 8} width={52} height={14} rx={4} fill="rgba(251,191,36,.18)" stroke="#fbbf24" strokeWidth="0.5" />
-              <text x={PL + GW - 26} y={toY(autoCashVal) + 2.5} fontSize="7" fill="#fbbf24" textAnchor="middle" fontWeight="800">AUTO ×{autoCashVal.toFixed(2)}</text>
-            </g>
-          )}
           {pathD && phase !== 'crashed' && (
             <path d={`${pathD} L ${toX(tCur).toFixed(1)},${GH} L ${PL},${GH} Z`} fill="url(#areaFill)" />
           )}
@@ -1098,12 +1080,6 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
                 onChange={e => { const v = parseFloat(e.target.value.replace(',', '.')); if (!isNaN(v)) setBet(Math.max(0.01, Math.min(50, v))); }}
                 style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: '#f8fafc', fontSize: 16, fontWeight: 700, marginLeft: 4 }} />
               <span style={{ fontSize: 11, color: '#475569', fontWeight: 600 }}>GRAM</span>
-            </div>
-            <div style={{ width: 120, background: '#0d1021', border: `1px solid ${autoCash ? 'rgba(251,191,36,.45)' : '#1e2847'}`, borderRadius: 10, display: 'flex', alignItems: 'center', padding: '6px 10px', gap: 4 }}>
-              <span style={{ fontSize: 10, color: '#fbbf24', fontWeight: 800, flexShrink: 0, letterSpacing: '0.03em' }}>AUTO×</span>
-              <input type="number" value={autoCash} placeholder="2.00" min={1.01} step={0.01}
-                onChange={e => setAutoCash(e.target.value)}
-                style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', color: '#f8fafc', fontSize: 13, fontWeight: 700 }} />
             </div>
           </div>
           <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
@@ -1268,13 +1244,6 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
                 onChange={e => { const v = +e.target.value; if (!isNaN(v)) setBet2(Math.max(0.01, Math.min(50, v))); }}
                 style={{ flex: 1, background: 'transparent', color: '#f8fafc', fontSize: 16, fontWeight: 700, outline: 'none', border: 'none', marginLeft: 4 }} />
               <span style={{ fontSize: 11, color: '#475569', fontWeight: 600 }}>GRAM</span>
-            </div>
-            <div style={{ background: '#080c1e', border: '1px solid #1e2847', borderRadius: 10, display: 'flex', alignItems: 'center', padding: '8px 12px', gap: 8, marginBottom: 8 }}>
-              <span style={{ fontSize: 10, color: '#64748b' }}>AUTO ×</span>
-              <input type="number" value={autoCash2} placeholder="2.00" min={1.01} step={0.01}
-                onChange={e => { setAutoCash2(e.target.value); autoCash2R.current = e.target.value; }}
-                style={{ flex: 1, background: 'transparent', color: '#f8fafc', fontSize: 14, fontWeight: 600, outline: 'none', border: 'none' }} />
-              {autoCash2 && <button onClick={() => { setAutoCash2(''); autoCash2R.current = ''; }} style={{ color: '#64748b', fontSize: 12, background: 'none', border: 'none', cursor: 'pointer' }}>✕</button>}
             </div>
             <button onClick={mainBtn2.onClick} disabled={mainBtn2.disabled}
               style={{ width: '100%', padding: '14px 0', borderRadius: 14, fontWeight: 900, letterSpacing: '0.06em', textTransform: 'uppercase', border: 'none', cursor: mainBtn2.disabled ? 'not-allowed' : 'pointer', opacity: mainBtn2.disabled ? 0.6 : 1, fontSize: 14, ...btnStyle2 }}>
