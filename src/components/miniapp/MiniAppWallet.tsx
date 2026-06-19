@@ -334,21 +334,23 @@ export const MiniAppDeposit: React.FC = () => {
       setTxError("Adresse de la plateforme non configurée — contactez l'admin.");
       return;
     }
-    const gramAmount = gramFromUsdt(usdtAmount);
-    if (!gramAmount) {
-      setTxError("Impossible de récupérer le prix du marché. Réessayez dans un instant.");
-      return;
-    }
     setTxError('');
-    // Credit GRAM balance directly (single balance, no USDT split)
-    useAppStore.getState().creditDeposit(
-      currentUser.id,
-      gramAmount,
-      'GRAM',
-      '',
-      'TON (USDT→GRAM)',
+    // Register pending USDT tx so the on-chain monitor can detect it and convert to GRAM
+    addTransaction({
+      userId: currentUser.id,
+      type: 'deposit',
+      amount: usdtAmount,
+      currency: 'USDT',
+      network: 'TON',
+      status: 'pending',
+      address: connectedAddr, // raw address — used by monitor for matching
+    });
+    const gram = gramFromUsdt(usdtAmount);
+    setSuccessMsg(
+      gram
+        ? `Dépôt de ${usdtAmount} USDT enregistré. Vous recevrez ≈ ${gram} GRAM après confirmation on-chain.`
+        : `Dépôt de ${usdtAmount} USDT enregistré. Il sera converti en GRAM après confirmation blockchain.`
     );
-    setSuccessMsg(`${usdtAmount} USDT convertis en ${gramAmount} GRAM au prix du marché. Solde mis à jour.`);
     setTxStatus('success');
   };
 
