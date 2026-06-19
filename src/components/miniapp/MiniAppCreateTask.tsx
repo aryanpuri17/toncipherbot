@@ -4,6 +4,20 @@ import { AlertCircle, Info, Loader2, Clock } from 'lucide-react';
 
 type TaskType = 'join_channel' | 'join_group' | 'start_bot' | 'watch_video' | 'social';
 
+const SOCIAL_DOMAINS = ['twitter.com','x.com','instagram.com','tiktok.com','discord.gg','discord.com','facebook.com','linkedin.com','twitch.tv','snapchat.com'];
+
+function isUrlValid(type: TaskType, url: string): boolean {
+  if (!url.startsWith('https://')) return false;
+  const u = url.toLowerCase();
+  if (type === 'join_channel' || type === 'join_group' || type === 'start_bot')
+    return u.startsWith('https://t.me/');
+  if (type === 'watch_video')
+    return u.includes('youtube.com') || u.includes('youtu.be');
+  if (type === 'social')
+    return SOCIAL_DOMAINS.some(d => u.includes(d));
+  return true;
+}
+
 const TASK_TYPES: { value: TaskType; icon: string; label: string; urlLabel: string; urlPlaceholder: string; isTelegram: boolean }[] = [
   { value: 'join_channel', icon: '📢', label: 'Canal Telegram',  urlLabel: 'Lien du canal',   urlPlaceholder: 'https://t.me/votre_canal',  isTelegram: true  },
   { value: 'join_group',   icon: '👥', label: 'Groupe Telegram', urlLabel: 'Lien du groupe',  urlPlaceholder: 'https://t.me/votre_groupe', isTelegram: true  },
@@ -47,6 +61,21 @@ export const MiniAppCreateTask: React.FC = () => {
     if (currentTypeConf.isTelegram && !targetUrl.startsWith('https://t.me/')) {
       setError("Pour une tâche Telegram, l'URL doit commencer par https://t.me/");
       return;
+    }
+    if (type === 'watch_video') {
+      const u = targetUrl.toLowerCase();
+      if (!u.includes('youtube.com') && !u.includes('youtu.be')) {
+        setError("Pour une tâche YouTube, l'URL doit être un lien YouTube (youtube.com ou youtu.be)");
+        return;
+      }
+    }
+    if (type === 'social') {
+      const u = targetUrl.toLowerCase();
+      const allowed = ['twitter.com','x.com','instagram.com','tiktok.com','discord.gg','discord.com','facebook.com','linkedin.com','twitch.tv','snapchat.com'];
+      if (!allowed.some(d => u.includes(d))) {
+        setError("Pour une tâche réseau social, l'URL doit être un lien d'un réseau reconnu (Instagram, TikTok, Twitter/X, Discord, Facebook…)");
+        return;
+      }
     }
     if (execCount < minExec) { setError(`Minimum ${minExec} exécutions`); return; }
     if (execCount > maxExec) { setError(`Maximum ${maxExec.toLocaleString()} exécutions`); return; }
@@ -256,8 +285,23 @@ export const MiniAppCreateTask: React.FC = () => {
             value={targetUrl}
             onChange={e => setTargetUrl(e.target.value)}
             placeholder={currentTypeConf.urlPlaceholder}
-            className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white text-sm font-mono placeholder:text-slate-600 focus:outline-none focus:border-[#0098EA]/50"
+            className={`w-full px-4 py-3 bg-white/5 rounded-xl text-white text-sm font-mono placeholder:text-slate-600 focus:outline-none border ${
+              targetUrl && !isUrlValid(type, targetUrl)
+                ? 'border-red-500/60 focus:border-red-500'
+                : 'border-white/10 focus:border-[#0098EA]/50'
+            }`}
           />
+          {targetUrl && !isUrlValid(type, targetUrl) && (
+            <p className="text-xs mt-1.5 text-red-400">
+              {type === 'watch_video'
+                ? '⚠️ Doit être un lien YouTube (youtube.com ou youtu.be)'
+                : type === 'social'
+                ? '⚠️ Doit être un lien d\'un réseau social reconnu (Instagram, TikTok, Twitter/X, Discord…)'
+                : currentTypeConf.isTelegram
+                ? '⚠️ Doit commencer par https://t.me/'
+                : '⚠️ URL invalide'}
+            </p>
+          )}
         </div>
 
         <div>
