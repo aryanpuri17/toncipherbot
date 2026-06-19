@@ -153,9 +153,7 @@ export const MiniAppCreateTask: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-500/10 border border-amber-500/20">
-          <span className="text-xs text-amber-400/80">Déduit :</span>
-          <span className="text-sm font-bold text-amber-400">{totalCost.toFixed(4)} TON</span>
-          <span className="text-xs text-slate-500">• remboursé si refusé</span>
+          <span className="text-xs text-amber-400/80">Budget réservé · remboursé si refusé</span>
         </div>
 
         <div className="flex gap-3 w-full max-w-[280px]">
@@ -332,18 +330,20 @@ export const MiniAppCreateTask: React.FC = () => {
         <p className="text-xs font-semibold text-slate-400 mb-1">Récapitulatif</p>
 
         <div className="flex justify-between text-xs">
-          <span className="text-slate-500">Prix par exécution</span>
-          <span className="text-white font-semibold">{priceFixed.toFixed(4)} TON</span>
+          <span className="text-slate-500">Récompense par participant</span>
+          <span className="font-semibold" style={{ color: '#0098EA' }}>
+            {workerReward.toFixed(4)} TON
+          </span>
         </div>
         <div className="flex justify-between text-xs">
-          <span className="text-slate-500">Nombre d'exécutions</span>
+          <span className="text-slate-500">Nombre de participants</span>
           <span className="text-white font-semibold">{execCount > 0 ? execCount.toLocaleString() : '—'}</span>
         </div>
 
         <div className="h-px bg-white/[0.06] my-0.5" />
 
         <div className="flex justify-between items-center">
-          <span className="text-xs font-semibold text-white">Coût total</span>
+          <span className="text-xs font-semibold text-white">Budget total</span>
           <span
             className="text-base font-bold"
             style={{ color: execCount > 0 ? '#f59e0b' : '#64748b' }}
