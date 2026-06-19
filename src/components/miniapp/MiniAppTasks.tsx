@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useAppStore } from '../../store/appStore';
 import {
   Hash, Users, Bot, Calendar, Star, CheckCircle, Plus,
-  AlertCircle, Flame, Loader2, ShieldCheck, Clock, FileText, Send, X, RotateCcw,
+  Loader2, ShieldCheck, Clock, FileText, Send, X,
   Play, Globe, ChevronRight,
 } from 'lucide-react';
 import { haptic } from '../../lib/haptics';
@@ -163,7 +163,8 @@ const COLORS: Record<string, { glow: string; bg: string }> = {
   invite_friends: { glow: '#a855f7', bg: 'rgba(168,85,247,0.12)' },
 };
 
-const getColors = (type: string) => COLORS[type] ?? { glow: '#8b5cf6', bg: 'rgba(139,92,246,0.12)' };
+const _getColors = (type: string) => COLORS[type] ?? { glow: '#8b5cf6', bg: 'rgba(139,92,246,0.12)' };
+void _getColors;
 
 // ── Component ──────────────────────────────────────────────────────────────────
 
@@ -608,18 +609,6 @@ export const MiniAppTasks: React.FC = () => {
     }, 700);
   };
 
-  const handleReportAbuse = async (taskId: string) => {
-    try {
-      await fetch('/api/report-proof-abuse', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ telegramId: currentUser.telegramId, taskId }),
-      });
-      localStorage.removeItem(`tc_proof_rejected_${taskId}`);
-      setPhase(taskId, 'needs_proof');
-    } catch { /* ignore */ }
-  };
-
   // ── Card renderer ────────────────────────────────────────────────────────────
 
   const renderCard = (card: CardTask) => {
@@ -629,434 +618,198 @@ export const MiniAppTasks: React.FC = () => {
                         (card.source === 'api'      && completedApiTaskIds.includes(card.id));
 
     if (isCompleted && phase !== 'completing' && phase !== 'done') return null;
-    if (phase === 'done') return null;
 
-    const displayReward  = card.reward * (card.promoMultiplier ?? 1);
-    const avatarBg       = card.source === 'api' ? taskAvatarColor(card.title) : null;
-    const { glow, bg }   = getColors(card.type);
-    void bg;
+    const isDone        = isCompleted || phase === 'done';
+    const displayReward = card.reward * (card.promoMultiplier ?? 1);
+    const avatarBg      = card.source === 'api' ? taskAvatarColor(card.title) : null;
 
     const _dEntry = phase === 'too_early' ? parseDeparture(localStorage.getItem(departKey(card.id))) : null;
     void tick;
     const remainingSec = _dEntry ? Math.max(0, Math.ceil((_dEntry.ms - (Date.now() - _dEntry.ts)) / 1000)) : 0;
+    const isSocialOrVideo = card.type === 'social' || card.type === 'watch_video';
 
-    const notSubbedMsg = card.type === 'start_bot'
-      ? 'Confirmation non reçue. Ouvrez le bot via le lien de confirmation, attendez quelques secondes, puis réessayez.'
-      : card.type === 'watch_video'
-      ? "Temps insuffisant — regardez la vidéo jusqu'à la fin (20s min)."
-      : card.type === 'social'
-      ? "Preuve refusée. Effectuez l'action, puis renvoyez un screenshot plus clair."
-      : 'Temps insuffisant — rejoignez et restez quelques secondes.';
-
-    const notSubbed = phase === 'not_subscribed';
+    const icon = (() => {
+      if (isDone) return <CheckCircle style={{ width: 26, height: 26, color: '#34d399' }} />;
+      const logo = getPlatformLogo(card.targetUrl ?? '', card.type, 34);
+      if (logo) return logo;
+      if (card.icon) return <span style={{ fontSize: 24 }}>{card.icon}</span>;
+      if (avatarBg) return <span style={{ fontSize: 18, fontWeight: 800, color: avatarBg }}>{card.title.charAt(0).toUpperCase()}</span>;
+      return <span style={{ color: '#64748b' }}>{React.cloneElement(config.icon as React.ReactElement<{ style?: React.CSSProperties }>, { style: { width: 22, height: 22 } })}</span>;
+    })();
 
     const hasProgress = card.maxCompletions != null && card.maxCompletions > 0;
-    const progressPct = hasProgress
-      ? Math.min((card.totalCompletions / card.maxCompletions!) * 100, 100)
-      : 0;
+    const notSubbed   = phase === 'not_subscribed';
 
-    // Social/video check (inlined)
-    const isSocOrVid = card.type === 'social' || card.type === 'watch_video';
-
-    const renderStatusStrip = () => {
-      if (phase === 'too_early') {
-        const progressPct2 = _dEntry ? Math.min(((Date.now() - _dEntry.ts) / _dEntry.ms) * 100, 100) : 0;
-        if (isSocOrVid) {
-          return (
-            <div style={{ marginTop: 10 }}>
-              <div style={{
-                borderRadius: 10, padding: '10px 12px',
-                background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.25)',
-                marginBottom: 8,
-              }}>
-                <p style={{ fontSize: 12, fontWeight: 800, color: '#fbbf24', margin: 0, marginBottom: 4 }}>
-                  ⚠️ Revenu trop tôt
-                </p>
-                <p style={{ fontSize: 11, color: '#94a3b8', margin: 0, lineHeight: 1.5 }}>
-                  {card.type === 'watch_video'
-                    ? "Retournez regarder la vidéo jusqu'à la fin, puis revenez ici."
-                    : "Retournez effectuer l'action, puis revenez ici."}
-                </p>
-              </div>
-              {card.targetUrl && (
-                <button
-                  onClick={() => handleJoin(card)}
-                  style={{
-                    width: '100%', padding: '9px 0', borderRadius: 10,
-                    background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)',
-                    color: '#64748b', fontSize: 11, fontWeight: 600,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
-                    cursor: 'pointer',
-                  }}
-                >
-                  <RotateCcw style={{ width: 12, height: 12 }} /> Retourner
-                </button>
-              )}
-            </div>
-          );
-        }
-        return (
-          <div style={{ marginTop: 10 }}>
-            <div style={{
-              borderRadius: 10, overflow: 'hidden',
-              background: 'rgba(59,130,246,0.05)', border: '1px solid rgba(59,130,246,0.18)',
-              marginBottom: 8,
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px' }}>
-                <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
-                  {[0, 1, 2].map(i => (
-                    <div key={i} style={{
-                      width: 7, height: 7, borderRadius: '50%', background: '#3b82f6',
-                      animation: `pulse 1.2s ease-in-out ${i * 0.2}s infinite`,
-                    }} />
-                  ))}
-                </div>
-                <p style={{ fontSize: 11, fontWeight: 700, color: '#60a5fa', margin: 0 }}>
-                  En attente…
-                </p>
-              </div>
-              <div style={{ height: 2, background: 'rgba(59,130,246,0.08)' }}>
-                <div style={{
-                  height: '100%', background: 'linear-gradient(90deg, #3b82f6, #6366f1)',
-                  width: `${progressPct2}%`, transition: 'width 1.8s linear',
-                }} />
-              </div>
-            </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              {card.targetUrl && (
-                <button
-                  onClick={() => handleJoin(card)}
-                  style={{
-                    flex: 1, padding: '9px 0', borderRadius: 10,
-                    background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)',
-                    color: '#64748b', fontSize: 11, fontWeight: 600,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
-                    cursor: 'pointer',
-                  }}
-                >
-                  <RotateCcw style={{ width: 11, height: 11 }} /> Retourner
-                </button>
-              )}
-              <button
-                disabled={remainingSec > 0}
-                onClick={remainingSec === 0 ? () => void handleVerify(card) : undefined}
-                style={{
-                  flex: 2, padding: '9px 0', borderRadius: 10,
-                  background: remainingSec > 0 ? 'rgba(59,130,246,0.06)' : 'rgba(59,130,246,0.18)',
-                  border: remainingSec > 0 ? '1px solid rgba(59,130,246,0.14)' : '1px solid rgba(59,130,246,0.4)',
-                  color: remainingSec > 0 ? 'rgba(96,165,250,0.35)' : '#60a5fa',
-                  fontSize: 11, fontWeight: 700,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
-                  cursor: remainingSec > 0 ? 'not-allowed' : 'pointer',
-                  transition: 'all 0.3s',
-                }}
-              >
-                <ShieldCheck style={{ width: 12, height: 12 }} />
-                {remainingSec > 0 ? 'En attente…' : 'Vérifier maintenant'}
-              </button>
-            </div>
-          </div>
-        );
-      }
-
-      if (phase === 'ready' && !notSubbed) {
-        return (
-          <button
-            onClick={() => void handleVerify(card)}
-            style={{
-              marginTop: 10, width: '100%', padding: '9px 0', borderRadius: 10,
-              background: 'rgba(52,211,153,0.15)', border: '1px solid rgba(52,211,153,0.35)',
-              color: '#34d399', fontSize: 12, fontWeight: 700,
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-              cursor: 'pointer',
-            }}
-          >
-            <ShieldCheck style={{ width: 13, height: 13 }} /> ✓ Vérifier
-          </button>
-        );
-      }
-
-      if (phase === 'verifying') {
-        return (
-          <div style={{
-            marginTop: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
-            padding: '9px 0', borderRadius: 10,
-            background: 'rgba(59,130,246,0.07)', border: '1px solid rgba(59,130,246,0.18)',
-          }}>
-            <Loader2 style={{ width: 13, height: 13, color: '#60a5fa', animation: 'spin 1s linear infinite' }} />
-            <span style={{ fontSize: 11, fontWeight: 600, color: '#60a5fa' }}>
-              {card.type === 'watch_video' ? 'Vérification YouTube…'
-                : card.type === 'social' ? 'Vérification réseau social…'
-                : 'Vérification Telegram…'}
-            </span>
-          </div>
-        );
-      }
-
-      if (phase === 'completing') {
-        return (
-          <div style={{
-            marginTop: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
-            padding: '9px 0', borderRadius: 10,
-            background: 'rgba(52,211,153,0.07)', border: '1px solid rgba(52,211,153,0.18)',
-          }}>
-            <Loader2 style={{ width: 13, height: 13, color: '#34d399', animation: 'spin 1s linear infinite' }} />
-            <span style={{ fontSize: 11, fontWeight: 600, color: '#34d399' }}>
-              Crédit de <strong>+{displayReward.toFixed(4)} GRAM</strong> en cours…
-            </span>
-          </div>
-        );
-      }
-
-      if (phase === 'needs_bot_confirm') {
-        return (
-          <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <div style={{
-              padding: '9px 12px', borderRadius: 10,
-              background: 'rgba(6,182,212,0.07)', border: '1px solid rgba(6,182,212,0.22)',
-              fontSize: 11, color: '#67e8f9', lineHeight: 1.5,
-            }}>
-              ✅ Timer validé. Confirmez votre visite via notre bot pour recevoir la récompense.
-            </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button
-                onClick={() => openUrl(`https://t.me/${botName}?start=vb_${card.id}_${currentUser.telegramId}`)}
-                style={{
-                  flex: 1, padding: '9px 0', borderRadius: 10,
-                  background: 'rgba(6,182,212,0.12)', border: '1px solid rgba(6,182,212,0.3)',
-                  color: '#22d3ee', fontSize: 11, fontWeight: 700,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
-                  cursor: 'pointer',
-                }}
-              >
-                Confirmer dans le bot
-              </button>
-              <button
-                onClick={() => void handleBotConfirm(card)}
-                style={{
-                  flex: 1, padding: '9px 0', borderRadius: 10,
-                  background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.35)',
-                  color: '#60a5fa', fontSize: 11, fontWeight: 700,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
-                  cursor: 'pointer',
-                }}
-              >
-                <ShieldCheck style={{ width: 12, height: 12 }} /> Vérifier
-              </button>
-            </div>
-          </div>
-        );
-      }
-
-      if (phase === 'needs_proof') {
-        return (
-          <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <div style={{
-              padding: '9px 12px', borderRadius: 10,
-              background: 'rgba(249,115,22,0.07)', border: '1px solid rgba(249,115,22,0.22)',
-              fontSize: 11, color: '#fb923c', lineHeight: 1.5,
-            }}>
-              📸 Action effectuée ? Envoyez un screenshot au bot pour valider votre preuve.
-            </div>
-            <button
-              onClick={() => {
-                openUrl(`https://t.me/${botName}?start=sp_${card.id}_${currentUser.telegramId}`);
-                localStorage.setItem(`tc_proof_sent_${card.id}`, '1');
-                setPhase(card.id, 'proof_pending');
-              }}
-              style={{
-                width: '100%', padding: '9px 0', borderRadius: 10,
-                background: 'rgba(249,115,22,0.12)', border: '1px solid rgba(249,115,22,0.3)',
-                color: '#fb923c', fontSize: 11, fontWeight: 700,
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                cursor: 'pointer',
-              }}
-            >
-              📸 Envoyer la preuve au bot
-            </button>
-          </div>
-        );
-      }
-
-      if (phase === 'proof_pending') {
-        return (
-          <div style={{
-            marginTop: 10, display: 'flex', alignItems: 'center', gap: 9,
-            padding: '9px 12px', borderRadius: 10,
-            background: 'rgba(100,116,139,0.1)', border: '1px solid rgba(100,116,139,0.2)',
-          }}>
-            <Loader2 style={{ width: 13, height: 13, color: '#94a3b8', animation: 'spin 1s linear infinite', flexShrink: 0 }} />
-            <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8' }}>En attente de validation</span>
-          </div>
-        );
-      }
-
-      if (notSubbed) {
-        return (
-          <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <div style={{
-              display: 'flex', alignItems: 'flex-start', gap: 7,
-              padding: '9px 12px', borderRadius: 10,
-              background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.22)',
-            }}>
-              <AlertCircle style={{ width: 13, height: 13, color: '#f87171', flexShrink: 0, marginTop: 1 }} />
-              <p style={{ fontSize: 11, color: '#f87171', margin: 0, lineHeight: 1.4 }}>
-                {notSubbedMsg}
-              </p>
-            </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              {card.targetUrl && (
-                <button
-                  onClick={() => handleJoin(card)}
-                  style={{
-                    flex: 1, padding: '9px 0', borderRadius: 10,
-                    background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)',
-                    color: '#64748b', fontSize: 11, fontWeight: 600,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
-                    cursor: 'pointer',
-                  }}
-                >
-                  <RotateCcw style={{ width: 11, height: 11 }} /> Retourner
-                </button>
-              )}
-              <button
-                onClick={() => void handleVerify(card)}
-                style={{
-                  flex: 2, padding: '9px 0', borderRadius: 10,
-                  background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.35)',
-                  color: '#60a5fa', fontSize: 11, fontWeight: 700,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
-                  cursor: 'pointer',
-                }}
-              >
-                <ShieldCheck style={{ width: 12, height: 12 }} /> Réessayer
-              </button>
-            </div>
-            {card.type === 'social' && (() => {
-              const wasRejected = !!localStorage.getItem(`tc_proof_rejected_${card.id}`);
-              return wasRejected ? (
-                <button
-                  onClick={() => void handleReportAbuse(card.id)}
-                  style={{
-                    width: '100%', padding: '9px 0', borderRadius: 10,
-                    background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.25)',
-                    color: '#fbbf24', fontSize: 11, fontWeight: 700,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
-                    cursor: 'pointer',
-                  }}
-                >
-                  🚨 Contester ce refus
-                </button>
-              ) : null;
-            })()}
-          </div>
-        );
-      }
-
-      return null;
-    };
-
-    return (
-      <div
-        key={card.id}
+    const arrowBtn = (onClick: () => void, disabled = false) => (
+      <button
+        onClick={disabled ? undefined : onClick}
+        disabled={disabled}
         style={{
-          borderRadius: 16,
-          background: 'rgba(255,255,255,0.035)',
-          border: '1px solid rgba(255,255,255,0.07)',
-          padding: 14,
+          width: 38, height: 38, borderRadius: 10, flexShrink: 0,
+          background: disabled ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.07)',
+          border: '1px solid rgba(255,255,255,0.09)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          cursor: disabled ? 'not-allowed' : 'pointer',
         }}
       >
-        {/* Promo accent stripe */}
+        <ChevronRight style={{ width: 18, height: 18, color: disabled ? '#334155' : '#94a3b8' }} />
+      </button>
+    );
+
+    return (
+      <div key={card.id} style={{
+        background: isDone ? 'rgba(52,211,153,0.04)' : 'rgba(255,255,255,0.04)',
+        borderRadius: 14,
+        border: isDone ? '1px solid rgba(52,211,153,0.15)' : '1px solid rgba(255,255,255,0.06)',
+        overflow: 'hidden',
+      }}>
+        {/* Promo accent */}
         {card.promoMultiplier && (
-          <div style={{ height: 2, marginBottom: 12, borderRadius: 99, background: 'linear-gradient(90deg, #f59e0b, #fbbf24)' }} />
+          <div style={{ height: 2, background: 'linear-gradient(90deg, #f59e0b, #fbbf24)' }} />
         )}
 
-        {/* Top row: icon + title/desc + arrow button */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-
-          {/* Icon 48×48 */}
-          <div style={{
-            width: 48, height: 48, borderRadius: 12, flexShrink: 0,
-            background: avatarBg ? `${avatarBg}22` : 'rgba(255,255,255,0.06)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            overflow: 'hidden',
-          }}>
-            {(() => {
-              const logo = getPlatformLogo(card.targetUrl ?? '', card.type, 34);
-              if (logo) return logo;
-              if (card.icon) return <span style={{ fontSize: 20 }}>{card.icon}</span>;
-              if (avatarBg) return <span style={{ fontSize: 17, fontWeight: 700, color: avatarBg }}>{card.title.charAt(0).toUpperCase()}</span>;
-              return <span style={{ color: glow }}>{React.cloneElement(config.icon as React.ReactElement<{ style?: React.CSSProperties }>, { style: { width: 20, height: 20 } })}</span>;
-            })()}
+        <div style={{ padding: '12px 14px' }}>
+          {/* Top row: icon + title/desc */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{
+              width: 48, height: 48, borderRadius: 12, flexShrink: 0,
+              background: avatarBg ? `${avatarBg}22` : 'rgba(255,255,255,0.06)',
+              border: '1px solid rgba(255,255,255,0.08)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
+            }}>
+              {icon}
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 14, fontWeight: 700, color: '#f8fafc' }}>{card.title}</span>
+                {card.promoMultiplier && (
+                  <span style={{ padding: '1px 5px', borderRadius: 5, background: 'rgba(245,158,11,0.15)', color: '#fbbf24', fontSize: 9, fontWeight: 700 }}>
+                    ×{card.promoMultiplier}
+                  </span>
+                )}
+              </div>
+              {card.description && (
+                <p style={{ fontSize: 12, color: '#64748b', margin: '2px 0 0', lineHeight: 1.4 }}>{card.description}</p>
+              )}
+            </div>
           </div>
 
-          {/* Title + description */}
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 14, fontWeight: 700, color: '#f8fafc', lineHeight: 1.2 }}>{card.title}</span>
-              {card.promoMultiplier && (
-                <span style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 2,
-                  padding: '1px 5px', borderRadius: 5,
-                  background: 'rgba(245,158,11,0.15)', color: '#fbbf24',
-                  fontSize: 9, fontWeight: 700,
-                }}>
-                  <Flame style={{ width: 8, height: 8 }} /> &times;{card.promoMultiplier}
+          {/* Bottom row: reward + action */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: 16 }}>🪙</span>
+              <span style={{ fontSize: 16, fontWeight: 800, color: card.promoMultiplier ? '#fbbf24' : '#f8fafc' }}>
+                {displayReward.toFixed(4)}
+              </span>
+              <span style={{ fontSize: 10, color: '#475569', fontWeight: 600 }}>GRAM</span>
+              {hasProgress && (
+                <span style={{ fontSize: 11, color: '#64748b', marginLeft: 4 }}>
+                  {card.totalCompletions}/{card.maxCompletions}
                 </span>
               )}
             </div>
-            <p style={{ fontSize: 12, color: '#64748b', margin: '2px 0 0', lineHeight: 1.4 }}>{card.description}</p>
-          </div>
 
-          {/* Arrow button — only in idle */}
-          {phase === 'idle' && (
-            <button
-              onClick={() => handleStart(card)}
-              style={{
-                width: 36, height: 36, borderRadius: 10, flexShrink: 0,
-                background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.1)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                cursor: 'pointer', padding: 0,
-              }}
-            >
-              <ChevronRight style={{ width: 18, height: 18, color: '#94a3b8' }} />
-            </button>
-          )}
-        </div>
-
-        {/* Bottom row: reward left + progress right */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-            <span style={{ fontSize: 15 }}>🪙</span>
-            <span style={{ fontSize: 13, fontWeight: 800, color: card.promoMultiplier ? '#fbbf24' : '#4ade80' }}>
-              {displayReward.toFixed(4)}
-            </span>
-            <span style={{ fontSize: 10, color: '#475569', fontWeight: 600 }}>GRAM</span>
-            {card.promoMultiplier && (
-              <span style={{ fontSize: 10, color: '#475569', textDecoration: 'line-through', marginLeft: 2 }}>
-                {card.reward.toFixed(4)}
-              </span>
+            {/* Action button based on phase */}
+            {isDone && (
+              <div style={{ padding: '6px 10px', borderRadius: 8, background: 'rgba(52,211,153,0.1)', border: '1px solid rgba(52,211,153,0.2)' }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: '#34d399' }}>✓ Fait</span>
+              </div>
             )}
+            {!isDone && phase === 'idle' && arrowBtn(() => handleStart(card))}
+            {!isDone && phase === 'ready' && !notSubbed && (
+              <button onClick={() => void handleVerify(card)} style={{
+                padding: '8px 14px', borderRadius: 10,
+                background: 'rgba(52,211,153,0.15)', border: '1px solid rgba(52,211,153,0.3)',
+                color: '#34d399', fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                display: 'flex', alignItems: 'center', gap: 5,
+              }}>
+                <ShieldCheck style={{ width: 13, height: 13 }} /> Vérifier
+              </button>
+            )}
+            {!isDone && (phase === 'verifying' || phase === 'completing') && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Loader2 style={{ width: 16, height: 16, color: phase === 'completing' ? '#34d399' : '#60a5fa', animation: 'spin 1s linear infinite' }} />
+                <span style={{ fontSize: 11, color: phase === 'completing' ? '#34d399' : '#60a5fa' }}>
+                  {phase === 'completing' ? 'Crédit…' : 'Vérif…'}
+                </span>
+              </div>
+            )}
+            {!isDone && phase === 'too_early' && !isSocialOrVideo && arrowBtn(() => {}, true)}
+            {!isDone && phase === 'too_early' && isSocialOrVideo && arrowBtn(() => handleJoin(card))}
+            {!isDone && (phase === 'not_subscribed' || phase === 'needs_bot_confirm' || phase === 'needs_proof' || phase === 'proof_pending') && arrowBtn(() => void handleVerify(card))}
           </div>
-          {hasProgress && (
-            <span style={{ fontSize: 11, color: '#475569', fontWeight: 600 }}>
-              {card.totalCompletions}/{card.maxCompletions}
-            </span>
-          )}
         </div>
 
-        {/* Progress bar */}
-        {hasProgress && (
-          <div style={{ marginTop: 8, height: 3, borderRadius: 99, background: 'rgba(255,255,255,0.06)' }}>
-            <div style={{
-              height: '100%', borderRadius: 99, background: glow,
-              width: `${progressPct}%`, transition: 'width 0.3s ease',
-            }} />
+        {/* Phase strip at bottom of card */}
+        {phase === 'too_early' && (
+          <div style={{
+            borderTop: '1px solid rgba(255,255,255,0.06)',
+            padding: '8px 14px',
+            background: isSocialOrVideo ? 'rgba(245,158,11,0.05)' : 'rgba(59,130,246,0.05)',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+          }}>
+            {isSocialOrVideo ? (
+              <>
+                <span style={{ fontSize: 11, color: '#fbbf24', fontWeight: 600 }}>⚠️ Revenu trop tôt — retournez et revenez</span>
+                <button onClick={() => handleJoin(card)} style={{ padding: '5px 10px', borderRadius: 8, background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.3)', color: '#fbbf24', fontSize: 10, fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}>
+                  Retourner
+                </button>
+              </>
+            ) : (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  {[0,1,2].map(i => (
+                    <div key={i} style={{ width: 6, height: 6, borderRadius: '50%', background: '#3b82f6', animation: `pulse 1.2s ease-in-out ${i*0.2}s infinite` }} />
+                  ))}
+                  <span style={{ fontSize: 11, color: '#60a5fa', fontWeight: 600 }}>En cours de vérification…</span>
+                </div>
+                {remainingSec === 0 && (
+                  <button onClick={() => void handleVerify(card)} style={{ padding: '5px 10px', borderRadius: 8, background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.3)', color: '#60a5fa', fontSize: 10, fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}>
+                    Vérifier
+                  </button>
+                )}
+              </>
+            )}
           </div>
         )}
 
-        {/* Status strips / action buttons for non-idle phases */}
-        {renderStatusStrip()}
+        {notSubbed && (
+          <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', padding: '8px 14px', background: 'rgba(239,68,68,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+            <span style={{ fontSize: 11, color: '#f87171', fontWeight: 600 }}>Adhésion non détectée</span>
+            <button onClick={() => void handleVerify(card)} style={{ padding: '5px 10px', borderRadius: 8, background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)', color: '#f87171', fontSize: 10, fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}>
+              Réessayer
+            </button>
+          </div>
+        )}
+
+        {phase === 'needs_bot_confirm' && (
+          <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', padding: '8px 14px', background: 'rgba(6,182,212,0.05)', display: 'flex', gap: 8 }}>
+            <button onClick={() => openUrl(`https://t.me/${botName}?start=vb_${card.id}_${currentUser.telegramId}`)} style={{ flex: 1, padding: '7px 0', borderRadius: 8, background: 'rgba(6,182,212,0.12)', border: '1px solid rgba(6,182,212,0.3)', color: '#22d3ee', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+              Confirmer dans le bot
+            </button>
+            <button onClick={() => void handleBotConfirm(card)} style={{ flex: 1, padding: '7px 0', borderRadius: 8, background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.3)', color: '#60a5fa', fontSize: 11, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
+              <ShieldCheck style={{ width: 12, height: 12 }} /> Vérifier
+            </button>
+          </div>
+        )}
+
+        {phase === 'needs_proof' && (
+          <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', padding: '8px 14px', background: 'rgba(249,115,22,0.05)' }}>
+            <button onClick={() => { openUrl(`https://t.me/${botName}?start=sp_${card.id}_${currentUser.telegramId}`); localStorage.setItem(`tc_proof_sent_${card.id}`, '1'); setPhase(card.id, 'proof_pending'); }} style={{ width: '100%', padding: '7px 0', borderRadius: 8, background: 'rgba(249,115,22,0.12)', border: '1px solid rgba(249,115,22,0.3)', color: '#fb923c', fontSize: 11, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
+              <Send style={{ width: 12, height: 12 }} /> Envoyer la preuve au bot
+            </button>
+          </div>
+        )}
+
+        {phase === 'proof_pending' && (
+          <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', padding: '8px 14px', background: 'rgba(100,116,139,0.05)', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Clock style={{ width: 13, height: 13, color: '#64748b' }} />
+            <span style={{ fontSize: 11, color: '#64748b' }}>En attente de validation…</span>
+            <button onClick={() => void handleVerify(card)} style={{ marginLeft: 'auto', padding: '4px 10px', borderRadius: 7, background: 'rgba(100,116,139,0.15)', border: '1px solid rgba(100,116,139,0.25)', color: '#94a3b8', fontSize: 10, cursor: 'pointer' }}>
+              Vérifier
+            </button>
+          </div>
+        )}
       </div>
     );
   };
