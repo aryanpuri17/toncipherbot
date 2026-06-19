@@ -1907,13 +1907,25 @@ async def api_admin_approve_withdrawal(request: web.Request) -> web.Response:
     except Exception:
         data = {}
     tx_hash = str(data.get("txHash", "")).strip()
+    tx_date_raw = str(data.get("txDate", "")).strip()  # "YYYY-MM-DDTHH:MM" from datetime-local input
+
+    # Parse admin-supplied date or fall back to now
+    from datetime import datetime as _dt_ap
+    if tx_date_raw:
+        try:
+            tx_dt = _dt_ap.strptime(tx_date_raw[:16], "%Y-%m-%dT%H:%M")
+            processed_at_val = tx_dt.strftime("%Y-%m-%d %H:%M:%S")
+        except Exception:
+            processed_at_val = _dt_ap.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    else:
+        processed_at_val = _dt_ap.utcnow().strftime("%Y-%m-%d %H:%M:%S")
 
     async with aiosqlite.connect(DB_PATH) as db:
         cur = await db.execute("""
             UPDATE transactions
-            SET status = 'completed', tx_hash = ?, processed_at = datetime('now')
+            SET status = 'completed', tx_hash = ?, processed_at = ?
             WHERE id = ? AND type = 'withdrawal' AND status = 'pending'
-        """, (tx_hash, tx_id))
+        """, (tx_hash, processed_at_val, tx_id))
         if cur.rowcount == 0:
             # Already approved/rejected (or unknown id) — don't notify twice
             return web.json_response({"error": "Already processed or not found"}, status=409, headers=_CORS)

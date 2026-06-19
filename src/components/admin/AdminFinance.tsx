@@ -146,6 +146,7 @@ export const AdminWithdrawals: React.FC = () => {
   const [filter, setFilter]           = useState<'pending' | 'completed' | 'rejected' | 'all'>('pending');
   const [actioning, setActioning]     = useState<string | null>(null);
   const [txHashInput, setTxHashInput] = useState<Record<string, string>>({});
+  const [txDateInput, setTxDateInput] = useState<Record<string, string>>({});
   const [noteInput, setNoteInput]     = useState<Record<string, string>>({});
   const [expanded, setExpanded]       = useState<string | null>(null);
   const [copied, setCopied]           = useState<string | null>(null);
@@ -182,7 +183,7 @@ export const AdminWithdrawals: React.FC = () => {
     try {
       const res = await adminFetch(`/api/admin/withdrawals/${id}/approve`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ txHash: txHashInput[id] ?? '' }),
+        body: JSON.stringify({ txHash: txHashInput[id] ?? '', txDate: txDateInput[id] ?? '' }),
       });
       if (!res.ok && res.status !== 409) {
         setActionError(`Échec de l'approbation (${res.status}). Réessayez.`);
@@ -381,6 +382,10 @@ export const AdminWithdrawals: React.FC = () => {
                           {isActioning ? 'En cours…' : 'Approuver'}
                         </button>
                       </div>
+                      <input type="datetime-local" value={txDateInput[w.id] ?? ''}
+                        onChange={e => setTxDateInput(p => ({ ...p, [w.id]: e.target.value }))}
+                        className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-xs text-white placeholder:text-slate-600 focus:outline-none focus:border-emerald-500/40"
+                        title="Date/heure exacte de la transaction (laisser vide = heure actuelle)" />
                       <div className="flex gap-2">
                         <input type="text" value={noteInput[w.id] ?? ''}
                           onChange={e => setNoteInput(p => ({ ...p, [w.id]: e.target.value }))}
