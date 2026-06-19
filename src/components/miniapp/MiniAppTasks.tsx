@@ -1,9 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAppStore } from '../../store/appStore';
 import {
-  Hash, Users, Bot, Calendar, Star, CheckCircle, ExternalLink, Plus,
-  AlertCircle, Flame, Loader2, ShieldCheck, Clock, FileText, Send, X, RotateCcw,
-  Play, Globe,
+  Hash, Users, Bot, Calendar, Star, CheckCircle,
+  Loader2, ShieldCheck, Clock, Send,
+  Play, Globe, ChevronRight,
 } from 'lucide-react';
 import { haptic } from '../../lib/haptics';
 
@@ -81,32 +81,6 @@ function getPlatformLogo(url: string, type: string, size = 30): React.ReactNode 
     return <DiscordLogo size={size} />;
   return null;
 }
-
-const TaskDoneCheck: React.FC = () => (
-  <div className="relative w-9 h-9 flex items-center justify-center flex-shrink-0">
-    {/* Ring pulse */}
-    <svg className="absolute inset-0 w-full h-full" viewBox="0 0 36 36">
-      <circle
-        cx="18" cy="18" r="16" fill="none" stroke="rgba(52,211,153,0.5)" strokeWidth="2"
-        style={{ animation: 'ringPulse 0.6s ease-out forwards' }}
-      />
-    </svg>
-    {/* Circle + check */}
-    <svg className="w-9 h-9" viewBox="0 0 36 36">
-      <circle
-        cx="18" cy="18" r="15" fill="none" stroke="#34d399" strokeWidth="2"
-        strokeDasharray="95" strokeDashoffset="95"
-        style={{ animation: 'checkDraw 0.35s ease-out forwards' }}
-      />
-      <polyline
-        points="11,18 16,23 25,13" fill="none" stroke="#34d399" strokeWidth="2.5"
-        strokeLinecap="round" strokeLinejoin="round"
-        strokeDasharray="22" strokeDashoffset="22"
-        style={{ animation: 'checkDraw 0.3s 0.4s ease-out forwards' }}
-      />
-    </svg>
-  </div>
-);
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -189,14 +163,15 @@ const COLORS: Record<string, { glow: string; bg: string }> = {
   invite_friends: { glow: '#a855f7', bg: 'rgba(168,85,247,0.12)' },
 };
 
-const getColors = (type: string) => COLORS[type] ?? { glow: '#8b5cf6', bg: 'rgba(139,92,246,0.12)' };
+const _getColors = (type: string) => COLORS[type] ?? { glow: '#8b5cf6', bg: 'rgba(139,92,246,0.12)' };
+void _getColors;
 
 // ── Component ──────────────────────────────────────────────────────────────────
 
 export const MiniAppTasks: React.FC = () => {
   const {
     tasks, completedTaskIds, completeTask, creditReferralBonus,
-    setMiniAppPage, currentUser, taskSubmissions, submitTaskProof, platformConfig,
+    setMiniAppPage, currentUser, platformConfig,
   } = useAppStore();
 
   const botName = platformConfig.botUsername || 'TonCipher_bot';
@@ -213,11 +188,6 @@ export const MiniAppTasks: React.FC = () => {
   const [apiTasks,            setApiTasks]            = useState<ApiTask[]>([]);
   const [completedApiTaskIds, setCompletedApiTaskIds] = useState<string[]>([]);
 
-  const [proofOpen,       setProofOpen]       = useState<string | null>(null);
-  const [proofText,       setProofText]       = useState('');
-  const [proofImage,      setProofImage]      = useState<string | null>(null);
-  const [proofSubmitting, setProofSubmitting] = useState(false);
-  const [proofResult,     setProofResult]     = useState<{ taskId: string; success: boolean; message: string } | null>(null);
 
   // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -593,64 +563,12 @@ export const MiniAppTasks: React.FC = () => {
     }, 1500);
   };
 
-  // ── Promo proof ──────────────────────────────────────────────────────────────
-
-  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !file.type.startsWith('image/')) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        const maxW = 1200;
-        const scale = Math.min(1, maxW / img.width);
-        canvas.width  = Math.round(img.width  * scale);
-        canvas.height = Math.round(img.height * scale);
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        setProofImage(canvas.toDataURL('image/jpeg', 0.75));
-      };
-      img.src = ev.target?.result as string;
-    };
-    reader.readAsDataURL(file);
-    e.target.value = '';
-  };
-
-  const handleSubmitProof = (taskId: string) => {
-    if (proofSubmitting || (!proofText.trim() && !proofImage)) return;
-    setProofSubmitting(true);
-    const result = submitTaskProof(taskId, proofText, proofImage ?? undefined);
-    setTimeout(() => {
-      setProofSubmitting(false);
-      setProofResult({
-        taskId,
-        success: result.success,
-        message: result.success ? 'Soumission envoyée ! En attente de validation.' : (result.error ?? 'Erreur.'),
-      });
-      if (result.success) { setProofOpen(null); setProofText(''); setProofImage(null); }
-      setTimeout(() => setProofResult(null), 5000);
-    }, 700);
-  };
-
-  const handleReportAbuse = async (taskId: string) => {
-    try {
-      await fetch('/api/report-proof-abuse', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ telegramId: currentUser.telegramId, taskId }),
-      });
-      localStorage.removeItem(`tc_proof_rejected_${taskId}`);
-      setPhase(taskId, 'needs_proof');
-    } catch { /* ignore */ }
-  };
-
-  // ── Filter state ─────────────────────────────────────────────────────────────
-
-  const [activeFilter, setActiveFilter] = React.useState<'all' | 'special' | 'channel' | 'bot' | 'socials'>('all');
-
   // ── Card renderer ────────────────────────────────────────────────────────────
+
+  const handlePromoComplete = async (task: { id: string; reward: number }) => {
+    completeTask(task.id);
+    haptic.success();
+  };
 
   const renderCard = (card: CardTask) => {
     const config      = typeConfig[card.type] ?? typeConfig.special;
@@ -660,484 +578,247 @@ export const MiniAppTasks: React.FC = () => {
 
     if (isCompleted && phase !== 'completing' && phase !== 'done') return null;
 
-    const isDone         = isCompleted || phase === 'done';
-    const displayReward  = card.reward * (card.promoMultiplier ?? 1);
-    const avatarBg       = card.source === 'api' ? taskAvatarColor(card.title) : null;
-    const { glow, bg }   = getColors(card.type);
+    const isDone        = isCompleted || phase === 'done';
+    const displayReward = card.reward * (card.promoMultiplier ?? 1);
+    const avatarBg      = card.source === 'api' ? taskAvatarColor(card.title) : null;
 
     const _dEntry = phase === 'too_early' ? parseDeparture(localStorage.getItem(departKey(card.id))) : null;
     void tick;
     const remainingSec = _dEntry ? Math.max(0, Math.ceil((_dEntry.ms - (Date.now() - _dEntry.ts)) / 1000)) : 0;
+    const isSocialOrVideo = card.type === 'social' || card.type === 'watch_video';
 
-    const actionLabel = card.type === 'join_channel' || card.type === 'join_group'
-      ? 'Rejoindre'
-      : card.type === 'start_bot'
-      ? 'Démarrer'
-      : card.type === 'watch_video'
-      ? 'Regarder'
-      : card.type === 'social'
-      ? 'Suivre'
-      : card.type === 'daily'
-      ? 'Réclamer'
-      : card.type === 'invite_friends'
-      ? 'Inviter'
-      : 'Faire';
-
-    const notSubbedMsg = card.type === 'start_bot'
-      ? 'Confirmation non reçue. Ouvrez le bot via le lien de confirmation, attendez quelques secondes, puis réessayez.'
-      : card.type === 'watch_video'
-      ? 'Temps insuffisant — regardez la vidéo jusqu\'à la fin (20s min).'
-      : card.type === 'social'
-      ? 'Preuve refusée. Effectuez l\'action, puis renvoyez un screenshot plus clair.'
-      : 'Temps insuffisant — rejoignez et restez quelques secondes.';
-
-    const notSubbed = phase === 'not_subscribed';
+    const icon = (() => {
+      if (isDone) return <CheckCircle style={{ width: 26, height: 26, color: '#34d399' }} />;
+      const logo = getPlatformLogo(card.targetUrl ?? '', card.type, 34);
+      if (logo) return logo;
+      if (card.icon) return <span style={{ fontSize: 24 }}>{card.icon}</span>;
+      if (avatarBg) return <span style={{ fontSize: 18, fontWeight: 800, color: avatarBg }}>{card.title.charAt(0).toUpperCase()}</span>;
+      return <span style={{ color: '#64748b' }}>{React.cloneElement(config.icon as React.ReactElement<{ style?: React.CSSProperties }>, { style: { width: 22, height: 22 } })}</span>;
+    })();
 
     const hasProgress = card.maxCompletions != null && card.maxCompletions > 0;
-    const progressPct = hasProgress
-      ? Math.min((card.totalCompletions / card.maxCompletions!) * 100, 100)
-      : 0;
+    const notSubbed   = phase === 'not_subscribed';
 
-    return (
-      <div
-        key={card.id}
+    const arrowBtn = (onClick: () => void, disabled = false) => (
+      <button
+        onClick={disabled ? undefined : onClick}
+        disabled={disabled}
         style={{
-          borderRadius: 18,
-          border: `1px solid ${glow}28`,
-          overflow: 'hidden',
-          background: isDone ? 'rgba(52,211,153,0.04)' : 'rgba(255,255,255,0.03)',
+          width: 38, height: 38, borderRadius: 10, flexShrink: 0,
+          background: disabled ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.07)',
+          border: '1px solid rgba(255,255,255,0.09)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          cursor: disabled ? 'not-allowed' : 'pointer',
         }}
       >
-        {/* Promo accent stripe */}
+        <ChevronRight style={{ width: 18, height: 18, color: disabled ? '#334155' : '#94a3b8' }} />
+      </button>
+    );
+
+    return (
+      <div key={card.id} style={{
+        background: isDone ? 'rgba(52,211,153,0.04)' : 'rgba(255,255,255,0.04)',
+        borderRadius: 14,
+        border: isDone ? '1px solid rgba(52,211,153,0.15)' : '1px solid rgba(255,255,255,0.06)',
+        overflow: 'hidden',
+      }}>
+        {/* Promo accent */}
         {card.promoMultiplier && (
           <div style={{ height: 2, background: 'linear-gradient(90deg, #f59e0b, #fbbf24)' }} />
         )}
 
-        {/* Card body */}
-        <div style={{ padding: 14 }}>
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-
-            {/* Icon */}
+        <div style={{ padding: '12px 14px' }}>
+          {/* Top row: icon + title/desc */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <div style={{
-              width: 52, height: 52, borderRadius: 14, flexShrink: 0,
-              background: avatarBg ? `${avatarBg}33` : bg,
-              border: `1px solid ${avatarBg ?? glow}30`,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              overflow: 'hidden',
+              width: 48, height: 48, borderRadius: 12, flexShrink: 0,
+              background: avatarBg ? `${avatarBg}22` : 'rgba(255,255,255,0.06)',
+              border: '1px solid rgba(255,255,255,0.08)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
             }}>
-              {isDone ? (
-                <CheckCircle style={{ width: 22, height: 22, color: '#34d399' }} />
-              ) : (() => {
-                const logo = getPlatformLogo(card.targetUrl ?? '', card.type, 36);
-                if (logo) return logo;
-                if (card.icon) return <span style={{ fontSize: 22 }}>{card.icon}</span>;
-                if (avatarBg) return <span style={{ fontSize: 18, fontWeight: 700, color: avatarBg }}>{card.title.charAt(0).toUpperCase()}</span>;
-                return <span style={{ color: glow }}>{React.cloneElement(config.icon as React.ReactElement<{ style?: React.CSSProperties }>, { style: { width: 22, height: 22 } })}</span>;
-              })()}
+              {icon}
             </div>
-
-            {/* Content */}
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 2 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                 <span style={{ fontSize: 14, fontWeight: 700, color: '#f8fafc' }}>{card.title}</span>
                 {card.promoMultiplier && (
-                  <span style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 3,
-                    padding: '2px 6px', borderRadius: 6,
-                    background: 'rgba(245,158,11,0.15)', color: '#fbbf24',
-                    fontSize: 9, fontWeight: 700,
-                  }}>
-                    <Flame style={{ width: 9, height: 9 }} /> &times;{card.promoMultiplier}
+                  <span style={{ padding: '1px 5px', borderRadius: 5, background: 'rgba(245,158,11,0.15)', color: '#fbbf24', fontSize: 9, fontWeight: 700 }}>
+                    ×{card.promoMultiplier}
                   </span>
                 )}
               </div>
-              <p style={{ fontSize: 11, color: '#64748b', margin: 0, lineHeight: 1.4 }}>{card.description}</p>
-            </div>
-
-            {/* Reward */}
-            <div style={{ flexShrink: 0, textAlign: 'right' }}>
-              <div style={{ fontSize: 16, fontWeight: 800, color: card.promoMultiplier ? '#fbbf24' : '#4ade80' }}>
-                +{displayReward.toFixed(4)}
-              </div>
-              <div style={{ fontSize: 9, color: '#475569', marginTop: 1 }}>GRAM</div>
-              {card.promoMultiplier && (
-                <div style={{ fontSize: 10, color: '#475569', textDecoration: 'line-through', marginTop: 2 }}>
-                  +{card.reward.toFixed(4)}
-                </div>
+              {card.description && (
+                <p style={{ fontSize: 12, color: '#64748b', margin: '2px 0 0', lineHeight: 1.4 }}>{card.description}</p>
               )}
             </div>
           </div>
 
-          {/* Progress bar */}
-          {hasProgress && (
-            <div style={{ marginTop: 10, height: 3, borderRadius: 99, background: 'rgba(255,255,255,0.06)' }}>
-              <div style={{
-                height: '100%', borderRadius: 99, background: glow,
-                width: `${progressPct}%`, transition: 'width 0.3s ease',
-              }} />
-            </div>
-          )}
-        </div>
-
-        {/* Action zone */}
-        <div style={{ padding: '0 14px 14px' }}>
-
-          {/* IDLE */}
-          {phase === 'idle' && !isDone && (
-            <button
-              onClick={() => handleStart(card)}
-              style={{
-                width: '100%', padding: '10px 0', borderRadius: 12,
-                background: bg, border: `1px solid ${glow}45`,
-                color: glow, fontSize: 12, fontWeight: 700,
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                cursor: 'pointer',
-              }}
-            >
-              {actionLabel}
-              {!card.isInstant && card.type !== 'invite_friends' && (
-                <ExternalLink style={{ width: 13, height: 13 }} />
+          {/* Bottom row: reward + action */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <svg width="16" height="16" viewBox="0 0 56 56" fill="none" style={{ flexShrink: 0 }}>
+                <circle cx="28" cy="28" r="28" fill="#0098EA"/>
+                <path d="M37.5603 15.6277H18.4386C14.9228 15.6277 12.7547 19.4202 14.5145 22.4798L26.9572 44.1141C27.5004 45.0567 28.8567 45.0567 29.3999 44.1141L41.8427 22.4798C43.6025 19.4202 41.4344 15.6277 37.5603 15.6277Z" fill="white"/>
+                <path opacity="0.5" d="M28.0001 15.6277H18.4386C14.9228 15.6277 12.7547 19.4202 14.5145 22.4798L20.2931 32.4371L28.0001 15.6277Z" fill="white"/>
+              </svg>
+              <span style={{ fontSize: 13, fontWeight: 800, color: card.promoMultiplier ? '#fbbf24' : '#60a5fa' }}>
+                {displayReward.toFixed(3)}
+              </span>
+              <span style={{ fontSize: 10, color: '#475569', fontWeight: 600 }}>GRAM</span>
+              {hasProgress && (
+                <span style={{ fontSize: 11, color: '#64748b', marginLeft: 4 }}>
+                  {card.totalCompletions}/{card.maxCompletions}
+                </span>
               )}
-            </button>
-          )}
-
-          {/* TOO EARLY */}
-          {phase === 'too_early' && (() => {
-            const isSocialOrVideo = card.type === 'social' || card.type === 'watch_video';
-            const progressPct2 = _dEntry ? Math.min(((Date.now() - _dEntry.ts) / _dEntry.ms) * 100, 100) : 0;
-            return (
-              <div>
-                {isSocialOrVideo ? (
-                  /* Social / video: returned too early — must go back and come back */
-                  <div style={{
-                    borderRadius: 14, marginBottom: 8, padding: '14px 16px',
-                    background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.25)',
-                  }}>
-                    <p style={{ fontSize: 13, fontWeight: 800, color: '#fbbf24', margin: 0, marginBottom: 6 }}>
-                      ⚠️ Revenu trop tôt
-                    </p>
-                    <p style={{ fontSize: 11, color: '#94a3b8', margin: 0, lineHeight: 1.5 }}>
-                      {card.type === 'watch_video'
-                        ? 'Retournez regarder la vidéo jusqu\'à la fin, puis revenez ici.'
-                        : 'Retournez effectuer l\'action, puis revenez ici.'}
-                    </p>
-                  </div>
-                ) : (
-                  /* Telegram / bot / channel / group: in-progress with pulsing dots */
-                  <div style={{
-                    borderRadius: 14, marginBottom: 8, overflow: 'hidden',
-                    background: 'rgba(59,130,246,0.05)', border: '1px solid rgba(59,130,246,0.18)',
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px' }}>
-                      {/* Pulsing dots */}
-                      <div style={{ display: 'flex', gap: 5, flexShrink: 0 }}>
-                        {[0, 1, 2].map(i => (
-                          <div key={i} style={{
-                            width: 8, height: 8, borderRadius: '50%',
-                            background: '#3b82f6',
-                            animation: `pulse 1.2s ease-in-out ${i * 0.2}s infinite`,
-                          }} />
-                        ))}
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        <p style={{ fontSize: 12, fontWeight: 700, color: '#60a5fa', margin: 0, marginBottom: 3 }}>
-                          {card.type === 'start_bot' ? 'Vérification en cours…' : 'En cours de vérification…'}
-                        </p>
-                        <p style={{ fontSize: 10, color: '#475569', margin: 0 }}>
-                          Patientez, puis revenez ici
-                        </p>
-                      </div>
-                    </div>
-                    {/* Progress bar — no numbers */}
-                    <div style={{ height: 2, background: 'rgba(59,130,246,0.08)' }}>
-                      <div style={{
-                        height: '100%',
-                        background: 'linear-gradient(90deg, #3b82f6, #6366f1)',
-                        width: `${progressPct2}%`,
-                        transition: 'width 1.8s linear',
-                      }} />
-                    </div>
-                  </div>
-                )}
-
-                <div style={{ display: 'flex', gap: 8 }}>
-                  {card.targetUrl && (
-                    <button
-                      onClick={() => handleJoin(card)}
-                      style={{
-                        flex: 1, padding: '10px 0', borderRadius: 12,
-                        background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)',
-                        color: '#64748b', fontSize: 11, fontWeight: 600,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
-                        cursor: 'pointer',
-                      }}
-                    >
-                      <RotateCcw style={{ width: 12, height: 12 }} /> Retourner
-                    </button>
-                  )}
-                  {!isSocialOrVideo && (
-                    <button
-                      disabled={remainingSec > 0}
-                      onClick={remainingSec === 0 ? () => void handleVerify(card) : undefined}
-                      style={{
-                        flex: 2, padding: '10px 0', borderRadius: 12,
-                        background: remainingSec > 0 ? 'rgba(59,130,246,0.06)' : 'rgba(59,130,246,0.18)',
-                        border: remainingSec > 0 ? '1px solid rgba(59,130,246,0.14)' : '1px solid rgba(59,130,246,0.4)',
-                        color: remainingSec > 0 ? 'rgba(96,165,250,0.35)' : '#60a5fa',
-                        fontSize: 12, fontWeight: 700,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                        cursor: remainingSec > 0 ? 'not-allowed' : 'pointer',
-                        transition: 'all 0.3s',
-                      }}
-                    >
-                      <ShieldCheck style={{ width: 13, height: 13 }} />
-                      {remainingSec > 0 ? 'En attente…' : 'Vérifier maintenant'}
-                    </button>
-                  )}
-                </div>
-              </div>
-            );
-          })()}
-
-          {/* READY */}
-          {phase === 'ready' && !notSubbed && (
-            <button
-              onClick={() => void handleVerify(card)}
-              style={{
-                width: '100%', padding: '11px 0', borderRadius: 12,
-                background: 'linear-gradient(135deg, rgba(59,130,246,0.2), rgba(99,102,241,0.2))',
-                border: '1px solid rgba(59,130,246,0.4)',
-                color: '#60a5fa', fontSize: 12, fontWeight: 700,
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                cursor: 'pointer',
-              }}
-            >
-              <ShieldCheck style={{ width: 14, height: 14 }} /> Vérifier maintenant
-            </button>
-          )}
-
-          {/* NEEDS BOT CONFIRM — start_bot API tasks */}
-          {phase === 'needs_bot_confirm' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <div style={{
-                padding: '10px 12px', borderRadius: 12,
-                background: 'rgba(6,182,212,0.07)', border: '1px solid rgba(6,182,212,0.22)',
-                fontSize: 11, color: '#67e8f9', lineHeight: 1.5,
-              }}>
-                ✅ Timer validé. Confirmez votre visite via notre bot pour recevoir la récompense.
-              </div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button
-                  onClick={() => openUrl(`https://t.me/${botName}?start=vb_${card.id}_${currentUser.telegramId}`)}
-                  style={{
-                    flex: 1, padding: '10px 0', borderRadius: 12,
-                    background: 'rgba(6,182,212,0.12)', border: '1px solid rgba(6,182,212,0.3)',
-                    color: '#22d3ee', fontSize: 11, fontWeight: 700,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
-                    cursor: 'pointer',
-                  }}
-                >
-                  Confirmer dans le bot
-                </button>
-                <button
-                  onClick={() => void handleBotConfirm(card)}
-                  style={{
-                    flex: 1, padding: '10px 0', borderRadius: 12,
-                    background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.35)',
-                    color: '#60a5fa', fontSize: 11, fontWeight: 700,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
-                    cursor: 'pointer',
-                  }}
-                >
-                  <ShieldCheck style={{ width: 12, height: 12 }} /> Vérifier
-                </button>
-              </div>
             </div>
-          )}
 
-          {/* NEEDS PROOF — social API tasks */}
-          {phase === 'needs_proof' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <div style={{
-                padding: '10px 12px', borderRadius: 12,
-                background: 'rgba(249,115,22,0.07)', border: '1px solid rgba(249,115,22,0.22)',
-                fontSize: 11, color: '#fb923c', lineHeight: 1.5,
-              }}>
-                📸 Action effectuée ? Envoyez un screenshot au bot pour valider votre preuve.
+            {/* Action button based on phase */}
+            {isDone && (
+              <div style={{ padding: '6px 10px', borderRadius: 8, background: 'rgba(52,211,153,0.1)', border: '1px solid rgba(52,211,153,0.2)' }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: '#34d399' }}>✓ Fait</span>
               </div>
-              <button
-                onClick={() => {
-                  openUrl(`https://t.me/${botName}?start=sp_${card.id}_${currentUser.telegramId}`);
-                  localStorage.setItem(`tc_proof_sent_${card.id}`, '1');
-                  setPhase(card.id, 'proof_pending');
-                }}
-                style={{
-                  width: '100%', padding: '10px 0', borderRadius: 12,
-                  background: 'rgba(249,115,22,0.12)', border: '1px solid rgba(249,115,22,0.3)',
-                  color: '#fb923c', fontSize: 12, fontWeight: 700,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                  cursor: 'pointer',
-                }}
-              >
-                📸 Envoyer la preuve au bot
+            )}
+            {!isDone && phase === 'idle' && arrowBtn(() => handleStart(card))}
+            {!isDone && phase === 'ready' && !notSubbed && (
+              <button onClick={() => void handleVerify(card)} style={{
+                padding: '8px 14px', borderRadius: 10,
+                background: 'rgba(52,211,153,0.15)', border: '1px solid rgba(52,211,153,0.3)',
+                color: '#34d399', fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                display: 'flex', alignItems: 'center', gap: 5,
+              }}>
+                <ShieldCheck style={{ width: 13, height: 13 }} /> Vérifier
               </button>
-            </div>
-          )}
-
-          {/* PROOF PENDING — waiting for admin */}
-          {phase === 'proof_pending' && (
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: 10,
-              padding: '11px 14px', borderRadius: 12,
-              background: 'rgba(249,115,22,0.06)', border: '1px solid rgba(249,115,22,0.2)',
-            }}>
-              <Loader2 style={{ width: 14, height: 14, color: '#fb923c', animation: 'spin 1s linear infinite', flexShrink: 0 }} />
-              <div>
-                <p style={{ fontSize: 11, fontWeight: 700, color: '#fb923c', margin: 0 }}>En attente de validation</p>
-                <p style={{ fontSize: 10, color: '#78350f', margin: 0 }}>Notre équipe vérifie votre preuve — notification par bot</p>
+            )}
+            {!isDone && (phase === 'verifying' || phase === 'completing') && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Loader2 style={{ width: 16, height: 16, color: phase === 'completing' ? '#34d399' : '#60a5fa', animation: 'spin 1s linear infinite' }} />
+                <span style={{ fontSize: 11, color: phase === 'completing' ? '#34d399' : '#60a5fa' }}>
+                  {phase === 'completing' ? 'Crédit…' : 'Vérif…'}
+                </span>
               </div>
-            </div>
-          )}
+            )}
+            {!isDone && phase === 'too_early' && !isSocialOrVideo && arrowBtn(() => {}, true)}
+            {!isDone && phase === 'too_early' && isSocialOrVideo && arrowBtn(() => handleJoin(card))}
+            {!isDone && (phase === 'not_subscribed' || phase === 'needs_bot_confirm' || phase === 'needs_proof' || phase === 'proof_pending') && arrowBtn(() => void handleVerify(card))}
+          </div>
+        </div>
 
-          {/* NOT SUBSCRIBED */}
-          {notSubbed && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <div style={{
-                display: 'flex', alignItems: 'flex-start', gap: 8,
-                padding: '10px 12px', borderRadius: 12,
-                background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.22)',
-              }}>
-                <AlertCircle style={{ width: 14, height: 14, color: '#f87171', flexShrink: 0, marginTop: 1 }} />
-                <p style={{ fontSize: 11, color: '#f87171', margin: 0, lineHeight: 1.4 }}>
-                  {notSubbedMsg}
-                </p>
-              </div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                {card.targetUrl && (
-                  <button
-                    onClick={() => handleJoin(card)}
-                    style={{
-                      flex: 1, padding: '10px 0', borderRadius: 12,
-                      background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)',
-                      color: '#64748b', fontSize: 11, fontWeight: 600,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <RotateCcw style={{ width: 12, height: 12 }} /> Retourner
+        {/* Phase strip at bottom of card */}
+        {phase === 'too_early' && (
+          <div style={{
+            borderTop: '1px solid rgba(255,255,255,0.06)',
+            padding: '8px 14px',
+            background: isSocialOrVideo ? 'rgba(245,158,11,0.05)' : 'rgba(59,130,246,0.05)',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+          }}>
+            {isSocialOrVideo ? (
+              <>
+                <span style={{ fontSize: 11, color: '#fbbf24', fontWeight: 600 }}>⚠️ Revenu trop tôt — retournez et revenez</span>
+                <button onClick={() => handleJoin(card)} style={{ padding: '5px 10px', borderRadius: 8, background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.3)', color: '#fbbf24', fontSize: 10, fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}>
+                  Retourner
+                </button>
+              </>
+            ) : (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  {[0,1,2].map(i => (
+                    <div key={i} style={{ width: 6, height: 6, borderRadius: '50%', background: '#3b82f6', animation: `pulse 1.2s ease-in-out ${i*0.2}s infinite` }} />
+                  ))}
+                  <span style={{ fontSize: 11, color: '#60a5fa', fontWeight: 600 }}>En cours de vérification…</span>
+                </div>
+                {remainingSec === 0 && (
+                  <button onClick={() => void handleVerify(card)} style={{ padding: '5px 10px', borderRadius: 8, background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.3)', color: '#60a5fa', fontSize: 10, fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}>
+                    Vérifier
                   </button>
                 )}
-                <button
-                  onClick={() => void handleVerify(card)}
-                  style={{
-                    flex: 2, padding: '10px 0', borderRadius: 12,
-                    background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.35)',
-                    color: '#60a5fa', fontSize: 11, fontWeight: 700,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
-                    cursor: 'pointer',
-                  }}
-                >
-                  <ShieldCheck style={{ width: 12, height: 12 }} /> Réessayer
-                </button>
-              </div>
-              {card.type === 'social' && (() => {
-                const wasRejected = !!localStorage.getItem(`tc_proof_rejected_${card.id}`);
-                return wasRejected ? (
-                  <button
-                    onClick={() => void handleReportAbuse(card.id)}
-                    style={{
-                      marginTop: 6,
-                      width: '100%', padding: '9px 0', borderRadius: 12,
-                      background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.25)',
-                      color: '#fbbf24', fontSize: 11, fontWeight: 700,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    🚨 Contester ce refus
-                  </button>
-                ) : null;
-              })()}
-            </div>
-          )}
+              </>
+            )}
+          </div>
+        )}
 
-          {/* VERIFYING */}
-          {phase === 'verifying' && (
-            <div style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-              padding: '11px 0', borderRadius: 12,
-              background: 'rgba(59,130,246,0.07)', border: '1px solid rgba(59,130,246,0.18)',
-            }}>
-              <Loader2 style={{ width: 14, height: 14, color: '#60a5fa', animation: 'spin 1s linear infinite' }} />
-              <span style={{ fontSize: 12, fontWeight: 600, color: '#60a5fa' }}>
-                {card.type === 'watch_video' ? 'Vérification YouTube…'
-                  : card.type === 'social' ? 'Vérification réseau social…'
-                  : 'Vérification Telegram…'}
-              </span>
-            </div>
-          )}
+        {notSubbed && (
+          <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', padding: '8px 14px', background: 'rgba(239,68,68,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+            <span style={{ fontSize: 11, color: '#f87171', fontWeight: 600 }}>Adhésion non détectée</span>
+            <button onClick={() => void handleVerify(card)} style={{ padding: '5px 10px', borderRadius: 8, background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)', color: '#f87171', fontSize: 10, fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}>
+              Réessayer
+            </button>
+          </div>
+        )}
 
-          {/* COMPLETING */}
-          {phase === 'completing' && (
-            <div style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-              padding: '11px 0', borderRadius: 12,
-              background: 'rgba(52,211,153,0.07)', border: '1px solid rgba(52,211,153,0.18)',
-            }}>
-              <Loader2 style={{ width: 14, height: 14, color: '#34d399', animation: 'spin 1s linear infinite' }} />
-              <span style={{ fontSize: 12, fontWeight: 600, color: '#34d399' }}>
-                Crédit de <strong>+{displayReward.toFixed(4)} GRAM</strong> en cours…
-              </span>
-            </div>
-          )}
+        {phase === 'needs_bot_confirm' && (
+          <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', padding: '8px 14px', background: 'rgba(6,182,212,0.05)', display: 'flex', gap: 8 }}>
+            <button onClick={() => openUrl(`https://t.me/${botName}?start=vb_${card.id}_${currentUser.telegramId}`)} style={{ flex: 1, padding: '7px 0', borderRadius: 8, background: 'rgba(6,182,212,0.12)', border: '1px solid rgba(6,182,212,0.3)', color: '#22d3ee', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+              Confirmer dans le bot
+            </button>
+            <button onClick={() => void handleBotConfirm(card)} style={{ flex: 1, padding: '7px 0', borderRadius: 8, background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.3)', color: '#60a5fa', fontSize: 11, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
+              <ShieldCheck style={{ width: 12, height: 12 }} /> Vérifier
+            </button>
+          </div>
+        )}
 
-          {/* DONE */}
-          {phase === 'done' && (
-            <div style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
-              padding: '10px 14px', borderRadius: 12,
-              background: 'rgba(52,211,153,0.07)', border: '1px solid rgba(52,211,153,0.2)',
-            }}>
-              <TaskDoneCheck />
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: '#34d399' }}>Récompense créditée !</div>
-                <div style={{ fontSize: 12, fontWeight: 800, color: '#4ade80' }}>+{displayReward.toFixed(4)} GRAM</div>
-              </div>
-            </div>
-          )}
-        </div>
+        {phase === 'needs_proof' && (
+          <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', padding: '8px 14px', background: 'rgba(249,115,22,0.05)' }}>
+            <button onClick={() => { openUrl(`https://t.me/${botName}?start=sp_${card.id}_${currentUser.telegramId}`); localStorage.setItem(`tc_proof_sent_${card.id}`, '1'); setPhase(card.id, 'proof_pending'); }} style={{ width: '100%', padding: '7px 0', borderRadius: 8, background: 'rgba(249,115,22,0.12)', border: '1px solid rgba(249,115,22,0.3)', color: '#fb923c', fontSize: 11, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
+              <Send style={{ width: 12, height: 12 }} /> Envoyer la preuve au bot
+            </button>
+          </div>
+        )}
+
+        {phase === 'proof_pending' && (
+          <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', padding: '8px 14px', background: 'rgba(100,116,139,0.05)', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Clock style={{ width: 13, height: 13, color: '#64748b' }} />
+            <span style={{ fontSize: 11, color: '#64748b' }}>En attente de validation…</span>
+            <button onClick={() => void handleVerify(card)} style={{ marginLeft: 'auto', padding: '4px 10px', borderRadius: 7, background: 'rgba(100,116,139,0.15)', border: '1px solid rgba(100,116,139,0.25)', color: '#94a3b8', fontSize: 10, cursor: 'pointer' }}>
+              Vérifier
+            </button>
+          </div>
+        )}
       </div>
     );
   };
 
   // ── Render ───────────────────────────────────────────────────────────────────
 
+  const telegramCards = allCards.filter(c => c.type === 'join_channel' || c.type === 'join_group' || c.type === 'start_bot');
+  const socialCards   = allCards.filter(c => c.type === 'social');
+  const videoCards    = allCards.filter(c => c.type === 'watch_video');
   const totalAvailable = allCards.length + promoTasks.length;
 
-  const isSocialCard = (c: CardTask) => c.type === 'watch_video' || c.type === 'social';
-  const isTelegramCard = (c: CardTask) => c.type === 'join_channel' || c.type === 'join_group' || c.type === 'start_bot';
+  const SectionHead = ({ title, hint, infoOnly }: { title: string; hint?: string; infoOnly?: boolean }) => (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, marginTop: 4 }}>
+      <span style={{ fontSize: 17, fontWeight: 800, color: '#f8fafc' }}>{title}</span>
+      {!infoOnly && hint && (
+        <button
+          onClick={() => { localStorage.setItem('tc_create_type_hint', hint); setMiniAppPage('createTask'); }}
+          style={{
+            width: 34, height: 34, borderRadius: 10,
+            background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
+            color: '#94a3b8', fontSize: 20, lineHeight: 1,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            cursor: 'pointer', flexShrink: 0,
+          }}
+        >+</button>
+      )}
+      {infoOnly && (
+        <div style={{ width: 34, height: 34, borderRadius: 10, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <Star style={{ width: 15, height: 15, color: '#f59e0b' }} />
+        </div>
+      )}
+    </div>
+  );
 
-  const getFilteredCards = (): CardTask[] => {
-    switch (activeFilter) {
-      case 'special': return allCards.filter(c => c.type === 'special');
-      case 'channel': return allCards.filter(c => c.type === 'join_channel' || c.type === 'join_group');
-      case 'bot':     return allCards.filter(c => c.type === 'start_bot');
-      case 'socials': return allCards.filter(isSocialCard);
-      default:        return allCards;
-    }
-  };
-
-  const filteredCards = getFilteredCards();
-  const showPromo = activeFilter === 'all' || activeFilter === 'special';
-  const socialsCount = allCards.filter(isSocialCard).length;
-
+  const EmptyCard = ({ text }: { text: string }) => (
+    <div style={{ padding: '16px', borderRadius: 12, background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', textAlign: 'center' }}>
+      <p style={{ fontSize: 12, color: '#334155', margin: 0 }}>{text}</p>
+    </div>
+  );
 
   return (
     <div className="animate-slide-up" style={{ paddingBottom: 8 }}>
 
       {/* Header */}
       <div style={{ marginBottom: 20 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
           <div>
             <h1 style={{ fontSize: 22, fontWeight: 900, color: '#f8fafc', letterSpacing: '-0.3px', margin: 0 }}>Tâches</h1>
             <p style={{ fontSize: 12, color: '#475569', marginTop: 2, marginBottom: 0 }}>
@@ -1146,431 +827,116 @@ export const MiniAppTasks: React.FC = () => {
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             {currentUser.todayEarnings > 0 && (
-              <div style={{
-                padding: '5px 10px', borderRadius: 10,
-                background: 'rgba(52,211,153,0.1)', border: '1px solid rgba(52,211,153,0.2)',
-                display: 'flex', alignItems: 'center', gap: 5,
-              }}>
+              <div style={{ padding: '5px 10px', borderRadius: 10, background: 'rgba(52,211,153,0.1)', border: '1px solid rgba(52,211,153,0.2)', display: 'flex', alignItems: 'center', gap: 5 }}>
                 <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#34d399', display: 'inline-block' }} />
-                <span style={{ fontSize: 11, fontWeight: 700, color: '#34d399' }}>
-                  +{currentUser.todayEarnings.toFixed(2)} GRAM
-                </span>
+                <span style={{ fontSize: 11, fontWeight: 700, color: '#34d399' }}>+{currentUser.todayEarnings.toFixed(2)} GRAM</span>
               </div>
             )}
-            <button
-              onClick={() => setMiniAppPage('myTasks')}
-              style={{
-                padding: '6px 12px', borderRadius: 10,
-                background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)',
-                color: '#64748b', fontSize: 11, fontWeight: 600, cursor: 'pointer',
-              }}
-            >
+            <button onClick={() => setMiniAppPage('myTasks')} style={{ padding: '6px 12px', borderRadius: 10, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: '#64748b', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
               Mes campagnes
             </button>
           </div>
         </div>
-
-        {/* Filter tabs */}
-        <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 2 }}>
-          {([
-            { key: 'all',     label: 'Toutes',             count: allCards.length + promoTasks.length, always: true },
-            { key: 'special', label: '⭐ Spécial',         count: promoTasks.length,                   always: false },
-            { key: 'socials', label: '📱 Réseaux sociaux', count: socialsCount,                        always: false },
-          ] as { key: typeof activeFilter; label: string; count: number; always: boolean }[])
-          .filter(f => f.always || f.count > 0)
-          .map(f => (
-            <button
-              key={f.key}
-              onClick={() => setActiveFilter(f.key)}
-              style={{
-                padding: '6px 14px', borderRadius: 20, fontSize: 11, fontWeight: 700,
-                whiteSpace: 'nowrap', flexShrink: 0, cursor: 'pointer',
-                background: activeFilter === f.key ? 'rgba(59,130,246,0.2)' : 'rgba(255,255,255,0.04)',
-                border: activeFilter === f.key ? '1px solid rgba(59,130,246,0.4)' : '1px solid rgba(255,255,255,0.07)',
-                color: activeFilter === f.key ? '#60a5fa' : '#64748b',
-              }}
-            >
-              {f.label}{f.count > 0 ? ` (${f.count})` : ''}
-            </button>
-          ))}
-        </div>
       </div>
 
-      {/* Task list */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {activeFilter === 'all' ? (() => {
-          const telegramCards = filteredCards.filter(isTelegramCard);
-          const socialCards   = filteredCards.filter(isSocialCard);
+      {/* Sections */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
 
-          const SectionHeader = ({ label, count, hint }: { label: string; count: number; hint: string }) => (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0 4px' }}>
-              <span style={{ fontSize: 10, fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.12em' }}>{label}</span>
-              <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.06)' }} />
-              {count > 0 && <span style={{ fontSize: 10, color: '#334155', fontWeight: 700 }}>{count}</span>}
-              <button
-                onClick={() => { localStorage.setItem('tc_create_type_hint', hint); setMiniAppPage('createTask'); }}
-                style={{
-                  width: 22, height: 22, borderRadius: 6,
-                  background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.25)',
-                  color: '#60a5fa', fontSize: 15, fontWeight: 800, lineHeight: 1,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  cursor: 'pointer', padding: 0, flexShrink: 0,
-                }}
-              >+</button>
+        {/* Telegram */}
+        <div>
+          <SectionHead title="Telegram" hint="join_channel" />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {telegramCards.length === 0
+              ? <EmptyCard text="No tasks" />
+              : telegramCards.map(c => renderCard(c))}
+          </div>
+        </div>
+
+        {/* Réseaux sociaux */}
+        <div>
+          <SectionHead title="Réseaux sociaux" hint="social" />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {socialCards.length === 0
+              ? <EmptyCard text="No tasks" />
+              : socialCards.map(c => renderCard(c))}
+          </div>
+        </div>
+
+        {/* YouTube */}
+        <div>
+          <SectionHead title="YouTube" hint="watch_video" />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {videoCards.length === 0
+              ? <EmptyCard text="No tasks" />
+              : videoCards.map(c => renderCard(c))}
+          </div>
+        </div>
+
+        {/* Promo / Spécial */}
+        {promoTasks.length > 0 && (
+          <div>
+            <SectionHead title="⭐ Promo" infoOnly />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {promoTasks.map(task => {
+                const isAutoReferral = task.verificationMethod === 'auto_referral';
+                if (isAutoReferral) {
+                  const required   = task.requiredCount ?? 3;
+                  const count      = currentUser.referralDailyCount;
+                  const isComplete = completedTaskIds.includes(task.id);
+                  const isEligible = count >= required;
+                  const pct        = Math.min((count / required) * 100, 100);
+                  return (
+                    <div key={task.id} style={{ background: isComplete ? 'rgba(52,211,153,0.04)' : 'rgba(139,92,246,0.05)', borderRadius: 14, border: isComplete ? '1px solid rgba(52,211,153,0.15)' : '1px solid rgba(139,92,246,0.2)', overflow: 'hidden' }}>
+                      <div style={{ padding: '12px 14px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                          <div style={{ width: 48, height: 48, borderRadius: 12, background: 'rgba(139,92,246,0.15)', border: '1px solid rgba(139,92,246,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>
+                            {task.icon ?? '🏆'}
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <span style={{ fontSize: 14, fontWeight: 700, color: '#f8fafc' }}>{task.title}</span>
+                            <p style={{ fontSize: 12, color: '#64748b', margin: '2px 0 0', lineHeight: 1.4 }}>{task.description}</p>
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <svg width="16" height="16" viewBox="0 0 56 56" fill="none" style={{ flexShrink: 0 }}>
+                <circle cx="28" cy="28" r="28" fill="#0098EA"/>
+                <path d="M37.5603 15.6277H18.4386C14.9228 15.6277 12.7547 19.4202 14.5145 22.4798L26.9572 44.1141C27.5004 45.0567 28.8567 45.0567 29.3999 44.1141L41.8427 22.4798C43.6025 19.4202 41.4344 15.6277 37.5603 15.6277Z" fill="white"/>
+                <path opacity="0.5" d="M28.0001 15.6277H18.4386C14.9228 15.6277 12.7547 19.4202 14.5145 22.4798L20.2931 32.4371L28.0001 15.6277Z" fill="white"/>
+              </svg>
+                            <span style={{ fontSize: 13, fontWeight: 800, color: '#60a5fa' }}>{task.reward.toFixed(3)}</span>
+                            <span style={{ fontSize: 10, color: '#475569', fontWeight: 600 }}>GRAM</span>
+                          </div>
+                          <span style={{ fontSize: 12, color: isEligible ? '#4ade80' : '#64748b', fontWeight: 700 }}>{count}/{required}</span>
+                        </div>
+                        <div style={{ marginTop: 8, height: 3, borderRadius: 99, background: 'rgba(255,255,255,0.07)' }}>
+                          <div style={{ height: '100%', borderRadius: 99, background: isEligible ? 'linear-gradient(90deg,#10b981,#34d399)' : 'linear-gradient(90deg,#8b5cf6,#ec4899)', width: `${pct}%`, transition: 'width 0.3s' }} />
+                        </div>
+                      </div>
+                      {!isComplete && isEligible && (
+                        <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', padding: '8px 14px' }}>
+                          <button onClick={() => void handlePromoComplete(task)} style={{ width: '100%', padding: '8px 0', borderRadius: 10, background: 'linear-gradient(135deg,rgba(52,211,153,0.2),rgba(16,185,129,0.2))', border: '1px solid rgba(52,211,153,0.3)', color: '#34d399', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                            Réclamer la récompense
+                          </button>
+                        </div>
+                      )}
+                      {isComplete && (
+                        <div style={{ borderTop: '1px solid rgba(52,211,153,0.1)', padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <CheckCircle style={{ width: 14, height: 14, color: '#34d399' }} />
+                          <span style={{ fontSize: 11, color: '#34d399', fontWeight: 700 }}>Complété !</span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
+                // Regular promo task — use renderCard
+                return renderCard({ ...task, source: 'platform' as const, type: task.type as CardTask['type'], isInstant: false });
+              })}
             </div>
-          );
-
-          const EmptyHint = ({ text }: { text: string }) => (
-            <div style={{
-              padding: '12px 14px', borderRadius: 12, textAlign: 'center',
-              background: 'rgba(255,255,255,0.02)', border: '1px dashed rgba(255,255,255,0.06)',
-            }}>
-              <p style={{ fontSize: 11, color: '#334155', margin: 0 }}>{text}</p>
-            </div>
-          );
-
-          return (
-            <>
-              <SectionHeader label="Telegram" count={telegramCards.length} hint="join_channel" />
-              {telegramCards.length === 0
-                ? <EmptyHint text="Aucune tâche Telegram · appuyez sur + pour en créer une" />
-                : telegramCards.map(card => renderCard(card))}
-              <SectionHeader label="Réseaux sociaux" count={socialCards.length} hint="social" />
-              {socialCards.length === 0
-                ? <EmptyHint text="Aucune tâche sur les réseaux sociaux · appuyez sur + pour en créer une" />
-                : socialCards.map(card => renderCard(card))}
-            </>
-          );
-        })() : filteredCards.map(card => renderCard(card))}
-
-        {/* Promo / Spécial tasks */}
-        {showPromo && promoTasks.length > 0 && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0 4px', marginTop: 4 }}>
-            <span style={{ fontSize: 10, fontWeight: 800, color: '#ec4899', textTransform: 'uppercase', letterSpacing: '0.12em' }}>⭐ Spécial</span>
-            <div style={{ flex: 1, height: 1, background: 'rgba(236,72,153,0.15)' }} />
-            <span style={{ fontSize: 10, color: '#ec4899', fontWeight: 700 }}>{promoTasks.length}</span>
           </div>
         )}
-        {showPromo && promoTasks.map(task => {
-          const isAutoReferral = task.verificationMethod === 'auto_referral';
 
-          // ── AUTO-REFERRAL task ──────────────────────────────────────────────
-          if (isAutoReferral) {
-            const required   = task.requiredCount ?? 3;
-            const count      = currentUser.referralDailyCount;
-            const isComplete = completedTaskIds.includes(task.id);
-            const isEligible = count >= required;
-            const pct        = Math.min((count / required) * 100, 100);
-
-            return (
-              <div
-                key={task.id}
-                style={{
-                  borderRadius: 18,
-                  border: isComplete ? '1px solid rgba(52,211,153,0.25)' : '1px solid rgba(139,92,246,0.25)',
-                  overflow: 'hidden',
-                  background: 'rgba(139,92,246,0.04)',
-                }}
-              >
-                <div style={{ padding: 14 }}>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-                    <div style={{
-                      width: 52, height: 52, borderRadius: 14, flexShrink: 0,
-                      background: 'rgba(139,92,246,0.15)', border: '1px solid rgba(139,92,246,0.25)',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22,
-                    }}>
-                      {task.icon ?? '🏆'}
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 2 }}>
-                        <span style={{ fontSize: 14, fontWeight: 700, color: '#f8fafc' }}>{task.title}</span>
-                        <span style={{
-                          padding: '2px 6px', borderRadius: 6,
-                          background: 'rgba(139,92,246,0.2)', color: '#a78bfa',
-                          fontSize: 9, fontWeight: 700,
-                        }}>PROMO</span>
-                      </div>
-                      <p style={{ fontSize: 11, color: '#64748b', lineHeight: 1.4, margin: 0 }}>{task.description}</p>
-                    </div>
-                    <div style={{ flexShrink: 0, textAlign: 'right' }}>
-                      <div style={{ fontSize: 16, fontWeight: 800, color: '#4ade80' }}>+{task.reward.toFixed(4)}</div>
-                      <div style={{ fontSize: 9, color: '#475569', marginTop: 1 }}>GRAM</div>
-                    </div>
-                  </div>
-
-                  {/* Referral progress */}
-                  <div style={{ marginTop: 12 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                      <span style={{ fontSize: 11, color: '#64748b' }}>Filleuls aujourd'hui</span>
-                      <span style={{ fontSize: 11, fontWeight: 700, color: isEligible ? '#34d399' : '#94a3b8' }}>
-                        {count} / {required}
-                      </span>
-                    </div>
-                    <div style={{ height: 4, borderRadius: 99, background: 'rgba(255,255,255,0.08)' }}>
-                      <div style={{
-                        height: '100%', borderRadius: 99,
-                        background: isEligible
-                          ? 'linear-gradient(90deg, #10b981, #34d399)'
-                          : 'linear-gradient(90deg, #8b5cf6, #ec4899)',
-                        width: `${pct}%`, transition: 'width 0.3s ease',
-                      }} />
-                    </div>
-                  </div>
-                </div>
-
-                <div style={{ padding: '0 14px 14px' }}>
-                  {isComplete ? (
-                    <div style={{
-                      display: 'flex', alignItems: 'center', gap: 8,
-                      padding: '9px 12px', borderRadius: 12,
-                      background: 'rgba(52,211,153,0.07)', border: '1px solid rgba(52,211,153,0.2)',
-                    }}>
-                      <CheckCircle style={{ width: 14, height: 14, color: '#34d399', flexShrink: 0 }} />
-                      <span style={{ fontSize: 12, fontWeight: 600, color: '#34d399' }}>Validée — récompense créditée</span>
-                    </div>
-                  ) : isEligible ? (
-                    <button
-                      onClick={() => completeTask(task.id)}
-                      style={{
-                        width: '100%', padding: '10px 0', borderRadius: 12,
-                        background: 'linear-gradient(135deg, #3b82f6, #6366f1)',
-                        border: 'none', color: '#fff', fontSize: 12, fontWeight: 700,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                        cursor: 'pointer',
-                      }}
-                    >
-                      <CheckCircle style={{ width: 14, height: 14 }} />
-                      Récupérer ma récompense
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => setMiniAppPage('referral')}
-                      style={{
-                        width: '100%', padding: '10px 0', borderRadius: 12,
-                        background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.3)',
-                        color: '#a78bfa', fontSize: 12, fontWeight: 700,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                        cursor: 'pointer',
-                      }}
-                    >
-                      <Users style={{ width: 14, height: 14 }} />
-                      Inviter des amis ({required - count} restant{required - count > 1 ? 's' : ''})
-                    </button>
-                  )}
-                </div>
-              </div>
-            );
-          }
-
-          // ── MANUAL task ─────────────────────────────────────────────────────
-          const userSubmission = taskSubmissions.find(
-            s => s.taskId === task.id && s.userId === currentUser.id
-          );
-          const isApproved = userSubmission?.status === 'approved';
-          const isPending  = userSubmission?.status === 'pending';
-          const isRejected = userSubmission?.status === 'rejected';
-          const isOpen     = proofOpen === task.id;
-          const thisResult = proofResult?.taskId === task.id ? proofResult : null;
-
-          return (
-            <div
-              key={task.id}
-              style={{
-                borderRadius: 18,
-                border: isApproved ? '1px solid rgba(52,211,153,0.25)' : '1px solid rgba(139,92,246,0.25)',
-                overflow: 'hidden',
-                background: isApproved ? 'rgba(52,211,153,0.04)' : 'rgba(139,92,246,0.04)',
-              }}
-            >
-              <div style={{ padding: 14 }}>
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-                  <div style={{
-                    width: 52, height: 52, borderRadius: 14, flexShrink: 0,
-                    background: 'rgba(139,92,246,0.15)', border: '1px solid rgba(139,92,246,0.25)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22,
-                  }}>
-                    {task.icon ?? '🎯'}
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 2 }}>
-                      <span style={{ fontSize: 14, fontWeight: 700, color: '#f8fafc' }}>{task.title}</span>
-                      <span style={{
-                        padding: '2px 6px', borderRadius: 6,
-                        background: 'rgba(139,92,246,0.2)', color: '#a78bfa',
-                        fontSize: 9, fontWeight: 700,
-                      }}>PROMO</span>
-                    </div>
-                    <p style={{ fontSize: 11, color: '#64748b', lineHeight: 1.4, margin: 0 }}>{task.description}</p>
-                  </div>
-                  <div style={{ flexShrink: 0, textAlign: 'right' }}>
-                    <div style={{ fontSize: 16, fontWeight: 800, color: '#4ade80' }}>+{task.reward.toFixed(4)}</div>
-                    <div style={{ fontSize: 9, color: '#475569', marginTop: 1 }}>GRAM</div>
-                  </div>
-                </div>
-              </div>
-
-              <div style={{ padding: '0 14px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-
-                {isApproved && (
-                  <div style={{
-                    display: 'flex', alignItems: 'center', gap: 8,
-                    padding: '9px 12px', borderRadius: 12,
-                    background: 'rgba(52,211,153,0.07)', border: '1px solid rgba(52,211,153,0.2)',
-                  }}>
-                    <CheckCircle style={{ width: 14, height: 14, color: '#34d399', flexShrink: 0 }} />
-                    <span style={{ fontSize: 12, fontWeight: 600, color: '#34d399' }}>Validée — récompense créditée</span>
-                  </div>
-                )}
-
-                {isPending && (
-                  <div style={{
-                    display: 'flex', alignItems: 'center', gap: 8,
-                    padding: '9px 12px', borderRadius: 12,
-                    background: 'rgba(245,158,11,0.07)', border: '1px solid rgba(245,158,11,0.2)',
-                  }}>
-                    <Clock style={{ width: 14, height: 14, color: '#fbbf24', flexShrink: 0 }} />
-                    <span style={{ fontSize: 12, fontWeight: 600, color: '#fbbf24' }}>En attente de validation par l'équipe</span>
-                  </div>
-                )}
-
-                {isRejected && (
-                  <div style={{
-                    padding: '9px 12px', borderRadius: 12,
-                    background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.2)',
-                  }}>
-                    <p style={{ fontSize: 12, fontWeight: 600, color: '#f87171', margin: 0, marginBottom: userSubmission?.adminNote ? 3 : 0 }}>
-                      Preuve refusée
-                    </p>
-                    {userSubmission?.adminNote && (
-                      <p style={{ fontSize: 10, color: 'rgba(248,113,113,0.7)', margin: 0 }}>Motif : {userSubmission.adminNote}</p>
-                    )}
-                  </div>
-                )}
-
-                {thisResult && (
-                  <p style={{ fontSize: 11, fontWeight: 600, color: thisResult.success ? '#34d399' : '#f87171', margin: 0 }}>
-                    {thisResult.success ? '✓' : '✗'} {thisResult.message}
-                  </p>
-                )}
-
-                {!isApproved && !isPending && !isOpen && (
-                  <button
-                    onClick={() => { setProofOpen(task.id); setProofText(''); setProofResult(null); }}
-                    style={{
-                      width: '100%', padding: '10px 0', borderRadius: 12,
-                      background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.3)',
-                      color: '#a78bfa', fontSize: 12, fontWeight: 700,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <FileText style={{ width: 14, height: 14 }} />
-                    {isRejected ? 'Soumettre à nouveau' : 'Soumettre ma preuve'}
-                  </button>
-                )}
-
-                {isOpen && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10, borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 12 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <span style={{ fontSize: 12, fontWeight: 700, color: '#f8fafc' }}>Votre preuve</span>
-                      <button
-                        onClick={() => { setProofOpen(null); setProofText(''); setProofImage(null); }}
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', display: 'flex', padding: 0 }}
-                      >
-                        <X style={{ width: 16, height: 16 }} />
-                      </button>
-                    </div>
-
-                    {proofImage ? (
-                      <div style={{ position: 'relative', borderRadius: 12, overflow: 'hidden' }}>
-                        <img
-                          src={proofImage} alt="Capture d'écran"
-                          style={{ width: '100%', maxHeight: 192, objectFit: 'contain', display: 'block', background: 'rgba(255,255,255,0.04)' }}
-                        />
-                        <button
-                          onClick={() => setProofImage(null)}
-                          style={{
-                            position: 'absolute', top: 8, right: 8,
-                            background: 'rgba(0,0,0,0.6)', border: 'none', borderRadius: '50%',
-                            width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            cursor: 'pointer', color: '#fff',
-                          }}
-                        >
-                          <X style={{ width: 12, height: 12 }} />
-                        </button>
-                      </div>
-                    ) : (
-                      <label style={{
-                        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                        gap: 6, padding: 16, borderRadius: 12,
-                        border: '2px dashed rgba(255,255,255,0.12)', cursor: 'pointer',
-                      }}>
-                        <span style={{ fontSize: 24 }}>📸</span>
-                        <p style={{ fontSize: 12, fontWeight: 600, color: '#cbd5e1', margin: 0 }}>Ajouter une capture d'écran</p>
-                        <p style={{ fontSize: 10, color: '#64748b', margin: 0 }}>Appuyez pour choisir ou prendre une photo</p>
-                        <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImageSelect} />
-                      </label>
-                    )}
-
-                    <textarea
-                      value={proofText}
-                      onChange={e => setProofText(e.target.value)}
-                      placeholder="Description optionnelle ou lien…"
-                      rows={2}
-                      style={{
-                        width: '100%', padding: '10px 12px', boxSizing: 'border-box',
-                        background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)',
-                        borderRadius: 10, color: '#f8fafc', fontSize: 12, resize: 'none',
-                        outline: 'none', fontFamily: 'inherit',
-                      }}
-                    />
-
-                    <button
-                      onClick={() => handleSubmitProof(task.id)}
-                      disabled={(!proofText.trim() && !proofImage) || proofSubmitting}
-                      style={{
-                        width: '100%', padding: '10px 0', borderRadius: 12,
-                        background: 'linear-gradient(135deg, #3b82f6, #6366f1)',
-                        border: 'none', color: '#fff', fontSize: 12, fontWeight: 700,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                        cursor: (!proofText.trim() && !proofImage) || proofSubmitting ? 'not-allowed' : 'pointer',
-                        opacity: (!proofText.trim() && !proofImage) || proofSubmitting ? 0.45 : 1,
-                      }}
-                    >
-                      {proofSubmitting
-                        ? <><Loader2 style={{ width: 13, height: 13, animation: 'spin 1s linear infinite' }} /> Envoi...</>
-                        : <><Send style={{ width: 13, height: 13 }} /> Envoyer ma preuve</>}
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-          );
-        })}
       </div>
-
-      {/* Empty state */}
-      {filteredCards.length === 0 && !(showPromo && promoTasks.length > 0) && (
-        <div style={{ textAlign: 'center', padding: '40px 20px' }}>
-          <div style={{ fontSize: 36, marginBottom: 12 }}>✅</div>
-          <p style={{ color: '#475569', fontSize: 13, fontWeight: 600 }}>Aucune tâche dans cette catégorie</p>
-        </div>
-      )}
-
-      {/* Create task CTA */}
-      <button
-        onClick={() => setMiniAppPage('createTask')}
-        style={{
-          width: '100%', padding: '12px 0', borderRadius: 14,
-          background: 'rgba(59,130,246,0.06)', border: '1px dashed rgba(59,130,246,0.25)',
-          color: '#3b82f6', fontSize: 12, fontWeight: 700,
-          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-          marginTop: 16, cursor: 'pointer',
-        }}
-      >
-        <Plus style={{ width: 14, height: 14 }} /> Créer une tâche sponsorisée
-      </button>
-
     </div>
   );
 };

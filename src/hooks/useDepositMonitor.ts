@@ -128,15 +128,50 @@ export function useDepositMonitor(): void {
             return ageSec >= 0 && ageSec < 7200;
           });
 
+          // Helper: fetch TON price and return GRAM equivalent (2% below market)
+          const toGram = async (usdt: number): Promise<number> => {
+            try {
+              const r = await fetch('https://api.binance.com/api/v3/ticker/price?symbol=TONUSDT');
+              const d = await r.json() as { price?: string };
+              if (d.price) return parseFloat(((usdt / parseFloat(d.price)) * 0.98).toFixed(4));
+            } catch { /* fallback below */ }
+            try {
+              const r = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=the-open-network&vs_currencies=usd');
+              const d = await r.json() as { 'the-open-network'?: { usd?: number } };
+              const p = d['the-open-network']?.usd;
+              if (p) return parseFloat(((usdt / p) * 0.98).toFixed(4));
+            } catch { /* noop */ }
+            return usdt; // last resort: 1:1 (should never happen in practice)
+          };
+
           if (match) {
             markSeen(txHash);
-            useAppStore.getState().confirmDeposit(match.id, txHash);
+            const gramAmt = await toGram(usdtAmt);
+            // Credit GRAM (not USDT) — single balance
+            useAppStore.setState(s => {
+              const tx  = s.transactions.find(t => t.id === match.id);
+              if (!tx) return s;
+              const usr = s.users.find(u => u.id === tx.userId);
+              if (!usr) return s;
+              const nb = parseFloat((usr.balanceMain + gramAmt).toFixed(6));
+              return {
+                transactions: s.transactions.map(t => t.id === match.id
+                  ? { ...t, status: 'completed' as const, txHash, amount: gramAmt, currency: 'GRAM', completedAt: new Date().toISOString() }
+                  : t),
+                users:       s.users.map(u => u.id === usr.id ? { ...u, balanceMain: nb, totalEarnings: parseFloat((usr.totalEarnings + gramAmt).toFixed(6)) } : u),
+                currentUser: s.currentUser.id === usr.id ? { ...s.currentUser, balanceMain: nb, totalEarnings: parseFloat((s.currentUser.totalEarnings + gramAmt).toFixed(6)) } : s.currentUser,
+              };
+            });
+            const matchTx = useAppStore.getState().transactions.find(t => t.id === match.id);
+            if (matchTx) {
+              useAppStore.getState().addNotification({ userId: matchTx.userId, type: 'deposit', title: 'Dépôt confirmé! 🎉', message: `+${gramAmt.toFixed(4)} GRAM crédité (${usdtAmt} USDT converti).`, isRead: false });
+            }
             const matchUser = state.users.find(u => u.id === (state.transactions.find(t => t.id === match.id)?.userId ?? ''));
             if (matchUser?.telegramId) {
               void fetch('/api/deposit/record', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id: match.id, telegramId: matchUser.telegramId, amount: usdtAmt, currency: 'USDT', network: 'TON', txHash, initData: getInitData() }),
+                body: JSON.stringify({ id: match.id, telegramId: matchUser.telegramId, amount: gramAmt, currency: 'GRAM', network: 'TON', txHash, initData: getInitData() }),
               }).catch(() => {});
             }
             break;
@@ -148,12 +183,13 @@ export function useDepositMonitor(): void {
             const user = state.users.find(u => depositCodeFor(u) === codeStr);
             if (user) {
               markSeen(txHash);
-              useAppStore.getState().creditDeposit(user.id, usdtAmt, 'USDT', txHash, 'TON');
+              const gramAmt = await toGram(usdtAmt);
+              useAppStore.getState().creditDeposit(user.id, gramAmt, 'GRAM', txHash, 'TON (USDT→GRAM)');
               if (user.telegramId) {
                 void fetch('/api/deposit/record', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ telegramId: user.telegramId, amount: usdtAmt, currency: 'USDT', network: 'TON', txHash, initData: getInitData() }),
+                  body: JSON.stringify({ telegramId: user.telegramId, amount: gramAmt, currency: 'GRAM', network: 'TON', txHash, initData: getInitData() }),
                 }).catch(() => {});
               }
               break;
