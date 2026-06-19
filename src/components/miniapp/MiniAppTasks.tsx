@@ -157,8 +157,8 @@ type TaskPhase = 'idle' | 'too_early' | 'ready' | 'verifying' | 'not_subscribed'
 
 const REQUIRED_MS         = 30_000; // bots: 30s
 const CHANNEL_REQUIRED_MS = 5_000;  // channels/groups: 5s
-const VIDEO_REQUIRED_MS   = 20_000; // videos: 20s
-const SOCIAL_REQUIRED_MS  = 5_000;  // social follow/like: 5s
+const VIDEO_REQUIRED_MS   = 30_000; // videos: 30s
+const SOCIAL_REQUIRED_MS  = 30_000; // social/YouTube: 30s minimum
 const MAX_VERIFY_GRACE_MS = 30 * 60_000; // 30-min window after timer expires to verify
 const departKey = (id: string) => `tc_task_depart_${id}`;
 
@@ -250,7 +250,6 @@ export const MiniAppTasks: React.FC = () => {
 
       const afterPhase = (e: DepartEntry): TaskPhase =>
         e.source === 'api' && e.type === 'start_bot' ? 'needs_bot_confirm'
-        : e.source === 'api' && e.type === 'social'   ? 'needs_proof'
         : 'ready';
 
       if (remainingMs <= 0) {
@@ -263,7 +262,8 @@ export const MiniAppTasks: React.FC = () => {
       } else {
         setTaskStates(prev => ({ ...prev, [id]: { phase: 'too_early' } }));
         const autoKey = `depart_auto_${id}`;
-        if (!timerRefs.current[autoKey]) {
+        const entryType = entry.type ?? '';
+        if (entryType !== 'social' && entryType !== 'watch_video' && !timerRefs.current[autoKey]) {
           timerRefs.current[autoKey] = setTimeout(() => {
             delete timerRefs.current[autoKey];
             setTaskStates(prev => ({ ...prev, [id]: { phase: afterPhase(entry) } }));
@@ -280,9 +280,9 @@ export const MiniAppTasks: React.FC = () => {
     return () => { Object.values(snap).forEach(clearTimeout); };
   }, []);
 
-  // 1-second ticker so too_early cards show a live countdown
+  // Ticker to re-evaluate departure state periodically
   useEffect(() => {
-    const interval = setInterval(() => setTick(t => t + 1), 1000);
+    const interval = setInterval(() => setTick(t => t + 1), 2000);
     return () => clearInterval(interval);
   }, []);
 
@@ -434,12 +434,15 @@ export const MiniAppTasks: React.FC = () => {
     const waitMs  = card.type === 'start_bot' ? REQUIRED_MS : card.type === 'watch_video' ? VIDEO_REQUIRED_MS : card.type === 'social' ? SOCIAL_REQUIRED_MS : CHANNEL_REQUIRED_MS;
     const autoKey = `depart_auto_${card.id}`;
     if (timerRefs.current[autoKey]) { clearTimeout(timerRefs.current[autoKey]); delete timerRefs.current[autoKey]; }
-    localStorage.setItem(departKey(card.id), JSON.stringify({ ts: Date.now(), ms: waitMs }));
+    localStorage.setItem(departKey(card.id), JSON.stringify({ ts: Date.now(), ms: waitMs, type: card.type, source: card.source }));
     setPhase(card.id, 'too_early');
-    timerRefs.current[autoKey] = setTimeout(() => {
-      delete timerRefs.current[autoKey];
-      setPhase(card.id, 'ready');
-    }, waitMs);
+    // Social/video: no in-memory timer — only a real return to app (checkDepartures) can unlock verify
+    if (card.type !== 'social' && card.type !== 'watch_video') {
+      timerRefs.current[autoKey] = setTimeout(() => {
+        delete timerRefs.current[autoKey];
+        setPhase(card.id, 'ready');
+      }, waitMs);
+    }
     openUrl(card.targetUrl);
   };
 
@@ -665,7 +668,6 @@ export const MiniAppTasks: React.FC = () => {
     const _dEntry = phase === 'too_early' ? parseDeparture(localStorage.getItem(departKey(card.id))) : null;
     void tick;
     const remainingSec = _dEntry ? Math.max(0, Math.ceil((_dEntry.ms - (Date.now() - _dEntry.ts)) / 1000)) : 0;
-    const totalSec = _dEntry ? Math.ceil(_dEntry.ms / 1000) : 30;
 
     const actionLabel = card.type === 'join_channel' || card.type === 'join_group'
       ? 'Rejoindre'
@@ -799,108 +801,103 @@ export const MiniAppTasks: React.FC = () => {
             </button>
           )}
 
-          {/* TOO EARLY — prominent countdown */}
-          {phase === 'too_early' && (
-            <div>
-              <div style={{
-                borderRadius: 14, marginBottom: 8, overflow: 'hidden',
-                background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.22)',
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px' }}>
-                  {/* Large circular countdown */}
-                  <div style={{ position: 'relative', width: 58, height: 58, flexShrink: 0 }}>
-                    <svg width="58" height="58" viewBox="0 0 58 58" style={{ transform: 'rotate(-90deg)' }}>
-                      <circle cx="29" cy="29" r="25" fill="none" stroke="rgba(245,158,11,0.12)" strokeWidth="3.5" />
-                      <circle
-                        cx="29" cy="29" r="25" fill="none"
-                        stroke={remainingSec === 0 ? '#34d399' : '#f59e0b'} strokeWidth="3.5"
-                        strokeDasharray={`${2 * Math.PI * 25}`}
-                        strokeDashoffset={`${2 * Math.PI * 25 * (remainingSec / Math.max(totalSec, 1))}`}
-                        strokeLinecap="round"
-                        style={{ transition: 'stroke-dashoffset 0.9s linear, stroke 0.3s' }}
-                      />
-                    </svg>
-                    <div style={{
-                      position: 'absolute', inset: 0,
-                      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                    }}>
-                      <span style={{ fontSize: remainingSec >= 100 ? 13 : 17, fontWeight: 900, color: remainingSec === 0 ? '#34d399' : '#f59e0b', lineHeight: 1 }}>
-                        {remainingSec === 0 ? '✓' : remainingSec}
-                      </span>
-                      {remainingSec > 0 && (
-                        <span style={{ fontSize: 7, fontWeight: 700, color: 'rgba(245,158,11,0.55)', letterSpacing: '0.08em', marginTop: 1 }}>SEC</span>
-                      )}
+          {/* TOO EARLY */}
+          {phase === 'too_early' && (() => {
+            const isSocialOrVideo = card.type === 'social' || card.type === 'watch_video';
+            const progressPct2 = _dEntry ? Math.min(((Date.now() - _dEntry.ts) / _dEntry.ms) * 100, 100) : 0;
+            return (
+              <div>
+                {isSocialOrVideo ? (
+                  /* Social / video: returned too early — must go back and come back */
+                  <div style={{
+                    borderRadius: 14, marginBottom: 8, padding: '14px 16px',
+                    background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.25)',
+                  }}>
+                    <p style={{ fontSize: 13, fontWeight: 800, color: '#fbbf24', margin: 0, marginBottom: 6 }}>
+                      ⚠️ Revenu trop tôt
+                    </p>
+                    <p style={{ fontSize: 11, color: '#94a3b8', margin: 0, lineHeight: 1.5 }}>
+                      {card.type === 'watch_video'
+                        ? 'Retournez regarder la vidéo jusqu\'à la fin, puis revenez ici.'
+                        : 'Retournez effectuer l\'action, puis revenez ici.'}
+                    </p>
+                  </div>
+                ) : (
+                  /* Telegram / bot / channel / group: in-progress with pulsing dots */
+                  <div style={{
+                    borderRadius: 14, marginBottom: 8, overflow: 'hidden',
+                    background: 'rgba(59,130,246,0.05)', border: '1px solid rgba(59,130,246,0.18)',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px' }}>
+                      {/* Pulsing dots */}
+                      <div style={{ display: 'flex', gap: 5, flexShrink: 0 }}>
+                        {[0, 1, 2].map(i => (
+                          <div key={i} style={{
+                            width: 8, height: 8, borderRadius: '50%',
+                            background: '#3b82f6',
+                            animation: `pulse 1.2s ease-in-out ${i * 0.2}s infinite`,
+                          }} />
+                        ))}
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <p style={{ fontSize: 12, fontWeight: 700, color: '#60a5fa', margin: 0, marginBottom: 3 }}>
+                          {card.type === 'start_bot' ? 'Vérification en cours…' : 'En cours de vérification…'}
+                        </p>
+                        <p style={{ fontSize: 10, color: '#475569', margin: 0 }}>
+                          Patientez, puis revenez ici
+                        </p>
+                      </div>
+                    </div>
+                    {/* Progress bar — no numbers */}
+                    <div style={{ height: 2, background: 'rgba(59,130,246,0.08)' }}>
+                      <div style={{
+                        height: '100%',
+                        background: 'linear-gradient(90deg, #3b82f6, #6366f1)',
+                        width: `${progressPct2}%`,
+                        transition: 'width 1.8s linear',
+                      }} />
                     </div>
                   </div>
-
-                  <div style={{ flex: 1 }}>
-                    <p style={{ fontSize: 12, fontWeight: 700, color: '#fbbf24', margin: 0, marginBottom: 4 }}>
-                      {card.type === 'start_bot'
-                        ? 'Restez dans le bot…'
-                        : card.type === 'watch_video'
-                        ? 'Regardez la vidéo…'
-                        : card.type === 'social'
-                        ? 'Effectuez l\'action…'
-                        : `Rejoignez le ${card.type === 'join_channel' ? 'canal' : 'groupe'}…`}
-                    </p>
-                    {remainingSec > 0 ? (
-                      <p style={{ fontSize: 10, color: '#92400e', margin: 0 }}>
-                        Vérification dans <strong style={{ color: '#f59e0b' }}>{remainingSec}s</strong>
-                      </p>
-                    ) : (
-                      <p style={{ fontSize: 10, fontWeight: 700, color: '#34d399', margin: 0 }}>
-                        ✓ Prêt — cliquez sur Vérifier
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                {/* Progress bar */}
-                <div style={{ height: 2, background: 'rgba(245,158,11,0.1)' }}>
-                  <div style={{
-                    height: '100%',
-                    background: remainingSec === 0 ? '#34d399' : 'linear-gradient(90deg, #f59e0b, #fbbf24)',
-                    width: `${((totalSec - remainingSec) / Math.max(totalSec, 1)) * 100}%`,
-                    transition: 'width 0.9s linear, background 0.3s',
-                  }} />
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', gap: 8 }}>
-                {card.targetUrl && (
-                  <button
-                    onClick={() => handleJoin(card)}
-                    style={{
-                      flex: 1, padding: '10px 0', borderRadius: 12,
-                      background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)',
-                      color: '#64748b', fontSize: 11, fontWeight: 600,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <RotateCcw style={{ width: 12, height: 12 }} /> Retourner
-                  </button>
                 )}
-                <button
-                  disabled={remainingSec > 0}
-                  onClick={remainingSec === 0 ? () => void handleVerify(card) : undefined}
-                  style={{
-                    flex: 2, padding: '10px 0', borderRadius: 12,
-                    background: remainingSec > 0 ? 'rgba(245,158,11,0.07)' : 'rgba(59,130,246,0.18)',
-                    border: remainingSec > 0 ? '1px solid rgba(245,158,11,0.18)' : '1px solid rgba(59,130,246,0.4)',
-                    color: remainingSec > 0 ? 'rgba(245,158,11,0.5)' : '#60a5fa',
-                    fontSize: 12, fontWeight: 700,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                    cursor: remainingSec > 0 ? 'not-allowed' : 'pointer',
-                    transition: 'all 0.3s',
-                  }}
-                >
-                  <ShieldCheck style={{ width: 13, height: 13 }} />
-                  {remainingSec > 0 ? `Vérifier dans ${remainingSec}s` : 'Vérifier maintenant'}
-                </button>
+
+                <div style={{ display: 'flex', gap: 8 }}>
+                  {card.targetUrl && (
+                    <button
+                      onClick={() => handleJoin(card)}
+                      style={{
+                        flex: 1, padding: '10px 0', borderRadius: 12,
+                        background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)',
+                        color: '#64748b', fontSize: 11, fontWeight: 600,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <RotateCcw style={{ width: 12, height: 12 }} /> Retourner
+                    </button>
+                  )}
+                  {!isSocialOrVideo && (
+                    <button
+                      disabled={remainingSec > 0}
+                      onClick={remainingSec === 0 ? () => void handleVerify(card) : undefined}
+                      style={{
+                        flex: 2, padding: '10px 0', borderRadius: 12,
+                        background: remainingSec > 0 ? 'rgba(59,130,246,0.06)' : 'rgba(59,130,246,0.18)',
+                        border: remainingSec > 0 ? '1px solid rgba(59,130,246,0.14)' : '1px solid rgba(59,130,246,0.4)',
+                        color: remainingSec > 0 ? 'rgba(96,165,250,0.35)' : '#60a5fa',
+                        fontSize: 12, fontWeight: 700,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                        cursor: remainingSec > 0 ? 'not-allowed' : 'pointer',
+                        transition: 'all 0.3s',
+                      }}
+                    >
+                      <ShieldCheck style={{ width: 13, height: 13 }} />
+                      {remainingSec > 0 ? 'En attente…' : 'Vérifier maintenant'}
+                    </button>
+                  )}
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* READY */}
           {phase === 'ready' && !notSubbed && (

@@ -38,10 +38,8 @@ DB_PATH = os.getenv(
 )
 ADMIN_SECRET      = os.getenv("ADMIN_SECRET", "")
 ADMIN_TELEGRAM_ID = int(os.getenv("ADMIN_TELEGRAM_ID", "0"))
-# Canal Telegram obligatoire (ex: @TonCipher_official ou -100xxxxxxxxxx)
-OFFICIAL_CHANNEL  = os.getenv("OFFICIAL_CHANNEL", "")
-# Canal Telegram où poster les retraits (ex: @TonCipher_withdrawals ou -100xxxxxxxxxx)
-WITHDRAWAL_CHANNEL = os.getenv("WITHDRAWAL_CHANNEL", "")
+OFFICIAL_CHANNEL   = os.getenv("OFFICIAL_CHANNEL",   "@TonCipher_officiel")
+WITHDRAWAL_CHANNEL = os.getenv("WITHDRAWAL_CHANNEL", "@TonCipher_Pays")
 
 REFERRAL_BONUS_TON  = float(os.getenv("REFERRAL_BONUS_TON", "1.0"))
 MAX_ACCOUNTS_PER_IP = int(os.getenv("MAX_ACCOUNTS_PER_IP", "3"))
@@ -1197,15 +1195,26 @@ async def api_withdrawal_create(request: web.Request) -> web.Response:
     is_flagged = bool(urow[2]) if urow else False
 
     flag_warn = "\n⚠️ <b>Compte signalé (anti-fraude)</b> — vérification recommandée." if is_flagged else ""
-    withdrawal_msg = (
-        f"💸 <b>Nouvelle demande de retrait</b>{flag_warn}\n"
-        f"👤 {fname} @{uname or 'inconnu'} (ID: <code>{telegram_id}</code>)\n"
-        f"💰 <b>{amount:.2f} {currency}</b> ({network}) — frais: {fee}\n"
-        f"📬 Adresse: <code>{address}</code>\n"
-        f"🆔 TX ID: <code>{tx_id}</code>"
+    from datetime import datetime as _dt
+    now_str = _dt.utcnow().strftime("%d/%m/%Y à %H:%M UTC")
+    admin_msg = (
+        f"━━━━━━━━━━━━━━━━━━━━━\n"
+        f"💸 <b>DEMANDE DE RETRAIT</b>{flag_warn}\n"
+        f"━━━━━━━━━━━━━━━━━━━━━\n"
+        f"👤 <b>Utilisateur :</b> {fname} @{uname or 'inconnu'}\n"
+        f"🆔 <b>Telegram ID :</b> <code>{telegram_id}</code>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━\n"
+        f"💰 <b>Montant :</b> <b>{amount:.4f} {currency}</b>\n"
+        f"🌐 <b>Réseau :</b> {network}\n"
+        f"🏷️ <b>Frais :</b> {fee}\n"
+        f"━━━━━━━━━━━━━━━━━━━━━\n"
+        f"📬 <b>Adresse :</b>\n<code>{address}</code>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━\n"
+        f"🔖 <b>Référence :</b> <code>{tx_id}</code>\n"
+        f"🕐 <b>Date :</b> {now_str}\n"
+        f"━━━━━━━━━━━━━━━━━━━━━"
     )
-    await _notify_admin(withdrawal_msg + "\n👉 Ouvre l'admin pour approuver ou refuser.")
-    await _notify_channel(await _configured_withdrawal_channel(), withdrawal_msg + "\n⏳ En attente d'approbation.")
+    await _notify_admin(admin_msg + "\n\n👉 <b>Ouvre l'admin pour approuver ou refuser.</b>")
 
     log.info("Withdrawal request: id=%s telegram_id=%d amount=%.2f %s → %s",
              tx_id, telegram_id, amount, currency, address[:12])
@@ -1898,20 +1907,32 @@ async def api_admin_approve_withdrawal(request: web.Request) -> web.Response:
     except Exception:
         data = {}
     tx_hash = str(data.get("txHash", "")).strip()
+    tx_date_raw = str(data.get("txDate", "")).strip()  # "YYYY-MM-DDTHH:MM" from datetime-local input
+
+    # Parse admin-supplied date or fall back to now
+    from datetime import datetime as _dt_ap
+    if tx_date_raw:
+        try:
+            tx_dt = _dt_ap.strptime(tx_date_raw[:16], "%Y-%m-%dT%H:%M")
+            processed_at_val = tx_dt.strftime("%Y-%m-%d %H:%M:%S")
+        except Exception:
+            processed_at_val = _dt_ap.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    else:
+        processed_at_val = _dt_ap.utcnow().strftime("%Y-%m-%d %H:%M:%S")
 
     async with aiosqlite.connect(DB_PATH) as db:
         cur = await db.execute("""
             UPDATE transactions
-            SET status = 'completed', tx_hash = ?, processed_at = datetime('now')
+            SET status = 'completed', tx_hash = ?, processed_at = ?
             WHERE id = ? AND type = 'withdrawal' AND status = 'pending'
-        """, (tx_hash, tx_id))
+        """, (tx_hash, processed_at_val, tx_id))
         if cur.rowcount == 0:
             # Already approved/rejected (or unknown id) — don't notify twice
             return web.json_response({"error": "Already processed or not found"}, status=409, headers=_CORS)
         # Fetch transaction + user details for the notification
         async with db.execute("""
             SELECT t.telegram_id, t.amount, t.currency, t.address,
-                   u.first_name, u.username
+                   u.first_name, t.processed_at
             FROM transactions t
             LEFT JOIN users u ON t.telegram_id = u.telegram_id
             WHERE t.id = ?
@@ -1946,14 +1967,26 @@ async def api_admin_approve_withdrawal(request: web.Request) -> web.Response:
             pass
 
     if tx_row:
-        user_label = f"@{tx_row[5]}" if tx_row[5] else (tx_row[4] or f"ID:{tx_row[0]}")
+        first_name_pub = tx_row[4] or "Utilisateur"
+        # processed_at from DB (SQLite returns "YYYY-MM-DD HH:MM:SS")
+        try:
+            from datetime import datetime as _dt2
+            processed_dt = _dt2.strptime(tx_row[5], "%Y-%m-%d %H:%M:%S")
+            approved_str = processed_dt.strftime("%d/%m/%Y à %H:%M:%S UTC")
+        except Exception:
+            from datetime import datetime as _dt2
+            approved_str = _dt2.utcnow().strftime("%d/%m/%Y à %H:%M:%S UTC")
         await _notify_channel(
             await _configured_withdrawal_channel(),
-            f"✅ <b>Retrait approuvé</b>\n"
-            f"👤 {user_label} (<code>{tx_row[0]}</code>)\n"
-            f"💰 {tx_row[1]:.4f} {tx_row[2]}\n"
-            f"🆔 TX: <code>{tx_id}</code>\n"
-            + (f'🔗 <a href="{tx_link}">Voir sur TonScan</a>' if tx_link else "📭 Aucun TX Hash"),
+            f"━━━━━━━━━━━━━━━━━━━━━\n"
+            f"✅ <b>RETRAIT APPROUVÉ</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━\n"
+            f"👤 <b>Bénéficiaire :</b> {first_name_pub}\n"
+            f"💰 <b>Montant :</b> {tx_row[1]:.4f} {tx_row[2]}\n"
+            f"🕐 <b>Approuvé le :</b> {approved_str}\n"
+            f"━━━━━━━━━━━━━━━━━━━━━\n"
+            + (f'🔗 <a href="{tx_link}">Voir la transaction sur TonScan</a>\n' if tx_link else "📭 Aucun TX Hash fourni\n")
+            + f"━━━━━━━━━━━━━━━━━━━━━",
         )
 
     return web.json_response({"success": True}, headers=_CORS)
@@ -2016,15 +2049,6 @@ async def api_admin_reject_withdrawal(request: web.Request) -> web.Response:
             )
         except Exception:
             pass
-
-    if tx_row:
-        await _notify_channel(
-            await _configured_withdrawal_channel(),
-            f"❌ <b>Retrait refusé</b>\n"
-            f"🆔 TX ID: <code>{tx_id}</code>\n"
-            f"💰 {tx_row[1]:.2f} {tx_row[2]}\n"
-            + (f"📝 Motif : {note}" if note else ""),
-        )
 
     return web.json_response({"success": True}, headers=_CORS)
 
