@@ -1088,8 +1088,9 @@ async def api_user_init(request: web.Request) -> web.Response:
         elif not _validate_init_data(init_data, BOT_TOKEN):
             violations.append("invalid_init_data")
         elif _init_data_user_id(init_data) != telegram_id:
-            # claimed telegram_id doesn't match the initData's embedded user id
-            violations.append("init_data_id_mismatch")
+            # Valid initData but for a different user — active impersonation attempt.
+            # Block immediately; don't return any account data.
+            return web.json_response({"error": "Identity mismatch"}, status=403, headers=_CORS)
 
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute("SELECT banned FROM users WHERE telegram_id = ?", (telegram_id,)) as cur:
