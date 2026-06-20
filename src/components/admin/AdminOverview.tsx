@@ -126,9 +126,9 @@ export const AdminOverview: React.FC = () => {
           color="green"
         />
         <StatCard
-          title="Retraits totaux"
+          title="Total withdrawals"
           value={totalWithdrawals >= 1000 ? `${(totalWithdrawals / 1000).toFixed(2)}K TON` : `${totalWithdrawals.toFixed(2)} TON`}
-          subtitle="Traitement automatique"
+          subtitle="Automatic processing"
           icon={<ArrowUpFromLine className="w-5 h-5" />}
           color="orange"
         />

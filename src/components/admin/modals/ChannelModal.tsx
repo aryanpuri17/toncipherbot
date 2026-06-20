@@ -90,7 +90,7 @@ export const ChannelModal: React.FC = () => {
 
         <FormActions>
           <Button type="button" variant="secondary" onClick={closeModal}>Annuler</Button>
-          <Button type="submit">{isEdit ? 'Enregistrer' : 'Ajouter'}</Button>
+          <Button type="submit">{isEdit ? 'Save' : 'Add'}</Button>
         </FormActions>
       </form>
     </Modal>

@@ -173,13 +173,13 @@ export const CryptoModal: React.FC = () => {
           <div className="space-y-4">
             <ToggleSwitch enabled={form.isActive} onChange={v => setForm({ ...form, isActive: v })} label="Réseau actif" />
             <ToggleSwitch enabled={form.isDepositEnabled} onChange={v => setForm({ ...form, isDepositEnabled: v })} label="Dépôts activés" />
-            <ToggleSwitch enabled={form.isWithdrawalEnabled} onChange={v => setForm({ ...form, isWithdrawalEnabled: v })} label="Retraits activés" />
+            <ToggleSwitch enabled={form.isWithdrawalEnabled} onChange={v => setForm({ ...form, isWithdrawalEnabled: v })} label="Withdrawals enabled" />
           </div>
         </FormSection>
 
         <FormActions>
           <Button type="button" variant="secondary" onClick={closeModal}>Annuler</Button>
-          <Button type="submit">{isEdit ? 'Enregistrer' : 'Ajouter'}</Button>
+          <Button type="submit">{isEdit ? 'Save' : 'Add'}</Button>
         </FormActions>
       </form>
     </Modal>

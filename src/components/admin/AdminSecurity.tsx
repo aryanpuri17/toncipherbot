@@ -69,8 +69,8 @@ export const AdminAntiFraud: React.FC = () => {
     <div className="space-y-6 animate-fade-in">
       <div className="flex items-start justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-white">Anti-Fraude</h2>
-          <p className="text-slate-400 text-sm mt-1">Surveillance et détection des fraudes</p>
+          <h2 className="text-2xl font-bold text-white">Anti-Fraud</h2>
+          <p className="text-slate-400 text-sm mt-1">Surveillance and fraud detection</p>
         </div>
         <button onClick={() => void fetchAlerts()} className="p-2 rounded-lg hover:bg-white/5 text-slate-400 transition-colors" title="Actualiser">
           <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
@@ -89,7 +89,7 @@ export const AdminAntiFraud: React.FC = () => {
             className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-blue-500/50 w-48" />
           <button onClick={saveApiKey}
             className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${keySaved ? 'bg-emerald-500/20 text-emerald-400' : 'bg-blue-500/20 text-blue-400 hover:bg-blue-500/30'}`}>
-            {keySaved ? '✓ Enregistrée' : 'Enregistrer'}
+            {keySaved ? '✓ Saved' : 'Save'}
           </button>
         </div>
       </div>

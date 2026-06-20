@@ -212,7 +212,7 @@ export const TaskModal: React.FC = () => {
 
         <FormActions>
           <Button type="button" variant="secondary" onClick={closeModal}>Annuler</Button>
-          <Button type="submit">{isEdit ? 'Enregistrer' : 'Créer la tâche'}</Button>
+          <Button type="submit">{isEdit ? 'Save' : 'Create task'}</Button>
         </FormActions>
       </form>
     </Modal>

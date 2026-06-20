@@ -29,8 +29,8 @@ export const AdminReferrals: React.FC = () => {
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
-        <h2 className="text-2xl font-bold text-white">Parrainage</h2>
-        <p className="text-slate-400 text-sm mt-1">Paliers de primes et top parrains</p>
+        <h2 className="text-2xl font-bold text-white">Referrals</h2>
+        <p className="text-slate-400 text-sm mt-1">Bonus tiers and top referrers</p>
       </div>
 
       {/* Milestones */}
@@ -38,22 +38,22 @@ export const AdminReferrals: React.FC = () => {
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-sm font-semibold text-white">Paliers de parrainage</h3>
           <button onClick={startAdd} className="btn-primary px-3 py-1.5 rounded-lg text-xs font-medium text-white flex items-center gap-1.5">
-            <Plus className="w-3.5 h-3.5" /> Ajouter
+            <Plus className="w-3.5 h-3.5" /> Add
           </button>
         </div>
 
         {/* Add form */}
         {adding && (
           <div className="mb-4 p-4 rounded-xl border border-blue-500/30 bg-blue-500/5 space-y-3">
-            <p className="text-xs font-semibold text-blue-400">Nouveau palier</p>
+            <p className="text-xs font-semibold text-blue-400">New tier</p>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs text-slate-400 mb-1">Filleuls requis</label>
+                <label className="block text-xs text-slate-400 mb-1">Required referrals</label>
                 <input type="number" value={form.referralCount} onChange={e => setForm(f => ({ ...f, referralCount: parseInt(e.target.value) || 0 }))}
                   className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500/50" />
               </div>
               <div>
-                <label className="block text-xs text-slate-400 mb-1">Prime (TON)</label>
+                <label className="block text-xs text-slate-400 mb-1">Bonus (TON)</label>
                 <input type="number" step="0.01" value={form.reward} onChange={e => setForm(f => ({ ...f, reward: parseFloat(e.target.value) || 0 }))}
                   className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500/50" />
               </div>
@@ -61,33 +61,33 @@ export const AdminReferrals: React.FC = () => {
             <div>
               <label className="block text-xs text-slate-400 mb-1">Description</label>
               <input type="text" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-                className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500/50" placeholder="Ex: Invitez 5 amis" />
+                className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500/50" placeholder="Ex: Invite 5 friends" />
             </div>
             <div className="flex gap-2">
               <button onClick={save} className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-emerald-500/20 text-emerald-400 text-xs font-medium hover:bg-emerald-500/30 transition-colors">
-                <Save className="w-3.5 h-3.5" /> Sauvegarder
+                <Save className="w-3.5 h-3.5" /> Save
               </button>
               <button onClick={cancel} className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-white/5 text-slate-400 text-xs font-medium hover:bg-white/10 transition-colors">
-                <X className="w-3.5 h-3.5" /> Annuler
+                <X className="w-3.5 h-3.5" /> Cancel
               </button>
             </div>
           </div>
         )}
 
         <div className="space-y-2">
-          {referralMilestones.length === 0 && <p className="text-sm text-slate-500 text-center py-4">Aucun palier configuré</p>}
+          {referralMilestones.length === 0 && <p className="text-sm text-slate-500 text-center py-4">No tiers configured</p>}
           {referralMilestones.map(m => (
             <div key={m.id}>
               {editing === m.id ? (
                 <div className="p-4 rounded-xl border border-blue-500/30 bg-blue-500/5 space-y-3">
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs text-slate-400 mb-1">Filleuls requis</label>
+                      <label className="block text-xs text-slate-400 mb-1">Required referrals</label>
                       <input type="number" value={form.referralCount} onChange={e => setForm(f => ({ ...f, referralCount: parseInt(e.target.value) || 0 }))}
                         className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500/50" />
                     </div>
                     <div>
-                      <label className="block text-xs text-slate-400 mb-1">Prime (TON)</label>
+                      <label className="block text-xs text-slate-400 mb-1">Bonus (TON)</label>
                       <input type="number" step="0.01" value={form.reward} onChange={e => setForm(f => ({ ...f, reward: parseFloat(e.target.value) || 0 }))}
                         className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500/50" />
                     </div>
@@ -99,10 +99,10 @@ export const AdminReferrals: React.FC = () => {
                   </div>
                   <div className="flex gap-2">
                     <button onClick={save} className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-emerald-500/20 text-emerald-400 text-xs font-medium hover:bg-emerald-500/30 transition-colors">
-                      <Save className="w-3.5 h-3.5" /> Sauvegarder
+                      <Save className="w-3.5 h-3.5" /> Save
                     </button>
                     <button onClick={cancel} className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-white/5 text-slate-400 text-xs font-medium hover:bg-white/10 transition-colors">
-                      <X className="w-3.5 h-3.5" /> Annuler
+                      <X className="w-3.5 h-3.5" /> Cancel
                     </button>
                   </div>
                 </div>
@@ -112,8 +112,8 @@ export const AdminReferrals: React.FC = () => {
                     <span className="text-sm font-bold text-purple-400">{m.referralCount}</span>
                   </div>
                   <div className="flex-1">
-                    <p className="text-sm font-medium text-white">{m.description || `${m.referralCount} filleuls`}</p>
-                    <p className="text-xs text-slate-500">Prime: {m.reward.toFixed(2)} TON</p>
+                    <p className="text-sm font-medium text-white">{m.description || `${m.referralCount} referrals`}</p>
+                    <p className="text-xs text-slate-500">Bonus: {m.reward.toFixed(2)} TON</p>
                   </div>
                   <div className="flex items-center gap-1">
                     <button onClick={() => startEdit(m)} className="p-1.5 rounded-lg hover:bg-white/5 text-slate-400 hover:text-white transition-colors">
@@ -133,9 +133,9 @@ export const AdminReferrals: React.FC = () => {
 
       {/* Top Referrers */}
       <div className="glass-card p-5">
-        <h3 className="text-sm font-semibold text-white mb-4">Top Parrains</h3>
+        <h3 className="text-sm font-semibold text-white mb-4">Top Referrers</h3>
         <div className="space-y-3">
-          {topReferrers.length === 0 && <p className="text-sm text-slate-500 text-center py-4">Aucun utilisateur pour l'instant</p>}
+          {topReferrers.length === 0 && <p className="text-sm text-slate-500 text-center py-4">No users yet</p>}
           {topReferrers.map((user, i) => (
             <div key={user.id} className="flex items-center gap-3 p-3 rounded-lg bg-white/[0.02]">
               <span className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${i === 0 ? 'bg-amber-500/20 text-amber-400' : i === 1 ? 'bg-slate-300/20 text-slate-300' : i === 2 ? 'bg-orange-700/20 text-orange-400' : 'bg-white/5 text-slate-400'}`}>
@@ -146,8 +146,8 @@ export const AdminReferrals: React.FC = () => {
                 <p className="text-xs text-slate-500">Code: {user.referralCode}</p>
               </div>
               <div className="text-right">
-                <p className="text-sm font-semibold text-purple-400">{user.referralCount} filleuls</p>
-                <p className="text-xs text-slate-500">{user.totalEarnings.toFixed(2)} TON gagnés</p>
+                <p className="text-sm font-semibold text-purple-400">{user.referralCount} referrals</p>
+                <p className="text-xs text-slate-500">{user.totalEarnings.toFixed(2)} TON earned</p>
               </div>
             </div>
           ))}
@@ -164,18 +164,18 @@ export const AdminShop: React.FC = () => {
     <div className="space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-white">Boutique</h2>
-          <p className="text-slate-400 text-sm mt-1">Gestion des articles de la boutique</p>
+          <h2 className="text-2xl font-bold text-white">Shop</h2>
+          <p className="text-slate-400 text-sm mt-1">Shop item management</p>
         </div>
         <button onClick={() => openModal('shopItem')} className="btn-primary px-4 py-2.5 rounded-xl text-sm font-medium text-white flex items-center gap-2">
-          <Plus className="w-4 h-4" /> Nouvel article
+          <Plus className="w-4 h-4" /> New item
         </button>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {shopItems.length === 0 && (
           <div className="col-span-full glass-card p-10 text-center">
-            <p className="text-sm text-slate-500">Aucun article dans la boutique pour l'instant</p>
+            <p className="text-sm text-slate-500">No items in the shop yet</p>
           </div>
         )}
         {shopItems.map(item => (
@@ -200,14 +200,14 @@ export const AdminShop: React.FC = () => {
             <p className="text-xs text-slate-400 mb-3">{item.description}</p>
             <div className="flex items-center justify-between">
               <span className="text-lg font-bold text-emerald-400">{item.price.toFixed(2)} {item.currency === 'xp' ? 'XP' : item.currency === 'bonus' ? 'Bonus' : 'TON'}</span>
-              <span className="text-xs text-slate-500">{item.purchases} achats</span>
+              <span className="text-xs text-slate-500">{item.purchases} purchases</span>
             </div>
             {item.maxPurchases && (
               <div className="mt-2">
                 <div className="progress-bar">
                   <div className="progress-bar-fill bg-gradient-to-r from-purple-500 to-pink-500" style={{ width: `${(item.purchases / item.maxPurchases) * 100}%` }} />
                 </div>
-                <p className="text-[10px] text-slate-500 mt-1">{item.purchases}/{item.maxPurchases} disponibles</p>
+                <p className="text-[10px] text-slate-500 mt-1">{item.purchases}/{item.maxPurchases} available</p>
               </div>
             )}
           </div>
