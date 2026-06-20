@@ -179,8 +179,11 @@ async def api_tasks_stream(request: web.Request) -> web.StreamResponse:
         except ValueError: pass
     return resp
 
-# In-memory rate-limit buckets  {ip: [timestamps]}
-_rate_buckets: dict[str, list[float]] = defaultdict(list)
+# In-memory rate-limit buckets  {ip: [timestamps]} and {telegram_id: [timestamps]}
+_rate_buckets:      dict[str, list[float]] = defaultdict(list)
+_user_rate_buckets: dict[int, list[float]] = defaultdict(list)
+# Tighter per-user limits for financial endpoints (10 req/min)
+USER_FINANCIAL_RATE_MAX = int(os.getenv("USER_FINANCIAL_RATE_MAX", "10"))
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -195,6 +198,18 @@ def _is_rate_limited(ip: str) -> bool:
     cutoff = now - RATE_LIMIT_WINDOW
     _rate_buckets[ip] = bucket = [t for t in _rate_buckets[ip] if t > cutoff]
     if len(bucket) >= RATE_LIMIT_MAX:
+        return True
+    bucket.append(now)
+    return False
+
+
+def _is_user_rate_limited(telegram_id: int, max_per_window: int = USER_FINANCIAL_RATE_MAX) -> bool:
+    """Per-user rate limit — not spoofable via X-Forwarded-For since telegram_id
+    comes from HMAC-validated initData."""
+    now = time.time()
+    cutoff = now - RATE_LIMIT_WINDOW
+    _user_rate_buckets[telegram_id] = bucket = [t for t in _user_rate_buckets[telegram_id] if t > cutoff]
+    if len(bucket) >= max_per_window:
         return True
     bucket.append(now)
     return False
@@ -1395,6 +1410,9 @@ async def api_withdrawal_create(request: web.Request) -> web.Response:
                 log.warning("Withdrawal impersonation: claimed=%d authed=%d addr=%s",
                             telegram_id, authed_id, address[:12])
             return web.json_response({"error": "Authentification requise"}, status=401, headers=_CORS)
+
+    if _is_user_rate_limited(telegram_id, max_per_window=5):
+        return web.json_response({"error": "Too many withdrawal attempts"}, status=429, headers=_CORS)
 
     async with aiosqlite.connect(DB_PATH) as db:
         # ── User status check ──────────────────────────────────────────────────
@@ -3770,6 +3788,9 @@ async def api_platform_task_complete(request: web.Request) -> web.Response:
     if not _verify_user_request(init_data, telegram_id):
         return web.json_response({"error": "Unauthorized"}, status=401, headers=_CORS)
 
+    if _is_user_rate_limited(telegram_id):
+        return web.json_response({"error": "Rate limit exceeded"}, status=429, headers=_CORS)
+
     task_cfg = PLATFORM_TASKS.get(task_id)
     if not task_cfg:
         return web.json_response({"error": "Unknown platform task"}, status=404, headers=_CORS)
@@ -3974,6 +3995,9 @@ async def api_game_result(request: web.Request) -> web.Response:
     if not _verify_user_request(init_data, telegram_id):
         return web.json_response({"error": "Authentification requise"}, status=401, headers=_CORS)
 
+    if _is_user_rate_limited(telegram_id):
+        return web.json_response({"error": "Rate limit exceeded"}, status=429, headers=_CORS)
+
     # Validate game name
     game_cfg = GAME_CONFIG.get(game)
     if not game_cfg:
@@ -4090,6 +4114,9 @@ async def api_referral_milestone_claim(request: web.Request) -> web.Response:
     if not _verify_user_request(init_data, telegram_id):
         return web.json_response({"error": "Authentification requise"}, status=401, headers=_CORS)
 
+    if _is_user_rate_limited(telegram_id, max_per_window=5):
+        return web.json_response({"error": "Rate limit exceeded"}, status=429, headers=_CORS)
+
     async with aiosqlite.connect(DB_PATH) as db:
         # Load milestone config from platform_config (admin-overridable)
         async with db.execute(
@@ -4189,6 +4216,9 @@ async def api_welcome_bonus(request: web.Request) -> web.Response:
     if not _verify_user_request(init_data, telegram_id):
         return web.json_response({"error": "Authentification requise"}, status=401, headers=_CORS)
 
+    if _is_user_rate_limited(telegram_id, max_per_window=3):
+        return web.json_response({"error": "Rate limit exceeded"}, status=429, headers=_CORS)
+
     async with aiosqlite.connect(DB_PATH) as db:
         # Check user exists and is not banned
         async with db.execute(
@@ -4249,7 +4279,7 @@ async def api_welcome_bonus(request: web.Request) -> web.Response:
 # ── Web Application ────────────────────────────────────────────────────────────
 
 async def start_web() -> None:
-    app = web.Application()
+    app = web.Application(client_max_size=6 * 1024 * 1024)  # 6 MB — covers proof screenshots
 
     # Static / health
     app.router.add_get("/health",                          health)
