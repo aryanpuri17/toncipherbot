@@ -514,6 +514,29 @@ export const MiniAppTasks: React.FC = () => {
     haptic.success();
   };
 
+  const getTaskAccent = (card: CardTask): { from: string; to: string; glow: string; badge: string; badgeColor: string } => {
+    const url = (card.targetUrl ?? '').toLowerCase();
+    if (card.type === 'join_channel' || card.type === 'join_group')
+      return { from: '#29B6F6', to: '#0288D1', glow: 'rgba(41,182,246,0.35)', badge: 'TELEGRAM', badgeColor: '#29B6F6' };
+    if (card.type === 'start_bot')
+      return { from: '#7C3AED', to: '#5B21B6', glow: 'rgba(124,58,237,0.35)', badge: 'BOT', badgeColor: '#a78bfa' };
+    if (url.includes('youtube') || url.includes('youtu.be'))
+      return { from: '#EF4444', to: '#DC2626', glow: 'rgba(239,68,68,0.35)', badge: 'YOUTUBE', badgeColor: '#f87171' };
+    if (url.includes('twitter') || url.includes('x.com'))
+      return { from: '#94a3b8', to: '#64748b', glow: 'rgba(148,163,184,0.3)', badge: 'X', badgeColor: '#cbd5e1' };
+    if (url.includes('instagram'))
+      return { from: '#C13584', to: '#833AB4', glow: 'rgba(193,53,132,0.35)', badge: 'INSTAGRAM', badgeColor: '#e879f9' };
+    if (url.includes('tiktok'))
+      return { from: '#69C9D0', to: '#EE1D52', glow: 'rgba(105,201,208,0.35)', badge: 'TIKTOK', badgeColor: '#69C9D0' };
+    if (url.includes('discord'))
+      return { from: '#5865F2', to: '#4338CA', glow: 'rgba(88,101,242,0.35)', badge: 'DISCORD', badgeColor: '#818cf8' };
+    if (card.type === 'watch_video')
+      return { from: '#EF4444', to: '#DC2626', glow: 'rgba(239,68,68,0.35)', badge: 'VIDÉO', badgeColor: '#f87171' };
+    if (card.type === 'social')
+      return { from: '#8B5CF6', to: '#7C3AED', glow: 'rgba(139,92,246,0.35)', badge: 'SOCIAL', badgeColor: '#a78bfa' };
+    return { from: '#3B82F6', to: '#2563EB', glow: 'rgba(59,130,246,0.35)', badge: 'TÂCHE', badgeColor: '#60a5fa' };
+  };
+
   const renderCard = (card: CardTask) => {
     const config      = typeConfig[card.type] ?? typeConfig.special;
     const phase       = getPhase(card.id);
@@ -525,6 +548,9 @@ export const MiniAppTasks: React.FC = () => {
     const isDone        = isCompleted || phase === 'done';
     const displayReward = card.reward * (card.promoMultiplier ?? 1);
     const avatarBg      = card.source === 'api' ? taskAvatarColor(card.title) : null;
+    const accent        = isDone
+      ? { from: '#34d399', to: '#059669', glow: 'rgba(52,211,153,0.3)', badge: '✓ FAIT', badgeColor: '#34d399' }
+      : getTaskAccent(card);
 
     const icon = (() => {
       if (isDone) return <CheckCircle style={{ width: 26, height: 26, color: '#34d399' }} />;
@@ -555,11 +581,20 @@ export const MiniAppTasks: React.FC = () => {
 
     return (
       <div key={card.id} style={{
-        background: isDone ? 'rgba(52,211,153,0.04)' : 'rgba(255,255,255,0.04)',
-        borderRadius: 14,
-        border: isDone ? '1px solid rgba(52,211,153,0.15)' : '1px solid rgba(255,255,255,0.06)',
+        background: `linear-gradient(135deg,${accent.from}18,${accent.to}0c)`,
+        borderRadius: 16,
+        border: `1px solid ${accent.from}50`,
         overflow: 'hidden',
+        position: 'relative',
       }}>
+        {/* Type badge */}
+        <span style={{
+          position: 'absolute', top: 10, right: 10, zIndex: 2,
+          fontSize: 8, fontWeight: 800, padding: '2px 7px', borderRadius: 20,
+          background: `${accent.badgeColor}22`, color: accent.badgeColor,
+          border: `1px solid ${accent.badgeColor}44`, letterSpacing: '0.08em',
+        }}>{accent.badge}</span>
+
         {/* Promo accent */}
         {card.promoMultiplier && (
           <div style={{ height: 2, background: 'linear-gradient(90deg, #f59e0b, #fbbf24)' }} />
@@ -569,14 +604,15 @@ export const MiniAppTasks: React.FC = () => {
           {/* Top row: icon + title/desc */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <div style={{
-              width: 48, height: 48, borderRadius: 12, flexShrink: 0,
-              background: avatarBg ? `${avatarBg}22` : 'rgba(255,255,255,0.06)',
-              border: '1px solid rgba(255,255,255,0.08)',
+              width: 48, height: 48, borderRadius: 14, flexShrink: 0,
+              background: `linear-gradient(135deg,${accent.from}33,${accent.to}22)`,
+              border: `1px solid ${accent.from}44`,
+              boxShadow: `0 4px 14px ${accent.glow}`,
               display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
             }}>
               {icon}
             </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ flex: 1, minWidth: 0, paddingRight: 48 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                 <span style={{ fontSize: 14, fontWeight: 700, color: '#f8fafc' }}>{card.title}</span>
                 {card.promoMultiplier && (
@@ -591,15 +627,18 @@ export const MiniAppTasks: React.FC = () => {
             </div>
           </div>
 
+          {/* Accent line */}
+          <div style={{ margin: '10px 0 0', height: '1.5px', borderRadius: 99, width: '45%', background: `linear-gradient(90deg,${accent.from},transparent)` }} />
+
           {/* Bottom row: reward + action */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <svg width="16" height="16" viewBox="0 0 56 56" fill="none" style={{ flexShrink: 0 }}>
                 <circle cx="28" cy="28" r="28" fill="#0098EA"/>
                 <path d="M37.5603 15.6277H18.4386C14.9228 15.6277 12.7547 19.4202 14.5145 22.4798L26.9572 44.1141C27.5004 45.0567 28.8567 45.0567 29.3999 44.1141L41.8427 22.4798C43.6025 19.4202 41.4344 15.6277 37.5603 15.6277Z" fill="white"/>
                 <path opacity="0.5" d="M28.0001 15.6277H18.4386C14.9228 15.6277 12.7547 19.4202 14.5145 22.4798L20.2931 32.4371L28.0001 15.6277Z" fill="white"/>
               </svg>
-              <span style={{ fontSize: 13, fontWeight: 800, color: card.promoMultiplier ? '#fbbf24' : '#60a5fa' }}>
+              <span style={{ fontSize: 13, fontWeight: 800, color: card.promoMultiplier ? '#fbbf24' : accent.from }}>
                 {displayReward.toFixed(3)}
               </span>
               <span style={{ fontSize: 10, color: '#475569', fontWeight: 600 }}>GRAM</span>
@@ -774,28 +813,34 @@ export const MiniAppTasks: React.FC = () => {
   const totalAvailable = allCards.filter(c => !completedTaskIds.includes(c.id) && !completedApiTaskIds.includes(c.id)).length
     + promoTasks.filter(c => !completedTaskIds.includes(c.id)).length;
 
-  const SectionHead = ({ title, hint, infoOnly }: { title: string; hint?: string; infoOnly?: boolean }) => (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, marginTop: 4 }}>
-      <span style={{ fontSize: 17, fontWeight: 800, color: '#f8fafc' }}>{title}</span>
-      {!infoOnly && hint && (
-        <button
-          onClick={() => { localStorage.setItem('tc_create_type_hint', hint); setMiniAppPage('createTask'); }}
-          style={{
-            width: 34, height: 34, borderRadius: 10,
-            background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
-            color: '#94a3b8', fontSize: 20, lineHeight: 1,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            cursor: 'pointer', flexShrink: 0,
-          }}
-        >+</button>
-      )}
-      {infoOnly && (
-        <div style={{ width: 34, height: 34, borderRadius: 10, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <Star style={{ width: 15, height: 15, color: '#f59e0b' }} />
+  const SectionHead = ({ title, hint, infoOnly, accentColor }: { title: string; hint?: string; infoOnly?: boolean; accentColor?: string }) => {
+    const col = accentColor ?? '#3b82f6';
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, marginTop: 4 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ width: 3, height: 18, borderRadius: 99, background: `linear-gradient(180deg,${col},${col}55)`, flexShrink: 0 }} />
+          <span style={{ fontSize: 15, fontWeight: 800, color: '#f8fafc', letterSpacing: '0.01em' }}>{title}</span>
         </div>
-      )}
-    </div>
-  );
+        {!infoOnly && hint && (
+          <button
+            onClick={() => { localStorage.setItem('tc_create_type_hint', hint); setMiniAppPage('createTask'); }}
+            style={{
+              width: 30, height: 30, borderRadius: 9,
+              background: `${col}18`, border: `1px solid ${col}40`,
+              color: col, fontSize: 18, lineHeight: 1,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              cursor: 'pointer', flexShrink: 0,
+            }}
+          >+</button>
+        )}
+        {infoOnly && (
+          <div style={{ width: 30, height: 30, borderRadius: 9, background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Star style={{ width: 14, height: 14, color: '#f59e0b' }} />
+          </div>
+        )}
+      </div>
+    );
+  };
 
   const EmptyCard = ({ text }: { text: string }) => (
     <div style={{ padding: '16px', borderRadius: 12, background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', textAlign: 'center' }}>
@@ -832,7 +877,7 @@ export const MiniAppTasks: React.FC = () => {
 
         {/* Telegram */}
         <div>
-          <SectionHead title="Telegram" hint="join_channel" />
+          <SectionHead title="Telegram" hint="join_channel" accentColor="#29B6F6" />
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {telegramCards.length === 0
               ? <EmptyCard text="No tasks" />
@@ -842,7 +887,7 @@ export const MiniAppTasks: React.FC = () => {
 
         {/* Réseaux sociaux & YouTube (combined, bottom before promo) */}
         <div>
-          <SectionHead title="Réseaux sociaux" hint="social" />
+          <SectionHead title="Réseaux sociaux" hint="social" accentColor="#8B5CF6" />
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {socialCards.length === 0
               ? <EmptyCard text="No tasks" />
@@ -853,7 +898,7 @@ export const MiniAppTasks: React.FC = () => {
         {/* Promo / Spécial */}
         {promoTasks.length > 0 && (
           <div>
-            <SectionHead title="⭐ Promo" infoOnly />
+            <SectionHead title="⭐ Promo" infoOnly accentColor="#f59e0b" />
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {promoTasks.map(task => {
                 const isAutoReferral = task.verificationMethod === 'auto_referral';
