@@ -241,7 +241,7 @@ export const MiniAppTasks: React.FC = () => {
 
   // Ticker to re-evaluate departure state periodically
   useEffect(() => {
-    const interval = setInterval(() => setTick(t => t + 1), 2000);
+    const interval = setInterval(() => setTick(t => t + 1), 1000);
     return () => clearInterval(interval);
   }, []);
 
@@ -698,8 +698,7 @@ export const MiniAppTasks: React.FC = () => {
                 </span>
               </div>
             )}
-            {!isDone && phase === 'too_early' && !isSocialOrVideo && arrowBtn(() => {}, true)}
-            {!isDone && phase === 'too_early' && isSocialOrVideo && arrowBtn(() => handleJoin(card))}
+            {!isDone && phase === 'too_early' && arrowBtn(() => {}, true)}
             {!isDone && (phase === 'not_subscribed' || phase === 'needs_bot_confirm') && arrowBtn(() => void handleVerify(card))}
           </div>
         </div>
@@ -708,30 +707,41 @@ export const MiniAppTasks: React.FC = () => {
         {phase === 'too_early' && (
           <div style={{
             borderTop: '1px solid rgba(255,255,255,0.06)',
-            padding: '8px 14px',
-            background: isSocialOrVideo ? 'rgba(245,158,11,0.05)' : 'rgba(59,130,246,0.05)',
+            padding: '10px 14px',
+            background: remainingSec > 0 ? 'rgba(245,158,11,0.06)' : 'rgba(52,211,153,0.05)',
             display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
           }}>
-            {isSocialOrVideo ? (
+            {remainingSec > 0 ? (
               <>
-                <span style={{ fontSize: 11, color: '#fbbf24', fontWeight: 600 }}>⚠️ Revenu trop tôt — retournez et revenez</span>
-                <button onClick={() => handleJoin(card)} style={{ padding: '5px 10px', borderRadius: 8, background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.3)', color: '#fbbf24', fontSize: 10, fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}>
-                  Retourner
-                </button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{
+                    width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
+                    background: 'rgba(245,158,11,0.12)', border: '2px solid rgba(245,158,11,0.4)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    <span style={{ fontSize: 13, fontWeight: 900, color: '#fbbf24' }}>{remainingSec}</span>
+                  </div>
+                  <div>
+                    <span style={{ fontSize: 12, color: '#fbbf24', fontWeight: 700, display: 'block' }}>
+                      ⏳ Patience — {remainingSec}s restantes
+                    </span>
+                    <span style={{ fontSize: 10, color: '#92400e' }}>
+                      {isSocialOrVideo ? 'Reste sur la page avant de revenir' : 'Vérification automatique en cours…'}
+                    </span>
+                  </div>
+                </div>
+                {isSocialOrVideo && (
+                  <button onClick={() => handleJoin(card)} style={{ padding: '5px 10px', borderRadius: 8, background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.3)', color: '#fbbf24', fontSize: 10, fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}>
+                    Retourner
+                  </button>
+                )}
               </>
             ) : (
               <>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  {[0,1,2].map(i => (
-                    <div key={i} style={{ width: 6, height: 6, borderRadius: '50%', background: '#3b82f6', animation: `pulse 1.2s ease-in-out ${i*0.2}s infinite` }} />
-                  ))}
-                  <span style={{ fontSize: 11, color: '#60a5fa', fontWeight: 600 }}>En cours de vérification…</span>
-                </div>
-                {remainingSec === 0 && (
-                  <button onClick={() => void handleVerify(card)} style={{ padding: '5px 10px', borderRadius: 8, background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.3)', color: '#60a5fa', fontSize: 10, fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}>
-                    Vérifier
-                  </button>
-                )}
+                <span style={{ fontSize: 12, color: '#34d399', fontWeight: 700 }}>✓ Temps écoulé — tu peux vérifier</span>
+                <button onClick={() => void handleVerify(card)} style={{ padding: '5px 12px', borderRadius: 8, background: 'rgba(52,211,153,0.15)', border: '1px solid rgba(52,211,153,0.3)', color: '#34d399', fontSize: 10, fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}>
+                  Vérifier
+                </button>
               </>
             )}
           </div>
