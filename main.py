@@ -2674,6 +2674,10 @@ async def api_user_task_mine(request: web.Request) -> web.Response:
 
 
 async def api_user_task_available(request: web.Request) -> web.Response:
+    ip = _client_ip(request)
+    if _is_rate_limited(ip):
+        return web.json_response([], headers=_CORS)
+
     try:
         telegram_id = int(request.rel_url.query.get("telegram_id", 0))
     except (ValueError, TypeError):
@@ -3602,6 +3606,10 @@ async def _fetch_ton_price_usd() -> float | None:
 
 async def api_ton_price(request: web.Request) -> web.Response:
     """Return current TON/USD price for the frontend."""
+    ip = _client_ip(request)
+    if _is_rate_limited(ip):
+        return web.json_response({"error": "Rate limit exceeded"}, status=429, headers=_CORS)
+
     price = await _fetch_ton_price_usd()
     if price:
         return web.json_response({"price": price}, headers=_CORS)
