@@ -759,6 +759,19 @@ async def _log_fraud_alert(
         " VALUES (?, ?, ?, ?, ?, ?)",
         (telegram_id, username, alert_type, details, sev, score),
     )
+    # Auto-action based on severity: ban outright if critical, block withdrawals if high
+    if sev == "critical":
+        await db.execute(
+            "UPDATE users SET banned = 1, flagged = 1 WHERE telegram_id = ?", (telegram_id,)
+        )
+        log.warning("FRAUD AUTO-BAN user=%d @%s score=%d", telegram_id, username, score)
+    elif sev == "high":
+        await db.execute(
+            "UPDATE users SET withdrawal_blocked = 1, flagged = 1 WHERE telegram_id = ?", (telegram_id,)
+        )
+        log.warning("FRAUD AUTO-BLOCK-WD user=%d @%s score=%d", telegram_id, username, score)
+    else:
+        await db.execute("UPDATE users SET flagged = 1 WHERE telegram_id = ?", (telegram_id,))
     log.warning("FRAUD [%s] user=%d @%s score=%d — %s", sev.upper(), telegram_id, username, score, details)
 
 
@@ -1156,15 +1169,15 @@ async def api_user_init(request: web.Request) -> web.Response:
                 details=f"IP={ip} violations={violations} other_accounts_on_ip={ip_count}",
                 score=score,
             )
-            await db.execute("UPDATE users SET flagged = 1 WHERE telegram_id = ?", (telegram_id,))
             sev_label = _severity(score).upper()
+            auto_action = "🔨 Auto-banned." if sev_label == "CRITICAL" else "🔒 Withdrawals auto-blocked." if sev_label == "HIGH" else "⚑ Flagged for review."
             await _notify_admin(
                 f"⚠️ <b>Suspicious activity [{sev_label}]</b>\n"
                 f"👤 @{username or 'unknown'} (ID: <code>{telegram_id}</code>)\n"
                 f"🚨 Reasons: {', '.join(violations)}\n"
                 f"📊 Risk score: {score}/100\n"
-                f"ℹ️ This account is <b>flagged</b> — no automatic ban.\n"
-                f"👉 Check the admin panel to decide."
+                f"✅ {auto_action}\n"
+                f"👉 Check the admin panel to review or unblock."
             )
 
         await db.commit()
@@ -2611,14 +2624,27 @@ async def api_admin_resolve_alert(request: web.Request) -> web.Response:
     action = str(data.get("action", "resolve"))
 
     async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute("UPDATE fraud_alerts SET resolved = 1 WHERE id = ?", (alert_id,))
+        async with db.execute("SELECT telegram_id FROM fraud_alerts WHERE id = ?", (alert_id,)) as cur:
+            row = await cur.fetchone()
+        tid = row[0] if row else None
+
         if action == "ban":
-            async with db.execute("SELECT telegram_id FROM fraud_alerts WHERE id = ?", (alert_id,)) as cur:
-                row = await cur.fetchone()
-            if row and row[0] > 0:
+            await db.execute("UPDATE fraud_alerts SET resolved = 1 WHERE id = ?", (alert_id,))
+            if tid:
                 await db.execute(
-                    "UPDATE users SET banned = 1, flagged = 1 WHERE telegram_id = ?", (row[0],)
+                    "UPDATE users SET banned = 1, flagged = 1 WHERE telegram_id = ?", (tid,)
                 )
+        elif action == "unban":
+            # Resolve all alerts for this user and fully unblock them
+            if tid:
+                await db.execute("UPDATE fraud_alerts SET resolved = 1 WHERE telegram_id = ?", (tid,))
+                await db.execute(
+                    "UPDATE users SET banned = 0, flagged = 0, withdrawal_blocked = 0 WHERE telegram_id = ?",
+                    (tid,)
+                )
+        else:
+            # resolve only
+            await db.execute("UPDATE fraud_alerts SET resolved = 1 WHERE id = ?", (alert_id,))
         await db.commit()
 
     return web.json_response({"success": True}, headers=_CORS)

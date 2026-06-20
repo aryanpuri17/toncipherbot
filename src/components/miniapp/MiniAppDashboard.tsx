@@ -79,8 +79,25 @@ export const MiniAppDashboard: React.FC = () => {
           <p className="text-slate-400 text-sm">Hello 👋</p>
           <h1 className="text-xl font-bold text-white">{u.firstName}</h1>
         </div>
-        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-sm font-bold text-white">
-          {u.firstName?.charAt(0) ?? '?'}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              haptic.impact('light');
+              const tg = (window as unknown as { Telegram?: { WebApp?: { openTelegramLink?: (u: string) => void } } }).Telegram?.WebApp;
+              if (tg?.openTelegramLink) {
+                tg.openTelegramLink('https://t.me/puriaryan');
+              } else {
+                window.open('https://t.me/puriaryan', '_blank');
+              }
+            }}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-all tap-scale"
+            style={{ background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.25)', color: '#93c5fd' }}
+          >
+            🎧 Support
+          </button>
+          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-sm font-bold text-white">
+            {u.firstName?.charAt(0) ?? '?'}
+          </div>
         </div>
       </div>
 
