@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAppStore } from '../../store/appStore';
-import { ArrowUpRight, ArrowDownLeft, ListTodo, ChevronRight, TrendingUp, Flame, Gift, Loader2, Users } from 'lucide-react';
+import { ArrowUpRight, ArrowDownLeft, ListTodo, ChevronRight, TrendingUp, Flame, Gift, Loader2 } from 'lucide-react';
 import { CountUp } from '../ui/CountUp';
 import { haptic } from '../../lib/haptics';
 
@@ -80,21 +80,6 @@ export const MiniAppDashboard: React.FC = () => {
           <h1 className="text-xl font-bold text-white">{u.firstName}</h1>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => {
-              haptic.impact('light');
-              const tg = (window as unknown as { Telegram?: { WebApp?: { openTelegramLink?: (u: string) => void } } }).Telegram?.WebApp;
-              if (tg?.openTelegramLink) {
-                tg.openTelegramLink('https://t.me/puriaryan');
-              } else {
-                window.open('https://t.me/puriaryan', '_blank');
-              }
-            }}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-all tap-scale"
-            style={{ background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.25)', color: '#93c5fd' }}
-          >
-            🎧 Support
-          </button>
           <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-sm font-bold text-white">
             {u.firstName?.charAt(0) ?? '?'}
           </div>
@@ -144,27 +129,6 @@ export const MiniAppDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Referral invite banner */}
-      <button
-        onClick={() => setMiniAppPage('referral')}
-        className="tap-scale w-full flex items-center gap-3 p-3.5 rounded-2xl bg-gradient-to-r from-purple-600/20 via-blue-600/15 to-purple-600/20 border border-purple-500/25 hover:border-purple-500/40 transition-all"
-      >
-        <div className="w-10 h-10 rounded-xl bg-purple-500/25 flex items-center justify-center shrink-0">
-          <Users className="w-5 h-5 text-purple-300" />
-        </div>
-        <div className="flex-1 text-left">
-          <p className="text-sm font-semibold text-white">Invite your friends</p>
-          <p className="text-xs text-purple-300">
-            {u.referralCount > 0
-              ? `${u.referralCount} friend${u.referralCount !== 1 ? 's' : ''} invited · ${(u.referralCount * platformConfig.referralBonusSignup).toFixed(2)} GRAM earned`
-              : `Earn ${platformConfig.referralBonusSignup.toFixed(2)} GRAM per friend who signs up`}
-          </p>
-        </div>
-        <div className="shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-lg bg-purple-500/20 border border-purple-500/30">
-          <span className="text-xs font-bold text-purple-300">+{platformConfig.referralBonusSignup.toFixed(0)} GRAM</span>
-          <ChevronRight className="w-3.5 h-3.5 text-purple-400" />
-        </div>
-      </button>
 
       {/* Quick Stats */}
       <div className="grid grid-cols-2 gap-3">

@@ -369,9 +369,9 @@ function diceWinChance(target: number, dir: DiceDir): number {
   return dir === 'under' ? target : 100 - target;
 }
 function diceMultiplier(target: number, dir: DiceDir): number {
-  // 90% RTP: house retains 10% of every bet
+  // 60% RTP: adjusted multiplier so at 50% chance it shows ×1.20
   const wc = Math.max(2, Math.min(98, diceWinChance(target, dir)));
-  return +(90 / wc).toFixed(4);
+  return +(60 / wc).toFixed(4);
 }
 
 function rollDice(target: number, dir: DiceDir): { roll: number; win: boolean } {
@@ -467,7 +467,7 @@ const DiceGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResul
             </div>
             <StreakChip streak={streak} />
           </div>
-          <p className="text-[11px] text-slate-500">Choisissez votre seuil · misez · lancez</p>
+          <p className="text-[11px] text-slate-500">Choose your target · bet · roll</p>
         </div>
         <MuteButton />
         <GameBalanceChip bal={bal} demo={demoMode} />
@@ -497,7 +497,7 @@ const DiceGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResul
           </p>
           {lastRoll != null && !rolling && (
             <p className="text-xs mt-1" style={{ color: lastWin ? '#4ade80' : '#f87171' }}>
-              {lastWin ? `🎉 Gagné +${payout.toFixed(2)} GRAM` : '😔 Perdu — réessayez'}
+              {lastWin ? `🎉 Won +${payout.toFixed(2)} GRAM` : '😔 Lost — try again'}
             </p>
           )}
         </div>
@@ -535,7 +535,7 @@ const DiceGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResul
               color: dir === 'under' ? '#06210f' : '#94a3b8',
               border: dir === 'under' ? 'none' : '1px solid #1e2847',
             }}>
-            Plus bas que {target}
+            Below {target}
           </button>
           <button onClick={() => setDir('over')}
             style={{
@@ -544,7 +544,7 @@ const DiceGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResul
               color: dir === 'over' ? '#06210f' : '#94a3b8',
               border: dir === 'over' ? 'none' : '1px solid #1e2847',
             }}>
-            Plus haut que {target}
+            Above {target}
           </button>
         </div>
 
@@ -555,11 +555,11 @@ const DiceGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResul
             <p style={{ fontSize: 14, fontWeight: 800, color: '#f8fafc' }}>{winChance.toFixed(0)}%</p>
           </div>
           <div style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid #1e2847', borderRadius: 10 }} className="px-2 py-2 text-center">
-            <p style={{ fontSize: 9, color: '#64748b', textTransform: 'uppercase', fontWeight: 600 }}>Multiplicateur</p>
+            <p style={{ fontSize: 9, color: '#64748b', textTransform: 'uppercase', fontWeight: 600 }}>Multiplier</p>
             <p style={{ fontSize: 14, fontWeight: 800, color: '#f8fafc' }}>×{multiplier.toFixed(2)}</p>
           </div>
           <div style={{ background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.2)', borderRadius: 10 }} className="px-2 py-2 text-center">
-            <p style={{ fontSize: 9, color: '#64748b', textTransform: 'uppercase', fontWeight: 600 }}>Gain possible</p>
+            <p style={{ fontSize: 9, color: '#64748b', textTransform: 'uppercase', fontWeight: 600 }}>Potential win</p>
             <p style={{ fontSize: 14, fontWeight: 800, color: '#4ade80' }}>{potentialWin.toFixed(2)}</p>
           </div>
         </div>
@@ -567,7 +567,7 @@ const DiceGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResul
 
       {/* Bet controls */}
       <div className="glass-card p-4 space-y-3">
-        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Montant de la mise</p>
+        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">BET AMOUNT</p>
         <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-xl px-4 py-3">
           <input type="number" value={bet} min={0.005} max={50} step={0.005}
             onChange={e => { const v = +e.target.value; if (!isNaN(v)) setBet(Math.max(0.005, Math.min(50, v))); }}
@@ -581,9 +581,9 @@ const DiceGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResul
               ? 'bg-gradient-to-r from-emerald-500 to-green-500 text-emerald-950 hover:from-emerald-400 hover:to-green-400 active:scale-[0.98] shadow-lg shadow-emerald-500/25'
               : 'bg-white/5 text-slate-600 cursor-not-allowed'
           }`}>
-          {rolling ? <><RotateCcw className="w-4 h-4 animate-spin" /> Lancement…</>
-            : bal < 0.005 ? (demoMode ? '🎮 Démo épuisé' : '💸 Solde insuffisant')
-            : <><Zap className="w-4 h-4" /> Lancer ({effBet.toFixed(2)} GRAM)</>}
+          {rolling ? <><RotateCcw className="w-4 h-4 animate-spin" /> Rolling…</>
+            : bal < 0.005 ? (demoMode ? '🎮 Demo exhausted' : '💸 Insufficient balance')
+            : <><Zap className="w-4 h-4" /> Roll ({effBet.toFixed(2)} GRAM)</>}
         </button>
       </div>
     </div>
@@ -2805,7 +2805,7 @@ const CATALOG = [
     id: 'mines' as ActiveGame,
     title: 'Mines',
     desc: 'Évite les mines, multiplie tes gains',
-    stats: 'multipliers élevés · stratégie',
+    stats: 'high multipliers · strategy',
     emoji: '💎',
     badge: 'STRATÉGIE',
     accentFrom: '#8b5cf6', accentTo: '#a78bfa',
