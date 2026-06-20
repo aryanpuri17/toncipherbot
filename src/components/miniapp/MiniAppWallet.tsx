@@ -772,13 +772,13 @@ export const MiniAppWithdraw: React.FC = () => {
   };
   const netReceived = parsedAmount - calcFee(parsedAmount);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     setError('');
     if (!selected) return;
-    const result = submitWithdrawal(selected.id, parsedAmount, address);
+    const result = await submitWithdrawal(selected.id, parsedAmount, address);
     if (result.success) {
       haptic.success();
-      // Keep address in localStorage so it's pre-filled next time
+      localStorage.setItem('tc_last_wd_addr', address);
       setSuccess(true);
     } else {
       haptic.error();

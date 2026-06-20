@@ -867,7 +867,7 @@ interface AppState {
   completeTask: (taskId: string) => void;
   completeTaskSecure: (taskId: string) => Promise<{ success: boolean; earned?: number; error?: string }>;
   creditReferralBonus: (earned: number) => void;
-  submitWithdrawal: (networkId: string, amount: number, address: string) => { success: boolean; error?: string };
+  submitWithdrawal: (networkId: string, amount: number, address: string) => Promise<{ success: boolean; error?: string }>;
   claimReferralMilestone: (id: string) => void;
   addReferralMilestone: (milestone: Omit<ReferralMilestone, 'id'>) => void;
   updateReferralMilestone: (id: string, data: Partial<ReferralMilestone>) => void;
@@ -1323,7 +1323,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     get().addTransaction({ userId: state.currentUser.id, type: 'reward', amount: milestone.reward, currency: 'TON', status: 'completed', completedAt: new Date().toISOString() });
   },
 
-  submitWithdrawal: (networkId, amount, address) => {
+  submitWithdrawal: async (networkId, amount, address) => {
     const state = get();
     if (state.currentUser.status !== 'active') return { success: false, error: 'Compte suspendu ou banni. Contactez le support.' };
     if (state.currentUser.withdrawalBlocked) return { success: false, error: 'Retraits bloqués sur ce compte. Contactez le support.' };
@@ -1338,53 +1338,62 @@ export const useAppStore = create<AppState>((set, get) => ({
       return { success: false, error: `${state.currentUser.taskCredits.toFixed(2)} GRAM sont réservés à la création de campagnes et ne peuvent pas être retirés.` };
     }
     if (!address || address.trim().length < 20) return { success: false, error: 'Adresse invalide (trop courte)' };
-    // Per-user daily withdrawal limit
     const perUserDailyLimit = state.dailyLimits.find(l => l.type === 'withdrawal' && l.perUser && l.isActive);
     if (perUserDailyLimit && state.currentUser.dailyWithdrawn + amount > perUserDailyLimit.limit) {
       const remaining = Math.max(0, perUserDailyLimit.limit - state.currentUser.dailyWithdrawn);
       return { success: false, error: `Limite journalière atteinte. Restant: ${remaining.toFixed(2)} ${network.symbol}` };
     }
-    // Per-network daily limit
     if (network.dailyWithdrawalLimit > 0 && amount > network.dailyWithdrawalLimit) {
       return { success: false, error: `Limite réseau dépassée: max ${network.dailyWithdrawalLimit} ${network.symbol}/jour` };
     }
-    // Platform-wide pending withdrawals cap
-    const pendingCount = state.transactions.filter(t => t.type === 'withdrawal' && t.status === 'pending').length;
-    if (pendingCount >= state.platformConfig.maxPendingWithdrawals) {
-      return { success: false, error: 'Trop de retraits en attente. Réessayez plus tard.' };
-    }
-    set(s => ({
-      currentUser: {
-        ...s.currentUser,
-        balanceMain: s.currentUser.balanceMain - amount,
-        dailyWithdrawn: s.currentUser.dailyWithdrawn + amount,
-      },
-      users: s.users.map(u => u.id === state.currentUser.id
-        ? { ...u, balanceMain: u.balanceMain - amount, dailyWithdrawn: u.dailyWithdrawn + amount }
-        : u),
-    }));
-    // Generate the ID upfront so the local transaction and the backend record always match
-    const withdrawalId = generateId();
-    set(s => ({ transactions: [{ userId: state.currentUser.id, type: 'withdrawal' as const, amount, currency: network.symbol, network: network.network, address: address.trim(), status: 'pending' as const, fee: network.withdrawalFee, id: withdrawalId, createdAt: new Date().toISOString() }, ...s.transactions] }));
-    // Record in backend (fire-and-forget — app works offline too)
     const initData = (window as unknown as { Telegram?: { WebApp?: { initData?: string } } })?.Telegram?.WebApp?.initData ?? '';
-    void fetch('/api/withdrawal/create', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        id: withdrawalId,
-        telegramId: state.currentUser.telegramId,
-        username: state.currentUser.username,
-        firstName: state.currentUser.firstName,
-        amount,
-        currency: network.symbol,
-        network: network.network,
-        address: address.trim(),
-        fee: network.withdrawalFee,
-        initData,
-      }),
-    }).catch(() => {});
-    return { success: true };
+    try {
+      const res = await fetch('/api/withdrawal/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          telegramId: state.currentUser.telegramId,
+          username: state.currentUser.username,
+          firstName: state.currentUser.firstName,
+          amount,
+          currency: network.symbol,
+          network: network.network,
+          address: address.trim(),
+          fee: network.withdrawalFee,
+          initData,
+        }),
+      });
+      const body = await res.json() as { success?: boolean; id?: string; error?: string };
+      if (!res.ok || !body.success) {
+        return { success: false, error: body.error ?? `Erreur ${res.status}` };
+      }
+      const serverTxId = body.id!;
+      set(s => ({
+        currentUser: {
+          ...s.currentUser,
+          balanceMain: s.currentUser.balanceMain - amount,
+          dailyWithdrawn: s.currentUser.dailyWithdrawn + amount,
+        },
+        users: s.users.map(u => u.id === state.currentUser.id
+          ? { ...u, balanceMain: u.balanceMain - amount, dailyWithdrawn: u.dailyWithdrawn + amount }
+          : u),
+        transactions: [{
+          id: serverTxId,
+          userId: state.currentUser.id,
+          type: 'withdrawal' as const,
+          amount,
+          currency: network.symbol,
+          network: network.network,
+          address: address.trim(),
+          status: 'pending' as const,
+          fee: network.withdrawalFee,
+          createdAt: new Date().toISOString(),
+        }, ...s.transactions],
+      }));
+      return { success: true };
+    } catch {
+      return { success: false, error: 'Serveur indisponible. Réessayez.' };
+    }
   },
 
   toggleDemoMode: () => set(s => {
