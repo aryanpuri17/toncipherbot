@@ -1223,6 +1223,19 @@ async def api_user_referral(request: web.Request) -> web.Response:
                 )
                 await db.commit()
             return web.json_response({"success": False, "error": "Unauthorized"}, status=401, headers=_CORS)
+        # Ensure initData belongs to the referee — blocks fake referral registration
+        # using a valid but wrong user's initData (identity impersonation).
+        if _init_data_user_id(init_data) != referee_id:
+            async with aiosqlite.connect(DB_PATH) as db:
+                score = _risk_score(["identity_mismatch"])
+                await _log_fraud_alert(
+                    db, referee_id, referee_username,
+                    "identity_mismatch",
+                    f"Referral impersonation: initData user ≠ claimed referee_id={referee_id} from IP={ip}",
+                    score,
+                )
+                await db.commit()
+            return web.json_response({"success": False, "error": "Identity mismatch"}, status=403, headers=_CORS)
 
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute("SELECT referrer_id FROM referrals WHERE referee_id = ?", (referee_id,)) as cur:
@@ -1729,13 +1742,13 @@ async def api_user_withdrawal_status(request: web.Request) -> web.Response:
     if not telegram_id:
         return web.json_response([], headers=_CORS)
 
-    # Verify the request comes from the same user via initData
+    # Require authenticated initData so financial history is user-private
     init_data = request.headers.get("X-Init-Data", "")
-    if BOT_TOKEN and init_data and not _validate_init_data(init_data, BOT_TOKEN):
-        return web.json_response({"error": "Forbidden"}, status=403, headers=_CORS)
-    caller_id = _init_data_user_id(init_data) if init_data else 0
-    if caller_id and caller_id != telegram_id:
-        return web.json_response({"error": "Forbidden"}, status=403, headers=_CORS)
+    if BOT_TOKEN:
+        if not init_data or not _validate_init_data(init_data, BOT_TOKEN):
+            return web.json_response({"error": "Authentication required"}, status=401, headers=_CORS)
+        if _init_data_user_id(init_data) != telegram_id:
+            return web.json_response({"error": "Forbidden"}, status=403, headers=_CORS)
 
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute("""
@@ -1777,13 +1790,13 @@ async def api_user_transactions(request: web.Request) -> web.Response:
     if not telegram_id:
         return web.json_response([], headers=_CORS)
 
-    # Verify the request comes from the same user via initData
+    # Require authenticated initData so financial history is user-private
     init_data = request.headers.get("X-Init-Data", "")
-    if BOT_TOKEN and init_data and not _validate_init_data(init_data, BOT_TOKEN):
-        return web.json_response({"error": "Forbidden"}, status=403, headers=_CORS)
-    caller_id = _init_data_user_id(init_data) if init_data else 0
-    if caller_id and caller_id != telegram_id:
-        return web.json_response({"error": "Forbidden"}, status=403, headers=_CORS)
+    if BOT_TOKEN:
+        if not init_data or not _validate_init_data(init_data, BOT_TOKEN):
+            return web.json_response({"error": "Authentication required"}, status=401, headers=_CORS)
+        if _init_data_user_id(init_data) != telegram_id:
+            return web.json_response({"error": "Forbidden"}, status=403, headers=_CORS)
 
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute("""

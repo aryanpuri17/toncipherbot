@@ -459,7 +459,9 @@ export default function App() {
             initData,
           }),
         }),
-        fetch(`${API}/api/user/transactions?telegram_id=${tgUser.id}`),
+        fetch(`${API}/api/user/transactions?telegram_id=${tgUser.id}`, {
+          headers: { 'X-Init-Data': initData },
+        }),
       ]);
 
       // Fresh device / cleared WebView storage: restore from the server-side

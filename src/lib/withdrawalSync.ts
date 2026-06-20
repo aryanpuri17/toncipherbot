@@ -191,9 +191,13 @@ export function processServerTransactions(list: ServerTx[], suppressEffects = fa
 /** Fetch the caller's deposits + withdrawals and reconcile them locally. */
 export async function syncServerTransactions(telegramId: number, suppressEffects = false): Promise<void> {
   if (!telegramId) return;
+  const initData = (window as unknown as { Telegram?: { WebApp?: { initData?: string } } })
+    ?.Telegram?.WebApp?.initData ?? '';
   let list: ServerTx[];
   try {
-    const res = await fetch(`/api/user/transactions?telegram_id=${telegramId}`);
+    const res = await fetch(`/api/user/transactions?telegram_id=${telegramId}`, {
+      headers: initData ? { 'X-Init-Data': initData } : {},
+    });
     if (!res.ok) return;
     list = await res.json() as ServerTx[];
   } catch { return; }
