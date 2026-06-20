@@ -164,7 +164,7 @@ export function useDepositMonitor(): void {
             });
             const matchTx = useAppStore.getState().transactions.find(t => t.id === match.id);
             if (matchTx) {
-              useAppStore.getState().addNotification({ userId: matchTx.userId, type: 'deposit', title: 'Dépôt confirmé! 🎉', message: `+${gramAmt.toFixed(4)} GRAM crédité (${usdtAmt} USDT converti).`, isRead: false });
+              useAppStore.getState().addNotification({ userId: matchTx.userId, type: 'deposit', title: 'Deposit confirmed! 🎉', message: `+${gramAmt.toFixed(4)} GRAM credited (${usdtAmt} USDT converted).`, isRead: false });
             }
             const matchUser = state.users.find(u => u.id === (state.transactions.find(t => t.id === match.id)?.userId ?? ''));
             if (matchUser?.telegramId) {

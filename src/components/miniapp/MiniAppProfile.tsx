@@ -108,7 +108,7 @@ export const MiniAppProfile: React.FC = () => {
         {[
           {
             value: u.tasksCompleted,
-            label: 'Tâches',
+            label: 'Tasks',
             format: (v: number) => v.toString(),
             color: 'text-violet-300',
             accent: 'rgba(139,92,246,0.06)',
@@ -118,7 +118,7 @@ export const MiniAppProfile: React.FC = () => {
           },
           {
             value: u.referralCount,
-            label: 'Filleuls',
+            label: 'Referrals',
             format: (v: number) => v.toString(),
             color: 'text-violet-300',
             accent: 'rgba(139,92,246,0.06)',
@@ -128,7 +128,7 @@ export const MiniAppProfile: React.FC = () => {
           },
           {
             value: u.totalEarnings,
-            label: 'Total gagné',
+            label: 'Total earned',
             format: (v: number) => `${v.toFixed(2)} GRAM`,
             color: 'text-white',
             accent: 'rgba(0,152,234,0.08)',
@@ -138,7 +138,7 @@ export const MiniAppProfile: React.FC = () => {
           },
           {
             value: u.todayEarnings,
-            label: "Aujourd'hui",
+            label: "Today",
             format: (v: number) => `${v.toFixed(2)} GRAM`,
             color: 'text-emerald-400',
             accent: 'rgba(16,185,129,0.08)',
@@ -176,7 +176,7 @@ export const MiniAppProfile: React.FC = () => {
           <div className="w-9 h-9 rounded-xl bg-amber-500/15 flex items-center justify-center flex-shrink-0">
             <Store className="w-4 h-4 text-amber-400" />
           </div>
-          <span className="text-sm text-white flex-1 text-left">Boutique</span>
+          <span className="text-sm text-white flex-1 text-left">Shop</span>
           <ChevronRight className="w-4 h-4 text-slate-500" />
         </button>
 
@@ -187,7 +187,7 @@ export const MiniAppProfile: React.FC = () => {
           <div className="w-9 h-9 rounded-xl bg-slate-500/15 flex items-center justify-center flex-shrink-0">
             <Settings className="w-4 h-4 text-slate-400" />
           </div>
-          <span className="text-sm text-white flex-1 text-left">Paramètres</span>
+          <span className="text-sm text-white flex-1 text-left">Settings</span>
           <ChevronRight className="w-4 h-4 text-slate-500" />
         </button>
 

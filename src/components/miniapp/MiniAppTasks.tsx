@@ -115,14 +115,14 @@ interface CardTask {
 // ── Static config ──────────────────────────────────────────────────────────────
 
 const typeConfig: Record<string, { icon: React.ReactNode; color: string; label: string }> = {
-  join_channel:   { icon: <Hash className="w-4 h-4" />,     color: 'bg-blue-500/20 text-blue-400',     label: 'Canal' },
-  join_group:     { icon: <Users className="w-4 h-4" />,    color: 'bg-purple-500/20 text-purple-400', label: 'Groupe' },
+  join_channel:   { icon: <Hash className="w-4 h-4" />,     color: 'bg-blue-500/20 text-blue-400',     label: 'Channel' },
+  join_group:     { icon: <Users className="w-4 h-4" />,    color: 'bg-purple-500/20 text-purple-400', label: 'Group' },
   start_bot:      { icon: <Bot className="w-4 h-4" />,      color: 'bg-cyan-500/20 text-cyan-400',     label: 'Bot' },
-  daily:          { icon: <Calendar className="w-4 h-4" />, color: 'bg-amber-500/20 text-amber-400',   label: 'Quotidien' },
-  special:        { icon: <Star className="w-4 h-4" />,     color: 'bg-pink-500/20 text-pink-400',     label: 'Spécial' },
-  watch_video:    { icon: <Play className="w-4 h-4" />,     color: 'bg-red-500/20 text-red-400',       label: 'Vidéo' },
+  daily:          { icon: <Calendar className="w-4 h-4" />, color: 'bg-amber-500/20 text-amber-400',   label: 'Daily' },
+  special:        { icon: <Star className="w-4 h-4" />,     color: 'bg-pink-500/20 text-pink-400',     label: 'Special' },
+  watch_video:    { icon: <Play className="w-4 h-4" />,     color: 'bg-red-500/20 text-red-400',       label: 'Video' },
   social:         { icon: <Globe className="w-4 h-4" />,    color: 'bg-orange-500/20 text-orange-400', label: 'Social' },
-  invite_friends: { icon: <Users className="w-4 h-4" />,    color: 'bg-violet-500/20 text-violet-400', label: 'Parrainage' },
+  invite_friends: { icon: <Users className="w-4 h-4" />,    color: 'bg-violet-500/20 text-violet-400', label: 'Referral' },
 };
 
 
@@ -316,8 +316,8 @@ export const MiniAppTasks: React.FC = () => {
     });
     creditReferralBonus(reward);
     state.addNotification({
-      type: 'reward', title: 'Tâche complétée !',
-      message: `+${reward.toFixed(4)} GRAM crédité.`, isRead: false,
+      type: 'reward', title: 'Task completed!',
+      message: `+${reward.toFixed(4)} GRAM credited.`, isRead: false,
     });
     setCompletedApiTaskIds(prev => [...prev, taskId]);
     setApiTasks(prev => prev.filter(t => t.id !== taskId));
@@ -383,7 +383,7 @@ export const MiniAppTasks: React.FC = () => {
       setPhase(card.id, 'completing');
       const res = await completeTaskSecure(card.id);
       if (!res.success) {
-        setTaskErrors(prev => ({ ...prev, [card.id]: res.error ?? 'Erreur serveur' }));
+        setTaskErrors(prev => ({ ...prev, [card.id]: res.error ?? 'Server error' }));
         setPhase(card.id, 'not_subscribed');
         haptic.error();
         return;
@@ -421,7 +421,7 @@ export const MiniAppTasks: React.FC = () => {
     } else {
       const res = await completeTaskSecure(card.id);
       if (!res.success) {
-        setTaskErrors(prev => ({ ...prev, [card.id]: res.error ?? 'Erreur serveur' }));
+        setTaskErrors(prev => ({ ...prev, [card.id]: res.error ?? 'Server error' }));
         setPhase(card.id, 'not_subscribed');
         haptic.error();
         return;
@@ -519,7 +519,7 @@ export const MiniAppTasks: React.FC = () => {
     } else {
       const res = await completeTaskSecure(card.id);
       if (!res.success) {
-        setTaskErrors(prev => ({ ...prev, [card.id]: res.error ?? 'Erreur serveur' }));
+        setTaskErrors(prev => ({ ...prev, [card.id]: res.error ?? 'Server error' }));
         setPhase(card.id, 'not_subscribed');
         haptic.error();
         return;
@@ -566,7 +566,7 @@ export const MiniAppTasks: React.FC = () => {
     const iconBg     = isDone ? 'rgba(52,211,153,0.18)' : (avatarBg ? `${avatarBg}22` : SIG_ICON);
     const iconBorder = isDone ? '1px solid rgba(52,211,153,0.3)' : `1px solid ${SIG_BORDER}`;
     const iconGlow   = isDone ? '0 4px 14px rgba(52,211,153,0.25)' : `0 4px 14px ${SIG_GLOW}`;
-    const badgeLabel = isDone ? '✓ FAIT' : (config.label ?? 'TÂCHE');
+    const badgeLabel = isDone ? '✓ DONE' : (config.label ?? 'TASK');
     const badgeBg    = isDone ? 'rgba(52,211,153,0.18)' : SIG_ICON;
     const badgeColor = isDone ? '#34d399' : SIG_LIGHT;
     const accentLine = isDone ? '#34d399' : SIG;
@@ -663,7 +663,7 @@ export const MiniAppTasks: React.FC = () => {
             {/* Action button based on phase */}
             {isDone && (
               <div style={{ padding: '6px 10px', borderRadius: 8, background: 'rgba(52,211,153,0.1)', border: '1px solid rgba(52,211,153,0.2)' }}>
-                <span style={{ fontSize: 11, fontWeight: 700, color: '#34d399' }}>✓ Fait</span>
+                <span style={{ fontSize: 11, fontWeight: 700, color: '#34d399' }}>✓ Done</span>
               </div>
             )}
             {!isDone && phase === 'idle' && arrowBtn(() => handleStart(card))}
@@ -671,7 +671,7 @@ export const MiniAppTasks: React.FC = () => {
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <Loader2 style={{ width: 16, height: 16, color: phase === 'completing' ? '#34d399' : '#60a5fa', animation: 'spin 1s linear infinite' }} />
                 <span style={{ fontSize: 11, color: phase === 'completing' ? '#34d399' : '#60a5fa' }}>
-                  {phase === 'completing' ? 'Crédit…' : 'Vérif…'}
+                  {phase === 'completing' ? 'Crediting…' : 'Verifying…'}
                 </span>
               </div>
             )}
@@ -696,7 +696,7 @@ export const MiniAppTasks: React.FC = () => {
             {tooEarlyInfo[card.id] ? (
               <>
                 <span style={{ fontSize: 11, color: '#f87171', fontWeight: 600 }}>
-                  Revenu trop tôt — retourne encore un moment
+                  Too early — go back for a bit longer
                 </span>
                 <button
                   onClick={() => {
@@ -710,7 +710,7 @@ export const MiniAppTasks: React.FC = () => {
                     display: 'flex', alignItems: 'center', gap: 4,
                   }}
                 >
-                  <ChevronRight style={{ width: 12, height: 12 }} /> Retourner
+                  <ChevronRight style={{ width: 12, height: 12 }} /> Go back
                 </button>
               </>
             ) : (
@@ -721,8 +721,8 @@ export const MiniAppTasks: React.FC = () => {
                   )}
                   <span style={{ fontSize: 11, color: '#fbbf24', fontWeight: 600 }}>
                     {(card.type === 'join_channel' || card.type === 'join_group')
-                      ? 'Abonne-toi, puis clique Vérifier'
-                      : 'Rejoins, puis reviens cliquer sur Vérifier'}
+                      ? 'Subscribe, then click Verify'
+                      : 'Join, then come back and click Verify'}
                   </span>
                 </div>
                 <button onClick={() => void handleVerify(card)} style={{
@@ -731,7 +731,7 @@ export const MiniAppTasks: React.FC = () => {
                   color: '#34d399', fontSize: 11, fontWeight: 700, cursor: 'pointer',
                   display: 'flex', alignItems: 'center', gap: 4,
                 }}>
-                  <ShieldCheck style={{ width: 12, height: 12 }} /> Vérifier
+                  <ShieldCheck style={{ width: 12, height: 12 }} /> Verify
                 </button>
               </>
             )}
@@ -743,14 +743,14 @@ export const MiniAppTasks: React.FC = () => {
             <span style={{ fontSize: 11, color: '#f87171', fontWeight: 600, flex: 1 }}>
               {taskErrors[card.id] ?? (
                 (card.type === 'join_channel' || card.type === 'join_group')
-                  ? "Non membre — rejoins d'abord le canal"
+                  ? "Not a member — join the channel first"
                   : (card.type === 'social' || card.type === 'watch_video')
-                    ? 'Trop tôt — reste 30s dans l\'app externe'
-                    : 'Non vérifié — réessaie'
+                    ? 'Too early — stay 30s in the external app'
+                    : 'Not verified — try again'
               )}
             </span>
             <button onClick={() => { setTaskErrors(prev => { const n = { ...prev }; delete n[card.id]; return n; }); void handleVerify(card); }} style={{ padding: '5px 10px', borderRadius: 8, background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)', color: '#f87171', fontSize: 10, fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}>
-              Réessayer
+              Retry
             </button>
           </div>
         )}
@@ -777,10 +777,10 @@ export const MiniAppTasks: React.FC = () => {
                     localStorage.setItem(`tc_proof_sent_${card.id}`, '1');
                     setPhase(card.id, 'proof_pending');
                   } else {
-                    alert('Erreur lors de l\'envoi. Réessayez.');
+                    alert('Upload error. Please try again.');
                   }
                 } catch {
-                  alert('Erreur réseau. Réessayez.');
+                  alert('Network error. Please try again.');
                 } finally {
                   setUploadingProofId(null);
                   e.target.value = '';
@@ -800,8 +800,8 @@ export const MiniAppTasks: React.FC = () => {
               }}
             >
               {uploadingProofId === card.id
-                ? <><Loader2 style={{ width: 12, height: 12, animation: 'spin 1s linear infinite' }} /> Envoi en cours…</>
-                : <><Send style={{ width: 12, height: 12 }} /> 📸 Envoyer une capture d'écran</>
+                ? <><Loader2 style={{ width: 12, height: 12, animation: 'spin 1s linear infinite' }} /> Uploading…</>
+                : <><Send style={{ width: 12, height: 12 }} /> 📸 Send a screenshot</>
               }
             </label>
           </div>
@@ -810,9 +810,9 @@ export const MiniAppTasks: React.FC = () => {
         {phase === 'proof_pending' && (
           <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', padding: '8px 14px', background: 'rgba(100,116,139,0.05)', display: 'flex', alignItems: 'center', gap: 8 }}>
             <Clock style={{ width: 13, height: 13, color: '#64748b' }} />
-            <span style={{ fontSize: 11, color: '#64748b' }}>En attente de validation…</span>
+            <span style={{ fontSize: 11, color: '#64748b' }}>Awaiting approval…</span>
             <button onClick={() => void handleVerify(card)} style={{ marginLeft: 'auto', padding: '4px 10px', borderRadius: 7, background: 'rgba(100,116,139,0.15)', border: '1px solid rgba(100,116,139,0.25)', color: '#94a3b8', fontSize: 10, cursor: 'pointer' }}>
-              Vérifier
+              Verify
             </button>
           </div>
         )}
@@ -866,9 +866,9 @@ export const MiniAppTasks: React.FC = () => {
       <div style={{ marginBottom: 20 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
           <div>
-            <h1 style={{ fontSize: 22, fontWeight: 900, color: '#f8fafc', letterSpacing: '-0.3px', margin: 0 }}>Tâches</h1>
+            <h1 style={{ fontSize: 22, fontWeight: 900, color: '#f8fafc', letterSpacing: '-0.3px', margin: 0 }}>Tasks</h1>
             <p style={{ fontSize: 12, color: '#475569', marginTop: 2, marginBottom: 0 }}>
-              {totalAvailable} disponible{totalAvailable > 1 ? 's' : ''}
+              {totalAvailable} available
             </p>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -877,7 +877,7 @@ export const MiniAppTasks: React.FC = () => {
               <span style={{ fontSize: 10, fontWeight: 700, color: '#6ee7b7', letterSpacing: '0.05em' }}>GRAM</span>
             </div>
             <button onClick={() => setMiniAppPage('myTasks')} style={{ padding: '6px 12px', borderRadius: 10, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: '#64748b', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
-              Mes campagnes
+              My Campaigns
             </button>
           </div>
         </div>
@@ -898,7 +898,7 @@ export const MiniAppTasks: React.FC = () => {
 
         {/* Réseaux sociaux & YouTube (combined, bottom before promo) */}
         <div>
-          <SectionHead title="Réseaux sociaux" hint="social" />
+          <SectionHead title="Social Media" hint="social" />
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {socialCards.length === 0
               ? <EmptyCard text="No tasks" />
@@ -950,14 +950,14 @@ export const MiniAppTasks: React.FC = () => {
                       {!isComplete && isEligible && (
                         <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', padding: '8px 14px' }}>
                           <button onClick={() => void handlePromoComplete(task)} style={{ width: '100%', padding: '8px 0', borderRadius: 10, background: 'linear-gradient(135deg,rgba(52,211,153,0.2),rgba(16,185,129,0.2))', border: '1px solid rgba(52,211,153,0.3)', color: '#34d399', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-                            Réclamer la récompense
+                            Claim Reward
                           </button>
                         </div>
                       )}
                       {isComplete && (
                         <div style={{ borderTop: '1px solid rgba(52,211,153,0.1)', padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 8 }}>
                           <CheckCircle style={{ width: 14, height: 14, color: '#34d399' }} />
-                          <span style={{ fontSize: 11, color: '#34d399', fontWeight: 700 }}>Complété !</span>
+                          <span style={{ fontSize: 11, color: '#34d399', fontWeight: 700 }}>Completed!</span>
                         </div>
                       )}
                     </div>

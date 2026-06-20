@@ -40,8 +40,8 @@ export const MiniAppDashboard: React.FC = () => {
       if (ok) haptic.success(); else haptic.error();
       setPromoResult(
         ok
-          ? { success: true, message: `+${(result.reward ?? 0).toFixed(2)} GRAM crédité sur votre compte!` }
-          : { success: false, message: result.error ?? 'Erreur inconnue.' }
+          ? { success: true, message: `+${(result.reward ?? 0).toFixed(2)} GRAM credited to your account!` }
+          : { success: false, message: result.error ?? 'Unknown error.' }
       );
       if (ok) setPromoCode('');
       setTimeout(() => setPromoResult(null), 4000);
@@ -58,7 +58,7 @@ export const MiniAppDashboard: React.FC = () => {
             <div className="w-10 h-10 rounded-xl bg-amber-500/25 flex items-center justify-center shrink-0 text-lg">⚡</div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <p className="text-sm font-bold text-amber-300">ÉVÉNEMENT EN COURS</p>
+                <p className="text-sm font-bold text-amber-300">LIVE EVENT</p>
                 <span className="px-2 py-0.5 rounded-full bg-amber-500/30 text-amber-300 text-[10px] font-bold border border-amber-500/40">
                   ×{event!.multiplier} BONUS
                 </span>
@@ -66,7 +66,7 @@ export const MiniAppDashboard: React.FC = () => {
               <p className="text-xs text-amber-200/80 mt-0.5 truncate">{event!.label}</p>
             </div>
             <div className="shrink-0 text-right">
-              <p className="text-[10px] text-amber-400/60 uppercase tracking-wider">Fin dans</p>
+              <p className="text-[10px] text-amber-400/60 uppercase tracking-wider">Ends in</p>
               <p className="text-sm font-bold text-amber-300 font-mono">{eventTimeLeft}</p>
             </div>
           </div>
@@ -76,7 +76,7 @@ export const MiniAppDashboard: React.FC = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-slate-400 text-sm">Bonjour 👋</p>
+          <p className="text-slate-400 text-sm">Hello 👋</p>
           <h1 className="text-xl font-bold text-white">{u.firstName}</h1>
         </div>
         <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-sm font-bold text-white">
@@ -94,7 +94,7 @@ export const MiniAppDashboard: React.FC = () => {
         {/* Watermark */}
         <div className="absolute right-4 top-1/2 -translate-y-1/2 text-[80px] leading-none opacity-[0.06] select-none pointer-events-none font-bold text-white">💎</div>
         <div className="relative">
-          <p className="text-[#7DD4FC] text-xs font-medium uppercase tracking-widest mb-2">Solde total</p>
+          <p className="text-[#7DD4FC] text-xs font-medium uppercase tracking-widest mb-2">Total balance</p>
           <p className="text-4xl font-bold text-white tracking-tight mb-0.5">
             <CountUp value={u.balanceMain} decimals={2} animateOnMount suffix=" GRAM" />
           </p>
@@ -102,12 +102,12 @@ export const MiniAppDashboard: React.FC = () => {
             <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/20 border border-emerald-500/30 mb-4">
               <TrendingUp className="w-3 h-3 text-emerald-400" />
               <span className="text-emerald-300 text-xs font-semibold">
-                +<CountUp value={u.todayEarnings} decimals={2} duration={0.8} /> GRAM aujourd'hui
+                +<CountUp value={u.todayEarnings} decimals={2} duration={0.8} /> GRAM today
               </span>
             </div>
           ) : (
             <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/5 border border-white/10 mb-4">
-              <span className="text-slate-400 text-xs">Aucun gain aujourd'hui encore</span>
+              <span className="text-slate-400 text-xs">No earnings today yet</span>
             </div>
           )}
           <div className="flex gap-3">
@@ -115,13 +115,13 @@ export const MiniAppDashboard: React.FC = () => {
               onClick={() => { haptic.impact('light'); setMiniAppPage('deposit'); }}
               className="tap-scale flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-white/15 hover:bg-white/25 transition-colors text-white text-sm font-medium backdrop-blur-sm"
             >
-              <ArrowDownLeft className="w-4 h-4" /> Déposer
+              <ArrowDownLeft className="w-4 h-4" /> Deposit
             </button>
             <button
               onClick={() => { haptic.impact('light'); setMiniAppPage('withdraw'); }}
               className="tap-scale flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-white/15 hover:bg-white/25 transition-colors text-white text-sm font-medium backdrop-blur-sm"
             >
-              <ArrowUpRight className="w-4 h-4" /> Retirer
+              <ArrowUpRight className="w-4 h-4" /> Withdraw
             </button>
           </div>
         </div>
@@ -136,11 +136,11 @@ export const MiniAppDashboard: React.FC = () => {
           <Users className="w-5 h-5 text-purple-300" />
         </div>
         <div className="flex-1 text-left">
-          <p className="text-sm font-semibold text-white">Invitez vos amis</p>
+          <p className="text-sm font-semibold text-white">Invite your friends</p>
           <p className="text-xs text-purple-300">
             {u.referralCount > 0
-              ? `${u.referralCount} ami${u.referralCount !== 1 ? 's' : ''} invité${u.referralCount !== 1 ? 's' : ''} · ${(u.referralCount * platformConfig.referralBonusSignup).toFixed(2)} GRAM gagnés`
-              : `Gagnez ${platformConfig.referralBonusSignup.toFixed(2)} GRAM par ami qui s'inscrit`}
+              ? `${u.referralCount} friend${u.referralCount !== 1 ? 's' : ''} invited · ${(u.referralCount * platformConfig.referralBonusSignup).toFixed(2)} GRAM earned`
+              : `Earn ${platformConfig.referralBonusSignup.toFixed(2)} GRAM per friend who signs up`}
           </p>
         </div>
         <div className="shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-lg bg-purple-500/20 border border-purple-500/30">
@@ -159,7 +159,7 @@ export const MiniAppDashboard: React.FC = () => {
             <p className="text-2xl font-bold text-white leading-none">
               <CountUp value={u.tasksCompleted} decimals={0} animateOnMount />
             </p>
-            <p className="text-[11px] text-slate-400 mt-1">Tâches complétées</p>
+            <p className="text-[11px] text-slate-400 mt-1">Tasks completed</p>
             <div className="absolute bottom-0 left-0 right-0 h-0.5 rounded-b-2xl" style={{ background: 'linear-gradient(90deg,#8B5CF6,transparent)' }} />
           </div>
         </div>
@@ -171,7 +171,7 @@ export const MiniAppDashboard: React.FC = () => {
             <p className="text-xl font-bold text-emerald-400 leading-none">
               <CountUp value={u.totalEarnings} decimals={2} animateOnMount suffix=" GRAM" />
             </p>
-            <p className="text-[11px] text-slate-400 mt-1">Total gagné</p>
+            <p className="text-[11px] text-slate-400 mt-1">Total earned</p>
             <div className="absolute bottom-0 left-0 right-0 h-0.5 rounded-b-2xl" style={{ background: 'linear-gradient(90deg,#10b981,transparent)' }} />
           </div>
         </div>
@@ -181,7 +181,7 @@ export const MiniAppDashboard: React.FC = () => {
       <div className="glass-card p-4 space-y-3">
         <div className="flex items-center gap-2">
           <Gift className="w-4 h-4 text-amber-400" />
-          <p className="text-sm font-semibold text-white">Code promo</p>
+          <p className="text-sm font-semibold text-white">Promo code</p>
         </div>
         <div className="flex gap-2">
           <input
@@ -189,7 +189,7 @@ export const MiniAppDashboard: React.FC = () => {
             value={promoCode}
             onChange={e => { setPromoCode(e.target.value.toUpperCase()); setPromoResult(null); }}
             onKeyDown={e => e.key === 'Enter' && handleRedeemPromo()}
-            placeholder="Entrez votre code..."
+            placeholder="Enter your code..."
             className="flex-1 px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white text-sm font-mono tracking-widest placeholder:normal-case placeholder:tracking-normal focus:outline-none focus:border-amber-500/50 transition-colors"
           />
           <button
@@ -197,7 +197,7 @@ export const MiniAppDashboard: React.FC = () => {
             disabled={!promoCode.trim() || promoLoading}
             className="tap-scale px-4 py-2.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-400 text-xs font-semibold hover:bg-amber-500/25 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5"
           >
-            {promoLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Activer'}
+            {promoLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Activate'}
           </button>
         </div>
         {promoResult && (
@@ -212,10 +212,10 @@ export const MiniAppDashboard: React.FC = () => {
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <div style={{ width: 3, height: 16, borderRadius: 99, background: 'linear-gradient(180deg,#8B5CF6,#8B5CF655)', flexShrink: 0 }} />
-            <h2 className="text-sm font-semibold text-white">Tâches disponibles</h2>
+            <h2 className="text-sm font-semibold text-white">Available tasks</h2>
           </div>
           <button onClick={() => setMiniAppPage('tasks')} className="text-xs flex items-center gap-1 hover:underline" style={{ color: '#C4B5FD' }}>
-            Voir tout <ChevronRight className="w-3 h-3" />
+            See all <ChevronRight className="w-3 h-3" />
           </button>
         </div>
         <div className="space-y-2">
@@ -238,7 +238,7 @@ export const MiniAppDashboard: React.FC = () => {
             );
           })}
           {activeTasks.length === 0 && (
-            <p className="text-center text-sm text-slate-500 py-6">Aucune tâche disponible pour l'instant</p>
+            <p className="text-center text-sm text-slate-500 py-6">No tasks available right now</p>
           )}
         </div>
       </div>

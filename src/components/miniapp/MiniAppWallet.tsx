@@ -110,15 +110,15 @@ const TX_ICON: Record<string, React.ReactNode> = {
 };
 
 const TX_LABELS_LOCAL: Record<string, string> = {
-  deposit:      'Dépôt',
-  withdrawal:   'Retrait',
-  reward:       'Récompense tâche',
-  referral:     'Bonus parrainage',
-  bonus:        'Bonus promo',
-  purchase:     'Achat boutique',
-  fee:          'Frais',
-  admin_credit: 'Crédit admin',
-  admin_debit:  'Débit admin',
+  deposit:      'Deposit',
+  withdrawal:   'Withdrawal',
+  reward:       'Task reward',
+  referral:     'Referral bonus',
+  bonus:        'Promo bonus',
+  purchase:     'Shop purchase',
+  fee:          'Fee',
+  admin_credit: 'Admin credit',
+  admin_debit:  'Admin debit',
 };
 
 const TxRow: React.FC<{ tx: Tx }> = ({ tx }) => {
@@ -143,7 +143,7 @@ const TxRow: React.FC<{ tx: Tx }> = ({ tx }) => {
           {TX_LABELS_LOCAL[tx.type] ?? tx.type}
         </p>
         <p className="text-xs text-slate-500">
-          {tx.network || 'Interne'} · {new Date(tx.createdAt).toLocaleDateString('fr-FR')}
+          {tx.network || 'Internal'} · {new Date(tx.createdAt).toLocaleDateString('en-US')}
         </p>
       </div>
       <div className="text-right flex-shrink-0">
@@ -159,10 +159,10 @@ const TxRow: React.FC<{ tx: Tx }> = ({ tx }) => {
           tx.status === 'cancelled' || tx.status === 'failed' ? 'text-red-400'    :
                                                                 'text-blue-400'
         }`}>
-          {tx.status === 'completed'  ? '✓ Complété'   :
-           tx.status === 'pending'    ? '⏳ En attente' :
-           tx.status === 'cancelled'  ? '✕ Refusé'     :
-           tx.status === 'failed'     ? '✕ Échoué'     : '🔄 Confirmation'}
+          {tx.status === 'completed'  ? '✓ Completed'   :
+           tx.status === 'pending'    ? '⏳ Pending' :
+           tx.status === 'cancelled'  ? '✕ Rejected'     :
+           tx.status === 'failed'     ? '✕ Failed'     : '🔄 Confirming'}
         </p>
       </div>
     </div>
@@ -180,7 +180,7 @@ export const MiniAppWallet: React.FC = () => {
     <div className="space-y-5 animate-slide-up">
       <h1 className="text-xl font-bold text-white">Wallet</h1>
 
-      {/* Balance card — identité GRAM cohérente avec Dashboard */}
+      {/* Balance card — consistent GRAM identity with Dashboard */}
       <div className="wallet-balance-card relative overflow-hidden rounded-2xl p-5">
         <div className="absolute -top-8 -right-8 w-32 h-32 rounded-full pointer-events-none"
           style={{ background: 'radial-gradient(circle, rgba(0,152,234,0.2), transparent)' }} />
@@ -189,7 +189,7 @@ export const MiniAppWallet: React.FC = () => {
 
         <div className="relative">
           <p className="text-[#7DD4FC] text-xs font-medium uppercase tracking-widest mb-1">
-            Solde disponible
+            Available balance
           </p>
           <p className="text-3xl font-bold text-white tracking-tight">
             {u.balanceMain.toFixed(2)}{' '}
@@ -198,13 +198,13 @@ export const MiniAppWallet: React.FC = () => {
 
           <div className="flex items-center gap-3 mt-2 flex-wrap">
             <span className="text-xs text-emerald-400">
-              Total gagné : {u.totalEarnings.toFixed(2)} GRAM
+              Total earned: {u.totalEarnings.toFixed(2)} GRAM
             </span>
             {u.taskCredits > 0 && (
               <>
                 <span className="text-white/20">·</span>
                 <span className="text-xs text-blue-400">
-                  dont {u.taskCredits.toFixed(2)} GRAM crédits campagnes
+                  {u.taskCredits.toFixed(2)} GRAM campaign credits
                 </span>
               </>
             )}
@@ -213,7 +213,7 @@ export const MiniAppWallet: React.FC = () => {
           {u.taskCredits > 0 && u.balanceMain > 0 && (
             <div className="mt-3">
               <div className="flex justify-between text-[10px] text-slate-500 mb-1">
-                <span>Retirable</span>
+                <span>Withdrawable</span>
                 <span>{withdrawable.toFixed(2)} / {u.balanceMain.toFixed(2)} GRAM</span>
               </div>
               <div className="h-1 rounded-full bg-white/10 overflow-hidden">
@@ -236,13 +236,13 @@ export const MiniAppWallet: React.FC = () => {
           onClick={() => setMiniAppPage('deposit')}
           className="wallet-action-btn wallet-action-deposit py-3.5 rounded-xl text-sm font-semibold text-white flex items-center justify-center gap-2"
         >
-          <ArrowDownLeft className="w-4 h-4" /> Déposer
+          <ArrowDownLeft className="w-4 h-4" /> Deposit
         </button>
         <button
           onClick={() => setMiniAppPage('withdraw')}
           className="wallet-action-btn wallet-action-withdraw py-3.5 rounded-xl text-sm font-semibold text-white flex items-center justify-center gap-2"
         >
-          <ArrowUpRight className="w-4 h-4" /> Retirer
+          <ArrowUpRight className="w-4 h-4" /> Withdraw
         </button>
       </div>
 
@@ -251,10 +251,10 @@ export const MiniAppWallet: React.FC = () => {
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <div style={{ width: 3, height: 16, borderRadius: 99, background: 'linear-gradient(180deg,#8B5CF6,#8B5CF655)', flexShrink: 0 }} />
-            <h2 className="text-sm font-semibold text-white">Historique</h2>
+            <h2 className="text-sm font-semibold text-white">History</h2>
           </div>
           <button onClick={() => setMiniAppPage('history')} className="text-xs flex items-center gap-1" style={{ color: '#C4B5FD' }}>
-            Tout voir <ChevronRight className="w-3 h-3" />
+            See all <ChevronRight className="w-3 h-3" />
           </button>
         </div>
         <div className="space-y-2">
@@ -264,7 +264,7 @@ export const MiniAppWallet: React.FC = () => {
           {userTx.length === 0 && (
             <div className="py-10 text-center space-y-2">
               <p className="text-2xl">💸</p>
-              <p className="text-sm text-slate-500">Aucune transaction pour l'instant</p>
+              <p className="text-sm text-slate-500">No transactions yet</p>
             </div>
           )}
         </div>
@@ -359,7 +359,7 @@ export const MiniAppDeposit: React.FC = () => {
       return;
     }
     if (!hasAddress) {
-      setTxError("Adresse de la plateforme non configurée — contactez l'admin.");
+      setTxError("Platform address not configured — contact admin.");
       return;
     }
     setTxError('');
@@ -383,11 +383,11 @@ export const MiniAppDeposit: React.FC = () => {
           initData: tg?.initData ?? '',
         }),
       }).catch(() => {});
-      setSuccessMsg(`✅ ${amount} GRAM crédités sur votre compte !`);
+      setSuccessMsg(`✅ ${amount} GRAM credited to your account!`);
       setTxStatus('success');
     } catch {
       setTxStatus('error');
-      setTxError('Transaction annulée ou erreur réseau.');
+      setTxError('Transaction cancelled or network error.');
     }
   };
 
@@ -397,9 +397,9 @@ export const MiniAppDeposit: React.FC = () => {
   const handleSendUSDT = async () => {
     const usdtAmount = parseFloat(depositAmount);
     if (!usdtAmount || usdtAmount < 0.1) { setTxError('Minimum: 0.1 USDT'); return; }
-    if (!hasAddress) { setTxError("Adresse non configurée — contactez l'admin."); return; }
-    if (!connectedAddr) { setTxError('Connectez votre wallet d\'abord.'); return; }
-    if (!tonPrice) { setTxError('Prix TON/USDT non disponible, réessayez.'); return; }
+    if (!hasAddress) { setTxError("Address not configured — contact admin."); return; }
+    if (!connectedAddr) { setTxError('Connect your wallet first.'); return; }
+    if (!tonPrice) { setTxError('TON/USDT price unavailable, please try again.'); return; }
 
     setTxError('');
     setTxStatus('pending');
@@ -439,17 +439,17 @@ export const MiniAppDeposit: React.FC = () => {
         }),
       }).catch(() => {});
 
-      setSuccessMsg(`✅ ${usdtAmount} USDT envoyés → +${gram} GRAM crédités sur votre compte !`);
+      setSuccessMsg(`✅ ${usdtAmount} USDT sent → +${gram} GRAM credited to your account!`);
       setTxStatus('success');
     } catch (e: unknown) {
       setTxStatus('error');
       const msg = e instanceof Error ? e.message : '';
       if (msg.toLowerCase().includes('no usdt wallet')) {
-        setTxError('Vous n\'avez pas de USDT dans ce wallet.');
+        setTxError('You do not have USDT in this wallet.');
       } else if (msg.toLowerCase().includes('cancelled') || msg.toLowerCase().includes('cancel')) {
-        setTxError('Transaction annulée.');
+        setTxError('Transaction cancelled.');
       } else {
-        setTxError('Erreur lors de l\'envoi. Vérifiez votre solde USDT et réessayez.');
+        setTxError('Error during sending. Check your USDT balance and try again.');
       }
     }
   };
@@ -470,17 +470,17 @@ export const MiniAppDeposit: React.FC = () => {
         </div>
         <div className="text-center space-y-1">
           <h2 className="text-xl font-bold text-white">
-            {isNativeTON ? 'Transaction envoyée !' : 'Dépôt enregistré !'}
+            {isNativeTON ? 'Transaction sent!' : 'Deposit recorded!'}
           </h2>
           <p className="text-sm text-slate-400 leading-relaxed">{successMsg}</p>
         </div>
         <div className="w-full p-3 rounded-xl bg-[#0098EA]/10 border border-[#0098EA]/20">
           <p className="text-xs text-[#7DD4FC] text-center">
-            🔄 Votre solde sera mis à jour automatiquement après confirmation blockchain.
+            🔄 Your balance will be updated automatically after blockchain confirmation.
           </p>
         </div>
         <button onClick={goBack} className="btn-primary px-8 py-3.5 rounded-xl text-sm font-semibold text-white">
-          Retour au wallet
+          Back to wallet
         </button>
       </div>
     );
@@ -491,12 +491,12 @@ export const MiniAppDeposit: React.FC = () => {
       <div className="flex items-center gap-3">
         <button onClick={() => useAppStore.getState().setMiniAppPage('wallet')}
           className="p-2 rounded-lg hover:bg-white/5 text-slate-400">←</button>
-        <h1 className="text-xl font-bold text-white">Déposer</h1>
+        <h1 className="text-xl font-bold text-white">Deposit</h1>
       </div>
 
       {/* Network Selector */}
       <div>
-        <p className="text-xs text-slate-400 mb-2">Sélectionnez le réseau</p>
+        <p className="text-xs text-slate-400 mb-2">Select network</p>
         <div className="grid grid-cols-3 gap-2">
           {depositNetworks.map(net => (
             <button key={net.id}
@@ -516,9 +516,9 @@ export const MiniAppDeposit: React.FC = () => {
         <div className="glass-card p-5 space-y-4">
           <div className="flex items-center gap-2">
             <span>💎</span>
-            <h3 className="text-sm font-semibold text-white">Dépôt GRAM via wallet</h3>
+            <h3 className="text-sm font-semibold text-white">GRAM deposit via wallet</h3>
             <span className="ml-auto px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/20 text-blue-400 border border-blue-500/30">
-              Auto-détecté
+              Auto-detected
             </span>
           </div>
 
@@ -530,20 +530,20 @@ export const MiniAppDeposit: React.FC = () => {
               </div>
               <button onClick={() => tonConnectUI.disconnect()}
                 className="flex items-center gap-1 text-[10px] text-slate-400 hover:text-red-400 transition-colors">
-                <Unlink className="w-3 h-3" /> Déconnecter
+                <Unlink className="w-3 h-3" /> Disconnect
               </button>
             </div>
           ) : (
             <button onClick={() => tonConnectUI.openModal()}
               className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold transition-all" style={{ background: 'rgba(139,92,246,0.11)', border: '1px solid rgba(139,92,246,0.20)', color: '#C4B5FD' }}>
-              <Wallet className="w-4 h-4" /> Connecter wallet
+              <Wallet className="w-4 h-4" /> Connect wallet
             </button>
           )}
 
           {isWalletConnected && (
             <>
               <div>
-                <p className="text-xs text-slate-400 mb-2">Montant (GRAM)</p>
+                <p className="text-xs text-slate-400 mb-2">Amount (GRAM)</p>
                 <input type="number" step="0.1" min={0.1}
                   value={depositAmount}
                   onChange={e => { setDepositAmount(e.target.value); setTxError(''); }}
@@ -558,20 +558,20 @@ export const MiniAppDeposit: React.FC = () => {
               )}
               {!hasAddress && (
                 <p className="text-[10px] text-amber-400 text-center">
-                  ⚠️ L'adresse de la plateforme n'est pas encore configurée par l'admin.
+                  ⚠️ The platform address has not been configured by the admin yet.
                 </p>
               )}
               {/* Deposit code info */}
               <div className="p-3 rounded-xl bg-purple-500/5 border border-purple-500/20 flex items-start gap-2">
                 <span className="text-purple-400 text-xs">🔒</span>
                 <p className="text-[10px] text-slate-400">
-                  Code de dépôt <span className="font-mono font-bold text-purple-300">{depositCode}</span> inclus automatiquement dans la transaction.
+                  Deposit code <span className="font-mono font-bold text-purple-300">{depositCode}</span> automatically included in the transaction.
                 </p>
               </div>
               <button onClick={handleTonDeposit}
                 disabled={txStatus === 'pending' || !depositAmount || !hasAddress}
                 className="w-full btn-primary py-3.5 rounded-xl text-sm font-semibold text-white disabled:opacity-40 disabled:cursor-not-allowed">
-                {txStatus === 'pending' ? '⏳ En attente de signature…' : `Envoyer ${depositAmount || '0'} GRAM`}
+                {txStatus === 'pending' ? '⏳ Waiting for signature…' : `Send ${depositAmount || '0'} GRAM`}
               </button>
             </>
           )}
@@ -583,9 +583,9 @@ export const MiniAppDeposit: React.FC = () => {
         <div className="glass-card p-5 space-y-4">
           <div className="flex items-center gap-2">
             <span>💵</span>
-            <h3 className="text-sm font-semibold text-white">Dépôt USDT (TON Jetton)</h3>
+            <h3 className="text-sm font-semibold text-white">USDT deposit (TON Jetton)</h3>
             <span className="ml-auto px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-              Auto-détecté
+              Auto-detected
             </span>
           </div>
 
@@ -593,11 +593,11 @@ export const MiniAppDeposit: React.FC = () => {
           {!isWalletConnected && (
             <div className="space-y-3">
               <p className="text-xs text-slate-400 text-center">
-                Connectez wallet pour envoyer vos USDT directement depuis l'app — instantané, comme un dépôt TON.
+                Connect your wallet to send USDT directly from the app — instant, just like a TON deposit.
               </p>
               <button onClick={() => tonConnectUI.openModal()}
                 className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 text-sm font-semibold hover:bg-blue-500/20 transition-colors">
-                <Wallet className="w-4 h-4" /> Connecter wallet
+                <Wallet className="w-4 h-4" /> Connect wallet
               </button>
             </div>
           )}
@@ -605,7 +605,7 @@ export const MiniAppDeposit: React.FC = () => {
           {!isWalletConnected && !hasAddress && (
             <div className="flex flex-col items-center gap-3 py-2">
               <AlertCircle className="w-8 h-8 text-amber-400" />
-              <p className="text-xs text-slate-400 text-center">Adresse non configurée. Contactez l'admin.</p>
+              <p className="text-xs text-slate-400 text-center">Address not configured. Contact the admin.</p>
             </div>
           )}
 
@@ -619,13 +619,13 @@ export const MiniAppDeposit: React.FC = () => {
                 </div>
                 <button onClick={() => tonConnectUI.disconnect()}
                   className="flex items-center gap-1 text-[10px] text-slate-400 hover:text-red-400 transition-colors">
-                  <Unlink className="w-3 h-3" /> Déconnecter
+                  <Unlink className="w-3 h-3" /> Disconnect
                 </button>
               </div>
 
               {hasAddress && (
                 <div>
-                  <p className="text-xs text-slate-400 mb-1.5">Adresse de dépôt USDT</p>
+                  <p className="text-xs text-slate-400 mb-1.5">USDT deposit address</p>
                   <div className="flex items-center gap-2">
                     <div className="flex-1 px-3 py-2.5 bg-white/5 rounded-lg text-xs text-white font-mono truncate">{address}</div>
                     <button onClick={handleCopy} className="p-2.5 rounded-lg bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 transition-colors">
@@ -636,7 +636,7 @@ export const MiniAppDeposit: React.FC = () => {
               )}
 
               <div>
-                <p className="text-xs text-slate-400 mb-2">Montant envoyé (USDT)</p>
+                <p className="text-xs text-slate-400 mb-2">Amount sent (USDT)</p>
                 <input type="number" step="0.1" min={0.1}
                   value={depositAmount}
                   onChange={e => { setDepositAmount(e.target.value); setTxError(''); }}
@@ -648,13 +648,13 @@ export const MiniAppDeposit: React.FC = () => {
               {depositAmount && parseFloat(depositAmount) > 0 && (
                 <div className="flex items-center justify-between p-3 rounded-xl"
                   style={{ background: 'rgba(0,152,234,0.08)', border: '1px solid rgba(0,152,234,0.2)' }}>
-                  <span className="text-xs text-slate-400">Vous recevrez</span>
+                  <span className="text-xs text-slate-400">You will receive</span>
                   {tonPrice ? (
                     <span className="text-sm font-bold" style={{ color: '#0098EA' }}>
                       ≈ {gramFromUsdt(parseFloat(depositAmount) || 0)?.toFixed(4)} GRAM
                     </span>
                   ) : (
-                    <span className="text-xs text-slate-500">Chargement du prix…</span>
+                    <span className="text-xs text-slate-500">Loading price…</span>
                   )}
                 </div>
               )}
@@ -668,23 +668,23 @@ export const MiniAppDeposit: React.FC = () => {
 
               {!hasAddress && (
                 <p className="text-[10px] text-amber-400 text-center">
-                  ⚠️ Adresse de la plateforme non configurée par l'admin.
+                  ⚠️ Platform address not configured by admin.
                 </p>
               )}
 
               {tonPriceError && (
                 <p className="text-[11px] text-red-400 text-center">
-                  Impossible de récupérer le prix du marché. Réessayez plus tard.
+                  Unable to retrieve market price. Please try again later.
                 </p>
               )}
               <button onClick={() => void handleSendUSDT()}
                 disabled={txStatus === 'pending' || !depositAmount || !hasAddress || !tonPrice}
                 className="w-full btn-primary py-3.5 rounded-xl text-sm font-semibold text-white disabled:opacity-40 disabled:cursor-not-allowed">
                 {txStatus === 'pending'
-                  ? '⏳ En attente de signature…'
+                  ? '⏳ Waiting for signature…'
                   : tonPrice
-                  ? `Envoyer ${depositAmount || '0'} USDT via wallet`
-                  : tonPriceError ? 'Prix indisponible' : 'Chargement du prix marché…'}
+                  ? `Send ${depositAmount || '0'} USDT via wallet`
+                  : tonPriceError ? 'Price unavailable' : 'Loading market price…'}
               </button>
             </>
           )}
@@ -694,12 +694,12 @@ export const MiniAppDeposit: React.FC = () => {
       {/* ── Other networks (manual, no auto-detection) ───────────── */}
       {isOtherNetwork && (
         <div className="glass-card p-5 space-y-4">
-          <h3 className="text-sm font-semibold text-white">Dépôt {selected?.symbol ?? ''}</h3>
+          <h3 className="text-sm font-semibold text-white">{selected?.symbol ?? ''} Deposit</h3>
           {hasAddress ? (
             <>
               <p className="text-xs text-slate-400">
-                Envoyez vos {selected?.symbol} sur le réseau{' '}
-                <span className="text-white font-medium">{selected?.network}</span> à l'adresse ci-dessous :
+                Send your {selected?.symbol} on the{' '}
+                <span className="text-white font-medium">{selected?.network}</span> network to the address below:
               </p>
               <div className="flex items-center gap-2">
                 <div className="flex-1 px-3 py-2.5 bg-white/5 rounded-lg text-xs text-white font-mono truncate">{address}</div>
@@ -708,18 +708,18 @@ export const MiniAppDeposit: React.FC = () => {
                 </button>
               </div>
               <div className="flex justify-between text-xs">
-                <span className="text-slate-400">Dépôt minimum</span>
+                <span className="text-slate-400">Minimum deposit</span>
                 <span className="text-white font-medium">{selected?.minDeposit} {selected?.symbol}</span>
               </div>
               <div className="p-3 rounded-lg bg-amber-500/5 border border-amber-500/20">
-                <p className="text-xs text-amber-400">⚠️ Envoyez uniquement du {selected?.symbol} sur le réseau {selected?.network}. Le dépôt sera validé manuellement par l'administrateur.</p>
+                <p className="text-xs text-amber-400">⚠️ Send only {selected?.symbol} on the {selected?.network} network. The deposit will be validated manually by the administrator.</p>
               </div>
             </>
           ) : (
             <div className="flex flex-col items-center gap-3 py-4">
               <AlertCircle className="w-10 h-10 text-amber-400" />
-              <p className="text-sm text-amber-400 font-medium text-center">Adresse non configurée</p>
-              <p className="text-xs text-slate-400 text-center">L'administrateur doit configurer l'adresse dans Admin → Crypto & Réseaux.</p>
+              <p className="text-sm text-amber-400 font-medium text-center">Address not configured</p>
+              <p className="text-xs text-slate-400 text-center">The administrator must configure the address in Admin → Crypto & Networks.</p>
             </div>
           )}
         </div>
@@ -785,7 +785,7 @@ export const MiniAppWithdraw: React.FC = () => {
         setSuccess(true);
       } else {
         haptic.error();
-        setError(result.error ?? 'Erreur inconnue');
+        setError(result.error ?? 'Unknown error');
       }
     } finally {
       setIsSubmitting(false);
@@ -800,26 +800,26 @@ export const MiniAppWithdraw: React.FC = () => {
           <CheckCircle className="w-10 h-10 text-emerald-400" />
         </div>
         <div className="text-center space-y-1">
-          <h2 className="text-xl font-bold text-white">Retrait soumis !</h2>
+          <h2 className="text-xl font-bold text-white">Withdrawal submitted!</h2>
           <p className="text-sm text-slate-400 leading-relaxed">
-            Votre retrait de {parsedAmount.toFixed(2)} {displaySymbol(selected?.symbol ?? 'GRAM')} est en cours de traitement.
-            <br />Vous recevrez{' '}
+            Your withdrawal of {parsedAmount.toFixed(2)} {displaySymbol(selected?.symbol ?? 'GRAM')} is being processed.
+            <br />You will receive{' '}
             <span className="text-emerald-400 font-semibold">
               {Math.max(0, netReceived).toFixed(2)} {displaySymbol(selected?.symbol ?? 'GRAM')}
             </span>{' '}
-            après frais de réseau.
+            after network fees.
           </p>
         </div>
         <div className="w-full p-3 rounded-xl bg-amber-500/5 border border-amber-500/20">
           <p className="text-xs text-amber-400 text-center">
-            🔐 Validation admin sous 12-24h · Votre solde est réservé
+            🔐 Admin validation within 12-24h · Your balance is reserved
           </p>
         </div>
         <button
           onClick={() => useAppStore.getState().setMiniAppPage('wallet')}
           className="btn-primary px-8 py-3.5 rounded-xl text-sm font-semibold text-white"
         >
-          Retour au wallet
+          Back to wallet
         </button>
       </div>
     );
@@ -831,20 +831,20 @@ export const MiniAppWithdraw: React.FC = () => {
         <button onClick={() => useAppStore.getState().setMiniAppPage('wallet')} className="p-2 rounded-lg hover:bg-white/5 text-slate-400">
           ←
         </button>
-        <h1 className="text-xl font-bold text-white">Retirer</h1>
+        <h1 className="text-xl font-bold text-white">Withdraw</h1>
       </div>
 
       {/* Balance available */}
       <div className="glass-card-light p-3 space-y-1">
         <div className="flex items-center justify-between">
-          <span className="text-xs text-slate-400">Retirable</span>
+          <span className="text-xs text-slate-400">Withdrawable</span>
           <span className="text-sm font-bold text-blue-400">
             {Math.max(0, currentUser.balanceMain - currentUser.taskCredits).toFixed(2)} {displaySymbol(selected?.symbol ?? 'GRAM')}
           </span>
         </div>
         {currentUser.taskCredits > 0 && (
           <div className="flex items-center justify-between">
-            <span className="text-[10px] text-slate-500">Crédits campagnes (non retirables)</span>
+            <span className="text-[10px] text-slate-500">Campaign credits (non-withdrawable)</span>
             <span className="text-[10px] text-blue-400 font-medium">{currentUser.taskCredits.toFixed(2)} GRAM</span>
           </div>
         )}
@@ -852,7 +852,7 @@ export const MiniAppWithdraw: React.FC = () => {
 
       {/* Network */}
       <div>
-        <p className="text-xs text-slate-400 mb-2">Réseau</p>
+        <p className="text-xs text-slate-400 mb-2">Network</p>
         <div className="grid grid-cols-3 gap-2">
           {withdrawNetworks.map(net => (
             <button
@@ -871,7 +871,7 @@ export const MiniAppWithdraw: React.FC = () => {
       {/* TON wallet auto-fill — for all TON-network withdrawals */}
       {isOnTONNetwork && (
         <div className="glass-card-light p-4 space-y-3">
-          <p className="text-xs font-semibold text-slate-400">Wallet connecté</p>
+          <p className="text-xs font-semibold text-slate-400">Connected wallet</p>
           {tonWallet ? (
             <div className="flex items-center justify-between p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
               <div className="flex items-center gap-2">
@@ -879,13 +879,13 @@ export const MiniAppWithdraw: React.FC = () => {
                 <span className="text-xs text-emerald-400 font-mono">{rawToFriendly(connectedAddress).slice(0, 8)}...{rawToFriendly(connectedAddress).slice(-4)}</span>
               </div>
               <button onClick={() => tonConnectUI.disconnect()} className="text-[10px] text-slate-400 hover:text-red-400 flex items-center gap-1 transition-colors">
-                <Unlink className="w-3 h-3" /> Déconnecter
+                <Unlink className="w-3 h-3" /> Disconnect
               </button>
             </div>
           ) : (
             <button onClick={() => tonConnectUI.openModal()}
               className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-medium hover:bg-blue-500/20 transition-colors">
-              <Wallet className="w-3.5 h-3.5" /> Connecter wallet pour auto-remplir
+              <Wallet className="w-3.5 h-3.5" /> Connect wallet to auto-fill
             </button>
           )}
         </div>
@@ -894,7 +894,7 @@ export const MiniAppWithdraw: React.FC = () => {
       {/* Amount */}
       <div>
         <div className="flex items-center justify-between mb-2">
-          <p className="text-xs text-slate-400">Montant</p>
+          <p className="text-xs text-slate-400">Amount</p>
           <button
             onClick={() => {
               const withdrawable = Math.max(0, currentUser.balanceMain - currentUser.taskCredits);
@@ -919,12 +919,12 @@ export const MiniAppWithdraw: React.FC = () => {
 
       {/* Address */}
       <div>
-        <p className="text-xs text-slate-400 mb-2">Adresse de retrait</p>
+        <p className="text-xs text-slate-400 mb-2">Withdrawal address</p>
         <input
           type="text"
           value={address}
           onChange={e => { const v = e.target.value; setAddress(v); setError(''); try { localStorage.setItem('tc_last_wd_addr', v); } catch { /* noop */ } }}
-          placeholder="Collez votre adresse ici"
+          placeholder="Paste your address here"
           className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white text-sm font-mono placeholder:text-slate-600 focus:outline-none focus:border-blue-500/50"
         />
       </div>
@@ -933,7 +933,7 @@ export const MiniAppWithdraw: React.FC = () => {
       {selected && (
         <div className="glass-card-light p-4 space-y-2">
           <div className="flex justify-between text-xs">
-            <span className="text-slate-400">Frais de réseau</span>
+            <span className="text-slate-400">Network fee</span>
             <span className="text-orange-400 font-medium">
               {selected.withdrawalFeeType === 'percentage'
                 ? `${selected.withdrawalFee}% (${calcFee(parsedAmount).toFixed(4)} ${displaySymbol(selected.symbol)})`
@@ -941,20 +941,20 @@ export const MiniAppWithdraw: React.FC = () => {
             </span>
           </div>
           <div className="flex justify-between text-xs">
-            <span className="text-slate-400">Vous recevrez</span>
+            <span className="text-slate-400">You will receive</span>
             <span className="text-emerald-400 font-medium">{netReceived > 0 ? netReceived.toFixed(2) : '0.00'} {displaySymbol(selected.symbol)}</span>
           </div>
           {dailyRemaining !== null && (
             <div className="flex justify-between text-xs">
-              <span className="text-slate-400">Restant aujourd'hui</span>
+              <span className="text-slate-400">Remaining today</span>
               <span className={`font-medium ${dailyRemaining < 50 ? 'text-amber-400' : 'text-white'}`}>
                 {dailyRemaining.toFixed(2)} / {perUserDailyLimit!.limit} {displaySymbol(selected.symbol)}
               </span>
             </div>
           )}
           <div className="flex justify-between text-xs">
-            <span className="text-slate-400">Traitement</span>
-            <span className="text-amber-400 font-medium">Validation admin requise 🔐</span>
+            <span className="text-slate-400">Processing</span>
+            <span className="text-amber-400 font-medium">Admin validation required 🔐</span>
           </div>
         </div>
       )}
@@ -969,7 +969,7 @@ export const MiniAppWithdraw: React.FC = () => {
       <div className="flex items-start gap-2 p-3 rounded-xl bg-amber-500/5 border border-amber-500/20">
         <AlertCircle className="w-3.5 h-3.5 text-amber-400 flex-shrink-0 mt-0.5" />
         <p className="text-[11px] text-amber-400/90 leading-relaxed">
-          Votre solde sera réservé immédiatement. Le retrait sera traité sous 12-24h après validation par l'équipe.
+          Your balance will be reserved immediately. The withdrawal will be processed within 12-24h after team validation.
         </p>
       </div>
 
@@ -978,18 +978,18 @@ export const MiniAppWithdraw: React.FC = () => {
         disabled={!parsedAmount || !address.trim() || isSubmitting}
         className="w-full btn-accent py-3.5 rounded-xl text-sm font-semibold text-white disabled:opacity-40 disabled:cursor-not-allowed"
       >
-        {isSubmitting ? 'Envoi en cours…' : `Retirer ${parsedAmount > 0 ? parsedAmount.toFixed(2) : '0.00'} ${displaySymbol(selected?.symbol ?? 'GRAM')}`}
+        {isSubmitting ? 'Submitting…' : `Withdraw ${parsedAmount > 0 ? parsedAmount.toFixed(2) : '0.00'} ${displaySymbol(selected?.symbol ?? 'GRAM')}`}
       </button>
     </div>
   );
 };
 
 const TX_FILTER_GROUPS: { id: string; label: string; types: string[] }[] = [
-  { id: 'all',      label: 'Tout',       types: [] },
-  { id: 'in',       label: '⬇ Entrants', types: ['deposit', 'reward', 'referral', 'bonus', 'admin_credit'] },
-  { id: 'out',      label: '⬆ Sortants', types: ['withdrawal', 'purchase', 'fee', 'admin_debit'] },
-  { id: 'rewards',  label: '🎯 Tâches',  types: ['reward'] },
-  { id: 'deposits', label: '💎 Dépôts',  types: ['deposit'] },
+  { id: 'all',      label: 'All',       types: [] },
+  { id: 'in',       label: '⬇ Incoming', types: ['deposit', 'reward', 'referral', 'bonus', 'admin_credit'] },
+  { id: 'out',      label: '⬆ Outgoing', types: ['withdrawal', 'purchase', 'fee', 'admin_debit'] },
+  { id: 'rewards',  label: '🎯 Tasks',  types: ['reward'] },
+  { id: 'deposits', label: '💎 Deposits',  types: ['deposit'] },
 ];
 
 export const MiniAppHistory: React.FC = () => {
@@ -1005,7 +1005,7 @@ export const MiniAppHistory: React.FC = () => {
       <div className="flex items-center gap-3">
         <button onClick={() => useAppStore.getState().setMiniAppPage('wallet')} className="p-2 rounded-lg hover:bg-white/5 text-slate-400">←</button>
         <div>
-          <h1 className="text-xl font-bold text-white">Historique</h1>
+          <h1 className="text-xl font-bold text-white">History</h1>
           <p className="text-xs text-slate-400">{userTx.length} transaction{userTx.length !== 1 ? 's' : ''}</p>
         </div>
       </div>
@@ -1032,8 +1032,8 @@ export const MiniAppHistory: React.FC = () => {
             <p className="text-3xl">📭</p>
             <p className="text-sm font-medium text-slate-400">
               {filter === 'all'
-                ? "Aucune transaction pour l'instant"
-                : 'Aucune transaction dans cette catégorie'}
+                ? "No transactions yet"
+                : 'No transactions in this category'}
             </p>
           </div>
         )}

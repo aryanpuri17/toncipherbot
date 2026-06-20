@@ -23,6 +23,35 @@ export const AdminConfig: React.FC = () => {
     }).catch(() => {});
   };
 
+  const [broadcastMsg,     setBroadcastMsg]     = useState('');
+  const [broadcastPin,     setBroadcastPin]     = useState(false);
+  const [broadcastLoading, setBroadcastLoading] = useState(false);
+  const [broadcastResult,  setBroadcastResult]  = useState('');
+
+  const handleBroadcast = async () => {
+    if (!broadcastMsg.trim()) return;
+    setBroadcastLoading(true);
+    setBroadcastResult('');
+    try {
+      const res = await adminFetch('/api/admin/broadcast', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: broadcastMsg, pin: broadcastPin, parseMode: 'HTML' }),
+      });
+      const d = await res.json() as { success?: boolean; sent?: number; failed?: number; error?: string };
+      if (d.success) {
+        setBroadcastResult(`✅ Envoyé à ${d.sent} utilisateurs (${d.failed} échecs)`);
+        setBroadcastMsg('');
+      } else {
+        setBroadcastResult(`❌ Erreur : ${d.error}`);
+      }
+    } catch {
+      setBroadcastResult('❌ Erreur réseau');
+    } finally {
+      setBroadcastLoading(false);
+    }
+  };
+
   // Promo event form state
   const [eventMult,  setEventMult]  = useState(2);
   const [eventHours, setEventHours] = useState(24);
@@ -407,13 +436,6 @@ export const AdminConfig: React.FC = () => {
                 </div>
               )}
               <ToggleSwitch enabled={platformConfig.registrationEnabled} onChange={v => updatePlatformConfig({ registrationEnabled: v })} label="Inscriptions activées" />
-              <ToggleSwitch enabled={platformConfig.welcomeBonusEnabled} onChange={v => updatePlatformConfig({ welcomeBonusEnabled: v })} label="Bonus de bienvenue activé" />
-              {platformConfig.welcomeBonusEnabled && (
-                <div>
-                  <label className="block text-xs text-slate-400 mb-1.5">Montant bonus bienvenue ($)</label>
-                  <input type="number" step="0.01" min="0" value={platformConfig.welcomeBonusAmount} onChange={e => updatePlatformConfig({ welcomeBonusAmount: parseFloat(e.target.value) || 0 })} className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white" />
-                </div>
-              )}
             </div>
           </div>
         </div>
@@ -591,6 +613,37 @@ export const AdminConfig: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* ── Broadcast ───────────────────────────────────── */}
+      <div className="glass-card p-5 space-y-3">
+        <h3 className="text-sm font-semibold text-white">📢 Broadcast</h3>
+        <p className="text-xs text-slate-400">Envoyer un message Telegram à tous les utilisateurs actifs.</p>
+        <textarea
+          value={broadcastMsg}
+          onChange={e => setBroadcastMsg(e.target.value)}
+          placeholder="Écris ton message ici… (HTML supporté : <b>, <i>, <a href=''>)"
+          rows={5}
+          className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white placeholder-slate-500 resize-none"
+        />
+        <div className="flex items-center gap-3">
+          <label className="flex items-center gap-2 text-xs text-slate-400 cursor-pointer">
+            <input type="checkbox" checked={broadcastPin} onChange={e => setBroadcastPin(e.target.checked)} className="rounded" />
+            Épingler le message
+          </label>
+        </div>
+        {broadcastResult && (
+          <p className={`text-xs font-semibold ${broadcastResult.startsWith('✅') ? 'text-emerald-400' : 'text-red-400'}`}>
+            {broadcastResult}
+          </p>
+        )}
+        <button
+          onClick={() => { void handleBroadcast(); }}
+          disabled={broadcastLoading || !broadcastMsg.trim()}
+          className="w-full py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-sm font-bold transition-colors"
+        >
+          {broadcastLoading ? '⏳ Envoi en cours…' : '📤 Envoyer à tous'}
+        </button>
+      </div>
 
       {/* Save Button */}
       <div className="flex justify-end items-center gap-3">

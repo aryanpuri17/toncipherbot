@@ -19,11 +19,11 @@ function isUrlValid(type: TaskType, url: string): boolean {
 }
 
 const TASK_TYPES: { value: TaskType; icon: string; label: string; urlLabel: string; urlPlaceholder: string; isTelegram: boolean }[] = [
-  { value: 'join_channel', icon: '📢', label: 'Canal Telegram',  urlLabel: 'Lien du canal',   urlPlaceholder: 'https://t.me/votre_canal',  isTelegram: true  },
-  { value: 'join_group',   icon: '👥', label: 'Groupe Telegram', urlLabel: 'Lien du groupe',  urlPlaceholder: 'https://t.me/votre_groupe', isTelegram: true  },
-  { value: 'start_bot',    icon: '🤖', label: 'Démarrer un bot', urlLabel: 'Lien du bot',     urlPlaceholder: 'https://t.me/votre_bot',    isTelegram: true  },
-  { value: 'watch_video',  icon: '▶️', label: 'Vidéo YouTube',   urlLabel: 'URL de la vidéo', urlPlaceholder: 'https://youtube.com/watch?v=...', isTelegram: false },
-  { value: 'social',       icon: '🌐', label: 'Réseau social',   urlLabel: 'URL du profil',   urlPlaceholder: 'https://instagram.com/... ou https://x.com/...', isTelegram: false },
+  { value: 'join_channel', icon: '📢', label: 'Telegram Channel', urlLabel: 'Channel link',  urlPlaceholder: 'https://t.me/your_channel',  isTelegram: true  },
+  { value: 'join_group',   icon: '👥', label: 'Telegram Group',   urlLabel: 'Group link',    urlPlaceholder: 'https://t.me/your_group',    isTelegram: true  },
+  { value: 'start_bot',    icon: '🤖', label: 'Start a Bot',      urlLabel: 'Bot link',      urlPlaceholder: 'https://t.me/your_bot',      isTelegram: true  },
+  { value: 'watch_video',  icon: '▶️', label: 'YouTube Video',    urlLabel: 'Video URL',     urlPlaceholder: 'https://youtube.com/watch?v=...', isTelegram: false },
+  { value: 'social',       icon: '🌐', label: 'Social Media',     urlLabel: 'Profile URL',   urlPlaceholder: 'https://instagram.com/... or https://x.com/...', isTelegram: false },
 ];
 
 export const MiniAppCreateTask: React.FC = () => {
@@ -58,20 +58,20 @@ export const MiniAppCreateTask: React.FC = () => {
 
   const handleSubmit = async () => {
     setError('');
-    if (!title.trim())      { setError('Le titre est requis'); return; }
-    if (!targetUrl.trim())  { setError("L'URL est requise"); return; }
+    if (!title.trim())      { setError('Title is required'); return; }
+    if (!targetUrl.trim())  { setError('URL is required'); return; }
     if (!targetUrl.startsWith('https://')) {
-      setError("L'URL doit commencer par https://");
+      setError('URL must start with https://');
       return;
     }
     if (currentTypeConf.isTelegram && !targetUrl.startsWith('https://t.me/')) {
-      setError("Pour une tâche Telegram, l'URL doit commencer par https://t.me/");
+      setError('For a Telegram task, the URL must start with https://t.me/');
       return;
     }
     if (type === 'watch_video') {
       const u = targetUrl.toLowerCase();
       if (!u.includes('youtube.com') && !u.includes('youtu.be')) {
-        setError("Pour une tâche YouTube, l'URL doit être un lien YouTube (youtube.com ou youtu.be)");
+        setError('For a YouTube task, the URL must be a YouTube link (youtube.com or youtu.be)');
         return;
       }
     }
@@ -79,15 +79,15 @@ export const MiniAppCreateTask: React.FC = () => {
       const u = targetUrl.toLowerCase();
       const allowed = ['twitter.com','x.com','instagram.com','tiktok.com','discord.gg','discord.com','facebook.com','linkedin.com','twitch.tv','snapchat.com'];
       if (!allowed.some(d => u.includes(d))) {
-        setError("Pour une tâche réseau social, l'URL doit être un lien d'un réseau reconnu (Instagram, TikTok, Twitter/X, Discord, Facebook…)");
+        setError('For a social media task, the URL must be from a recognized platform (Instagram, TikTok, Twitter/X, Discord, Facebook…)');
         return;
       }
     }
-    if (execCount < minExec) { setError(`Minimum ${minExec} exécutions`); return; }
-    if (execCount > maxExec) { setError(`Maximum ${maxExec.toLocaleString()} exécutions`); return; }
+    if (execCount < minExec) { setError(`Minimum ${minExec} executions`); return; }
+    if (execCount > maxExec) { setError(`Maximum ${maxExec.toLocaleString()} executions`); return; }
     const totalAvailable = currentUser.balanceMain + currentUser.taskCredits;
     if (totalAvailable < totalCost) {
-      setError(`Solde insuffisant. Coût total : ${totalCost.toFixed(4)} TON`);
+      setError(`Insufficient balance. Total cost: ${totalCost.toFixed(4)} TON`);
       return;
     }
 
@@ -101,7 +101,7 @@ export const MiniAppCreateTask: React.FC = () => {
           initData:       (window as unknown as { Telegram?: { WebApp?: { initData?: string } } })?.Telegram?.WebApp?.initData ?? '',
           type,
           title:          title.trim(),
-          description:    description.trim() || `Complétez cette tâche pour gagner ${workerReward.toFixed(4)} TON`,
+          description:    description.trim() || `Complete this task to earn ${workerReward.toFixed(4)} TON`,
           targetUrl:      targetUrl.trim(), // NEVER modified
           reward:         workerReward,
           totalBudget:    parseFloat((workerReward * execCount).toFixed(8)),
@@ -110,7 +110,7 @@ export const MiniAppCreateTask: React.FC = () => {
       });
       const result = await res.json() as { success: boolean; id?: string; error?: string };
       if (!result.success) {
-        setError(result.error ?? 'Erreur lors de la création de la tâche.');
+        setError(result.error ?? 'Error creating the task.');
         return;
       }
 
@@ -130,7 +130,7 @@ export const MiniAppCreateTask: React.FC = () => {
 
       setSubmitted(true);
     } catch {
-      setError('Impossible de soumettre. Vérifiez votre connexion.');
+      setError('Unable to submit. Please check your connection.');
     } finally {
       setSubmitting(false);
     }
@@ -147,14 +147,14 @@ export const MiniAppCreateTask: React.FC = () => {
         </div>
 
         <div className="text-center space-y-2">
-          <h2 className="text-xl font-bold text-white">Soumise avec succès</h2>
+          <h2 className="text-xl font-bold text-white">Successfully Submitted</h2>
           <p className="text-sm text-slate-400 leading-relaxed max-w-[260px]">
-            Votre tâche est en attente de validation. Vous serez notifié par le bot dès son approbation.
+            Your task is pending review. You will be notified by the bot once it is approved.
           </p>
         </div>
 
         <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-500/10 border border-amber-500/20">
-          <span className="text-xs text-amber-400/80">Budget réservé · remboursé si refusé</span>
+          <span className="text-xs text-amber-400/80">Budget reserved · refunded if rejected</span>
         </div>
 
         <div className="flex gap-3 w-full max-w-[280px]">
@@ -184,14 +184,14 @@ export const MiniAppCreateTask: React.FC = () => {
           className="p-2 rounded-lg hover:bg-white/5 text-slate-400 transition-colors"
         >←</button>
         <div>
-          <h1 className="text-xl font-bold text-white">Créer une tâche</h1>
-          <p className="text-xs text-slate-500">Promouvoir votre canal ou bot</p>
+          <h1 className="text-xl font-bold text-white">Create a task</h1>
+          <p className="text-xs text-slate-500">Promote your channel or bot</p>
         </div>
       </div>
 
       {/* Type selector */}
       <div className="glass-card p-4 space-y-3">
-        <p className="text-xs font-medium text-slate-400">Type de tâche</p>
+        <p className="text-xs font-medium text-slate-400">Task type</p>
         <div className="grid grid-cols-2 gap-2">
           {TASK_TYPES.map(opt => {
             const isActive = type === opt.value;
@@ -217,9 +217,9 @@ export const MiniAppCreateTask: React.FC = () => {
           <div className="flex items-start gap-2.5 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
             <Info className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
             <p className="text-xs text-amber-300 leading-relaxed">
-              Pour vérifier les abonnements, ajoutez{' '}
+              To verify subscriptions, add{' '}
               <span className="font-semibold text-amber-200">@{botName}</span>{' '}
-              comme administrateur de votre canal.
+              as an administrator of your channel.
             </p>
           </div>
         )}
@@ -227,9 +227,9 @@ export const MiniAppCreateTask: React.FC = () => {
           <div className="flex items-start gap-2.5 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
             <Info className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
             <p className="text-xs text-amber-300 leading-relaxed">
-              Pour vérifier les membres, ajoutez{' '}
+              To verify members, add{' '}
               <span className="font-semibold text-amber-200">@{botName}</span>{' '}
-              comme administrateur de votre groupe.
+              as an administrator of your group.
             </p>
           </div>
         )}
@@ -237,7 +237,7 @@ export const MiniAppCreateTask: React.FC = () => {
           <div className="flex items-start gap-2.5 p-3 rounded-xl bg-cyan-500/10 border border-cyan-500/20">
             <Info className="w-4 h-4 text-cyan-400 flex-shrink-0 mt-0.5" />
             <p className="text-xs text-cyan-300 leading-relaxed">
-              Entrez le lien de votre bot Telegram. Les utilisateurs appuieront sur Start et devront rester 30 secondes.
+              Enter your Telegram bot link. Users will press Start and must stay for 30 seconds.
             </p>
           </div>
         )}
@@ -245,7 +245,7 @@ export const MiniAppCreateTask: React.FC = () => {
           <div className="flex items-start gap-2.5 p-3 rounded-xl bg-red-500/10 border border-red-500/20">
             <Info className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
             <p className="text-xs text-red-300 leading-relaxed">
-              Entrez le lien direct de votre vidéo YouTube. Les utilisateurs devront rester <span className="font-semibold">20 secondes</span> sur la page.
+              Enter the direct link to your YouTube video. Users must stay for <span className="font-semibold">20 seconds</span> on the page.
             </p>
           </div>
         )}
@@ -253,7 +253,7 @@ export const MiniAppCreateTask: React.FC = () => {
           <div className="flex items-start gap-2.5 p-3 rounded-xl bg-orange-500/10 border border-orange-500/20">
             <Info className="w-4 h-4 text-orange-400 flex-shrink-0 mt-0.5" />
             <p className="text-xs text-orange-300 leading-relaxed">
-              Entrez le lien de votre profil ou page. Supporte Instagram, TikTok, X (Twitter), Discord et autres.
+              Enter your profile or page link. Supports Instagram, TikTok, X (Twitter), Discord and more.
             </p>
           </div>
         )}
@@ -262,23 +262,23 @@ export const MiniAppCreateTask: React.FC = () => {
       {/* Task details */}
       <div className="glass-card p-4 space-y-4">
         <div>
-          <p className="text-xs text-slate-400 mb-2">Titre de la tâche *</p>
+          <p className="text-xs text-slate-400 mb-2">Task title *</p>
           <input
             type="text"
             value={title}
             onChange={e => setTitle(e.target.value)}
-            placeholder="Ex: Rejoindre mon canal"
+            placeholder="E.g.: Join my channel"
             className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white text-sm placeholder:text-slate-600 focus:outline-none focus:border-[#0098EA]/50"
           />
         </div>
 
         <div>
-          <p className="text-xs text-slate-400 mb-2">Description <span className="text-slate-600">(optionnel)</span></p>
+          <p className="text-xs text-slate-400 mb-2">Description <span className="text-slate-600">(optional)</span></p>
           <input
             type="text"
             value={description}
             onChange={e => setDescription(e.target.value)}
-            placeholder="Décrivez votre tâche"
+            placeholder="Describe your task"
             className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white text-sm placeholder:text-slate-600 focus:outline-none focus:border-[#0098EA]/50"
           />
         </div>
@@ -299,19 +299,19 @@ export const MiniAppCreateTask: React.FC = () => {
           {targetUrl && !isUrlValid(type, targetUrl) && (
             <p className="text-xs mt-1.5 text-red-400">
               {type === 'watch_video'
-                ? '⚠️ Doit être un lien YouTube (youtube.com ou youtu.be)'
+                ? '⚠️ Must be a YouTube link (youtube.com or youtu.be)'
                 : type === 'social'
-                ? '⚠️ Doit être un lien d\'un réseau social reconnu (Instagram, TikTok, Twitter/X, Discord…)'
+                ? '⚠️ Must be a link from a recognized social network (Instagram, TikTok, Twitter/X, Discord…)'
                 : currentTypeConf.isTelegram
-                ? '⚠️ Doit commencer par https://t.me/'
-                : '⚠️ URL invalide'}
+                ? '⚠️ Must start with https://t.me/'
+                : '⚠️ Invalid URL'}
             </p>
           )}
         </div>
 
         <div>
           <p className="text-xs text-slate-400 mb-2">
-            Nombre d'exécutions{' '}
+            Number of executions{' '}
             <span className="text-slate-600">({minExec.toLocaleString()} — {maxExec.toLocaleString()})</span>
           </p>
           <input
@@ -328,23 +328,23 @@ export const MiniAppCreateTask: React.FC = () => {
 
       {/* Cost summary */}
       <div className="glass-card p-4 space-y-2.5">
-        <p className="text-xs font-semibold text-slate-400 mb-1">Récapitulatif</p>
+        <p className="text-xs font-semibold text-slate-400 mb-1">Summary</p>
 
         <div className="flex justify-between text-xs">
-          <span className="text-slate-500">Récompense par participant</span>
+          <span className="text-slate-500">Reward per participant</span>
           <span className="font-semibold" style={{ color: '#0098EA' }}>
             {workerReward.toFixed(4)} TON
           </span>
         </div>
         <div className="flex justify-between text-xs">
-          <span className="text-slate-500">Nombre de participants</span>
+          <span className="text-slate-500">Number of participants</span>
           <span className="text-white font-semibold">{execCount > 0 ? execCount.toLocaleString() : '—'}</span>
         </div>
 
         <div className="h-px bg-white/[0.06] my-0.5" />
 
         <div className="flex justify-between items-center">
-          <span className="text-xs font-semibold text-white">Budget total</span>
+          <span className="text-xs font-semibold text-white">Total budget</span>
           <span
             className="text-base font-bold"
             style={{ color: execCount > 0 ? '#f59e0b' : '#64748b' }}
@@ -355,7 +355,7 @@ export const MiniAppCreateTask: React.FC = () => {
 
         {currentUser.taskCredits > 0 && execCount > 0 && (
           <div className="flex justify-between text-xs">
-            <span style={{ color: '#0098EA' }}>Crédits campagnes</span>
+            <span style={{ color: '#0098EA' }}>Campaign credits</span>
             <span className="font-semibold" style={{ color: '#0098EA' }}>
               -{Math.min(currentUser.taskCredits, totalCost).toFixed(4)} TON
             </span>
@@ -363,7 +363,7 @@ export const MiniAppCreateTask: React.FC = () => {
         )}
 
         <div className="flex justify-between text-xs">
-          <span className="text-slate-500">Votre solde</span>
+          <span className="text-slate-500">Your balance</span>
           <span className={`font-semibold ${
             (currentUser.balanceMain + currentUser.taskCredits) >= totalCost && totalCost > 0
               ? 'text-emerald-400'
@@ -371,7 +371,7 @@ export const MiniAppCreateTask: React.FC = () => {
           }`}>
             {currentUser.balanceMain.toFixed(4)} TON
             {currentUser.taskCredits > 0 && (
-              <span style={{ color: '#0098EA' }}> +{currentUser.taskCredits.toFixed(4)} crédits</span>
+              <span style={{ color: '#0098EA' }}> +{currentUser.taskCredits.toFixed(4)} credits</span>
             )}
           </span>
         </div>
@@ -390,8 +390,8 @@ export const MiniAppCreateTask: React.FC = () => {
         className="w-full btn-primary py-3.5 rounded-xl text-sm font-semibold text-white disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
       >
         {submitting
-          ? <><Loader2 className="w-4 h-4 animate-spin" /> Soumission...</>
-          : `Soumettre — ${totalCost > 0 ? totalCost.toFixed(4) : '0.0000'} TON`
+          ? <><Loader2 className="w-4 h-4 animate-spin" /> Submitting...</>
+          : `Submit — ${totalCost > 0 ? totalCost.toFixed(4) : '0.0000'} TON`
         }
       </button>
     </div>

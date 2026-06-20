@@ -164,15 +164,15 @@ export function processServerTransactions(list: ServerTx[], suppressEffects = fa
   const { addNotification } = useAppStore.getState();
   for (const tx of newlyCompleted) {
     addNotification({
-      type: 'withdrawal', title: 'Retrait approuvé ! ✅',
-      message: `Votre retrait de ${tx.amount.toFixed(2)} ${tx.currency} a été envoyé.`,
+      type: 'withdrawal', title: 'Withdrawal approved! ✅',
+      message: `Your withdrawal of ${tx.amount.toFixed(2)} ${tx.currency} has been sent.`,
       isRead: false,
     });
   }
   for (const tx of newlyRejected) {
     addNotification({
-      type: 'withdrawal', title: 'Retrait refusé',
-      message: `${tx.amount.toFixed(2)} ${tx.currency} recrédité sur votre solde.${tx.adminNote ? ` Motif : ${tx.adminNote}` : ''}`,
+      type: 'withdrawal', title: 'Withdrawal rejected',
+      message: `${tx.amount.toFixed(2)} ${tx.currency} re-credited to your balance.${tx.adminNote ? ` Reason: ${tx.adminNote}` : ''}`,
       isRead: false,
     });
   }
@@ -181,8 +181,8 @@ export function processServerTransactions(list: ServerTx[], suppressEffects = fa
     const { addNotification } = useAppStore.getState();
     addNotification({
       type: 'deposit',
-      title: 'Dépôt confirmé ! 🎉',
-      message: `+${tx.amount.toFixed(4)} GRAM crédité depuis ${tx.amount.toFixed(2)} USDT détecté on-chain.`,
+      title: 'Deposit confirmed! 🎉',
+      message: `+${tx.amount.toFixed(4)} GRAM credited from ${tx.amount.toFixed(2)} USDT detected on-chain.`,
       isRead: false,
     });
   }

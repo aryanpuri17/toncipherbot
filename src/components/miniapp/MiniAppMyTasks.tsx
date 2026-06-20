@@ -6,9 +6,9 @@ import {
 } from 'lucide-react';
 
 const typeConfig: Record<string, { icon: React.ReactNode; bg: string; text: string; label: string }> = {
-  join_channel: { icon: <Hash className="w-4 h-4" />,  bg: 'bg-blue-500/20',   text: 'text-blue-400',   label: 'Canal'  },
-  join_group:   { icon: <Users className="w-4 h-4" />, bg: 'bg-purple-500/20', text: 'text-purple-400', label: 'Groupe' },
-  start_bot:    { icon: <Bot className="w-4 h-4" />,   bg: 'bg-cyan-500/20',   text: 'text-cyan-400',   label: 'Bot'    },
+  join_channel: { icon: <Hash className="w-4 h-4" />,  bg: 'bg-blue-500/20',   text: 'text-blue-400',   label: 'Channel' },
+  join_group:   { icon: <Users className="w-4 h-4" />, bg: 'bg-purple-500/20', text: 'text-purple-400', label: 'Group'   },
+  start_bot:    { icon: <Bot className="w-4 h-4" />,   bg: 'bg-cyan-500/20',   text: 'text-cyan-400',   label: 'Bot'     },
 };
 
 interface PendingProof {
@@ -41,11 +41,11 @@ interface ApiUserTask {
 }
 
 const statusMap: Record<string, { label: string; dot: string; cls: string }> = {
-  pending_approval: { label: 'En attente',  dot: 'bg-amber-400',   cls: 'text-amber-400 bg-amber-500/10 border-amber-500/25'      },
-  active:           { label: 'Active',      dot: 'bg-emerald-400', cls: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/25' },
-  paused:           { label: 'En pause',    dot: 'bg-amber-400',   cls: 'text-amber-400 bg-amber-500/10 border-amber-500/25'      },
-  rejected:         { label: 'Refusée',     dot: 'bg-red-400',     cls: 'text-red-400 bg-red-500/10 border-red-500/25'            },
-  depleted:         { label: 'Terminée',    dot: 'bg-slate-500',   cls: 'text-slate-400 bg-white/5 border-white/10'               },
+  pending_approval: { label: 'Pending',   dot: 'bg-amber-400',   cls: 'text-amber-400 bg-amber-500/10 border-amber-500/25'      },
+  active:           { label: 'Active',    dot: 'bg-emerald-400', cls: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/25' },
+  paused:           { label: 'Paused',    dot: 'bg-amber-400',   cls: 'text-amber-400 bg-amber-500/10 border-amber-500/25'      },
+  rejected:         { label: 'Rejected',  dot: 'bg-red-400',     cls: 'text-red-400 bg-red-500/10 border-red-500/25'            },
+  depleted:         { label: 'Completed', dot: 'bg-slate-500',   cls: 'text-slate-400 bg-white/5 border-white/10'               },
 };
 
 /** Fetches a proof image via JS (X-Init-Data header) and renders it as a blob URL.
@@ -76,7 +76,7 @@ const ProofImage: React.FC<{ proofId: number; telegramId: number; initData: stri
 
   if (!src) return null;
   return (
-    <img src={src} alt="Preuve"
+    <img src={src} alt="Proof"
       style={{ width: '100%', maxHeight: 200, objectFit: 'cover', display: 'block' }} />
   );
 };
@@ -147,7 +147,7 @@ export const MiniAppMyTasks: React.FC = () => {
         localStorage.setItem('tc_task_refunded', JSON.stringify(newRefunded));
       }
     } catch {
-      setApiError('Impossible de charger vos campagnes — vérifiez votre connexion.');
+      setApiError('Unable to load your campaigns — please check your connection.');
     } finally {
       setLoading(false);
     }
@@ -181,7 +181,7 @@ export const MiniAppMyTasks: React.FC = () => {
     try {
       const r = await callApi(`/api/user-tasks/${task.id}/pause`, { telegramId: currentUser.telegramId, initData: _getInitData() });
       if (r.success) await fetchTasks();
-    } catch { setApiError('Erreur réseau.'); }
+    } catch { setApiError('Network error.'); }
     finally { setActionLoading(null); }
   };
 
@@ -198,7 +198,7 @@ export const MiniAppMyTasks: React.FC = () => {
         localStorage.setItem('tc_task_pending', JSON.stringify(pending.filter(p => p.id !== task.id)));
         await fetchTasks();
       }
-    } catch { setApiError('Erreur réseau.'); }
+    } catch { setApiError('Network error.'); }
     finally { setActionLoading(null); setConfirmDelete(null); }
   };
 
@@ -207,9 +207,9 @@ export const MiniAppMyTasks: React.FC = () => {
 
   const handleAddBudget = async (task: ApiUserTask) => {
     setBudgetError('');
-    if (additionalExecs < 1) { setBudgetError('Entrez un nombre valide.'); return; }
+    if (additionalExecs < 1) { setBudgetError('Please enter a valid number.'); return; }
     if (currentUser.balanceMain < additionalCost) {
-      setBudgetError(`Solde insuffisant. Disponible: ${currentUser.balanceMain.toFixed(4)} GRAM, requis: ${additionalCost.toFixed(4)} TON.`);
+      setBudgetError(`Insufficient balance. Available: ${currentUser.balanceMain.toFixed(4)} GRAM, required: ${additionalCost.toFixed(4)} TON.`);
       return;
     }
     setActionLoading(task.id);
@@ -232,7 +232,7 @@ export const MiniAppMyTasks: React.FC = () => {
         setAddExecs('');
         await fetchTasks();
       }
-    } catch { setBudgetError('Erreur réseau.'); }
+    } catch { setBudgetError('Network error.'); }
     finally { setActionLoading(null); }
   };
 
@@ -249,10 +249,10 @@ export const MiniAppMyTasks: React.FC = () => {
       if (data.success) {
         setPendingProofs(prev => prev.filter(p => p.id !== proof.id));
       } else {
-        setProofError('Erreur lors de la validation.');
+        setProofError('Validation error.');
       }
     } catch {
-      setProofError('Erreur réseau.');
+      setProofError('Network error.');
     } finally {
       setProofActionId(null);
     }
@@ -262,7 +262,7 @@ export const MiniAppMyTasks: React.FC = () => {
     return (
       <div className="flex flex-col items-center justify-center py-20 gap-3">
         <Loader2 className="w-8 h-8 animate-spin" style={{ color: '#0098EA' }} />
-        <p className="text-sm text-slate-500">Chargement de vos campagnes…</p>
+        <p className="text-sm text-slate-500">Loading your campaigns…</p>
       </div>
     );
   }
@@ -278,7 +278,7 @@ export const MiniAppMyTasks: React.FC = () => {
           >←</button>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-xl font-bold text-white">Mes campagnes</h1>
+              <h1 className="text-xl font-bold text-white">My Campaigns</h1>
               {pendingProofs.length > 0 && (
                 <span className="px-2 py-0.5 rounded-full bg-orange-500/20 text-orange-400 text-[10px] font-bold border border-orange-500/25 animate-pulse">
                   {pendingProofs.length}
@@ -287,7 +287,7 @@ export const MiniAppMyTasks: React.FC = () => {
             </div>
             {tasks.length > 0 && (
               <p className="text-xs font-medium" style={{ color: '#0098EA' }}>
-                {tasks.length} campagne{tasks.length !== 1 ? 's' : ''}
+                {tasks.length} campaign{tasks.length !== 1 ? 's' : ''}
               </p>
             )}
           </div>
@@ -311,7 +311,7 @@ export const MiniAppMyTasks: React.FC = () => {
       {pendingProofs.length > 0 && (
         <div className="space-y-3">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold text-white">Preuves en attente</span>
+            <span className="text-sm font-semibold text-white">Pending Proofs</span>
             <span className="px-2 py-0.5 rounded-full bg-orange-500/20 text-orange-400 text-[10px] font-bold border border-orange-500/25">
               {pendingProofs.length}
             </span>
@@ -339,7 +339,7 @@ export const MiniAppMyTasks: React.FC = () => {
                     {proof.taskTitle}
                   </p>
                   <p style={{ fontSize: 10, color: '#64748b', marginBottom: 8 }}>
-                    par {workerDisplay} · {new Date(proof.createdAt).toLocaleDateString('fr-FR')}
+                    by {workerDisplay} · {new Date(proof.createdAt).toLocaleDateString('en-GB')}
                   </p>
                   <div style={{ display: 'flex', gap: 8 }}>
                     <button
@@ -352,7 +352,7 @@ export const MiniAppMyTasks: React.FC = () => {
                         opacity: isActing ? 0.5 : 1,
                       }}
                     >
-                      ✅ Approuver
+                      ✅ Approve
                     </button>
                     <button
                       onClick={() => void handleReviewProof(proof, 'reject')}
@@ -364,7 +364,7 @@ export const MiniAppMyTasks: React.FC = () => {
                         opacity: isActing ? 0.5 : 1,
                       }}
                     >
-                      ❌ Refuser
+                      ❌ Reject
                     </button>
                   </div>
                 </div>
@@ -380,15 +380,15 @@ export const MiniAppMyTasks: React.FC = () => {
           <div className="w-16 h-16 rounded-2xl bg-slate-800/60 flex items-center justify-center">
             <TrendingUp className="w-7 h-7 text-slate-600" />
           </div>
-          <p className="text-sm font-semibold text-slate-400">Aucune campagne créée</p>
+          <p className="text-sm font-semibold text-slate-400">No campaigns created</p>
           <p className="text-xs text-slate-600 text-center px-6">
-            Créez une tâche pour promouvoir votre canal ou bot Telegram.
+            Create a task to promote your Telegram channel or bot.
           </p>
           <button
             onClick={() => setMiniAppPage('createTask')}
             className="mt-2 px-5 py-2.5 rounded-xl btn-primary text-sm font-semibold text-white"
           >
-            Créer une tâche
+            Create a Task
           </button>
         </div>
       ) : (
@@ -425,14 +425,14 @@ export const MiniAppMyTasks: React.FC = () => {
                     {task.status === 'pending_approval' && (
                       <div className="flex items-center gap-1.5 mt-1.5">
                         <Clock className="w-3 h-3 text-amber-400" />
-                        <p className="text-[10px] text-amber-400/80">En attente de validation</p>
+                        <p className="text-[10px] text-amber-400/80">Awaiting review</p>
                       </div>
                     )}
                     {task.status === 'rejected' && task.adminNote && (
-                      <p className="text-[10px] text-red-400/80 mt-1">Motif : {task.adminNote}</p>
+                      <p className="text-[10px] text-red-400/80 mt-1">Reason: {task.adminNote}</p>
                     )}
                     {task.status === 'rejected' && (
-                      <p className="text-[10px] text-emerald-400 mt-1">Budget remboursé automatiquement</p>
+                      <p className="text-[10px] text-emerald-400 mt-1">Budget automatically refunded</p>
                     )}
                   </div>
                 </div>
@@ -440,7 +440,7 @@ export const MiniAppMyTasks: React.FC = () => {
                 {/* Progress bar */}
                 <div>
                   <div className="flex justify-between text-[10px] mb-1.5">
-                    <span className="text-slate-400 font-medium">{task.completions.toLocaleString()} complétions</span>
+                    <span className="text-slate-400 font-medium">{task.completions.toLocaleString()} completions</span>
                     <span className="text-slate-500">{task.maxCompletions.toLocaleString()} max</span>
                   </div>
                   <div className="h-2 rounded-full bg-white/[0.06] overflow-hidden">
@@ -456,9 +456,9 @@ export const MiniAppMyTasks: React.FC = () => {
                 {/* Stats */}
                 <div className="grid grid-cols-3 gap-2">
                   {[
-                    { value: task.completions.toLocaleString(), label: 'Complétions', color: 'text-white' },
-                    { value: task.spent.toFixed(3),             label: 'TON dépensé', color: 'text-orange-400' },
-                    { value: remaining.toLocaleString(),         label: 'Restantes',   color: isFull ? 'text-emerald-400' : 'text-slate-300' },
+                    { value: task.completions.toLocaleString(), label: 'Completions', color: 'text-white' },
+                    { value: task.spent.toFixed(3),             label: 'TON spent',   color: 'text-orange-400' },
+                    { value: remaining.toLocaleString(),         label: 'Remaining',   color: isFull ? 'text-emerald-400' : 'text-slate-300' },
                   ].map(stat => (
                     <div key={stat.label} className="glass-card-light rounded-xl p-2 text-center">
                       <p className={`text-xs font-bold ${stat.color}`}>{stat.value}</p>
@@ -468,7 +468,7 @@ export const MiniAppMyTasks: React.FC = () => {
                 </div>
 
                 <div className="flex justify-between items-center text-xs px-0.5">
-                  <span className="text-slate-500">Budget total</span>
+                  <span className="text-slate-500">Total budget</span>
                   <span className="text-amber-400 font-semibold">{task.totalBudget.toFixed(3)} TON</span>
                 </div>
 
@@ -480,13 +480,13 @@ export const MiniAppMyTasks: React.FC = () => {
                       disabled={isLoading}
                       className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-all flex-1 justify-center disabled:opacity-40 ${task.status === 'active' ? 'bg-amber-500/10 border border-amber-500/20 text-amber-400 hover:bg-amber-500/20' : 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20'}`}
                     >
-                      {isLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : task.status === 'active' ? <><Pause className="w-3.5 h-3.5" /> Pause</> : <><Play className="w-3.5 h-3.5" /> Reprendre</>}
+                      {isLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : task.status === 'active' ? <><Pause className="w-3.5 h-3.5" /> Pause</> : <><Play className="w-3.5 h-3.5" /> Resume</>}
                     </button>
                     <button
                       onClick={() => { setBudgetTaskId(task.id); setAddExecs(''); setBudgetError(''); }}
                       className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-medium hover:bg-blue-500/20 transition-all flex-1 justify-center"
                     >
-                      <PlusCircle className="w-3.5 h-3.5" /> Budget
+                      <PlusCircle className="w-3.5 h-3.5" /> Add Budget
                     </button>
                     <button
                       onClick={() => setConfirmDelete(task.id)}
@@ -503,17 +503,17 @@ export const MiniAppMyTasks: React.FC = () => {
                     onClick={() => setConfirmDelete(task.id)}
                     className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-medium hover:bg-red-500/20 transition-all"
                   >
-                    <Trash2 className="w-3.5 h-3.5" /> Supprimer
+                    <Trash2 className="w-3.5 h-3.5" /> Delete
                   </button>
                 )}
 
                 {/* Delete confirmation */}
                 {isConfirmingDelete && (
                   <div className="border-t border-white/5 pt-3 space-y-2">
-                    <p className="text-xs text-slate-300 font-medium">Supprimer cette campagne ?</p>
+                    <p className="text-xs text-slate-300 font-medium">Delete this campaign?</p>
                     {remaining > 0 && (task.status === 'active' || task.status === 'paused') && (
                       <p className="text-xs text-emerald-400">
-                        Remboursement : <span className="font-bold">+{(remaining * priceFixed).toFixed(4)} TON</span> ({remaining} exécutions non utilisées)
+                        Refund: <span className="font-bold">+{(remaining * priceFixed).toFixed(4)} TON</span> ({remaining} unused executions)
                       </p>
                     )}
                     <div className="flex gap-2">
@@ -522,13 +522,13 @@ export const MiniAppMyTasks: React.FC = () => {
                         disabled={isLoading}
                         className="flex-1 py-2 rounded-xl bg-red-500/15 border border-red-500/30 text-red-400 text-xs font-semibold hover:bg-red-500/25 transition-all disabled:opacity-40"
                       >
-                        {isLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin mx-auto" /> : 'Supprimer'}
+                        {isLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin mx-auto" /> : 'Delete'}
                       </button>
                       <button
                         onClick={() => setConfirmDelete(null)}
                         className="flex-1 py-2 rounded-xl bg-white/5 text-slate-400 text-xs font-medium hover:bg-white/10 transition-all"
                       >
-                        Annuler
+                        Cancel
                       </button>
                     </div>
                   </div>
@@ -538,13 +538,13 @@ export const MiniAppMyTasks: React.FC = () => {
                 {isExpandingBudget && (
                   <div className="border-t border-white/5 pt-3 space-y-3">
                     <div className="flex items-center justify-between">
-                      <p className="text-xs font-semibold text-white">Augmenter le budget</p>
+                      <p className="text-xs font-semibold text-white">Increase Budget</p>
                       <button onClick={() => { setBudgetTaskId(null); setBudgetError(''); }} className="text-slate-500 hover:text-white">
                         <X className="w-4 h-4" />
                       </button>
                     </div>
                     <div className="space-y-1.5">
-                      <p className="text-[10px] text-slate-500">Exécutions à ajouter (× {priceFixed.toFixed(4)} GRAM)</p>
+                      <p className="text-[10px] text-slate-500">Executions to add (× {priceFixed.toFixed(4)} GRAM)</p>
                       <input
                         type="number" min="1" value={addExecs}
                         onChange={e => { setAddExecs(e.target.value); setBudgetError(''); }}
@@ -553,13 +553,13 @@ export const MiniAppMyTasks: React.FC = () => {
                       />
                     </div>
                     <div className="flex justify-between text-xs text-slate-400">
-                      <span>Coût supplémentaire</span>
+                      <span>Additional cost</span>
                       <span className={`font-semibold ${additionalExecs > 0 ? 'text-amber-400' : 'text-slate-500'}`}>
                         {additionalExecs > 0 ? `${additionalCost.toFixed(4)} GRAM` : '—'}
                       </span>
                     </div>
                     <div className="flex justify-between text-xs text-slate-400">
-                      <span>Votre solde</span>
+                      <span>Your balance</span>
                       <span className={`font-semibold ${currentUser.balanceMain >= additionalCost && additionalCost > 0 ? 'text-emerald-400' : 'text-slate-300'}`}>
                         {currentUser.balanceMain.toFixed(4)} GRAM
                       </span>
@@ -577,7 +577,7 @@ export const MiniAppMyTasks: React.FC = () => {
                     >
                       {isLoading
                         ? <Loader2 className="w-3.5 h-3.5 animate-spin mx-auto" />
-                        : `Confirmer — ${additionalExecs > 0 ? `${additionalCost.toFixed(4)} GRAM` : '0 GRAM'}`
+                        : `Confirm — ${additionalExecs > 0 ? `${additionalCost.toFixed(4)} GRAM` : '0 GRAM'}`
                       }
                     </button>
                   </div>
@@ -595,7 +595,7 @@ export const MiniAppMyTasks: React.FC = () => {
         onMouseEnter={e => (e.currentTarget.style.background = 'rgba(0,152,234,0.12)')}
         onMouseLeave={e => (e.currentTarget.style.background = 'rgba(0,152,234,0.06)')}
       >
-        <PlusCircle className="w-4 h-4" /> Créer une nouvelle tâche
+        <PlusCircle className="w-4 h-4" /> Create a New Task
       </button>
     </div>
   );
