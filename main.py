@@ -826,15 +826,22 @@ async def cmd_start(msg: types.Message):
     if not WEBAPP_URL:
         await msg.answer("⚙️ <b>TonCipher</b> — configuration en cours.", parse_mode="HTML")
         return
+    first_name = msg.from_user.first_name or "là"
     kb = InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(text="🚀 Ouvrir TonCipher", web_app=WebAppInfo(url=WEBAPP_URL))
+        InlineKeyboardButton(text="🚀 Ouvrir l'app", web_app=WebAppInfo(url=WEBAPP_URL))
     ]])
     await msg.answer(
-        "👋 Bienvenue sur <b>TonCipher</b> !\n\n"
-        "💎 Gagnez des <b>TON</b> en complétant des tâches simples.\n"
-        "👥 Invitez vos amis et montez dans le classement.\n\n"
-        "⬇️ Appuyez sur le bouton pour démarrer :",
-        parse_mode="HTML", reply_markup=kb,
+        f"👋 Salut <b>{first_name}</b> !\n\n"
+        f"Bienvenue sur <b>TonCipher</b> — la plateforme qui te permet de gagner de vrais <b>TON</b> 💎\n\n"
+        f"<b>🎯 Ce que tu peux faire :</b>\n"
+        f"• ✅ Accomplir des tâches simples (rejoindre des canaux, réseaux sociaux…)\n"
+        f"• 🎰 Jouer à des jeux (Mines, Roue, Jackpot, Aviator…)\n"
+        f"• 👥 Parrainer des amis et gagner des commissions\n"
+        f"• 💸 Retirer tes gains en TON directement dans ton wallet\n\n"
+        f"<b>💡 C'est gratuit, sans investissement obligatoire.</b>\n\n"
+        f"⬇️ Lance l'app et commence à gagner !",
+        parse_mode="HTML",
+        reply_markup=kb,
     )
 
 
@@ -1057,6 +1064,30 @@ async def handle_proof_callback(cb: types.CallbackQuery) -> None:
             pass
 
 
+def _compute_level(user_row: tuple) -> dict:
+    """Compute user level and XP from DB row.
+    user_row indices (from api_user_init SELECT):
+      0=referral_count, 1=referral_balance, 2=flagged,
+      3=banned, 4=withdrawal_blocked, 5=app_balance, 6=app_total_earnings,
+      7=app_tasks_completed, 8=app_completed_tasks
+    XP formula: 10 XP per task + 50 XP per referral + 1 XP per 0.1 GRAM earned
+    """
+    tasks      = int(user_row[7] or 0) if len(user_row) > 7 else 0
+    referrals  = int(user_row[0] or 0)
+    earnings   = float(user_row[6] or 0)
+    xp         = tasks * 10 + referrals * 50 + int(earnings * 10)
+    # Level thresholds: 1→0, 2→100, 3→300, 4→600, 5→1000, 6→1500, 7→2200, 8→3000, 9→4000, 10→5500
+    thresholds = [0, 100, 300, 600, 1000, 1500, 2200, 3000, 4000, 5500]
+    level = 1
+    for i, t in enumerate(thresholds):
+        if xp >= t:
+            level = i + 1
+    next_threshold = thresholds[level] if level < len(thresholds) else thresholds[-1]
+    prev_threshold = thresholds[level - 1]
+    progress = int((xp - prev_threshold) / max(1, next_threshold - prev_threshold) * 100) if level < len(thresholds) else 100
+    return {"level": level, "xp": xp, "xpNext": next_threshold, "progress": progress}
+
+
 # ── API — User init ────────────────────────────────────────────────────────────
 
 async def api_user_init(request: web.Request) -> web.Response:
@@ -1183,6 +1214,7 @@ async def api_user_init(request: web.Request) -> web.Response:
         "appTasksCompleted":    row[7] if row else None,
         "appCompletedTasks":    completed_tasks,
         "claimedMilestoneIds":  server_milestones,
+        "level":                _compute_level(row) if row else _compute_level((0, 0, 0, 0, 0, 0, 0, 0, 0)),
     }, headers=_CORS)
 
 
@@ -2269,7 +2301,6 @@ async def api_transactions(request: web.Request) -> web.Response:
 # Keys returned by the public /api/config endpoint (safe for all users to read)
 _PUBLIC_CONFIG_KEYS = {
     "promoEvent", "streakMilestones", "withdrawalChannel",
-    "welcomeBonusEnabled", "welcomeBonusAmount",
     "maintenanceMode", "maintenanceMessage", "registrationEnabled",
     "referralBonusSignup", "referralBonusActivity", "referralBonusDeposit",
     "referralBonusDepositPercent", "referralLevels", "referralCodeLength",
@@ -4389,6 +4420,61 @@ async def api_welcome_bonus(request: web.Request) -> web.Response:
     return web.json_response({"success": True, "reward": bonus_amount, "newBalance": new_balance}, headers=_CORS)
 
 
+async def api_admin_broadcast(request: web.Request) -> web.Response:
+    """Send a Telegram message to all non-banned users.
+
+    Respects Telegram rate limits (≤30 msg/s to different users).
+    Returns progress stats: sent, failed, total.
+    """
+    if not _check_admin_auth(request):
+        return web.json_response({"error": "Unauthorized"}, status=401, headers=_CORS)
+    if not bot:
+        return web.json_response({"error": "Bot not configured"}, status=503, headers=_CORS)
+
+    try:
+        data = await request.json()
+    except Exception:
+        return web.json_response({"error": "Invalid JSON"}, status=400, headers=_CORS)
+
+    message    = str(data.get("message", "")).strip()
+    parse_mode = str(data.get("parseMode", "HTML"))
+    pin        = bool(data.get("pin", False))
+
+    if not message:
+        return web.json_response({"error": "message requis"}, status=400, headers=_CORS)
+    if len(message) > 4096:
+        return web.json_response({"error": "message trop long (max 4096 chars)"}, status=400, headers=_CORS)
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute("SELECT telegram_id FROM users WHERE banned = 0") as cur:
+            user_ids = [row[0] async for row in cur]
+
+    sent = 0
+    failed = 0
+    for uid in user_ids:
+        try:
+            sent_msg = await bot.send_message(uid, message, parse_mode=parse_mode,
+                                              disable_web_page_preview=True)
+            if pin:
+                try:
+                    await bot.pin_chat_message(uid, sent_msg.message_id,
+                                               disable_notification=True)
+                except Exception:
+                    pass
+            sent += 1
+        except Exception:
+            failed += 1
+        await asyncio.sleep(0.04)  # 25 msg/s — under Telegram's 30/s limit
+
+    log.info("Broadcast: sent=%d failed=%d total=%d", sent, failed, len(user_ids))
+    return web.json_response({
+        "success": True,
+        "sent":    sent,
+        "failed":  failed,
+        "total":   len(user_ids),
+    }, headers=_CORS)
+
+
 # ── Web Application ────────────────────────────────────────────────────────────
 
 async def start_web() -> None:
@@ -4451,6 +4537,9 @@ async def start_web() -> None:
     # Admin — fraud alerts
     app.router.add_get( "/api/admin/fraud-alerts",         api_admin_fraud_alerts)
     app.router.add_post("/api/admin/fraud-alerts/{alert_id}/resolve", api_admin_resolve_alert)
+
+    # Admin API
+    app.router.add_post("/api/admin/broadcast",             api_admin_broadcast)
 
     # User tasks marketplace
     app.router.add_get( "/api/tasks/stream",                    api_tasks_stream)

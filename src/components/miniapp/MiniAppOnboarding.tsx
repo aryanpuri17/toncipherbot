@@ -7,75 +7,13 @@ interface Props { onDone: () => void; }
 type PlatformConfig = ReturnType<typeof useAppStore.getState>['platformConfig'];
 type CurrentUser = ReturnType<typeof useAppStore.getState>['currentUser'];
 
-// Stable coin positions — generated once, not on every render
-const COIN_SEEDS = Array.from({ length: 18 }, (_, i) => ({
-  left:  `${((i * 41 + 7) % 90) + 5}%`,
-  delay: `${((i * 0.13) % 0.8).toFixed(2)}s`,
-  dur:   `${(1.0 + (i * 0.09) % 0.7).toFixed(2)}s`,
-  size:  i % 4 === 0 ? 22 : 14,
-}));
-
-const CoinRain: React.FC<{ show: boolean }> = ({ show }) => (
-  <>
-    <style>{`@keyframes coinFall{0%{transform:translateY(-20px) rotate(0deg);opacity:1}100%{transform:translateY(80px) rotate(360deg);opacity:0}}`}</style>
-    {show && COIN_SEEDS.map((c, i) => (
-      <div key={i} style={{
-        position: 'absolute', left: c.left, top: '28%',
-        width: c.size, height: c.size, borderRadius: '50%',
-        background: 'linear-gradient(135deg,#fbbf24,#f59e0b)',
-        boxShadow: '0 0 6px rgba(251,191,36,0.6)',
-        animationName: 'coinFall',
-        animationDuration: c.dur,
-        animationDelay: c.delay,
-        animationTimingFunction: 'ease-in',
-        animationFillMode: 'forwards',
-        pointerEvents: 'none',
-        fontSize: 11, display: 'flex', alignItems: 'center', justifyContent: 'center',
-        color: '#78350f', fontWeight: 900,
-      }}>💎</div>
-    ))}
-  </>
-);
 
 export const MiniAppOnboarding: React.FC<Props> = ({ onDone }) => {
   const [slide, setSlide] = useState(0);
-  const { platformConfig, updateUser, currentUser } = useAppStore();
-  const bonusEnabled = platformConfig.welcomeBonusEnabled && platformConfig.welcomeBonusAmount > 0;
-  const SLIDES = bonusEnabled ? 6 : 5;
+  const { platformConfig, currentUser } = useAppStore();
+  const SLIDES = 5;
 
-  const complete = async (claimBonus: boolean) => {
-    if (claimBonus && bonusEnabled) {
-      haptic.success();
-      const u = useAppStore.getState().currentUser;
-      const initData = (window as unknown as { Telegram?: { WebApp?: { initData?: string } } })
-        ?.Telegram?.WebApp?.initData ?? '';
-
-      if (u.telegramId === 0) {
-        // Dev mode — credit locally without server
-        const bonus = platformConfig.welcomeBonusAmount;
-        updateUser(u.id, {
-          balanceMain:   +(u.balanceMain + bonus).toFixed(6),
-          totalEarnings: +(u.totalEarnings + bonus).toFixed(6),
-        });
-      } else {
-        try {
-          const res = await fetch('/api/user/welcome-bonus', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ telegramId: u.telegramId, initData }),
-          });
-          const body = await res.json() as { success?: boolean; reward?: number; newBalance?: number; error?: string };
-          if (body.success && typeof body.newBalance === 'number') {
-            const reward = body.reward ?? platformConfig.welcomeBonusAmount;
-            updateUser(u.id, {
-              balanceMain:   +body.newBalance.toFixed(6),
-              totalEarnings: +(u.totalEarnings + reward).toFixed(6),
-            });
-          }
-          // If server returns 409 (already claimed) or error, skip silently
-        } catch { /* server unavailable — skip bonus */ }
-      }
-    }
+  const complete = () => {
     try { localStorage.setItem('tc_onboarded', '1'); } catch {}
     onDone();
   };
@@ -83,21 +21,17 @@ export const MiniAppOnboarding: React.FC<Props> = ({ onDone }) => {
   const next = () => {
     haptic.impact('light');
     if (slide < SLIDES - 1) setSlide(s => s + 1);
-    else void complete(true);
+    else complete();
   };
 
   const skip = () => {
     haptic.selection();
-    void complete(false);
+    complete();
   };
 
   const isLastSlide = slide === SLIDES - 1;
-  const isBonusSlide = bonusEnabled && isLastSlide;
 
-  let btnLabel: string;
-  if (isBonusSlide) btnLabel = `🎁 Réclamer ${platformConfig.welcomeBonusAmount.toFixed(2)} TON !`;
-  else if (isLastSlide) btnLabel = "Accéder à l'app →";
-  else btnLabel = 'Suivant →';
+  const btnLabel = isLastSlide ? "Accéder à l'app →" : 'Suivant →';
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col" style={{ background: 'linear-gradient(180deg,#0f0c29 0%,#1a1a2e 40%,#16213e 100%)' }}>
@@ -115,7 +49,6 @@ export const MiniAppOnboarding: React.FC<Props> = ({ onDone }) => {
         {slide === 2 && <Slide2 platformConfig={platformConfig} />}
         {slide === 3 && <Slide3 />}
         {slide === 4 && <Slide4 platformConfig={platformConfig} currentUser={currentUser} />}
-        {slide === 5 && bonusEnabled && <Slide5 bonusAmount={platformConfig.welcomeBonusAmount} />}
       </div>
 
       {/* Progress dots */}
@@ -367,22 +300,3 @@ const Slide4: React.FC<{ platformConfig: PlatformConfig; currentUser: CurrentUse
   );
 };
 
-// ── Slide 5 : Bonus de bienvenue ────────────────────────────────────
-const Slide5: React.FC<{ bonusAmount: number }> = ({ bonusAmount }) => (
-  <div className="relative flex flex-col items-center text-center gap-6 w-full">
-    <CoinRain show />
-    <div className="text-6xl animate-pop-in select-none">🎁</div>
-    <div className="space-y-2">
-      <p className="text-slate-400 text-sm font-semibold uppercase tracking-widest">Bonus de bienvenue</p>
-      <p className="text-5xl font-black text-white">
-        +{bonusAmount.toFixed(2)} <span className="text-blue-400">TON</span>
-      </p>
-      <p className="text-slate-400 text-sm">Crédité immédiatement sur votre solde</p>
-    </div>
-    <div className="px-5 py-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/20">
-      <p className="text-xs text-emerald-400 font-semibold">
-        Aucun dépôt requis · Retrait possible dès 0.1 TON
-      </p>
-    </div>
-  </div>
-);
