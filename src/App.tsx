@@ -471,6 +471,7 @@ export default function App() {
           banned?: boolean; withdrawalBlocked?: boolean;
           appBalance?: number | null; appTotalEarnings?: number | null;
           appTasksCompleted?: number | null; appCompletedTasks?: string[];
+          claimedMilestoneIds?: string[];
         };
         if (typeof apiData.appBalance === 'number') {
           const localBalance = useAppStore.getState().currentUser.balanceMain;

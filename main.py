@@ -108,6 +108,16 @@ GAME_CONFIG: dict[str, dict] = {
 GAME_MIN_BET        = float(os.getenv("GAME_MIN_BET",        "0.001"))
 GAME_DAILY_WIN_LIMIT = float(os.getenv("GAME_DAILY_WIN_LIMIT", "50.0"))
 
+# ── Referral milestone defaults (mirror of frontend _defaultReferralMilestones) ─
+# Admin can override via /api/admin/config key "referralMilestones".
+_DEFAULT_REFERRAL_MILESTONES: list[dict] = [
+    {"id": "1", "referralCount": 5,   "reward": 2.00,  "description": "Invitez 5 amis",   "isActive": True},
+    {"id": "2", "referralCount": 20,  "reward": 10.00, "description": "Invitez 20 amis",  "isActive": True},
+    {"id": "3", "referralCount": 50,  "reward": 30.00, "description": "Invitez 50 amis",  "isActive": True},
+    {"id": "4", "referralCount": 100, "reward": 75.00, "description": "Invitez 100 amis", "isActive": True},
+]
+MILESTONE_MAX_REWARD = float(os.getenv("MILESTONE_MAX_REWARD", "500.0"))
+
 # ── Platform task definitions (server-authoritative) ──────────────────────────
 # Keys must match id values in frontend _defaultTasks.
 # verification: 'none'|'channel'|'bot'|'timer'|'referral'|'proof'
@@ -608,6 +618,16 @@ async def init_db() -> None:
             "CREATE INDEX IF NOT EXISTS idx_gr_lookup"
             " ON game_rounds(telegram_id, created_at)"
         )
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS milestone_claims (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                telegram_id  INTEGER NOT NULL,
+                milestone_id TEXT    NOT NULL,
+                reward       REAL    NOT NULL,
+                claimed_at   TEXT    NOT NULL DEFAULT (datetime('now')),
+                UNIQUE(telegram_id, milestone_id)
+            )
+        """)
         # A given on-chain tx hash may only be credited once — blocks deposit replay
         await db.execute("""
             CREATE UNIQUE INDEX IF NOT EXISTS idx_deposit_txhash
@@ -1070,6 +1090,13 @@ async def api_user_init(request: web.Request) -> web.Response:
         ) as cur:
             server_ptc = [r[0] async for r in cur]
 
+        # Claimed referral milestones — prevents re-claiming after localStorage clear.
+        async with db.execute(
+            "SELECT milestone_id FROM milestone_claims WHERE telegram_id = ?",
+            (telegram_id,)
+        ) as cur:
+            server_milestones = [r[0] async for r in cur]
+
     completed_tasks: list = []
     if row and row[8]:
         try:
@@ -1082,15 +1109,16 @@ async def api_user_init(request: web.Request) -> web.Response:
     completed_tasks = list(set(completed_tasks) | set(server_ptc))
 
     return web.json_response({
-        "referralCount":      row[0] if row else 0,
-        "referralBalance":    row[1] if row else 0.0,
-        "flagged":            bool(row[2]) if row else False,
-        "banned":             bool(row[3]) if row else False,
-        "withdrawalBlocked":  bool(row[4]) if row else False,
-        "appBalance":         row[5] if row else None,
-        "appTotalEarnings":   row[6] if row else None,
-        "appTasksCompleted":  row[7] if row else None,
-        "appCompletedTasks":  completed_tasks,
+        "referralCount":        row[0] if row else 0,
+        "referralBalance":      row[1] if row else 0.0,
+        "flagged":              bool(row[2]) if row else False,
+        "banned":               bool(row[3]) if row else False,
+        "withdrawalBlocked":    bool(row[4]) if row else False,
+        "appBalance":           row[5] if row else None,
+        "appTotalEarnings":     row[6] if row else None,
+        "appTasksCompleted":    row[7] if row else None,
+        "appCompletedTasks":    completed_tasks,
+        "claimedMilestoneIds":  server_milestones,
     }, headers=_CORS)
 
 
@@ -2092,6 +2120,7 @@ _PUBLIC_CONFIG_KEYS = {
     "maintenanceMode", "maintenanceMessage", "registrationEnabled",
     "referralBonusSignup", "referralBonusActivity", "referralBonusDeposit",
     "referralBonusDepositPercent", "referralLevels", "referralCodeLength",
+    "referralMilestones",
     "streakBonusPerDay", "bonusTaskMultiplier",
     "depositBonusPercent", "firstDepositBonus",
     "botUsername", "appShortName",
@@ -3868,6 +3897,109 @@ async def api_game_result(request: web.Request) -> web.Response:
     return web.json_response({"success": True, "newBalance": new_balance}, headers=_CORS)
 
 
+# ── API — Referral milestone claim ────────────────────────────────────────────
+
+async def api_referral_milestone_claim(request: web.Request) -> web.Response:
+    """Claim a referral milestone reward — server validates referral_count and deduplicates.
+
+    Security model:
+    - initData signature verifies Telegram identity
+    - Milestone config read from platform_config (admin-writable), falls back to defaults
+    - referral_count checked against DB (not client state)
+    - UNIQUE(telegram_id, milestone_id) constraint blocks replay atomically
+    - reward capped at MILESTONE_MAX_REWARD to limit damage from misconfigured milestones
+    """
+    ip = _client_ip(request)
+    if _is_rate_limited(ip):
+        return web.json_response({"error": "Rate limit exceeded"}, status=429, headers=_CORS)
+
+    try:
+        data = await request.json()
+    except Exception:
+        return web.json_response({"error": "Invalid JSON"}, status=400, headers=_CORS)
+
+    telegram_id  = _parse_telegram_id(data.get("telegramId"))
+    milestone_id = str(data.get("milestoneId", "")).strip()[:64]
+    init_data    = str(data.get("initData", "")).strip()
+
+    if not telegram_id or not milestone_id:
+        return web.json_response({"error": "Données manquantes"}, status=400, headers=_CORS)
+
+    if not _verify_user_request(init_data, telegram_id):
+        return web.json_response({"error": "Authentification requise"}, status=401, headers=_CORS)
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        # Load milestone config from platform_config (admin-overridable)
+        async with db.execute(
+            "SELECT value FROM platform_config WHERE key = 'referralMilestones'"
+        ) as cur:
+            cfg_row = await cur.fetchone()
+
+        milestones = _DEFAULT_REFERRAL_MILESTONES
+        if cfg_row:
+            try:
+                parsed = json.loads(cfg_row[0])
+                if isinstance(parsed, list) and parsed:
+                    milestones = parsed
+            except (ValueError, TypeError):
+                pass
+
+        # Find the requested milestone
+        milestone = next((m for m in milestones if str(m.get("id", "")) == milestone_id), None)
+        if not milestone:
+            return web.json_response({"error": "Milestone introuvable"}, status=404, headers=_CORS)
+        if not milestone.get("isActive", True):
+            return web.json_response({"error": "Milestone inactif"}, status=400, headers=_CORS)
+
+        reward            = float(milestone.get("reward", 0))
+        required_referrals = int(milestone.get("referralCount", 0))
+
+        if reward <= 0 or reward > MILESTONE_MAX_REWARD:
+            return web.json_response({"error": "Récompense invalide"}, status=400, headers=_CORS)
+
+        # Server-authoritative referral count check
+        async with db.execute(
+            "SELECT referral_count, banned FROM users WHERE telegram_id = ?", (telegram_id,)
+        ) as cur:
+            urow = await cur.fetchone()
+
+        if not urow:
+            return web.json_response({"error": "Utilisateur introuvable"}, status=404, headers=_CORS)
+        if urow[1]:
+            return web.json_response({"error": "Compte banni"}, status=403, headers=_CORS)
+
+        referral_count = int(urow[0] or 0)
+        if referral_count < required_referrals:
+            return web.json_response(
+                {"error": f"Filleuls insuffisants ({referral_count}/{required_referrals})"},
+                status=400, headers=_CORS,
+            )
+
+        # Atomic insert — UNIQUE constraint blocks re-claim
+        try:
+            await db.execute(
+                "INSERT INTO milestone_claims (telegram_id, milestone_id, reward) VALUES (?, ?, ?)",
+                (telegram_id, milestone_id, reward),
+            )
+        except aiosqlite.IntegrityError:
+            return web.json_response({"error": "Milestone déjà réclamé"}, status=409, headers=_CORS)
+
+        await db.execute(
+            "UPDATE users SET app_balance = COALESCE(app_balance, 0) + ? WHERE telegram_id = ?",
+            (reward, telegram_id),
+        )
+        await db.commit()
+
+        async with db.execute(
+            "SELECT app_balance FROM users WHERE telegram_id = ?", (telegram_id,)
+        ) as cur:
+            brow = await cur.fetchone()
+        new_balance = float(brow[0] or 0) if brow else reward
+
+    log.info("Milestone claimed: user=%d milestone=%s reward=%.2f", telegram_id, milestone_id, reward)
+    return web.json_response({"success": True, "reward": reward, "newBalance": new_balance}, headers=_CORS)
+
+
 # ── Web Application ────────────────────────────────────────────────────────────
 
 async def start_web() -> None:
@@ -3889,6 +4021,7 @@ async def start_web() -> None:
     app.router.add_post("/api/platform-tasks/complete",      api_platform_task_complete)
     app.router.add_get( "/api/platform-tasks/completed",     api_platform_tasks_completed)
     app.router.add_post("/api/game/result",                   api_game_result)
+    app.router.add_post("/api/referral/milestone/claim",      api_referral_milestone_claim)
     app.router.add_get( "/api/check-membership",           api_check_membership)
     app.router.add_get( "/api/check-bot-start",            api_check_bot_start)
     app.router.add_get( "/api/check-bot-verify",           api_check_bot_verify)

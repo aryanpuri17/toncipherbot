@@ -868,12 +868,12 @@ interface AppState {
   completeTaskSecure: (taskId: string) => Promise<{ success: boolean; earned?: number; error?: string }>;
   creditReferralBonus: (earned: number) => void;
   submitWithdrawal: (networkId: string, amount: number, address: string) => Promise<{ success: boolean; error?: string }>;
-  claimReferralMilestone: (id: string) => void;
+  claimReferralMilestone: (id: string) => Promise<void>;
   addReferralMilestone: (milestone: Omit<ReferralMilestone, 'id'>) => void;
   updateReferralMilestone: (id: string, data: Partial<ReferralMilestone>) => void;
   deleteReferralMilestone: (id: string) => void;
   initFromTelegram: (user: { id: number; first_name: string; last_name?: string; username?: string; photo_url?: string }) => void;
-  syncUserFromApi: (data: { referralCount: number; referralBalance: number; flagged: boolean; banned?: boolean; withdrawalBlocked?: boolean }) => void;
+  syncUserFromApi: (data: { referralCount: number; referralBalance: number; flagged: boolean; banned?: boolean; withdrawalBlocked?: boolean; claimedMilestoneIds?: string[] }) => void;
   adoptServerBalance: (data: { balance: number; totalEarnings: number; tasksCompleted: number; referralBalance: number; completedTaskIds: string[] }) => void;
   placeGameBet: (bet: number, win: number) => void;
   activatePromoEvent: (multiplier: number, hours: number, label: string) => void;
@@ -1296,31 +1296,69 @@ export const useAppStore = create<AppState>((set, get) => ({
       ...(data.banned             !== undefined && { status: data.banned ? 'banned' as const : s.currentUser.status }),
       ...(data.withdrawalBlocked  !== undefined && { withdrawalBlocked: data.withdrawalBlocked }),
     };
+    const serverClaimed = data.claimedMilestoneIds ?? [];
+    const mergedClaimed = serverClaimed.length > 0
+      ? Array.from(new Set([...s.claimedReferralMilestoneIds, ...serverClaimed]))
+      : s.claimedReferralMilestoneIds;
+    if (mergedClaimed !== s.claimedReferralMilestoneIds) {
+      try { localStorage.setItem('tc_claimed_milestones', JSON.stringify(mergedClaimed)); } catch { /* noop */ }
+    }
     return {
       currentUser: updatedUser,
       users: s.users.map(u => u.id === s.currentUser.id ? updatedUser : u),
       lastSyncedReferralBalance: data.referralBalance,
+      claimedReferralMilestoneIds: mergedClaimed,
     };
   }),
 
-  claimReferralMilestone: (id) => {
+  claimReferralMilestone: async (id) => {
     const state = get();
     if (state.claimedReferralMilestoneIds.includes(id)) return;
     const milestone = state.referralMilestones.find(m => m.id === id);
     if (!milestone || !milestone.isActive) return;
     if (state.currentUser.referralCount < milestone.referralCount) return;
-    const milestoneUpdate = {
-      balanceMain: state.currentUser.balanceMain + milestone.reward,
-      totalEarnings: state.currentUser.totalEarnings + milestone.reward,
-    };
-    const newIds = [...state.claimedReferralMilestoneIds, id];
-    localStorage.setItem('tc_claimed_milestones', JSON.stringify(newIds));
-    set(s => ({
-      claimedReferralMilestoneIds: [...s.claimedReferralMilestoneIds, id],
-      currentUser: { ...s.currentUser, ...milestoneUpdate },
-      users: s.users.map(u => u.id === state.currentUser.id ? { ...u, ...milestoneUpdate } : u),
-    }));
-    get().addTransaction({ userId: state.currentUser.id, type: 'reward', amount: milestone.reward, currency: 'TON', status: 'completed', completedAt: new Date().toISOString() });
+
+    // Dev mode (telegramId 0): skip server, apply locally
+    if (state.currentUser.telegramId === 0) {
+      const reward = milestone.reward;
+      const newIds = [...state.claimedReferralMilestoneIds, id];
+      localStorage.setItem('tc_claimed_milestones', JSON.stringify(newIds));
+      set(s => ({
+        claimedReferralMilestoneIds: newIds,
+        currentUser: { ...s.currentUser, balanceMain: s.currentUser.balanceMain + reward, totalEarnings: s.currentUser.totalEarnings + reward },
+        users: s.users.map(u => u.id === state.currentUser.id ? { ...u, balanceMain: u.balanceMain + reward, totalEarnings: u.totalEarnings + reward } : u),
+      }));
+      get().addTransaction({ userId: state.currentUser.id, type: 'reward', amount: reward, currency: 'TON', status: 'completed', completedAt: new Date().toISOString() });
+      return;
+    }
+
+    const initData = (window as unknown as { Telegram?: { WebApp?: { initData?: string } } })?.Telegram?.WebApp?.initData ?? '';
+    try {
+      const res = await fetch('/api/referral/milestone/claim', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ telegramId: state.currentUser.telegramId, milestoneId: id, initData }),
+      });
+      const body = await res.json() as { success?: boolean; reward?: number; newBalance?: number; error?: string };
+      if (!res.ok || !body.success) return;
+
+      const reward = body.reward ?? milestone.reward;
+      const newIds = [...get().claimedReferralMilestoneIds, id];
+      localStorage.setItem('tc_claimed_milestones', JSON.stringify(newIds));
+      set(s => {
+        const updatedUser = {
+          ...s.currentUser,
+          balanceMain:   typeof body.newBalance === 'number' ? body.newBalance : s.currentUser.balanceMain + reward,
+          totalEarnings: s.currentUser.totalEarnings + reward,
+        };
+        return {
+          claimedReferralMilestoneIds: newIds,
+          currentUser: updatedUser,
+          users: s.users.map(u => u.id === state.currentUser.id ? { ...u, ...updatedUser } : u),
+        };
+      });
+      get().addTransaction({ userId: state.currentUser.id, type: 'reward', amount: reward, currency: 'TON', status: 'completed', completedAt: new Date().toISOString() });
+    } catch { /* server unavailable — silently skip */ }
   },
 
   submitWithdrawal: async (networkId, amount, address) => {
@@ -1602,9 +1640,27 @@ export const useAppStore = create<AppState>((set, get) => ({
   deleteAdminUser: (id) => set((s) => ({ adminUsers: s.adminUsers.filter(a => a.id !== id) })),
 
   // Referral Milestone CRUD
-  addReferralMilestone: (milestone) => set((s) => ({ referralMilestones: [...s.referralMilestones, { ...milestone, id: generateId() }].sort((a, b) => a.referralCount - b.referralCount) })),
-  updateReferralMilestone: (id, data) => set((s) => ({ referralMilestones: s.referralMilestones.map(m => m.id === id ? { ...m, ...data } : m) })),
-  deleteReferralMilestone: (id) => set((s) => ({ referralMilestones: s.referralMilestones.filter(m => m.id !== id) })),
+  addReferralMilestone: (milestone) => {
+    set(s => {
+      const updated = [...s.referralMilestones, { ...milestone, id: generateId() }].sort((a, b) => a.referralCount - b.referralCount);
+      void pushConfigToBackend('referralMilestones', updated);
+      return { referralMilestones: updated };
+    });
+  },
+  updateReferralMilestone: (id, data) => {
+    set(s => {
+      const updated = s.referralMilestones.map(m => m.id === id ? { ...m, ...data } : m);
+      void pushConfigToBackend('referralMilestones', updated);
+      return { referralMilestones: updated };
+    });
+  },
+  deleteReferralMilestone: (id) => {
+    set(s => {
+      const updated = s.referralMilestones.filter(m => m.id !== id);
+      void pushConfigToBackend('referralMilestones', updated);
+      return { referralMilestones: updated };
+    });
+  },
 
   // Others
   updateFraudAlert: (id, data) => set((s) => ({ fraudAlerts: s.fraudAlerts.map(a => a.id === id ? { ...a, ...data } : a) })),
