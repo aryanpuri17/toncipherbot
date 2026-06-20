@@ -448,18 +448,45 @@ export const MiniAppTasks: React.FC = () => {
   const handleVerify = async (card: CardTask) => {
     haptic.impact('light');
 
-    // ── INSTANT timer check — no loading, no spinner, all task types ───────────
-    const entry = parseDeparture(localStorage.getItem(departKey(card.id)));
-    const elapsed = entry ? Date.now() - entry.ts : 0;
-    const required = entry?.ms ?? REQUIRED_MS;
-    if (!entry || elapsed < required) {
-      setTooEarlyInfo(prev => ({ ...prev, [card.id]: true }));
-      haptic.error();
-      return; // instant — no loading, no phase change
+    const isTimerTask   = card.type === 'social' || card.type === 'watch_video' || card.type === 'start_bot';
+    const isChannelTask = card.type === 'join_channel' || card.type === 'join_group';
+
+    // ── Timer tasks: instant check, no server, no loading ─────────────────────
+    if (isTimerTask) {
+      const entry    = parseDeparture(localStorage.getItem(departKey(card.id)));
+      const elapsed  = entry ? Date.now() - entry.ts : 0;
+      const required = entry?.ms ?? REQUIRED_MS;
+      if (!entry || elapsed < required) {
+        setTooEarlyInfo(prev => ({ ...prev, [card.id]: true }));
+        haptic.error();
+        return; // instant feedback — no spinner shown
+      }
+      setTooEarlyInfo(prev => { const n = { ...prev }; delete n[card.id]; return n; });
     }
 
-    // Timer passed — credit immediately
-    setTooEarlyInfo(prev => { const n = { ...prev }; delete n[card.id]; return n; });
+    // ── Channel/group tasks: real membership check (5s timeout) ───────────────
+    if (isChannelTask) {
+      setPhase(card.id, 'verifying');
+      if (card.targetUrl) {
+        const chatRefMatch = card.targetUrl.match(/t\.me\/([^/?+]+)/);
+        const chatRef = chatRefMatch?.[1];
+        if (chatRef && !chatRef.startsWith('+')) {
+          try {
+            const ctrl = new AbortController();
+            const tId  = setTimeout(() => ctrl.abort(), 5000);
+            const res  = await fetch(
+              `/api/check-membership?telegram_id=${currentUser.telegramId}&chat_id=${encodeURIComponent(`@${chatRef}`)}`,
+              { signal: ctrl.signal },
+            );
+            clearTimeout(tId);
+            const { member } = await res.json() as { member: boolean };
+            if (!member) { setPhase(card.id, 'not_subscribed'); haptic.error(); return; }
+          } catch { /* timeout / network error — allow through */ }
+        }
+      }
+    }
+
+    // ── All checks passed — credit ─────────────────────────────────────────────
     localStorage.removeItem(departKey(card.id));
     const autoKey = `depart_auto_${card.id}`;
     if (timerRefs.current[autoKey]) { clearTimeout(timerRefs.current[autoKey]); delete timerRefs.current[autoKey]; }
@@ -639,9 +666,13 @@ export const MiniAppTasks: React.FC = () => {
             ) : (
               <>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <Loader2 style={{ width: 16, height: 16, color: '#fbbf24', animation: 'spin 2s linear infinite', flexShrink: 0 }} />
+                  {(card.type === 'social' || card.type === 'watch_video' || card.type === 'start_bot') && (
+                    <Loader2 style={{ width: 16, height: 16, color: '#fbbf24', animation: 'spin 2s linear infinite', flexShrink: 0 }} />
+                  )}
                   <span style={{ fontSize: 11, color: '#fbbf24', fontWeight: 600 }}>
-                    Rejoins, puis reviens cliquer sur Vérifier
+                    {(card.type === 'join_channel' || card.type === 'join_group')
+                      ? 'Abonne-toi, puis clique Vérifier'
+                      : 'Rejoins, puis reviens cliquer sur Vérifier'}
                   </span>
                 </div>
                 <button onClick={() => void handleVerify(card)} style={{
