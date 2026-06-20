@@ -291,7 +291,7 @@ export const AdminOverview: React.FC = () => {
                   </span>
                 </div>
                 <p className="text-xs text-slate-500 truncate">{alert.alert_type.replace(/_/g, ' ')}</p>
-                <p className="text-[10px] text-slate-600 mt-1">Score: {alert.risk_score}/100 · {new Date(alert.created_at).toLocaleString('fr-FR')}</p>
+                <p className="text-[10px] text-slate-600 mt-1">Score: {alert.risk_score}/100 · {new Date(alert.created_at).toLocaleString('en-US')}</p>
               </div>
             ))}
           </div>
