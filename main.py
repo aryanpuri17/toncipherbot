@@ -85,6 +85,17 @@ _ton_price_cache: dict = {"price": None, "ts": 0}
 # Keys must match id values in frontend _defaultTasks.
 # verification: 'none'|'channel'|'bot'|'timer'|'referral'|'proof'
 # max_per_user: 0 = unlimited with cooldown, 1 = one-time only
+# ── Withdrawal security limits (overridable via env vars) ─────────────────────
+WD_MIN_AMOUNT  = float(os.getenv("WD_MIN_AMOUNT",  "0.1"))    # minimum per withdrawal (GRAM)
+WD_MAX_AMOUNT  = float(os.getenv("WD_MAX_AMOUNT",  "5000.0")) # maximum per withdrawal (GRAM)
+WD_DAILY_LIMIT = float(os.getenv("WD_DAILY_LIMIT", "1000.0")) # per-user daily total (GRAM)
+WD_MAX_PENDING = int(os.getenv("WD_MAX_PENDING",   "3"))       # max simultaneous pending per user
+WD_MIN_TASKS   = int(os.getenv("WD_MIN_TASKS",     "3"))       # min completed tasks before first withdrawal
+
+# ── Platform task definitions (server-authoritative) ──────────────────────────
+# Keys must match id values in frontend _defaultTasks.
+# verification: 'none'|'channel'|'bot'|'timer'|'referral'|'proof'
+# max_per_user: 0 = unlimited with cooldown, 1 = one-time only
 PLATFORM_TASKS: dict[str, dict] = {
     "1":  {"type": "daily",        "reward": 0.10,  "cooldown_hours": 24, "verification": "none",     "target": None,                 "max_per_user": 0},
     "2":  {"type": "join_channel", "reward": 0.002, "cooldown_hours":  0, "verification": "channel",  "target": "@TonCipher_Official", "max_per_user": 1},
@@ -1231,6 +1242,15 @@ async def api_deposit_record(request: web.Request) -> web.Response:
 # ── API — Create withdrawal request (called by frontend on submit) ─────────────
 
 async def api_withdrawal_create(request: web.Request) -> web.Response:
+    """Create a withdrawal request with full server-side validation.
+
+    Security model:
+    - Transaction ID is generated SERVER-SIDE (client ID is ignored)
+    - app_balance is checked and atomically reserved before confirming
+    - Duplicate / concurrent requests blocked by the atomic UPDATE
+    - Daily limit, pending cap, min tasks all validated against DB (not client state)
+    - initData signature verifies the caller's Telegram identity
+    """
     ip = _client_ip(request)
     if _is_rate_limited(ip):
         return web.json_response({"error": "Rate limit exceeded"}, status=429, headers=_CORS)
@@ -1240,55 +1260,139 @@ async def api_withdrawal_create(request: web.Request) -> web.Response:
     except Exception:
         return web.json_response({"error": "Invalid JSON"}, status=400, headers=_CORS)
 
-    tx_id       = str(data.get("id", "")).strip() or _short_id()
     telegram_id = _parse_telegram_id(data.get("telegramId"))
     amount      = _parse_amount(data.get("amount"))
-    currency    = str(data.get("currency", "TON"))
-    network     = str(data.get("network",  "TON"))
-    address     = ( data.get("address") or "").strip()
+    currency    = str(data.get("currency", "TON"))[:10]
+    network     = str(data.get("network",  "TON"))[:20]
+    address     = (data.get("address") or "").strip()[:128]
     fee         = _parse_amount(data.get("fee")) or 0.0
     init_data   = str(data.get("initData", "")).strip()
 
-    if not telegram_id or amount is None or len(address) < 20:
-        return web.json_response({"error": "Invalid data"}, status=400, headers=_CORS)
+    # ── Basic input validation ─────────────────────────────────────────────────
+    if not telegram_id or amount is None:
+        return web.json_response({"error": "Données manquantes"}, status=400, headers=_CORS)
+    if len(address) < 20:
+        return web.json_response({"error": "Adresse invalide (trop courte)"}, status=400, headers=_CORS)
+    if amount < WD_MIN_AMOUNT:
+        return web.json_response(
+            {"error": f"Montant minimum : {WD_MIN_AMOUNT} GRAM"}, status=400, headers=_CORS
+        )
+    if amount > WD_MAX_AMOUNT:
+        return web.json_response(
+            {"error": f"Montant maximum : {WD_MAX_AMOUNT} GRAM"}, status=400, headers=_CORS
+        )
 
-    # Authenticate: verify initData signature and confirm the caller is who they claim
-    if BOT_TOKEN:
-        if not init_data or not _validate_init_data(init_data, BOT_TOKEN):
-            return web.json_response({"error": "Authentication required"}, status=401, headers=_CORS)
-        authed_id = _init_data_user_id(init_data)
-        if authed_id != telegram_id:
-            log.warning("Withdrawal impersonation attempt: claimed=%d authed=%d addr=%s",
-                        telegram_id, authed_id, address[:12])
-            return web.json_response({"error": "Identity mismatch"}, status=403, headers=_CORS)
+    # ── Identity verification ─────────────────────────────────────────────────
+    if not _verify_user_request(init_data, telegram_id):
+        if BOT_TOKEN:
+            authed_id = _init_data_user_id(init_data)
+            if authed_id and authed_id != telegram_id:
+                log.warning("Withdrawal impersonation: claimed=%d authed=%d addr=%s",
+                            telegram_id, authed_id, address[:12])
+            return web.json_response({"error": "Authentification requise"}, status=401, headers=_CORS)
 
     async with aiosqlite.connect(DB_PATH) as db:
+        # ── User status check ──────────────────────────────────────────────────
         async with db.execute(
-            "SELECT banned, withdrawal_blocked FROM users WHERE telegram_id = ?", (telegram_id,)
-        ) as cur:
-            row = await cur.fetchone()
-        if row:
-            if row[0]:
-                return web.json_response({"error": "Account banned"}, status=403, headers=_CORS)
-            if row[1]:
-                return web.json_response({"error": "Withdrawals blocked"}, status=403, headers=_CORS)
-
-        await db.execute("""
-            INSERT OR IGNORE INTO transactions
-                (id, telegram_id, type, amount, currency, network, address, status, fee)
-            VALUES (?, ?, 'withdrawal', ?, ?, ?, ?, 'pending', ?)
-        """, (tx_id, telegram_id, amount, currency, network, address, fee))
-        await db.commit()
-
-        # Fetch user info for the notification
-        async with db.execute(
-            "SELECT username, first_name, flagged FROM users WHERE telegram_id = ?", (telegram_id,)
+            "SELECT banned, withdrawal_blocked, app_balance, app_tasks_completed,"
+            "       username, first_name, flagged"
+            " FROM users WHERE telegram_id = ?",
+            (telegram_id,)
         ) as cur:
             urow = await cur.fetchone()
 
-    uname    = urow[0] if urow else ""
-    fname    = urow[1] if urow else ""
-    is_flagged = bool(urow[2]) if urow else False
+        if not urow:
+            return web.json_response({"error": "Utilisateur introuvable"}, status=404, headers=_CORS)
+
+        banned, wd_blocked, app_balance, tasks_done, uname, fname, is_flagged = urow
+        app_balance  = float(app_balance  or 0)
+        tasks_done   = int(tasks_done or 0)
+
+        if banned:
+            return web.json_response({"error": "Compte banni"}, status=403, headers=_CORS)
+        if wd_blocked:
+            return web.json_response({"error": "Retraits bloqués sur ce compte"}, status=403, headers=_CORS)
+
+        # ── Minimum tasks requirement ──────────────────────────────────────────
+        if tasks_done < WD_MIN_TASKS:
+            return web.json_response(
+                {"error": f"Complétez au moins {WD_MIN_TASKS} tâches avant de retirer "
+                          f"({tasks_done}/{WD_MIN_TASKS})"},
+                status=400, headers=_CORS
+            )
+
+        # ── Server-side balance check ──────────────────────────────────────────
+        if app_balance < amount:
+            return web.json_response(
+                {"error": f"Solde insuffisant ({app_balance:.4f} GRAM disponibles)"},
+                status=400, headers=_CORS
+            )
+
+        # ── Pending withdrawal cap (anti double-spend) ─────────────────────────
+        async with db.execute(
+            "SELECT COUNT(*), COALESCE(SUM(amount),0)"
+            " FROM transactions"
+            " WHERE telegram_id = ? AND type = 'withdrawal' AND status = 'pending'",
+            (telegram_id,)
+        ) as cur:
+            pending_count, pending_sum = await cur.fetchone()
+        if pending_count >= WD_MAX_PENDING:
+            return web.json_response(
+                {"error": f"Vous avez déjà {pending_count} retraits en attente. "
+                          f"Attendez qu'ils soient traités."},
+                status=400, headers=_CORS
+            )
+        # Ensure pending + new request does not exceed actual balance
+        if float(pending_sum or 0) + amount > app_balance:
+            return web.json_response(
+                {"error": "Solde insuffisant (retrait en attente pris en compte)"},
+                status=400, headers=_CORS
+            )
+
+        # ── Daily limit check ─────────────────────────────────────────────────
+        async with db.execute(
+            "SELECT COALESCE(SUM(amount),0)"
+            " FROM transactions"
+            " WHERE telegram_id = ? AND type = 'withdrawal'"
+            "   AND status != 'rejected'"
+            "   AND DATE(created_at) = DATE('now')",
+            (telegram_id,)
+        ) as cur:
+            (daily_total,) = await cur.fetchone()
+        if float(daily_total or 0) + amount > WD_DAILY_LIMIT:
+            remaining = max(0, WD_DAILY_LIMIT - float(daily_total or 0))
+            return web.json_response(
+                {"error": f"Limite journalière atteinte. Restant aujourd'hui : {remaining:.2f} GRAM"},
+                status=400, headers=_CORS
+            )
+
+        # ── Atomic balance reservation ─────────────────────────────────────────
+        # Only succeeds if app_balance is still sufficient (race-condition-safe).
+        upd = await db.execute(
+            "UPDATE users SET app_balance = app_balance - ?"
+            " WHERE telegram_id = ? AND COALESCE(app_balance, 0) >= ?",
+            (amount, telegram_id, amount)
+        )
+        if upd.rowcount == 0:
+            return web.json_response(
+                {"error": "Solde insuffisant (actualisé) — réessayez"},
+                status=400, headers=_CORS
+            )
+
+        # ── Insert withdrawal record with SERVER-GENERATED id ──────────────────
+        tx_id = str(uuid.uuid4())
+        await db.execute(
+            "INSERT INTO transactions"
+            " (id, telegram_id, type, amount, currency, network, address, status, fee)"
+            " VALUES (?, ?, 'withdrawal', ?, ?, ?, ?, 'pending', ?)",
+            (tx_id, telegram_id, amount, currency, network, address, fee)
+        )
+        await db.commit()
+
+    # Fetch user info for the notification
+    uname  = uname  or ""
+    fname  = fname  or ""
+    is_flagged = bool(is_flagged)
 
     flag_warn = "\n⚠️ <b>Compte signalé (anti-fraude)</b> — vérification recommandée." if is_flagged else ""
     from datetime import datetime as _dt
