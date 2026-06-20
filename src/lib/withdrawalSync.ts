@@ -101,6 +101,11 @@ export function processServerTransactions(list: ServerTx[], suppressEffects = fa
     }
   }
 
+  // Write to localStorage BEFORE setState — if the process crashes between
+  // here and the state update, IDs are already marked so no double-credit on reopen.
+  writeProcessed(processed);
+  if (newDeposits.length > 0) writeDepCredited(depCredited);
+
   useAppStore.setState(s => {
     const byId = new Map(s.transactions.map(t => [t.id, t] as const));
     let changed = false;
@@ -171,11 +176,6 @@ export function processServerTransactions(list: ServerTx[], suppressEffects = fa
       isRead: false,
     });
   }
-
-  // Write both sets to localStorage BEFORE setState so a crash between here
-  // and the state update cannot cause double-crediting on the next open.
-  writeProcessed(processed);
-  if (newDeposits.length > 0) writeDepCredited(depCredited);
 
   for (const tx of newDeposits) {
     const { addNotification } = useAppStore.getState();
