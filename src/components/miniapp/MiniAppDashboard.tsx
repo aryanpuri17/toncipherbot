@@ -151,30 +151,28 @@ export const MiniAppDashboard: React.FC = () => {
 
       {/* Quick Stats */}
       <div className="grid grid-cols-2 gap-3">
-        <div className="stat-card glass-card p-4 relative overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-br from-blue-500/8 to-transparent pointer-events-none rounded-2xl" />
+        <div className="stat-card glass-card p-4 relative overflow-hidden" style={{ background: 'rgba(79,111,240,0.07)', border: '1px solid rgba(79,111,240,0.18)', borderRadius: 16 }}>
           <div className="relative">
-            <div className="w-8 h-8 rounded-lg bg-blue-500/15 flex items-center justify-center mb-2">
-              <ListTodo className="w-4 h-4 text-blue-400" />
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center mb-2.5" style={{ background: 'rgba(79,111,240,0.18)', boxShadow: '0 4px 12px rgba(79,111,240,0.28)' }}>
+              <ListTodo className="w-4 h-4" style={{ color: '#7B93F5' }} />
             </div>
             <p className="text-2xl font-bold text-white leading-none">
               <CountUp value={u.tasksCompleted} decimals={0} animateOnMount />
             </p>
             <p className="text-[11px] text-slate-400 mt-1">Tâches complétées</p>
-            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-500/60 to-transparent rounded-b-2xl" />
+            <div className="absolute bottom-0 left-0 right-0 h-0.5 rounded-b-2xl" style={{ background: 'linear-gradient(90deg,#4F6FF0,transparent)' }} />
           </div>
         </div>
-        <div className="stat-card glass-card p-4 relative overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/8 to-transparent pointer-events-none rounded-2xl" />
+        <div className="stat-card glass-card p-4 relative overflow-hidden" style={{ background: 'rgba(16,185,129,0.07)', border: '1px solid rgba(16,185,129,0.18)', borderRadius: 16 }}>
           <div className="relative">
-            <div className="w-8 h-8 rounded-lg bg-emerald-500/15 flex items-center justify-center mb-2">
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center mb-2.5" style={{ background: 'rgba(16,185,129,0.18)', boxShadow: '0 4px 12px rgba(16,185,129,0.25)' }}>
               <TrendingUp className="w-4 h-4 text-emerald-400" />
             </div>
             <p className="text-xl font-bold text-emerald-400 leading-none">
               <CountUp value={u.totalEarnings} decimals={2} animateOnMount suffix=" GRAM" />
             </p>
             <p className="text-[11px] text-slate-400 mt-1">Total gagné</p>
-            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-emerald-500/60 to-transparent rounded-b-2xl" />
+            <div className="absolute bottom-0 left-0 right-0 h-0.5 rounded-b-2xl" style={{ background: 'linear-gradient(90deg,#10b981,transparent)' }} />
           </div>
         </div>
       </div>
@@ -212,8 +210,11 @@ export const MiniAppDashboard: React.FC = () => {
       {/* Active Tasks Preview */}
       <div>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold text-white">Tâches disponibles</h2>
-          <button onClick={() => setMiniAppPage('tasks')} className="text-xs text-blue-400 flex items-center gap-1 hover:underline">
+          <div className="flex items-center gap-2">
+            <div style={{ width: 3, height: 16, borderRadius: 99, background: 'linear-gradient(180deg,#4F6FF0,#4F6FF055)', flexShrink: 0 }} />
+            <h2 className="text-sm font-semibold text-white">Tâches disponibles</h2>
+          </div>
+          <button onClick={() => setMiniAppPage('tasks')} className="text-xs flex items-center gap-1 hover:underline" style={{ color: '#7B93F5' }}>
             Voir tout <ChevronRight className="w-3 h-3" />
           </button>
         </div>
@@ -222,9 +223,9 @@ export const MiniAppDashboard: React.FC = () => {
             const isPromoActive = task.promotion && new Date(task.promotion.endsAt) > new Date();
             const displayReward = task.reward * (isPromoActive ? task.promotion!.multiplier : 1);
             return (
-              <div key={task.id} className={`glass-card-light p-3.5 flex items-center gap-3 ${isPromoActive ? 'border border-amber-500/30' : ''}`}>
-                <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-blue-500/20 text-blue-400 flex-shrink-0">
-                  {task.icon ? <span className="text-base">{task.icon}</span> : <ListTodo className="w-4 h-4" />}
+              <div key={task.id} className="p-3.5 flex items-center gap-3" style={{ background: isPromoActive ? 'rgba(245,158,11,0.07)' : 'rgba(79,111,240,0.07)', border: `1px solid ${isPromoActive ? 'rgba(245,158,11,0.25)' : 'rgba(79,111,240,0.18)'}`, borderRadius: 12 }}>
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(79,111,240,0.18)', boxShadow: '0 3px 10px rgba(79,111,240,0.25)' }}>
+                  {task.icon ? <span className="text-base">{task.icon}</span> : <ListTodo className="w-4 h-4" style={{ color: '#7B93F5' }} />}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5">

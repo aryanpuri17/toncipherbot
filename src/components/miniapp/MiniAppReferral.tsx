@@ -77,7 +77,7 @@ const Leaderboard: React.FC = () => {
         {data.map((user, i) => {
           const isMe = user.telegramId === currentUser.telegramId;
           return (
-            <div key={user.telegramId} className={`glass-card-light p-3.5 flex items-center gap-3 ${isMe ? 'border border-blue-500/30 bg-blue-500/5' : ''}`}>
+            <div key={user.telegramId} className="glass-card-light p-3.5 flex items-center gap-3" style={isMe ? { border: '1px solid rgba(79,111,240,0.30)', background: 'rgba(79,111,240,0.07)' } : {}}>
               <span className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${i === 0 ? 'bg-amber-500/20 text-amber-400' : i === 1 ? 'bg-slate-300/20 text-slate-300' : i === 2 ? 'bg-orange-700/20 text-orange-400' : 'bg-white/5 text-slate-400'}`}>
                 {i < 3 ? medals[i] : i + 1}
               </span>
@@ -178,16 +178,18 @@ export const MiniAppReferral: React.FC = () => {
   return (
     <div className="space-y-4 animate-slide-up">
       {/* ── Tab bar ── */}
-      <div className="flex gap-2 p-1 rounded-xl bg-white/[0.04] border border-white/5">
+      <div className="flex gap-2 p-1 rounded-xl" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}>
         <button
           onClick={() => setTab('invite')}
-          className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all ${tab === 'invite' ? 'bg-blue-500/20 text-blue-400 shadow-sm' : 'text-slate-400 hover:text-white'}`}
+          className="flex-1 py-2 rounded-lg text-sm font-semibold transition-all"
+          style={tab === 'invite' ? { background: 'rgba(79,111,240,0.18)', color: '#7B93F5', border: '1px solid rgba(79,111,240,0.30)' } : { color: '#64748b' }}
         >
           👥 Inviter
         </button>
         <button
           onClick={() => setTab('classement')}
-          className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all ${tab === 'classement' ? 'bg-blue-500/20 text-blue-400 shadow-sm' : 'text-slate-400 hover:text-white'}`}
+          className="flex-1 py-2 rounded-lg text-sm font-semibold transition-all"
+          style={tab === 'classement' ? { background: 'rgba(79,111,240,0.18)', color: '#7B93F5', border: '1px solid rgba(79,111,240,0.30)' } : { color: '#64748b' }}
         >
           🏆 Classement
         </button>
@@ -243,7 +245,8 @@ export const MiniAppReferral: React.FC = () => {
           <div className="grid grid-cols-2 gap-3">
             <button
               onClick={handleShare}
-              className="flex items-center justify-center gap-2 py-3.5 rounded-xl bg-blue-500 hover:bg-blue-400 active:bg-blue-600 transition-colors text-white text-sm font-bold shadow-lg shadow-blue-500/25"
+              className="flex items-center justify-center gap-2 py-3.5 rounded-xl text-white text-sm font-bold transition-all"
+              style={{ background: 'linear-gradient(135deg,#4F6FF0,#3B55D9)', boxShadow: '0 6px 20px rgba(79,111,240,0.35)' }}
             >
               <Share2 className="w-4 h-4" />
               Partager
@@ -270,16 +273,22 @@ export const MiniAppReferral: React.FC = () => {
 
           {/* How it works */}
           <div className="glass-card p-4 space-y-3">
-            <p className="text-xs font-bold text-slate-300 uppercase tracking-wider">Comment ça marche</p>
+            <div className="flex items-center gap-2">
+              <div style={{ width: 3, height: 14, borderRadius: 99, background: 'linear-gradient(180deg,#4F6FF0,#4F6FF055)' }} />
+              <p className="text-xs font-bold text-slate-300 uppercase tracking-wider">Comment ça marche</p>
+            </div>
             <div className="flex items-start gap-0">
               {[
-                { icon: <Share2 className="w-4 h-4" />, color: 'bg-blue-500/20 text-blue-400',     label: 'Partagez',      sub: 'Envoyez votre lien à un ami' },
-                { icon: <Users  className="w-4 h-4" />, color: 'bg-purple-500/20 text-purple-400', label: "Il s'inscrit",  sub: 'Via votre lien Telegram' },
-                { icon: <Gift   className="w-4 h-4" />, color: 'bg-emerald-500/20 text-emerald-400', label: 'Vous gagnez', sub: `+${SIGNUP_BONUS.toFixed(2)} GRAM + ${DEPOSIT_PCT}% tâches` },
+                { icon: <Share2 className="w-4 h-4" />, sig: true,  label: 'Partagez',     sub: 'Envoyez votre lien à un ami' },
+                { icon: <Users  className="w-4 h-4" />, sig: false, color: 'bg-purple-500/20 text-purple-400', label: "Il s'inscrit", sub: 'Via votre lien Telegram' },
+                { icon: <Gift   className="w-4 h-4" />, sig: false, color: 'bg-emerald-500/20 text-emerald-400', label: 'Vous gagnez', sub: `+${SIGNUP_BONUS.toFixed(2)} GRAM + ${DEPOSIT_PCT}% tâches` },
               ].map((step, i) => (
                 <React.Fragment key={i}>
                   <div className="flex flex-col items-center text-center flex-1 gap-2">
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${step.color}`}>
+                    <div
+                      className={`w-10 h-10 rounded-xl flex items-center justify-center ${step.sig ? '' : (step.color ?? '')}`}
+                      style={step.sig ? { background: 'rgba(79,111,240,0.18)', boxShadow: '0 4px 12px rgba(79,111,240,0.28)', color: '#7B93F5' } : {}}
+                    >
                       {step.icon}
                     </div>
                     <p className="text-xs font-semibold text-white leading-tight">{step.label}</p>
@@ -318,8 +327,8 @@ export const MiniAppReferral: React.FC = () => {
                         <div className="flex items-center gap-2">
                           <div className="flex-1 h-1.5 rounded-full bg-white/10 overflow-hidden">
                             <div
-                              className={`h-full rounded-full transition-all ${claimed ? 'bg-emerald-500' : unlocked ? 'bg-amber-500' : 'bg-blue-500'}`}
-                              style={{ width: `${progress * 100}%` }}
+                              className={`h-full rounded-full transition-all ${claimed ? 'bg-emerald-500' : unlocked ? 'bg-amber-500' : ''}`}
+                              style={{ width: `${progress * 100}%`, ...(!claimed && !unlocked ? { background: '#4F6FF0' } : {}) }}
                             />
                           </div>
                           <span className="text-[10px] text-slate-500 shrink-0">
