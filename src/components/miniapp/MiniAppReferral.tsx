@@ -230,7 +230,7 @@ export const MiniAppReferral: React.FC = () => {
                   <p className="text-[11px] text-blue-200 mt-0.5">GRAM earned</p>
                 </div>
                 <div className="rounded-xl bg-white/10 px-3 py-2.5">
-                  <p className="text-xl font-bold text-amber-300 leading-none">+{SIGNUP_BONUS.toFixed(2)}</p>
+                  <p className="text-xl font-bold text-amber-300 leading-none">+{SIGNUP_BONUS < 0.01 ? SIGNUP_BONUS.toFixed(4) : SIGNUP_BONUS.toFixed(2)}</p>
                   <p className="text-[11px] text-blue-200 mt-0.5">GRAM / friend joined</p>
                 </div>
                 <div className="rounded-xl bg-white/10 px-3 py-2.5">
@@ -281,7 +281,7 @@ export const MiniAppReferral: React.FC = () => {
               {[
                 { icon: <Share2 className="w-4 h-4" />, sig: true,  label: 'Share',     sub: 'Send your link to a friend' },
                 { icon: <Users  className="w-4 h-4" />, sig: false, color: 'bg-purple-500/20 text-purple-400', label: "They sign up", sub: 'Via your Telegram link' },
-                { icon: <Gift   className="w-4 h-4" />, sig: false, color: 'bg-emerald-500/20 text-emerald-400', label: 'You earn', sub: `+${SIGNUP_BONUS.toFixed(2)} GRAM + ${DEPOSIT_PCT}% tasks` },
+                { icon: <Gift   className="w-4 h-4" />, sig: false, color: 'bg-emerald-500/20 text-emerald-400', label: 'You earn', sub: `+${SIGNUP_BONUS < 0.01 ? SIGNUP_BONUS.toFixed(4) : SIGNUP_BONUS.toFixed(2)} GRAM + ${DEPOSIT_PCT}% tasks` },
               ].map((step, i) => (
                 <React.Fragment key={i}>
                   <div className="flex flex-col items-center text-center flex-1 gap-2">

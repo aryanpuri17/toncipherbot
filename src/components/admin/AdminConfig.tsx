@@ -40,13 +40,13 @@ export const AdminConfig: React.FC = () => {
       });
       const d = await res.json() as { success?: boolean; sent?: number; failed?: number; error?: string };
       if (d.success) {
-        setBroadcastResult(`✅ Envoyé à ${d.sent} utilisateurs (${d.failed} échecs)`);
+        setBroadcastResult(`✅ Sent to ${d.sent} users (${d.failed} failed)`);
         setBroadcastMsg('');
       } else {
-        setBroadcastResult(`❌ Erreur : ${d.error}`);
+        setBroadcastResult(`❌ Error: ${d.error}`);
       }
     } catch {
-      setBroadcastResult('❌ Erreur réseau');
+      setBroadcastResult('❌ Network error');
     } finally {
       setBroadcastLoading(false);
     }
@@ -105,21 +105,21 @@ export const AdminConfig: React.FC = () => {
     { id: 'bot',           label: 'Bot',          icon: <Terminal className="w-4 h-4" /> },
     { id: 'telegram',      label: 'Telegram',     icon: <Hash className="w-4 h-4" /> },
     { id: 'wallet',        label: 'Wallet',       icon: <Wallet className="w-4 h-4" /> },
-    { id: 'referral',      label: 'Parrainage',   icon: <Gift className="w-4 h-4" /> },
-    { id: 'antifraud',     label: 'Anti-Fraude',  icon: <Shield className="w-4 h-4" /> },
-    { id: 'withdrawals',   label: 'Retraits',     icon: <CreditCard className="w-4 h-4" /> },
-    { id: 'tasks',         label: 'Tâches',       icon: <Users className="w-4 h-4" /> },
-    { id: 'deposits',      label: 'Dépôts',       icon: <Wallet className="w-4 h-4" /> },
-    { id: 'system',        label: 'Système',      icon: <Server className="w-4 h-4" /> },
+    { id: 'referral',      label: 'Referral',     icon: <Gift className="w-4 h-4" /> },
+    { id: 'antifraud',     label: 'Anti-Fraud',   icon: <Shield className="w-4 h-4" /> },
+    { id: 'withdrawals',   label: 'Withdrawals',  icon: <CreditCard className="w-4 h-4" /> },
+    { id: 'tasks',         label: 'Tasks',        icon: <Users className="w-4 h-4" /> },
+    { id: 'deposits',      label: 'Deposits',     icon: <Wallet className="w-4 h-4" /> },
+    { id: 'system',        label: 'System',       icon: <Server className="w-4 h-4" /> },
     { id: 'notifications', label: 'Notifications',icon: <Bell className="w-4 h-4" /> },
-    { id: 'streaks',       label: 'Streaks & Événements', icon: <Flame className="w-4 h-4" /> },
+    { id: 'streaks',       label: 'Streaks & Events', icon: <Flame className="w-4 h-4" /> },
   ];
 
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
         <h2 className="text-2xl font-bold text-white">Configuration</h2>
-        <p className="text-slate-400 text-sm mt-1">Paramètres globaux de la plateforme - Tout est modifiable ici</p>
+        <p className="text-slate-400 text-sm mt-1">Global platform settings — everything is configurable here</p>
       </div>
 
       {/* Tabs */}
@@ -174,33 +174,33 @@ export const AdminConfig: React.FC = () => {
       {activeTab === 'telegram' && (
         <div className="space-y-6">
           <div className="glass-card p-5">
-            <h3 className="text-sm font-semibold text-white mb-4">Canaux & Groupes principaux</h3>
+            <h3 className="text-sm font-semibold text-white mb-4">Main Channels & Groups</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs text-slate-400 mb-1.5">Canal principal</label>
+                <label className="block text-xs text-slate-400 mb-1.5">Main channel</label>
                 <input type="text" value={platformConfig.mainChannel} onChange={e => updatePlatformConfig({ mainChannel: e.target.value })} className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white" />
               </div>
               <div>
-                <label className="block text-xs text-slate-400 mb-1.5">Groupe principal</label>
+                <label className="block text-xs text-slate-400 mb-1.5">Main group</label>
                 <input type="text" value={platformConfig.mainGroup} onChange={e => updatePlatformConfig({ mainGroup: e.target.value })} className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white" />
               </div>
               <div>
-                <label className="block text-xs text-slate-400 mb-1.5">Bot support</label>
+                <label className="block text-xs text-slate-400 mb-1.5">Support bot</label>
                 <input type="text" value={platformConfig.supportBot} onChange={e => updatePlatformConfig({ supportBot: e.target.value })} className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white" />
               </div>
               <div>
-                <label className="block text-xs text-slate-400 mb-1.5">Canal d'annonces</label>
+                <label className="block text-xs text-slate-400 mb-1.5">Announcements channel</label>
                 <input type="text" value={platformConfig.announcementChannel} onChange={e => updatePlatformConfig({ announcementChannel: e.target.value })} className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white" />
               </div>
             </div>
           </div>
 
           <div className="glass-card p-5">
-            <h3 className="text-sm font-semibold text-white mb-1">Canal des retraits</h3>
+            <h3 className="text-sm font-semibold text-white mb-1">Withdrawal channel</h3>
             <p className="text-xs text-slate-500 mb-4">
-              Le bot y publie chaque demande, approbation et refus de retrait.
-              Format : <span className="font-mono">@MonCanal</span> ou <span className="font-mono">-100xxxxxxxxxx</span>.
-              Le bot doit être <b>administrateur</b> du canal pour pouvoir publier.
+              The bot posts every withdrawal request, approval, and rejection here.
+              Format: <span className="font-mono">@MyChannel</span> or <span className="font-mono">-100xxxxxxxxxx</span>.
+              The bot must be an <b>administrator</b> of the channel to post.
             </p>
             <div className="flex gap-3">
               <input
@@ -215,7 +215,7 @@ export const AdminConfig: React.FC = () => {
                 disabled={wdChannelSaved === 'saving'}
                 className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${wdChannelSaved === 'ok' ? 'bg-emerald-500/20 text-emerald-400' : wdChannelSaved === 'error' ? 'bg-red-500/20 text-red-400' : 'bg-blue-500/20 text-blue-400 hover:bg-blue-500/30'} disabled:opacity-50`}
               >
-                {wdChannelSaved === 'saving' ? '…' : wdChannelSaved === 'ok' ? '✓ Enregistré' : wdChannelSaved === 'error' ? 'Erreur — clé admin ?' : 'Enregistrer'}
+                {wdChannelSaved === 'saving' ? '…' : wdChannelSaved === 'ok' ? '✓ Saved' : wdChannelSaved === 'error' ? 'Error — admin key?' : 'Save'}
               </button>
             </div>
           </div>
@@ -226,21 +226,21 @@ export const AdminConfig: React.FC = () => {
       {activeTab === 'wallet' && (
         <div className="space-y-6">
           <div className="glass-card p-5">
-            <h3 className="text-sm font-semibold text-white mb-4">Configuration Wallet</h3>
+            <h3 className="text-sm font-semibold text-white mb-4">Wallet Configuration</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="sm:col-span-2">
-                <label className="block text-xs text-slate-400 mb-1.5">Adresse du wallet principal</label>
+                <label className="block text-xs text-slate-400 mb-1.5">Main wallet address</label>
                 <input type="text" value={platformConfig.mainWallet} onChange={e => updatePlatformConfig({ mainWallet: e.target.value })} className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white font-mono" />
               </div>
               <div>
-                <label className="block text-xs text-slate-400 mb-1.5">Seuil Hot Wallet ($)</label>
+                <label className="block text-xs text-slate-400 mb-1.5">Hot Wallet threshold ($)</label>
                 <input type="number" value={platformConfig.hotWalletThreshold} onChange={e => updatePlatformConfig({ hotWalletThreshold: parseFloat(e.target.value) || 0 })} className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white" />
-                <p className="text-[10px] text-slate-500 mt-1">Alerte si balance en-dessous</p>
+                <p className="text-[10px] text-slate-500 mt-1">Alert if balance drops below</p>
               </div>
               <div>
-                <label className="block text-xs text-slate-400 mb-1.5">Seuil Cold Wallet ($)</label>
+                <label className="block text-xs text-slate-400 mb-1.5">Cold Wallet threshold ($)</label>
                 <input type="number" value={platformConfig.coldWalletThreshold} onChange={e => updatePlatformConfig({ coldWalletThreshold: parseFloat(e.target.value) || 0 })} className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white" />
-                <p className="text-[10px] text-slate-500 mt-1">Transfert auto vers cold wallet</p>
+                <p className="text-[10px] text-slate-500 mt-1">Auto transfer to cold wallet</p>
               </div>
             </div>
           </div>
@@ -251,42 +251,28 @@ export const AdminConfig: React.FC = () => {
       {activeTab === 'referral' && (
         <div className="space-y-6">
           <div className="glass-card p-5">
-            <h3 className="text-sm font-semibold text-white mb-4">Système de parrainage</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <h3 className="text-sm font-semibold text-white mb-1">Referral program</h3>
+            <p className="text-xs text-slate-400 mb-4">Reward paid to the referrer when a friend joins or completes tasks.</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs text-slate-400 mb-1.5">Bonus inscription ($)</label>
-                <input type="number" step="0.01" value={platformConfig.referralBonusSignup} onChange={e => updatePlatformConfig({ referralBonusSignup: parseFloat(e.target.value) || 0 })} className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white" />
+                <label className="block text-xs text-slate-400 mb-1.5">Reward per referral (GRAM)</label>
+                <input type="number" step="0.001" min="0" value={platformConfig.referralBonusSignup} onChange={e => updatePlatformConfig({ referralBonusSignup: parseFloat(e.target.value) || 0 })} className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white" />
+                <p className="text-[10px] text-slate-500 mt-1">GRAM credited to the referrer when a new user signs up via their link</p>
               </div>
               <div>
-                <label className="block text-xs text-slate-400 mb-1.5">Bonus activité ($)</label>
-                <input type="number" step="0.01" value={platformConfig.referralBonusActivity} onChange={e => updatePlatformConfig({ referralBonusActivity: parseFloat(e.target.value) || 0 })} className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white" />
-              </div>
-              <div>
-                <label className="block text-xs text-slate-400 mb-1.5">Bonus dépôt ($)</label>
-                <input type="number" step="0.01" value={platformConfig.referralBonusDeposit} onChange={e => updatePlatformConfig({ referralBonusDeposit: parseFloat(e.target.value) || 0 })} className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white" />
-              </div>
-              <div>
-                <label className="block text-xs text-slate-400 mb-1.5">% sur dépôt filleul</label>
+                <label className="block text-xs text-slate-400 mb-1.5">Commission per task (%)</label>
                 <input type="number" min="0" max="100" value={platformConfig.referralBonusDepositPercent} onChange={e => updatePlatformConfig({ referralBonusDepositPercent: parseInt(e.target.value) || 0 })} className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white" />
-              </div>
-              <div>
-                <label className="block text-xs text-slate-400 mb-1.5">Niveaux de parrainage</label>
-                <input type="number" min="1" max="10" value={platformConfig.referralLevels} onChange={e => updatePlatformConfig({ referralLevels: parseInt(e.target.value) || 1 })} className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white" />
-              </div>
-              <div>
-                <label className="block text-xs text-slate-400 mb-1.5">Longueur code</label>
-                <input type="number" min="4" max="16" value={platformConfig.referralCodeLength} onChange={e => updatePlatformConfig({ referralCodeLength: parseInt(e.target.value) || 8 })} className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white" />
+                <p className="text-[10px] text-slate-500 mt-1">% of each GRAM reward earned by a referral that goes to the referrer</p>
               </div>
             </div>
-            <div className="mt-4 space-y-2">
+            <div className="mt-5 space-y-2">
               <div className="flex items-center justify-between">
-                <label className="block text-xs text-slate-400">Lien de parrainage actuel</label>
-                <span className="text-[10px] text-blue-400">Dérivé du nom du bot automatiquement</span>
+                <label className="block text-xs text-slate-400">Referral link</label>
+                <span className="text-[10px] text-blue-400">Auto-generated from bot name</span>
               </div>
               <div className="px-3 py-2 bg-white/[0.03] border border-white/5 rounded-lg text-xs text-slate-300 font-mono break-all">
                 https://t.me/<span className="text-blue-400">{platformConfig.botUsername}</span>/<span className="text-emerald-400">{(platformConfig as {appShortName?: string}).appShortName ?? 'app'}</span>?startapp=r_<span className="text-amber-400">TELEGRAMID</span>
               </div>
-              <p className="text-[10px] text-slate-500">Format Mini App — ouvre directement l'app. Configurez le short name via BotFather → /newapp.</p>
             </div>
           </div>
         </div>
@@ -296,27 +282,27 @@ export const AdminConfig: React.FC = () => {
       {activeTab === 'antifraud' && (
         <div className="space-y-6">
           <div className="glass-card p-5">
-            <h3 className="text-sm font-semibold text-white mb-4">Paramètres Anti-Fraude</h3>
+            <h3 className="text-sm font-semibold text-white mb-4">Anti-Fraud Settings</h3>
             <div className="space-y-4">
-              <ToggleSwitch enabled={platformConfig.antifraudEnabled} onChange={v => updatePlatformConfig({ antifraudEnabled: v })} label="Système anti-fraude activé" />
-              <ToggleSwitch enabled={platformConfig.vpnDetectionEnabled} onChange={v => updatePlatformConfig({ vpnDetectionEnabled: v })} label="Détection VPN/Proxy" />
-              <ToggleSwitch enabled={platformConfig.deviceFingerprintEnabled} onChange={v => updatePlatformConfig({ deviceFingerprintEnabled: v })} label="Fingerprint appareil" />
+              <ToggleSwitch enabled={platformConfig.antifraudEnabled} onChange={v => updatePlatformConfig({ antifraudEnabled: v })} label="Anti-fraud system enabled" />
+              <ToggleSwitch enabled={platformConfig.vpnDetectionEnabled} onChange={v => updatePlatformConfig({ vpnDetectionEnabled: v })} label="VPN/Proxy detection" />
+              <ToggleSwitch enabled={platformConfig.deviceFingerprintEnabled} onChange={v => updatePlatformConfig({ deviceFingerprintEnabled: v })} label="Device fingerprinting" />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
               <div>
-                <label className="block text-xs text-slate-400 mb-1.5">Max comptes par appareil</label>
+                <label className="block text-xs text-slate-400 mb-1.5">Max accounts per device</label>
                 <input type="number" min="1" value={platformConfig.maxAccountsPerDevice} onChange={e => updatePlatformConfig({ maxAccountsPerDevice: parseInt(e.target.value) || 1 })} className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white" />
               </div>
               <div>
-                <label className="block text-xs text-slate-400 mb-1.5">Max comptes par IP</label>
+                <label className="block text-xs text-slate-400 mb-1.5">Max accounts per IP</label>
                 <input type="number" min="1" value={platformConfig.maxAccountsPerIP} onChange={e => updatePlatformConfig({ maxAccountsPerIP: parseInt(e.target.value) || 1 })} className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white" />
               </div>
               <div>
-                <label className="block text-xs text-slate-400 mb-1.5">Seuil activité suspecte (score)</label>
+                <label className="block text-xs text-slate-400 mb-1.5">Suspicious activity threshold (score)</label>
                 <input type="number" min="1" max="100" value={platformConfig.suspiciousActivityThreshold} onChange={e => updatePlatformConfig({ suspiciousActivityThreshold: parseInt(e.target.value) || 50 })} className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white" />
               </div>
               <div>
-                <label className="block text-xs text-slate-400 mb-1.5">Seuil auto-ban (score)</label>
+                <label className="block text-xs text-slate-400 mb-1.5">Auto-ban threshold (score)</label>
                 <input type="number" min="1" max="100" value={platformConfig.autobanThreshold} onChange={e => updatePlatformConfig({ autobanThreshold: parseInt(e.target.value) || 90 })} className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white" />
               </div>
             </div>
@@ -328,33 +314,33 @@ export const AdminConfig: React.FC = () => {
       {activeTab === 'withdrawals' && (
         <div className="space-y-6">
           <div className="glass-card p-5">
-            <h3 className="text-sm font-semibold text-white mb-4">Paramètres de retrait</h3>
+            <h3 className="text-sm font-semibold text-white mb-4">Withdrawal Settings</h3>
             <div className="space-y-4">
-              <ToggleSwitch enabled={platformConfig.autoWithdrawalEnabled} onChange={v => updatePlatformConfig({ autoWithdrawalEnabled: v })} label="Retraits automatiques" />
+              <ToggleSwitch enabled={platformConfig.autoWithdrawalEnabled} onChange={v => updatePlatformConfig({ autoWithdrawalEnabled: v })} label="Automatic withdrawals" />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
               <div>
-                <label className="block text-xs text-slate-400 mb-1.5">Montant max auto ($)</label>
+                <label className="block text-xs text-slate-400 mb-1.5">Max auto amount ($)</label>
                 <input type="number" min="0" value={platformConfig.autoWithdrawalMaxAmount} onChange={e => updatePlatformConfig({ autoWithdrawalMaxAmount: parseFloat(e.target.value) || 0 })} className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white" />
               </div>
               <div>
-                <label className="block text-xs text-slate-400 mb-1.5">Seuil revue manuelle ($)</label>
+                <label className="block text-xs text-slate-400 mb-1.5">Manual review threshold ($)</label>
                 <input type="number" min="0" value={platformConfig.withdrawalReviewThreshold} onChange={e => updatePlatformConfig({ withdrawalReviewThreshold: parseFloat(e.target.value) || 0 })} className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white" />
               </div>
               <div>
-                <label className="block text-xs text-slate-400 mb-1.5">Intervalle min entre retraits (h)</label>
+                <label className="block text-xs text-slate-400 mb-1.5">Min interval between withdrawals (h)</label>
                 <input type="number" min="0" value={platformConfig.minWithdrawalInterval} onChange={e => updatePlatformConfig({ minWithdrawalInterval: parseInt(e.target.value) || 0 })} className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white" />
               </div>
               <div>
-                <label className="block text-xs text-slate-400 mb-1.5">Vérification requise au-dessus de ($)</label>
+                <label className="block text-xs text-slate-400 mb-1.5">Verification required above ($)</label>
                 <input type="number" min="0" value={platformConfig.requireVerificationAbove} onChange={e => updatePlatformConfig({ requireVerificationAbove: parseFloat(e.target.value) || 0 })} className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white" />
               </div>
               <div>
-                <label className="block text-xs text-slate-400 mb-1.5">Limite globale journalière ($)</label>
+                <label className="block text-xs text-slate-400 mb-1.5">Global daily limit ($)</label>
                 <input type="number" min="0" value={platformConfig.globalDailyWithdrawalLimit} onChange={e => updatePlatformConfig({ globalDailyWithdrawalLimit: parseFloat(e.target.value) || 0 })} className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white" />
               </div>
               <div>
-                <label className="block text-xs text-slate-400 mb-1.5">Max retraits en attente</label>
+                <label className="block text-xs text-slate-400 mb-1.5">Max pending withdrawals</label>
                 <input type="number" min="1" value={platformConfig.maxPendingWithdrawals} onChange={e => updatePlatformConfig({ maxPendingWithdrawals: parseInt(e.target.value) || 100 })} className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white" />
               </div>
             </div>
@@ -366,22 +352,22 @@ export const AdminConfig: React.FC = () => {
       {activeTab === 'tasks' && (
         <div className="space-y-6">
           <div className="glass-card p-5">
-            <h3 className="text-sm font-semibold text-white mb-4">Paramètres des tâches</h3>
+            <h3 className="text-sm font-semibold text-white mb-4">Task Settings</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs text-slate-400 mb-1.5">Timeout vérification (sec)</label>
+                <label className="block text-xs text-slate-400 mb-1.5">Verification timeout (sec)</label>
                 <input type="number" min="5" value={platformConfig.taskVerificationTimeout} onChange={e => updatePlatformConfig({ taskVerificationTimeout: parseInt(e.target.value) || 30 })} className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white" />
               </div>
               <div>
-                <label className="block text-xs text-slate-400 mb-1.5">Cooldown global (min)</label>
+                <label className="block text-xs text-slate-400 mb-1.5">Global cooldown (min)</label>
                 <input type="number" min="0" value={platformConfig.taskCooldownGlobal} onChange={e => updatePlatformConfig({ taskCooldownGlobal: parseInt(e.target.value) || 0 })} className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white" />
               </div>
               <div>
-                <label className="block text-xs text-slate-400 mb-1.5">Max tâches par jour</label>
+                <label className="block text-xs text-slate-400 mb-1.5">Max tasks per day</label>
                 <input type="number" min="1" value={platformConfig.maxDailyTasks} onChange={e => updatePlatformConfig({ maxDailyTasks: parseInt(e.target.value) || 50 })} className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white" />
               </div>
               <div>
-                <label className="block text-xs text-slate-400 mb-1.5">Multiplicateur tâches bonus</label>
+                <label className="block text-xs text-slate-400 mb-1.5">Bonus task multiplier</label>
                 <input type="number" step="0.1" min="1" value={platformConfig.bonusTaskMultiplier} onChange={e => updatePlatformConfig({ bonusTaskMultiplier: parseFloat(e.target.value) || 1 })} className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white" />
               </div>
             </div>
@@ -393,22 +379,22 @@ export const AdminConfig: React.FC = () => {
       {activeTab === 'deposits' && (
         <div className="space-y-6">
           <div className="glass-card p-5">
-            <h3 className="text-sm font-semibold text-white mb-4">Paramètres de dépôt</h3>
+            <h3 className="text-sm font-semibold text-white mb-4">Deposit Settings</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs text-slate-400 mb-1.5">Bonus dépôt (%)</label>
+                <label className="block text-xs text-slate-400 mb-1.5">Deposit bonus (%)</label>
                 <input type="number" min="0" max="100" value={platformConfig.depositBonusPercent} onChange={e => updatePlatformConfig({ depositBonusPercent: parseInt(e.target.value) || 0 })} className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white" />
               </div>
               <div>
-                <label className="block text-xs text-slate-400 mb-1.5">Bonus 1er dépôt ($)</label>
+                <label className="block text-xs text-slate-400 mb-1.5">First deposit bonus ($)</label>
                 <input type="number" min="0" value={platformConfig.firstDepositBonus} onChange={e => updatePlatformConfig({ firstDepositBonus: parseFloat(e.target.value) || 0 })} className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white" />
               </div>
               <div>
-                <label className="block text-xs text-slate-400 mb-1.5">Dépôt min pour bonus ($)</label>
+                <label className="block text-xs text-slate-400 mb-1.5">Min deposit for bonus ($)</label>
                 <input type="number" min="0" value={platformConfig.minDepositForBonus} onChange={e => updatePlatformConfig({ minDepositForBonus: parseFloat(e.target.value) || 0 })} className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white" />
               </div>
               <div>
-                <label className="block text-xs text-slate-400 mb-1.5">Limite globale journalière ($)</label>
+                <label className="block text-xs text-slate-400 mb-1.5">Global daily limit ($)</label>
                 <input type="number" min="0" value={platformConfig.globalDailyDepositLimit} onChange={e => updatePlatformConfig({ globalDailyDepositLimit: parseFloat(e.target.value) || 0 })} className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white" />
               </div>
             </div>
@@ -420,22 +406,22 @@ export const AdminConfig: React.FC = () => {
       {activeTab === 'system' && (
         <div className="space-y-6">
           <div className="glass-card p-5">
-            <h3 className="text-sm font-semibold text-white mb-4">Paramètres système</h3>
+            <h3 className="text-sm font-semibold text-white mb-4">System Settings</h3>
             <div className="space-y-4">
               <div className="flex items-center justify-between p-3 rounded-lg bg-red-500/5 border border-red-500/20">
                 <div>
-                  <p className="text-sm text-red-400 font-medium">Mode maintenance</p>
-                  <p className="text-xs text-slate-400">Désactive l'accès utilisateur</p>
+                  <p className="text-sm text-red-400 font-medium">Maintenance mode</p>
+                  <p className="text-xs text-slate-400">Disables user access</p>
                 </div>
                 <ToggleSwitch enabled={platformConfig.maintenanceMode} onChange={v => updatePlatformConfig({ maintenanceMode: v })} />
               </div>
               {platformConfig.maintenanceMode && (
                 <div>
-                  <label className="block text-xs text-slate-400 mb-1.5">Message de maintenance</label>
+                  <label className="block text-xs text-slate-400 mb-1.5">Maintenance message</label>
                   <input type="text" value={platformConfig.maintenanceMessage} onChange={e => updatePlatformConfig({ maintenanceMessage: e.target.value })} className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white" />
                 </div>
               )}
-              <ToggleSwitch enabled={platformConfig.registrationEnabled} onChange={v => updatePlatformConfig({ registrationEnabled: v })} label="Inscriptions activées" />
+              <ToggleSwitch enabled={platformConfig.registrationEnabled} onChange={v => updatePlatformConfig({ registrationEnabled: v })} label="Registrations enabled" />
             </div>
           </div>
         </div>
@@ -445,36 +431,36 @@ export const AdminConfig: React.FC = () => {
       {activeTab === 'notifications' && (
         <div className="space-y-6">
           <div className="glass-card p-5">
-            <h3 className="text-sm font-semibold text-white mb-4">Notifications Admin</h3>
+            <h3 className="text-sm font-semibold text-white mb-4">Admin Notifications</h3>
             <div className="space-y-4">
-              <ToggleSwitch enabled={platformConfig.adminNotifyDeposit} onChange={v => updatePlatformConfig({ adminNotifyDeposit: v })} label="Notifier les dépôts" />
-              <ToggleSwitch enabled={platformConfig.adminNotifyWithdrawal} onChange={v => updatePlatformConfig({ adminNotifyWithdrawal: v })} label="Notifier les retraits" />
-              <ToggleSwitch enabled={platformConfig.adminNotifyFraud} onChange={v => updatePlatformConfig({ adminNotifyFraud: v })} label="Notifier les alertes fraude" />
-              <ToggleSwitch enabled={platformConfig.adminNotifyNewUser} onChange={v => updatePlatformConfig({ adminNotifyNewUser: v })} label="Notifier les nouveaux utilisateurs" />
+              <ToggleSwitch enabled={platformConfig.adminNotifyDeposit} onChange={v => updatePlatformConfig({ adminNotifyDeposit: v })} label="Notify deposits" />
+              <ToggleSwitch enabled={platformConfig.adminNotifyWithdrawal} onChange={v => updatePlatformConfig({ adminNotifyWithdrawal: v })} label="Notify withdrawals" />
+              <ToggleSwitch enabled={platformConfig.adminNotifyFraud} onChange={v => updatePlatformConfig({ adminNotifyFraud: v })} label="Notify fraud alerts" />
+              <ToggleSwitch enabled={platformConfig.adminNotifyNewUser} onChange={v => updatePlatformConfig({ adminNotifyNewUser: v })} label="Notify new users" />
             </div>
             <div className="mt-4">
-              <label className="block text-xs text-slate-400 mb-1.5">Chat ID pour notifications</label>
+              <label className="block text-xs text-slate-400 mb-1.5">Chat ID for notifications</label>
               <input type="text" value={platformConfig.adminChatId} onChange={e => updatePlatformConfig({ adminChatId: e.target.value })} className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white" />
             </div>
           </div>
         </div>
       )}
 
-      {/* Streaks & Événements */}
+      {/* Streaks & Events */}
       {activeTab === 'streaks' && (
         <div className="space-y-6">
           {/* Streak per day */}
           <div className="glass-card p-5">
-            <h3 className="text-sm font-semibold text-white mb-4">Bonus de streak quotidien</h3>
+            <h3 className="text-sm font-semibold text-white mb-4">Daily streak bonus</h3>
             <div className="max-w-xs">
-              <label className="block text-xs text-slate-400 mb-1.5">Bonus par jour de connexion (TON)</label>
+              <label className="block text-xs text-slate-400 mb-1.5">Bonus per login day (TON)</label>
               <input
                 type="number" step="0.01" min="0"
                 value={platformConfig.streakBonusPerDay}
                 onChange={e => updatePlatformConfig({ streakBonusPerDay: parseFloat(e.target.value) || 0 })}
                 className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white"
               />
-              <p className="text-[10px] text-slate-500 mt-1">Ce bonus est crédité à partir du jour 2 de streak.</p>
+              <p className="text-[10px] text-slate-500 mt-1">This bonus is credited from day 2 of the streak.</p>
             </div>
           </div>
 
@@ -482,14 +468,14 @@ export const AdminConfig: React.FC = () => {
           <div className="glass-card p-5">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <h3 className="text-sm font-semibold text-white">Paliers de streak</h3>
-                <p className="text-xs text-slate-400 mt-0.5">Bonus unique crédité lorsqu'un palier est atteint</p>
+                <h3 className="text-sm font-semibold text-white">Streak milestones</h3>
+                <p className="text-xs text-slate-400 mt-0.5">One-time bonus credited when a milestone is reached</p>
               </div>
               <button
                 onClick={() => setMilestones(m => [...m, { day: (m[m.length - 1]?.day ?? 0) + 7, bonus: 0.10 }])}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-500/15 border border-blue-500/25 text-blue-400 text-xs font-semibold hover:bg-blue-500/25 transition-all"
               >
-                <Plus className="w-3.5 h-3.5" /> Ajouter
+                <Plus className="w-3.5 h-3.5" /> Add
               </button>
             </div>
             <div className="space-y-2">
@@ -498,7 +484,7 @@ export const AdminConfig: React.FC = () => {
                   <div className="text-lg flex-shrink-0">🔥</div>
                   <div className="flex-1 grid grid-cols-2 gap-3">
                     <div>
-                      <label className="text-[10px] text-slate-500 uppercase tracking-wider">Jour</label>
+                      <label className="text-[10px] text-slate-500 uppercase tracking-wider">Day</label>
                       <input
                         type="number" min="1"
                         value={m.day}
@@ -525,14 +511,14 @@ export const AdminConfig: React.FC = () => {
                 </div>
               ))}
               {milestones.length === 0 && (
-                <p className="text-center text-xs text-slate-500 py-4">Aucun palier configuré</p>
+                <p className="text-center text-xs text-slate-500 py-4">No milestones configured</p>
               )}
             </div>
             <button
               onClick={saveMilestones}
               className="mt-4 w-full py-2.5 rounded-xl bg-blue-500/15 border border-blue-500/25 text-blue-400 text-sm font-semibold hover:bg-blue-500/25 transition-all"
             >
-              ✓ Sauvegarder les paliers
+              ✓ Save milestones
             </button>
           </div>
 
@@ -540,7 +526,7 @@ export const AdminConfig: React.FC = () => {
           <div className="glass-card p-5">
             <div className="flex items-center gap-2 mb-4">
               <Zap className="w-4 h-4 text-amber-400" />
-              <h3 className="text-sm font-semibold text-white">Événement promo global</h3>
+              <h3 className="text-sm font-semibold text-white">Global promo event</h3>
             </div>
 
             {isEventLive ? (
@@ -548,10 +534,10 @@ export const AdminConfig: React.FC = () => {
                 <div className="flex items-center gap-3 p-4 rounded-xl bg-amber-500/10 border border-amber-500/30">
                   <div className="w-10 h-10 rounded-xl bg-amber-500/20 flex items-center justify-center text-lg flex-shrink-0">⚡</div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-bold text-amber-300">Événement actif — ×{currentEvent!.multiplier}</p>
+                    <p className="text-sm font-bold text-amber-300">Active event — ×{currentEvent!.multiplier}</p>
                     <p className="text-xs text-amber-200/70 truncate">{currentEvent!.label}</p>
                     <p className="text-xs text-amber-400/60 mt-0.5">
-                      Fin : {new Date(currentEvent!.endsAt).toLocaleString('fr-FR')}
+                      Ends: {new Date(currentEvent!.endsAt).toLocaleString('en-US')}
                     </p>
                   </div>
                 </div>
@@ -559,15 +545,15 @@ export const AdminConfig: React.FC = () => {
                   onClick={deactivatePromoEvent}
                   className="w-full py-2.5 rounded-xl bg-red-500/10 border border-red-500/25 text-red-400 text-sm font-semibold hover:bg-red-500/20 transition-all"
                 >
-                  🛑 Désactiver l'événement
+                  🛑 Disable event
                 </button>
               </div>
             ) : (
               <div className="space-y-4">
-                <p className="text-xs text-slate-400">Activez un multiplicateur global qui s'applique à toutes les tâches et s'affiche comme bannière sur l'accueil.</p>
+                <p className="text-xs text-slate-400">Activate a global multiplier that applies to all tasks and shows as a banner on the home screen.</p>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs text-slate-400 mb-1.5">Multiplicateur</label>
+                    <label className="block text-xs text-slate-400 mb-1.5">Multiplier</label>
                     <select
                       value={eventMult}
                       onChange={e => setEventMult(parseFloat(e.target.value))}
@@ -579,34 +565,34 @@ export const AdminConfig: React.FC = () => {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs text-slate-400 mb-1.5">Durée</label>
+                    <label className="block text-xs text-slate-400 mb-1.5">Duration</label>
                     <select
                       value={eventHours}
                       onChange={e => setEventHours(parseInt(e.target.value))}
                       className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white"
                     >
                       {[1, 6, 12, 24, 48, 72].map(h => (
-                        <option key={h} value={h} className="bg-slate-900">{h < 24 ? `${h}h` : `${h / 24}j`}</option>
+                        <option key={h} value={h} className="bg-slate-900">{h < 24 ? `${h}h` : `${h / 24}d`}</option>
                       ))}
                     </select>
                   </div>
                 </div>
                 <div>
-                  <label className="block text-xs text-slate-400 mb-1.5">Nom de l'événement (optionnel)</label>
+                  <label className="block text-xs text-slate-400 mb-1.5">Event name (optional)</label>
                   <input
                     type="text"
                     value={eventLabel}
                     onChange={e => setEventLabel(e.target.value)}
-                    placeholder={`×${eventMult} sur toutes les tâches`}
+                    placeholder={`×${eventMult} on all tasks`}
                     className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white placeholder:text-slate-600"
                   />
                 </div>
                 <button
-                  onClick={() => activatePromoEvent(eventMult, eventHours, eventLabel.trim() || `×${eventMult} sur toutes les tâches`)}
+                  onClick={() => activatePromoEvent(eventMult, eventHours, eventLabel.trim() || `×${eventMult} on all tasks`)}
                   className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-500/35 text-amber-400 text-sm font-bold hover:from-amber-500/30 hover:to-orange-500/30 transition-all flex items-center justify-center gap-2"
                 >
                   <Zap className="w-4 h-4" />
-                  Lancer l'événement ×{eventMult} · {eventHours < 24 ? `${eventHours}h` : `${eventHours / 24}j`}
+                  Launch event ×{eventMult} · {eventHours < 24 ? `${eventHours}h` : `${eventHours / 24}d`}
                 </button>
               </div>
             )}
@@ -617,18 +603,18 @@ export const AdminConfig: React.FC = () => {
       {/* ── Broadcast ───────────────────────────────────── */}
       <div className="glass-card p-5 space-y-3">
         <h3 className="text-sm font-semibold text-white">📢 Broadcast</h3>
-        <p className="text-xs text-slate-400">Envoyer un message Telegram à tous les utilisateurs actifs.</p>
+        <p className="text-xs text-slate-400">Send a Telegram message to all active users at once — useful for announcements, new features, or promotions.</p>
         <textarea
           value={broadcastMsg}
           onChange={e => setBroadcastMsg(e.target.value)}
-          placeholder="Écris ton message ici… (HTML supporté : <b>, <i>, <a href=''>)"
+          placeholder="Write your message here… (HTML supported: <b>, <i>, <a href=''>)"
           rows={5}
           className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white placeholder-slate-500 resize-none"
         />
         <div className="flex items-center gap-3">
           <label className="flex items-center gap-2 text-xs text-slate-400 cursor-pointer">
             <input type="checkbox" checked={broadcastPin} onChange={e => setBroadcastPin(e.target.checked)} className="rounded" />
-            Épingler le message
+            Pin message
           </label>
         </div>
         {broadcastResult && (
@@ -641,15 +627,15 @@ export const AdminConfig: React.FC = () => {
           disabled={broadcastLoading || !broadcastMsg.trim()}
           className="w-full py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-sm font-bold transition-colors"
         >
-          {broadcastLoading ? '⏳ Envoi en cours…' : '📤 Envoyer à tous'}
+          {broadcastLoading ? '⏳ Sending…' : '📤 Send to all'}
         </button>
       </div>
 
       {/* Save Button */}
       <div className="flex justify-end items-center gap-3">
-        {saved && <span className="text-sm text-emerald-400 font-medium">✓ Configuration sauvegardée</span>}
+        {saved && <span className="text-sm text-emerald-400 font-medium">✓ Configuration saved</span>}
         <button onClick={() => { void handleSave(); }} className={`px-6 py-3 rounded-xl text-sm font-semibold text-white transition-all ${saved ? 'bg-emerald-600/80' : 'btn-primary'}`}>
-          💾 Sauvegarder la configuration
+          💾 Save configuration
         </button>
       </div>
     </div>
@@ -664,10 +650,10 @@ export const AdminNotifications: React.FC = () => {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-white">Messages & Templates</h2>
-          <p className="text-slate-400 text-sm mt-1">Tous les messages du bot sont configurables ici</p>
+          <p className="text-slate-400 text-sm mt-1">All bot messages are configurable here</p>
         </div>
         <button onClick={() => openModal('messageTemplate')} className="btn-primary px-4 py-2.5 rounded-xl text-sm font-medium text-white flex items-center gap-2">
-          <Plus className="w-4 h-4" /> Nouveau template
+          <Plus className="w-4 h-4" /> New template
         </button>
       </div>
 
@@ -710,7 +696,7 @@ export const AdminNotifications: React.FC = () => {
 
       {/* Recent Notifications */}
       <div className="glass-card p-5">
-        <h3 className="text-sm font-semibold text-white mb-4">Notifications récentes</h3>
+        <h3 className="text-sm font-semibold text-white mb-4">Recent notifications</h3>
         <div className="space-y-2">
           {notifications.slice(0, 5).map(n => (
             <div key={n.id} className={`flex items-start gap-3 p-3 rounded-lg ${!n.isRead ? 'bg-blue-500/5 border border-blue-500/10' : 'bg-white/[0.02]'}`}>
@@ -720,7 +706,7 @@ export const AdminNotifications: React.FC = () => {
               <div className="flex-1">
                 <p className="text-sm text-white font-medium">{n.title}</p>
                 <p className="text-xs text-slate-400">{n.message}</p>
-                <p className="text-[10px] text-slate-500 mt-1">{new Date(n.createdAt).toLocaleString('fr-FR')}</p>
+                <p className="text-[10px] text-slate-500 mt-1">{new Date(n.createdAt).toLocaleString('en-US')}</p>
               </div>
             </div>
           ))}
