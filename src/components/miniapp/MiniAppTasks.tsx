@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useTonWallet } from '@tonconnect/ui-react';
+
 import { useAppStore } from '../../store/appStore';
 import {
   Hash, Users, Bot, Calendar, Star, CheckCircle,
@@ -160,12 +160,6 @@ export const MiniAppTasks: React.FC = () => {
     setMiniAppPage, currentUser, platformConfig,
   } = useAppStore();
 
-  const tonWallet = useTonWallet();
-  const connectedAddress = tonWallet?.account.address ?? '';
-  const shortAddress = connectedAddress
-    ? `${connectedAddress.slice(0, 6)}…${connectedAddress.slice(-4)}`
-    : '';
-
   const botName = platformConfig.botUsername || 'TonCipher_bot';
 
   const eventPromo = platformConfig.promoEvent;
@@ -180,6 +174,7 @@ export const MiniAppTasks: React.FC = () => {
 
   const [apiTasks,            setApiTasks]            = useState<ApiTask[]>([]);
   const [completedApiTaskIds, setCompletedApiTaskIds] = useState<string[]>([]);
+  const [uploadingProofId, setUploadingProofId] = useState<string | null>(null);
 
 
   // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -764,9 +759,52 @@ export const MiniAppTasks: React.FC = () => {
 
         {phase === 'needs_proof' && (
           <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', padding: '8px 14px', background: 'rgba(249,115,22,0.05)' }}>
-            <button onClick={() => { openUrl(`https://t.me/${botName}?start=sp_${card.id}_${currentUser.telegramId}`); localStorage.setItem(`tc_proof_sent_${card.id}`, '1'); setPhase(card.id, 'proof_pending'); }} style={{ width: '100%', padding: '7px 0', borderRadius: 8, background: 'rgba(249,115,22,0.12)', border: '1px solid rgba(249,115,22,0.3)', color: '#fb923c', fontSize: 11, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
-              <Send style={{ width: 12, height: 12 }} /> Envoyer la preuve au bot
-            </button>
+            <input
+              id={`proof-file-${card.id}`}
+              type="file"
+              accept="image/*"
+              style={{ display: 'none' }}
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                setUploadingProofId(card.id);
+                const fd = new FormData();
+                fd.append('file', file);
+                fd.append('telegramId', String(currentUser.telegramId));
+                fd.append('taskId', card.id);
+                try {
+                  const res = await fetch('/api/submit-proof', { method: 'POST', body: fd });
+                  if (res.ok) {
+                    localStorage.setItem(`tc_proof_sent_${card.id}`, '1');
+                    setPhase(card.id, 'proof_pending');
+                  } else {
+                    alert('Erreur lors de l\'envoi. Réessayez.');
+                  }
+                } catch {
+                  alert('Erreur réseau. Réessayez.');
+                } finally {
+                  setUploadingProofId(null);
+                  e.target.value = '';
+                }
+              }}
+            />
+            <label
+              htmlFor={`proof-file-${card.id}`}
+              style={{
+                width: '100%', padding: '7px 0', borderRadius: 8,
+                background: uploadingProofId === card.id ? 'rgba(100,116,139,0.12)' : 'rgba(249,115,22,0.12)',
+                border: `1px solid ${uploadingProofId === card.id ? 'rgba(100,116,139,0.3)' : 'rgba(249,115,22,0.3)'}`,
+                color: uploadingProofId === card.id ? '#64748b' : '#fb923c',
+                fontSize: 11, fontWeight: 700, cursor: uploadingProofId === card.id ? 'default' : 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+                pointerEvents: uploadingProofId === card.id ? 'none' : 'auto',
+              }}
+            >
+              {uploadingProofId === card.id
+                ? <><Loader2 style={{ width: 12, height: 12, animation: 'spin 1s linear infinite' }} /> Envoi en cours…</>
+                : <><Send style={{ width: 12, height: 12 }} /> 📸 Envoyer une capture d'écran</>
+              }
+            </label>
           </div>
         )}
 
@@ -832,18 +870,10 @@ export const MiniAppTasks: React.FC = () => {
             </p>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            {shortAddress && (
-              <div style={{ padding: '5px 10px', borderRadius: 10, background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.2)', display: 'flex', alignItems: 'center', gap: 5 }}>
-                <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#3b82f6', display: 'inline-block' }} />
-                <span style={{ fontSize: 11, fontWeight: 600, color: '#60a5fa', fontFamily: 'monospace' }}>{shortAddress}</span>
-              </div>
-            )}
-            {currentUser.todayEarnings > 0 && (
-              <div style={{ padding: '5px 10px', borderRadius: 10, background: 'rgba(52,211,153,0.1)', border: '1px solid rgba(52,211,153,0.2)', display: 'flex', alignItems: 'center', gap: 5 }}>
-                <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#34d399', display: 'inline-block' }} />
-                <span style={{ fontSize: 11, fontWeight: 700, color: '#34d399' }}>+{currentUser.todayEarnings.toFixed(2)} GRAM</span>
-              </div>
-            )}
+            <div style={{ padding: '6px 12px', borderRadius: 10, background: 'linear-gradient(135deg,rgba(52,211,153,0.15),rgba(59,130,246,0.1))', border: '1px solid rgba(52,211,153,0.3)', display: 'flex', alignItems: 'center', gap: 5 }}>
+              <span style={{ fontSize: 13, fontWeight: 800, color: '#34d399' }}>{currentUser.balanceMain.toFixed(2)}</span>
+              <span style={{ fontSize: 10, fontWeight: 700, color: '#6ee7b7', letterSpacing: '0.05em' }}>GRAM</span>
+            </div>
             <button onClick={() => setMiniAppPage('myTasks')} style={{ padding: '6px 12px', borderRadius: 10, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: '#64748b', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
               Mes campagnes
             </button>

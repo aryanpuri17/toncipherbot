@@ -238,13 +238,36 @@ const AdminPanel: React.FC = () => {
   );
 };
 
+function rawToFriendly(raw: string): string {
+  try {
+    const [wStr, hex] = raw.split(':');
+    if (!hex || hex.length !== 64) return raw;
+    const workchain = parseInt(wStr, 10);
+    const addrBytes = hex.match(/.{2}/g)!.map(b => parseInt(b, 16));
+    const flags = 0x51; // non-bounceable mainnet
+    const payload = [flags, workchain & 0xFF, ...addrBytes];
+    let crc = 0;
+    for (const b of payload) {
+      crc ^= b << 8;
+      for (let i = 0; i < 8; i++) crc = (crc & 0x8000) ? ((crc << 1) ^ 0x1021) : (crc << 1);
+    }
+    crc &= 0xFFFF;
+    const full = new Uint8Array([...payload, (crc >> 8) & 0xFF, crc & 0xFF]);
+    let bin = '';
+    for (const b of full) bin += String.fromCharCode(b);
+    return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_');
+  } catch { return raw; }
+}
+
 const MiniAppHeader: React.FC = () => {
   const [tonConnectUI] = useTonConnectUI();
   const tonWallet = useTonWallet();
   const { notifications, currentUser, setMiniAppPage } = useAppStore();
   const isConnected = !!tonWallet;
-  const shortAddr = tonWallet?.account.address
-    ? `${tonWallet.account.address.slice(0, 4)}…${tonWallet.account.address.slice(-4)}`
+  const rawAddr = tonWallet?.account.address ?? '';
+  const friendlyAddr = rawAddr ? rawToFriendly(rawAddr) : '';
+  const shortAddr = friendlyAddr
+    ? `${friendlyAddr.slice(0, 6)}…${friendlyAddr.slice(-4)}`
     : '';
 
   const unreadCount = notifications.filter(n => !n.isRead && (!n.userId || n.userId === currentUser.id)).length;

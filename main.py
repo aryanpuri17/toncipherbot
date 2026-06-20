@@ -2431,6 +2431,82 @@ async def api_check_bot_verify(request: web.Request) -> web.Response:
     return web.json_response({"verified": row is not None}, headers=_CORS)
 
 
+async def api_submit_proof_miniapp(request: web.Request) -> web.Response:
+    """Accept a proof screenshot uploaded directly from the mini-app."""
+    from aiogram.types import BufferedInputFile
+    try:
+        reader = await request.multipart()
+        telegram_id: int | None = None
+        task_id: str | None = None
+        file_bytes: bytes | None = None
+        async for field in reader:
+            if field.name == "telegramId":
+                telegram_id = int(await field.read())
+            elif field.name == "taskId":
+                task_id = (await field.read()).decode("utf-8")
+            elif field.name == "file":
+                file_bytes = await field.read()
+    except Exception:
+        return web.json_response({"error": "Invalid request"}, status=400, headers=_CORS)
+
+    if not telegram_id or not task_id or not file_bytes:
+        return web.json_response({"error": "Missing fields"}, status=400, headers=_CORS)
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT creator_id, title FROM user_tasks WHERE id = ?", (task_id,)
+        ) as cur:
+            trow = await cur.fetchone()
+
+    creator_id  = trow[0] if trow else None
+    task_title  = trow[1] if trow else f"Tâche #{task_id}"
+    notify_id   = creator_id if creator_id else ADMIN_TELEGRAM_ID
+    if not notify_id:
+        return web.json_response({"error": "No admin configured"}, status=500, headers=_CORS)
+
+    kb = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="✅ Approuver", callback_data=f"proof_ok_PENDING_{telegram_id}_{task_id}"),
+        InlineKeyboardButton(text="❌ Refuser",   callback_data=f"proof_ko_PENDING_{telegram_id}_{task_id}"),
+    ]])
+    try:
+        photo_input = BufferedInputFile(file_bytes, filename="proof.jpg")
+        sent = await bot.send_photo(
+            notify_id,
+            photo=photo_input,
+            caption=(
+                f"📸 <b>Preuve à valider</b>\n\n"
+                f"Tâche : <b>{task_title}</b>\n"
+                f"Utilisateur : <code>{telegram_id}</code>"
+            ),
+            parse_mode="HTML",
+            reply_markup=kb,
+        )
+        file_id = sent.photo[-1].file_id
+    except Exception as exc:
+        return web.json_response({"error": str(exc)}, status=500, headers=_CORS)
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "INSERT INTO social_proofs (telegram_id, task_id, file_id, creator_id) VALUES (?,?,?,?)",
+            (telegram_id, task_id, file_id, creator_id),
+        ) as cur_ins:
+            proof_id = cur_ins.lastrowid
+        await db.commit()
+
+    # Update the Telegram message buttons with the real proof_id
+    if proof_id is not None:
+        kb2 = InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(text="✅ Approuver", callback_data=f"proof_ok_{proof_id}_{telegram_id}_{task_id}"),
+            InlineKeyboardButton(text="❌ Refuser",   callback_data=f"proof_ko_{proof_id}_{telegram_id}_{task_id}"),
+        ]])
+        try:
+            await bot.edit_message_reply_markup(notify_id, sent.message_id, reply_markup=kb2)
+        except Exception:
+            pass
+
+    return web.json_response({"ok": True, "proofId": proof_id}, headers=_CORS)
+
+
 async def api_check_social_proof(request: web.Request) -> web.Response:
     """Return approval status for a submitted social proof screenshot."""
     try:
@@ -3253,6 +3329,7 @@ async def start_web() -> None:
     app.router.add_get( "/api/check-bot-start",            api_check_bot_start)
     app.router.add_get( "/api/check-bot-verify",           api_check_bot_verify)
     app.router.add_get( "/api/check-social-proof",         api_check_social_proof)
+    app.router.add_post("/api/submit-proof",               api_submit_proof_miniapp)
     app.router.add_get( "/api/user-tasks/pending-proofs",      api_pending_proofs)
     app.router.add_post("/api/social-proof/{id}/review",        api_review_proof)
     app.router.add_get( "/api/proof-image/{id}",                api_proof_image)
