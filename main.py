@@ -154,8 +154,17 @@ async def _sse_broadcast(event: str, data: dict) -> None:
         except ValueError: pass
 
 
+_SSE_MAX_CONNECTIONS = 500
+
 async def api_tasks_stream(request: web.Request) -> web.StreamResponse:
     """SSE endpoint — clients subscribe here for real-time task lifecycle events."""
+    if len(_sse_queues) >= _SSE_MAX_CONNECTIONS:
+        return web.Response(status=503, text="Too many SSE connections")
+
+    ip = _client_ip(request)
+    if _is_rate_limited(ip):
+        return web.Response(status=429, text="Rate limit exceeded")
+
     resp = web.StreamResponse()
     resp.headers["Content-Type"] = "text/event-stream"
     resp.headers["Cache-Control"] = "no-cache"
@@ -3519,9 +3528,10 @@ async def serve_manifest(request: web.Request) -> web.Response:
 
 async def serve_image(request: web.Request) -> web.Response:
     filename = request.match_info["filename"]
-    if ".." in filename or filename.startswith("/"):
+    base_dir = os.path.realpath(os.path.join(DIST, "images"))
+    path     = os.path.realpath(os.path.join(base_dir, filename))
+    if not path.startswith(base_dir + os.sep) and path != base_dir:
         return web.Response(status=400)
-    path = os.path.join(DIST, "images", filename)
     if not os.path.isfile(path):
         return web.Response(status=404)
     ext = os.path.splitext(filename)[1].lower()
@@ -3597,13 +3607,9 @@ async def api_usdt_deposit_register(request: web.Request) -> web.Response:
     if not telegram_id or amount is None:
         return web.json_response({"error": "Invalid data"}, status=400, headers=_CORS)
 
-    # Light auth: if initData is provided, verify it matches
     init_data = str(data.get("initData", "")).strip()
-    if BOT_TOKEN and init_data:
-        if not _validate_init_data(init_data, BOT_TOKEN):
-            return web.json_response({"error": "Auth failed"}, status=401, headers=_CORS)
-        if _init_data_user_id(init_data) != telegram_id:
-            return web.json_response({"error": "Identity mismatch"}, status=403, headers=_CORS)
+    if not _verify_user_request(init_data, telegram_id):
+        return web.json_response({"error": "Authentication required"}, status=401, headers=_CORS)
 
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("""
