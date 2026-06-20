@@ -721,7 +721,7 @@ const mockPlatformConfig: PlatformConfig = {
   mainWallet: '',
   hotWalletThreshold: 10000,
   coldWalletThreshold: 100000,
-  referralBonusSignup: 1.00,
+  referralBonusSignup: 0.005,
   referralBonusActivity: 0.10,
   referralBonusDeposit: 5.00,
   referralBonusDepositPercent: 5,

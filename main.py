@@ -42,7 +42,7 @@ ADMIN_TELEGRAM_ID = int(os.getenv("ADMIN_TELEGRAM_ID", "0"))
 OFFICIAL_CHANNEL   = os.getenv("OFFICIAL_CHANNEL",   "@TonCipher_officiel")
 WITHDRAWAL_CHANNEL = os.getenv("WITHDRAWAL_CHANNEL", "@TonCipher_Pays")
 
-REFERRAL_BONUS_TON  = float(os.getenv("REFERRAL_BONUS_TON", "1.0"))
+REFERRAL_BONUS_TON  = float(os.getenv("REFERRAL_BONUS_TON", "0.005"))
 MAX_ACCOUNTS_PER_IP = int(os.getenv("MAX_ACCOUNTS_PER_IP", "3"))
 RATE_LIMIT_MAX      = int(os.getenv("RATE_LIMIT_MAX", "30"))  # requests / minute / IP
 RATE_LIMIT_WINDOW   = 60  # seconds
@@ -1181,15 +1181,37 @@ async def api_user_referral(request: web.Request) -> web.Response:
         if referrer_ip and referee_ip and referrer_ip == referee_ip:
             violations.append("self_referral_ip")
 
-        if ref_row and ref_row[1]:
+        if ref_row and ref_row[1]:  # referee already flagged
             violations.append("multi_account_ip")
+
+        # Check referrer's referral velocity: > 5 new referrals in the last hour → suspicious
+        async with db.execute(
+            "SELECT COUNT(*) FROM referrals"
+            " WHERE referrer_id = ? AND created_at >= datetime('now', '-1 hour')",
+            (referrer_id,)
+        ) as cur:
+            (recent_refs,) = await cur.fetchone()
+        if int(recent_refs or 0) >= 5:
+            violations.append("referral_velocity")
 
         if violations:
             score = _risk_score(violations)
+            # Flag the referee
             await _log_fraud_alert(
                 db, referee_id, referee_username,
                 alert_type=", ".join(violations),
-                details=f"Referral referrer={referrer_id}({referrer_ip}) referee={referee_id}({referee_ip})",
+                details=f"Referral fraud: referrer={referrer_id}({referrer_ip}) referee={referee_id}({referee_ip})",
+                score=score,
+            )
+            # Also flag the referrer so admin sees both sides
+            await db.execute(
+                "UPDATE users SET flagged = 1 WHERE telegram_id = ? AND flagged = 0",
+                (referrer_id,)
+            )
+            await _log_fraud_alert(
+                db, referrer_id, "",
+                alert_type="referral_fraud_referrer",
+                details=f"Referred a suspicious account {referee_id} — violations: {', '.join(violations)}",
                 score=score,
             )
             await db.commit()
@@ -1484,15 +1506,29 @@ async def api_withdrawal_create(request: web.Request) -> web.Response:
 # ── API — Check channel membership ────────────────────────────────────────────
 
 async def api_task_depart(request: web.Request) -> web.Response:
-    """Record server-side that a user left to complete a task (anti-cheat timer)."""
+    """Record server-side that a user left to complete a task (anti-cheat timer).
+
+    Requires valid Telegram initData so the departure record can't be forged
+    for an arbitrary telegramId. Without auth, an attacker could pre-seed a
+    departure record and immediately call verify-timer to fake the elapsed time.
+    """
+    ip = _client_ip(request)
+    if _is_rate_limited(ip):
+        return web.json_response({"error": "Rate limit exceeded"}, status=429, headers=_CORS)
+
     try:
         data        = await request.json()
-        telegram_id = int(data.get("telegramId", 0))
-        task_id     = str(data.get("taskId", "")).strip()
+        telegram_id = _parse_telegram_id(data.get("telegramId"))
+        task_id     = str(data.get("taskId", "")).strip()[:64]
+        init_data   = str(data.get("initData", "")).strip()
     except Exception:
         return web.json_response({"error": "Invalid JSON"}, status=400, headers=_CORS)
+
     if not telegram_id or not task_id:
         return web.json_response({"error": "Missing fields"}, status=400, headers=_CORS)
+
+    if not _verify_user_request(init_data, telegram_id):
+        return web.json_response({"error": "Authentication required"}, status=401, headers=_CORS)
 
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute(

@@ -355,10 +355,12 @@ export const MiniAppTasks: React.FC = () => {
   const recordDepart = (taskId: string) => {
     const tid = useAppStore.getState().currentUser.telegramId;
     if (!tid) return;
+    const initData = (window as unknown as { Telegram?: { WebApp?: { initData?: string } } })
+      ?.Telegram?.WebApp?.initData ?? '';
     void fetch('/api/task/depart', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ telegramId: tid, taskId }),
+      body: JSON.stringify({ telegramId: tid, taskId, initData }),
     }).catch(() => { /* silent — client-side timer still works */ });
   };
 
