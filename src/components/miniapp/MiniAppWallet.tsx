@@ -269,7 +269,7 @@ export const MiniAppWallet: React.FC = () => {
 };
 
 export const MiniAppDeposit: React.FC = () => {
-  const { cryptoNetworks, addTransaction, creditDeposit, currentUser } = useAppStore();
+  const { cryptoNetworks, creditDeposit, currentUser } = useAppStore();
   const [tonConnectUI] = useTonConnectUI();
   const tonWallet = useTonWallet();
   const [selectedId, setSelectedId] = useState(() => {
@@ -365,16 +365,20 @@ export const MiniAppDeposit: React.FC = () => {
         validUntil: Math.floor(Date.now() / 1000) + 600,
         messages: [{ address, amount: Math.floor(amount * 1e9).toString(), payload: commentPayload }],
       });
-      addTransaction({
-        userId: currentUser.id,
-        type: 'deposit',
-        amount,
-        currency: 'TON',
-        network: 'TON',
-        status: 'confirming',
-        address: connectedAddr, // sender — used for matching in monitor
-      });
-      setSuccessMsg(`${amount} GRAM envoyés. Confirmation blockchain en cours…`);
+      creditDeposit(currentUser.id, amount, 'TON', '', 'TON');
+      const tg = (window as unknown as { Telegram?: { WebApp?: { initData?: string } } }).Telegram?.WebApp;
+      void fetch('/api/deposit/record', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          telegramId: currentUser.telegramId,
+          amount,
+          currency: 'TON',
+          network:  'TON',
+          initData: tg?.initData ?? '',
+        }),
+      }).catch(() => {});
+      setSuccessMsg(`✅ ${amount} GRAM crédités sur votre compte !`);
       setTxStatus('success');
     } catch {
       setTxStatus('error');
