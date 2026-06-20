@@ -128,7 +128,7 @@ const typeConfig: Record<string, { icon: React.ReactNode; color: string; label: 
 
 type TaskPhase = 'idle' | 'too_early' | 'ready' | 'verifying' | 'not_subscribed' | 'completing' | 'done'
   | 'needs_bot_confirm'  // start_bot API tasks: timer done, awaiting bot deep-link confirmation
-  | 'needs_proof'        // social API tasks: timer done, awaiting screenshot via bot
+  | 'needs_proof'        // manual-verification tasks (Partage Communauté): awaiting screenshot upload
   | 'proof_pending';     // social: screenshot sent, awaiting admin approval
 
 const REQUIRED_MS         = 30_000; // bots: 30s
@@ -208,7 +208,6 @@ export const MiniAppTasks: React.FC = () => {
 
       const afterPhase = (e: DepartEntry): TaskPhase =>
         e.source === 'api' && e.type === 'start_bot' ? 'needs_bot_confirm'
-        : e.source === 'api' && e.type === 'social' ? 'needs_proof'
         : 'ready';
 
       if (remainingMs <= 0) {
@@ -461,7 +460,6 @@ export const MiniAppTasks: React.FC = () => {
     // Determine target phase after timer
     const afterTimerPhase = (type: string, source: string): TaskPhase =>
       source === 'api' && type === 'start_bot' ? 'needs_bot_confirm'
-      : source === 'api' && type === 'social'   ? 'needs_proof'
       : 'ready';
 
     timerRefs.current[autoKey] = setTimeout(() => {
