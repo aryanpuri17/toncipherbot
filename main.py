@@ -524,6 +524,14 @@ async def init_db() -> None:
                 status         TEXT    NOT NULL DEFAULT 'pending'
             )
         """)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS task_departures (
+                telegram_id INTEGER NOT NULL,
+                task_id     TEXT    NOT NULL,
+                departed_at TEXT    NOT NULL DEFAULT (datetime('now')),
+                PRIMARY KEY (telegram_id, task_id)
+            )
+        """)
         # A given on-chain tx hash may only be credited once — blocks deposit replay
         await db.execute("""
             CREATE UNIQUE INDEX IF NOT EXISTS idx_deposit_txhash
@@ -1267,6 +1275,69 @@ async def api_withdrawal_create(request: web.Request) -> web.Response:
 
 
 # ── API — Check channel membership ────────────────────────────────────────────
+
+async def api_task_depart(request: web.Request) -> web.Response:
+    """Record server-side that a user left to complete a task (anti-cheat timer)."""
+    try:
+        data        = await request.json()
+        telegram_id = int(data.get("telegramId", 0))
+        task_id     = str(data.get("taskId", "")).strip()
+    except Exception:
+        return web.json_response({"error": "Invalid JSON"}, status=400, headers=_CORS)
+    if not telegram_id or not task_id:
+        return web.json_response({"error": "Missing fields"}, status=400, headers=_CORS)
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "INSERT OR REPLACE INTO task_departures (telegram_id, task_id, departed_at)"
+            " VALUES (?, ?, datetime('now'))",
+            (telegram_id, task_id),
+        )
+        await db.commit()
+    return web.json_response({"ok": True}, headers=_CORS)
+
+
+async def api_task_verify_timer(request: web.Request) -> web.Response:
+    """Check whether 30 s have passed since the server-recorded departure.
+    Returns {ok: True} if verified, {ok: False, remaining: <seconds>} if too early.
+    Also deletes the departure record on success so it cannot be reused.
+    """
+    try:
+        telegram_id = int(request.rel_url.query.get("telegramId", 0))
+        task_id     = request.rel_url.query.get("taskId", "").strip()
+        required_s  = int(request.rel_url.query.get("requiredSeconds", 30))
+    except Exception:
+        return web.json_response({"ok": False, "remaining": 30}, headers=_CORS)
+    if not telegram_id or not task_id:
+        return web.json_response({"ok": False, "remaining": 30}, headers=_CORS)
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT (julianday('now') - julianday(departed_at)) * 86400.0"
+            " FROM task_departures WHERE telegram_id = ? AND task_id = ?",
+            (telegram_id, task_id),
+        ) as cur:
+            row = await cur.fetchone()
+
+    if row is None:
+        # No server-side record — could mean server was sleeping when user clicked;
+        # allow through (client-side timer still guards the UI).
+        return web.json_response({"ok": True, "noRecord": True}, headers=_CORS)
+
+    elapsed_s = row[0]
+    if elapsed_s < required_s:
+        remaining = max(1, int(required_s - elapsed_s))
+        return web.json_response({"ok": False, "remaining": remaining}, headers=_CORS)
+
+    # Timer passed — delete the record so it cannot be used again
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "DELETE FROM task_departures WHERE telegram_id = ? AND task_id = ?",
+            (telegram_id, task_id),
+        )
+        await db.commit()
+    return web.json_response({"ok": True}, headers=_CORS)
+
 
 async def api_check_membership(request: web.Request) -> web.Response:
     """Return {member: bool} — whether user is in a given Telegram channel/group.
@@ -3325,6 +3396,8 @@ async def start_web() -> None:
     app.router.add_post("/api/user/balance",               api_user_balance_set)
     app.router.add_get( "/api/user/withdrawals",           api_user_withdrawal_status)
     app.router.add_get( "/api/user/transactions",          api_user_transactions)
+    app.router.add_post("/api/task/depart",                 api_task_depart)
+    app.router.add_get( "/api/task/verify-timer",           api_task_verify_timer)
     app.router.add_get( "/api/check-membership",           api_check_membership)
     app.router.add_get( "/api/check-bot-start",            api_check_bot_start)
     app.router.add_get( "/api/check-bot-verify",           api_check_bot_verify)

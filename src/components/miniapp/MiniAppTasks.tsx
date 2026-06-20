@@ -400,12 +400,24 @@ export const MiniAppTasks: React.FC = () => {
 
   // ── Action handlers ──────────────────────────────────────────────────────────
 
+  /** Record server-side that the user left (best-effort — server may be sleeping). */
+  const recordDepart = (taskId: string) => {
+    const tid = useAppStore.getState().currentUser.telegramId;
+    if (!tid) return;
+    void fetch('/api/task/depart', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ telegramId: tid, taskId }),
+    }).catch(() => { /* silent — client-side timer still works */ });
+  };
+
   const handleJoin = (card: CardTask) => {
     if (!card.targetUrl) return;
     const waitMs  = card.type === 'start_bot' ? REQUIRED_MS : card.type === 'watch_video' ? VIDEO_REQUIRED_MS : card.type === 'social' ? SOCIAL_REQUIRED_MS : CHANNEL_REQUIRED_MS;
     const autoKey = `depart_auto_${card.id}`;
     if (timerRefs.current[autoKey]) { clearTimeout(timerRefs.current[autoKey]); delete timerRefs.current[autoKey]; }
     localStorage.setItem(departKey(card.id), JSON.stringify({ ts: Date.now(), ms: waitMs, type: card.type, source: card.source }));
+    recordDepart(card.id);
     setPhase(card.id, 'too_early');
     // Social/video: no in-memory timer — only a real return to app (checkDepartures) can unlock verify
     if (card.type !== 'social' && card.type !== 'watch_video') {
@@ -455,6 +467,7 @@ export const MiniAppTasks: React.FC = () => {
     const autoKey = `depart_auto_${card.id}`;
     if (timerRefs.current[autoKey]) { clearTimeout(timerRefs.current[autoKey]); delete timerRefs.current[autoKey]; }
     localStorage.setItem(departKey(card.id), JSON.stringify({ ts: Date.now(), ms: waitMs, type: card.type, source: card.source }));
+    recordDepart(card.id);
     setPhase(card.id, 'too_early');
 
     // Determine target phase after timer
@@ -548,6 +561,34 @@ export const MiniAppTasks: React.FC = () => {
       setPhase(card.id, 'not_subscribed');
       haptic.error();
       return;
+    }
+
+    // Server-side timer check — unbypassable even with localStorage manipulation
+    try {
+      const requiredSeconds =
+        card.type === 'watch_video' || card.type === 'social' ? 30
+        : card.type === 'start_bot' ? 30
+        : card.type === 'join_channel' || card.type === 'join_group' ? 5
+        : 30;
+      const res = await fetch(
+        `/api/task/verify-timer?telegramId=${currentUser.telegramId}&taskId=${encodeURIComponent(card.id)}&requiredSeconds=${requiredSeconds}`
+      );
+      const data = await res.json() as { ok: boolean; remaining?: number; noRecord?: boolean };
+      if (!data.ok) {
+        // Server says not enough time elapsed — reset local timer too
+        const waitMs =
+          card.type === 'start_bot' ? REQUIRED_MS
+          : card.type === 'watch_video' ? VIDEO_REQUIRED_MS
+          : card.type === 'social' ? SOCIAL_REQUIRED_MS
+          : CHANNEL_REQUIRED_MS;
+        const resetEntry: DepartEntry = { ts: Date.now(), ms: waitMs, type: card.type, source: card.source };
+        localStorage.setItem(departKey(card.id), JSON.stringify(resetEntry));
+        setPhase(card.id, 'too_early');
+        haptic.error();
+        return;
+      }
+    } catch {
+      // Server sleeping or unreachable — client-side check already passed, allow through
     }
 
     // For platform join_channel / join_group: verify real Telegram membership via bot API
