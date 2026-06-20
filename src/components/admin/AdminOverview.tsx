@@ -77,7 +77,7 @@ export const AdminOverview: React.FC = () => {
   const totalActiveTasks = tasks.filter(t => t.isActive).length;
 
   const chartData = React.useMemo(() => {
-    const days = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
+    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     return Array.from({ length: 7 }, (_, i) => {
       const d = new Date(); d.setDate(d.getDate() - (6 - i));
       const start = new Date(d); start.setHours(0, 0, 0, 0);
@@ -92,7 +92,7 @@ export const AdminOverview: React.FC = () => {
   }, [transactions]);
 
   const revenueData = React.useMemo(() => {
-    const months = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const now = new Date();
     return months.map((name, i) => ({
       name,
@@ -105,23 +105,23 @@ export const AdminOverview: React.FC = () => {
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
-        <h2 className="text-2xl font-bold text-white">Vue d'ensemble</h2>
-        <p className="text-slate-400 text-sm mt-1">Tableau de bord de la plateforme TonCipher</p>
+        <h2 className="text-2xl font-bold text-white">Overview</h2>
+        <p className="text-slate-400 text-sm mt-1">TonCipher platform dashboard</p>
       </div>
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
-          title="Utilisateurs totaux"
+          title="Total users"
           value={totalUsers.toLocaleString()}
-          subtitle={apiStats ? `${apiStats.flagged_users} signalés · ${apiStats.banned_users} bannis` : '—'}
+          subtitle={apiStats ? `${apiStats.flagged_users} flagged · ${apiStats.banned_users} banned` : '—'}
           icon={<Users className="w-5 h-5" />}
           color="blue"
         />
         <StatCard
-          title="Dépôts totaux"
+          title="Total deposits"
           value={totalDeposits >= 1000 ? `${(totalDeposits / 1000).toFixed(2)}K TON` : `${totalDeposits.toFixed(2)} TON`}
-          subtitle="Tous réseaux confondus"
+          subtitle="All networks combined"
           icon={<ArrowDownToLine className="w-5 h-5" />}
           color="green"
         />
@@ -133,9 +133,9 @@ export const AdminOverview: React.FC = () => {
           color="orange"
         />
         <StatCard
-          title="Revenus plateforme"
+          title="Platform revenue"
           value={`${platformRevenue.toFixed(2)} TON`}
-          subtitle="Frais et commissions"
+          subtitle="Fees and commissions"
           icon={<DollarSign className="w-5 h-5" />}
           color="purple"
         />
@@ -144,29 +144,29 @@ export const AdminOverview: React.FC = () => {
       {/* Second Stats Row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
-          title="Filleuls totaux"
+          title="Total referrals"
           value={apiStats ? apiStats.total_referrals.toLocaleString() : '—'}
-          subtitle={apiStats ? `${apiStats.total_referral_bonus.toFixed(2)} TON crédités` : ''}
+          subtitle={apiStats ? `${apiStats.total_referral_bonus.toFixed(2)} TON credited` : ''}
           icon={<Activity className="w-5 h-5" />}
           color="cyan"
         />
         <StatCard
-          title="Campagnes actives"
+          title="Active campaigns"
           value={activeCampaigns}
           icon={<Megaphone className="w-5 h-5" />}
           color="purple"
         />
         <StatCard
-          title="Tâches aujourd'hui"
+          title="Tasks today"
           value={completedTasksToday.toLocaleString()}
-          subtitle={`${totalActiveTasks} tâches actives`}
+          subtitle={`${totalActiveTasks} active tasks`}
           icon={<ListTodo className="w-5 h-5" />}
           color="green"
         />
         <StatCard
-          title="Alertes fraude"
+          title="Fraud alerts"
           value={openFraudAlerts}
-          subtitle={apiStats ? `${apiStats.critical_alerts} critiques · ${apiStats.high_alerts} élevées` : 'Surveillance 24/7'}
+          subtitle={apiStats ? `${apiStats.critical_alerts} critical · ${apiStats.high_alerts} high` : '24/7 monitoring'}
           icon={<Shield className="w-5 h-5" />}
           color="red"
         />
@@ -177,10 +177,10 @@ export const AdminOverview: React.FC = () => {
         {/* Activity Chart */}
         <div className="glass-card p-5">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold text-white">Activité cette semaine</h3>
+            <h3 className="text-sm font-semibold text-white">Activity this week</h3>
             <div className="flex items-center gap-4 text-xs">
-              <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-blue-400" /> Utilisateurs</span>
-              <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-400" /> Tâches</span>
+              <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-blue-400" /> Users</span>
+              <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-400" /> Tasks</span>
             </div>
           </div>
           <ResponsiveContainer width="100%" height={240}>
@@ -211,7 +211,7 @@ export const AdminOverview: React.FC = () => {
         {/* Revenue Chart */}
         <div className="glass-card p-5">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold text-white">Revenus mensuels</h3>
+            <h3 className="text-sm font-semibold text-white">Monthly revenue</h3>
             <TrendingUp className="w-4 h-4 text-emerald-400" />
           </div>
           <ResponsiveContainer width="100%" height={240}>
@@ -222,7 +222,7 @@ export const AdminOverview: React.FC = () => {
               <Tooltip
                 contentStyle={{ background: '#1e293b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', fontSize: '12px' }}
                 labelStyle={{ color: '#94a3b8' }}
-                formatter={(value) => [`${Number(value).toLocaleString()} TON`, 'Revenus']}
+                formatter={(value) => [`${Number(value).toLocaleString()} TON`, 'Revenue']}
               />
               <Bar dataKey="revenue" fill="url(#barGradient)" radius={[4, 4, 0, 0]} />
               <defs>
@@ -240,10 +240,10 @@ export const AdminOverview: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Recent Transactions */}
         <div className="glass-card p-5">
-          <h3 className="text-sm font-semibold text-white mb-4">Transactions récentes</h3>
+          <h3 className="text-sm font-semibold text-white mb-4">Recent transactions</h3>
           <div className="space-y-3">
             {recentTx.length === 0 ? (
-              <p className="text-sm text-slate-500 text-center py-4">Aucune transaction pour l'instant</p>
+              <p className="text-sm text-slate-500 text-center py-4">No transactions yet</p>
             ) : recentTx.map(tx => {
               const user = users.find(u => u.id === tx.userId);
               return (
@@ -254,7 +254,7 @@ export const AdminOverview: React.FC = () => {
                     </div>
                     <div>
                       <p className="text-sm text-white font-medium">@{user?.username || 'unknown'}</p>
-                      <p className="text-xs text-slate-500">{tx.type === 'deposit' ? 'Dépôt' : tx.type === 'withdrawal' ? 'Retrait' : 'Récompense'} • {tx.network || 'Interne'}</p>
+                      <p className="text-xs text-slate-500">{tx.type === 'deposit' ? 'Deposit' : tx.type === 'withdrawal' ? 'Withdrawal' : 'Reward'} • {tx.network || 'Internal'}</p>
                     </div>
                   </div>
                   <div className="text-right">
@@ -271,12 +271,12 @@ export const AdminOverview: React.FC = () => {
 
         {/* Fraud Alerts */}
         <div className="glass-card p-5">
-          <h3 className="text-sm font-semibold text-white mb-4">Alertes anti-fraude récentes</h3>
+          <h3 className="text-sm font-semibold text-white mb-4">Recent anti-fraud alerts</h3>
           <div className="space-y-3">
             {recentAlerts.length === 0 && (
               <div className="text-center py-4">
                 <Shield className="w-6 h-6 text-slate-600 mx-auto mb-1" />
-                <p className="text-sm text-slate-500">Aucune alerte active</p>
+                <p className="text-sm text-slate-500">No active alerts</p>
               </div>
             )}
             {recentAlerts.map(alert => (
@@ -291,7 +291,7 @@ export const AdminOverview: React.FC = () => {
                   </span>
                 </div>
                 <p className="text-xs text-slate-500 truncate">{alert.alert_type.replace(/_/g, ' ')}</p>
-                <p className="text-[10px] text-slate-600 mt-1">Score: {alert.risk_score}/100 · {new Date(alert.created_at).toLocaleString('fr-FR')}</p>
+                <p className="text-[10px] text-slate-600 mt-1">Score: {alert.risk_score}/100 · {new Date(alert.created_at).toLocaleString('en-US')}</p>
               </div>
             ))}
           </div>

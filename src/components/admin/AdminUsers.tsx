@@ -57,10 +57,10 @@ export const AdminUsers: React.FC = () => {
         setUsers(fresh);
         setFetchError('');
       } else {
-        setFetchError(res.status === 401 ? 'Clé API admin invalide — configurez-la dans l\'onglet Sécurité.' : `Erreur serveur (${res.status}).`);
+        setFetchError(res.status === 401 ? 'Invalid admin API key — configure it in the Security tab.' : `Server error (${res.status}).`);
       }
     } catch {
-      setFetchError('Backend injoignable — vérifiez que le serveur tourne.');
+      setFetchError('Backend unreachable — check that the server is running.');
     }
     setLoading(false);
     return fresh;
@@ -74,7 +74,7 @@ export const AdminUsers: React.FC = () => {
     try {
       const res = await adminFetch(`/api/admin/users/${telegramId}/${action}`, { method: 'POST' });
       if (res.ok) {
-        setActionFeedback({ id: telegramId, msg: 'Action effectuée avec succès', ok: true });
+        setActionFeedback({ id: telegramId, msg: 'Action completed successfully', ok: true });
         const freshUsers = await fetchUsers();
         setSelected(prev => {
           if (!prev || prev.telegram_id !== telegramId) return prev;
@@ -84,7 +84,7 @@ export const AdminUsers: React.FC = () => {
         setActionFeedback({ id: telegramId, msg: `Erreur ${res.status}`, ok: false });
       }
     } catch {
-      setActionFeedback({ id: telegramId, msg: 'Backend injoignable', ok: false });
+      setActionFeedback({ id: telegramId, msg: 'Backend unreachable', ok: false });
     }
     setActioning(null);
     setTimeout(() => setActionFeedback(null), 3000);
@@ -93,7 +93,7 @@ export const AdminUsers: React.FC = () => {
   const doCredit = async (telegramId: number) => {
     const amount = parseFloat(creditAmount);
     if (!creditAmount || isNaN(amount) || amount <= 0) {
-      setCreditResult({ ok: false, msg: 'Montant invalide' });
+      setCreditResult({ ok: false, msg: 'Invalid amount' });
       return;
     }
     setCrediting(true);
@@ -113,12 +113,12 @@ export const AdminUsers: React.FC = () => {
         setCreditResult({ ok: false, msg: data.error ?? `Erreur ${res.status}` });
       }
     } catch {
-      setCreditResult({ ok: false, msg: 'Backend injoignable' });
+      setCreditResult({ ok: false, msg: 'Backend unreachable' });
     }
     setCrediting(false);
   };
 
-  const statusLabel = { banned: 'Banni', blocked: 'Retraits bloqués', flagged: 'Signalé', active: 'Actif' } as const;
+  const statusLabel = { banned: 'Banned', blocked: 'Withdrawals blocked', flagged: 'Flagged', active: 'Active' } as const;
   const statusColor = {
     banned:  'bg-red-500/20 text-red-400',
     blocked: 'bg-orange-500/20 text-orange-400',
@@ -129,9 +129,9 @@ export const AdminUsers: React.FC = () => {
   // Account age helper
   const accountAge = (createdAt: string) => {
     const days = Math.floor((Date.now() - new Date(createdAt).getTime()) / 86400000);
-    if (days === 0) return "aujourd'hui";
-    if (days === 1) return 'hier';
-    return `il y a ${days}j`;
+    if (days === 0) return 'today';
+    if (days === 1) return 'yesterday';
+    return `${days}d ago`;
   };
 
   return (
@@ -149,7 +149,7 @@ export const AdminUsers: React.FC = () => {
       {fetchError && (
         <div className="glass-card p-3 border-red-500/30 bg-red-500/10 text-sm text-red-400 flex items-center justify-between">
           <span>⚠ {fetchError}</span>
-          <button onClick={() => void fetchUsers()} className="text-xs font-semibold underline hover:text-red-300">Réessayer</button>
+          <button onClick={() => void fetchUsers()} className="text-xs font-semibold underline hover:text-red-300">Retry</button>
         </div>
       )}
 
@@ -157,7 +157,7 @@ export const AdminUsers: React.FC = () => {
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-          <input type="text" placeholder="Rechercher nom, username, ID Telegram…"
+          <input type="text" placeholder="Search name, username, Telegram ID…"
             value={search} onChange={e => setSearch(e.target.value)}
             className="w-full pl-10 pr-4 py-2.5 bg-white/5 border border-white/10 rounded-xl text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-500/50" />
         </div>
@@ -165,11 +165,11 @@ export const AdminUsers: React.FC = () => {
           <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
             className="pl-10 pr-8 py-2.5 bg-white/5 border border-white/10 rounded-xl text-sm text-white appearance-none focus:outline-none focus:border-blue-500/50">
-            <option value="all">Tous</option>
-            <option value="active">Actifs</option>
-            <option value="flagged">Signalés</option>
-            <option value="banned">Bannis</option>
-            <option value="blocked">Retraits bloqués</option>
+            <option value="all">All</option>
+            <option value="active">Active</option>
+            <option value="flagged">Flagged</option>
+            <option value="banned">Banned</option>
+            <option value="blocked">Withdrawals blocked</option>
           </select>
           <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
         </div>
@@ -182,10 +182,10 @@ export const AdminUsers: React.FC = () => {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-white/5">
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Utilisateur</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Dépôts</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Retraits</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Statut</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">User</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Deposits</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Withdrawals</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Status</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
@@ -193,12 +193,12 @@ export const AdminUsers: React.FC = () => {
                 {loading && (
                   <tr><td colSpan={5} className="px-4 py-12 text-center">
                     <div className="w-6 h-6 border-2 border-blue-500/30 border-t-blue-400 rounded-full animate-spin mx-auto mb-2" />
-                    <p className="text-sm text-slate-500">Chargement…</p>
+                    <p className="text-sm text-slate-500">Loading…</p>
                   </td></tr>
                 )}
                 {!loading && users.length === 0 && (
                   <tr><td colSpan={5} className="px-4 py-10 text-center text-sm text-slate-500">
-                    {search || statusFilter !== 'all' ? 'Aucun résultat' : 'Aucun utilisateur inscrit'}
+                    {search || statusFilter !== 'all' ? 'No results' : 'No registered users'}
                   </td></tr>
                 )}
                 {!loading && users.map(user => {
@@ -225,13 +225,13 @@ export const AdminUsers: React.FC = () => {
                       </td>
                       <td className="px-4 py-3">
                         <p className="text-sm font-semibold text-emerald-400">+{user.deposit_total.toFixed(2)} TON</p>
-                        <p className="text-[10px] text-slate-500">{user.deposit_count} dépôt{user.deposit_count !== 1 ? 's' : ''}</p>
+                        <p className="text-[10px] text-slate-500">{user.deposit_count} deposit{user.deposit_count !== 1 ? 's' : ''}</p>
                       </td>
                       <td className="px-4 py-3">
                         <p className="text-sm font-semibold text-orange-400">−{user.withdrawal_total.toFixed(2)} TON</p>
                         <p className="text-[10px] text-slate-500">
-                          {user.withdrawal_count} retrait{user.withdrawal_count !== 1 ? 's' : ''}
-                          {user.pending_withdrawals > 0 && <span className="text-amber-400 ml-1">({user.pending_withdrawals} en attente)</span>}
+                          {user.withdrawal_count} withdrawal{user.withdrawal_count !== 1 ? 's' : ''}
+                          {user.pending_withdrawals > 0 && <span className="text-amber-400 ml-1">({user.pending_withdrawals} pending)</span>}
                         </p>
                       </td>
                       <td className="px-4 py-3">
@@ -259,9 +259,9 @@ export const AdminUsers: React.FC = () => {
                           {/* Inline ban confirmation */}
                           {confirm?.id === user.telegram_id && confirm.action === 'ban' && (
                             <div className="absolute right-2 top-8 z-20 bg-[#1a1f35] border border-red-500/30 rounded-lg p-2 shadow-xl flex items-center gap-2">
-                              <span className="text-[10px] text-red-400">Bannir ?</span>
-                              <button onClick={e => { e.stopPropagation(); void doAction(user.telegram_id, 'ban'); }} className="px-2 py-0.5 rounded bg-red-500/20 text-red-400 text-[10px] font-bold hover:bg-red-500/30">Oui</button>
-                              <button onClick={e => { e.stopPropagation(); setConfirm(null); }} className="px-2 py-0.5 rounded bg-white/5 text-slate-400 text-[10px]">Non</button>
+                              <span className="text-[10px] text-red-400">Ban?</span>
+                              <button onClick={e => { e.stopPropagation(); void doAction(user.telegram_id, 'ban'); }} className="px-2 py-0.5 rounded bg-red-500/20 text-red-400 text-[10px] font-bold hover:bg-red-500/30">Yes</button>
+                              <button onClick={e => { e.stopPropagation(); setConfirm(null); }} className="px-2 py-0.5 rounded bg-white/5 text-slate-400 text-[10px]">No</button>
                             </div>
                           )}
                           {actionFeedback?.id === user.telegram_id && (
@@ -307,14 +307,14 @@ export const AdminUsers: React.FC = () => {
                 <div className="flex justify-between items-center p-2.5 rounded-lg bg-emerald-500/5 border border-emerald-500/10">
                   <div className="flex items-center gap-2">
                     <ArrowDownLeft className="w-3.5 h-3.5 text-emerald-400" />
-                    <span className="text-xs text-slate-400">Dépôts ({selected.deposit_count})</span>
+                    <span className="text-xs text-slate-400">Deposits ({selected.deposit_count})</span>
                   </div>
                   <span className="text-sm font-bold text-emerald-400">+{selected.deposit_total.toFixed(2)} TON</span>
                 </div>
                 <div className="flex justify-between items-center p-2.5 rounded-lg bg-orange-500/5 border border-orange-500/10">
                   <div className="flex items-center gap-2">
                     <ArrowUpRight className="w-3.5 h-3.5 text-orange-400" />
-                    <span className="text-xs text-slate-400">Retraits ({selected.withdrawal_count})</span>
+                    <span className="text-xs text-slate-400">Withdrawals ({selected.withdrawal_count})</span>
                   </div>
                   <span className="text-sm font-bold text-orange-400">−{selected.withdrawal_total.toFixed(2)} TON</span>
                 </div>
@@ -322,13 +322,13 @@ export const AdminUsers: React.FC = () => {
                   <div className="flex justify-between items-center p-2.5 rounded-lg bg-amber-500/5 border border-amber-500/20">
                     <div className="flex items-center gap-2">
                       <Clock className="w-3.5 h-3.5 text-amber-400" />
-                      <span className="text-xs text-slate-400">En attente</span>
+                      <span className="text-xs text-slate-400">Pending</span>
                     </div>
                     <span className="text-sm font-bold text-amber-400">{selected.pending_withdrawals}</span>
                   </div>
                 )}
                 <div className={`flex justify-between items-center p-2.5 rounded-lg ${balanceDiff >= 0 ? 'bg-white/[0.03]' : 'bg-red-500/5 border border-red-500/10'}`}>
-                  <span className="text-xs text-slate-400">Bilan net</span>
+                  <span className="text-xs text-slate-400">Net balance</span>
                   <span className={`text-sm font-bold ${balanceDiff >= 0 ? 'text-white' : 'text-red-400'}`}>
                     {balanceDiff >= 0 ? '+' : ''}{balanceDiff.toFixed(2)} TON
                   </span>
@@ -337,40 +337,40 @@ export const AdminUsers: React.FC = () => {
 
               {/* Other stats */}
               <div className="space-y-1.5">
-                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Activité</p>
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Activity</p>
                 <div className="flex justify-between items-center p-2.5 rounded-lg bg-white/[0.03]">
-                  <span className="text-xs text-slate-400">Filleuls</span>
+                  <span className="text-xs text-slate-400">Referrals</span>
                   <span className="text-sm font-semibold text-purple-400">{selected.referral_count}</span>
                 </div>
                 <div className="flex justify-between items-center p-2.5 rounded-lg bg-white/[0.03]">
-                  <span className="text-xs text-slate-400">Bonus parrainage</span>
+                  <span className="text-xs text-slate-400">Referral bonus</span>
                   <span className="text-sm font-semibold text-emerald-400">{selected.referral_balance.toFixed(2)} TON</span>
                 </div>
                 <div className="flex justify-between items-center p-2.5 rounded-lg bg-white/[0.03]">
-                  <span className="text-xs text-slate-400">Inscrit</span>
-                  <span className="text-xs text-slate-300">{new Date(selected.created_at).toLocaleDateString('fr-FR')} ({accountAge(selected.created_at)})</span>
+                  <span className="text-xs text-slate-400">Registered</span>
+                  <span className="text-xs text-slate-300">{new Date(selected.created_at).toLocaleDateString('en-US')} ({accountAge(selected.created_at)})</span>
                 </div>
                 <div className="flex justify-between items-center p-2.5 rounded-lg bg-white/[0.03]">
                   <Shield className={`w-4 h-4 ${selected.banned ? 'text-red-400' : selected.flagged ? 'text-amber-400' : 'text-emerald-400'}`} />
                   <span className="text-xs text-slate-400">
-                    {selected.banned ? 'Compte banni' : selected.flagged ? 'Compte signalé' : 'Compte sain'}
+                    {selected.banned ? 'Account banned' : selected.flagged ? 'Account flagged' : 'Account clean'}
                   </span>
                 </div>
               </div>
 
               {/* Credit balance */}
               <div className="space-y-2">
-                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Créditer</p>
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Credit</p>
                 {!creditOpen ? (
                   <button
                     onClick={() => { setCreditOpen(true); setCreditResult(null); }}
                     className="w-full py-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 text-xs font-semibold hover:bg-emerald-500/20 flex items-center justify-center gap-2">
-                    <PlusCircle className="w-3.5 h-3.5" /> Ajouter du solde
+                    <PlusCircle className="w-3.5 h-3.5" /> Add balance
                   </button>
                 ) : (
                   <div className="rounded-xl bg-emerald-500/5 border border-emerald-500/20 p-3 space-y-2.5">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-semibold text-emerald-400">Crédit manuel</span>
+                      <span className="text-xs font-semibold text-emerald-400">Manual credit</span>
                       <button onClick={() => { setCreditOpen(false); setCreditAmount(''); setCreditNote(''); setCreditResult(null); }}
                         className="text-slate-500 hover:text-slate-300">
                         <X className="w-3.5 h-3.5" />
@@ -402,7 +402,7 @@ export const AdminUsers: React.FC = () => {
                       className="w-full py-2 rounded-lg bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 text-xs font-bold hover:bg-emerald-500/30 disabled:opacity-40 flex items-center justify-center gap-2">
                       {crediting
                         ? <><span className="w-3 h-3 border border-emerald-400/40 border-t-emerald-400 rounded-full animate-spin" /> En cours…</>
-                        : <><PlusCircle className="w-3.5 h-3.5" /> Confirmer le crédit</>}
+                        : <><PlusCircle className="w-3.5 h-3.5" /> Confirm credit</>}
                     </button>
                   </div>
                 )}
@@ -416,31 +416,31 @@ export const AdminUsers: React.FC = () => {
                     <button onClick={() => void doAction(selected.telegram_id, 'unflag')}
                       disabled={actioning === selected.telegram_id}
                       className="flex-1 py-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs font-medium hover:bg-amber-500/20 disabled:opacity-40">
-                      Désignaler
+                      Unflag
                     </button>
                   )}
                   {!selected.banned
                     ? <button onClick={() => void doAction(selected.telegram_id, 'ban')}
                         disabled={actioning === selected.telegram_id}
                         className="flex-1 py-2 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-medium hover:bg-red-500/20 disabled:opacity-40">
-                        <UserX className="inline w-3 h-3 mr-1" />Bannir
+                        <UserX className="inline w-3 h-3 mr-1" />Ban
                       </button>
                     : <button onClick={() => void doAction(selected.telegram_id, 'unban')}
                         disabled={actioning === selected.telegram_id}
                         className="flex-1 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-medium hover:bg-emerald-500/20 disabled:opacity-40">
-                        <UserCheck className="inline w-3 h-3 mr-1" />Débannir
+                        <UserCheck className="inline w-3 h-3 mr-1" />Unban
                       </button>}
                 </div>
                 {!selected.withdrawal_blocked
                   ? <button onClick={() => void doAction(selected.telegram_id, 'block-withdrawals')}
                       disabled={actioning === selected.telegram_id}
                       className="w-full py-2 rounded-lg bg-orange-500/10 border border-orange-500/20 text-orange-400 text-xs font-medium hover:bg-orange-500/20 disabled:opacity-40">
-                      <Lock className="inline w-3 h-3 mr-1" />Bloquer les retraits
+                      <Lock className="inline w-3 h-3 mr-1" />Block withdrawals
                     </button>
                   : <button onClick={() => void doAction(selected.telegram_id, 'unblock-withdrawals')}
                       disabled={actioning === selected.telegram_id}
                       className="w-full py-2 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-medium hover:bg-blue-500/20 disabled:opacity-40">
-                      <Unlock className="inline w-3 h-3 mr-1" />Débloquer les retraits
+                      <Unlock className="inline w-3 h-3 mr-1" />Unblock withdrawals
                     </button>}
               </div>
             </div>

@@ -33,31 +33,31 @@ export const ChannelModal: React.FC = () => {
   };
 
   return (
-    <Modal title={isEdit ? 'Modifier le canal/groupe' : 'Ajouter un canal/groupe'} size="md">
+    <Modal title={isEdit ? 'Edit channel/group' : 'Add channel/group'} size="md">
       <form onSubmit={handleSubmit} className="space-y-6">
-        <FormSection title="Informations">
+        <FormSection title="Information">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <FormGroup>
               <FormLabel required>Type</FormLabel>
               <FormSelect value={form.type} onChange={e => setForm({ ...form, type: e.target.value as 'channel' | 'group' })}>
-                <option value="channel">Canal</option>
-                <option value="group">Groupe</option>
+                <option value="channel">Channel</option>
+                <option value="group">Group</option>
               </FormSelect>
             </FormGroup>
             <FormGroup>
-              <FormLabel required>Priorité</FormLabel>
+              <FormLabel required>Priority</FormLabel>
               <FormInput type="number" min="1" value={form.priority} onChange={e => setForm({ ...form, priority: parseInt(e.target.value) || 1 })} />
             </FormGroup>
           </div>
 
           <FormGroup>
-            <FormLabel required>Nom</FormLabel>
-            <FormInput value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Nom du canal/groupe" required />
+            <FormLabel required>Name</FormLabel>
+            <FormInput value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Channel/group name" required />
           </FormGroup>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <FormGroup>
-              <FormLabel required>ID Telegram</FormLabel>
+              <FormLabel required>Telegram ID</FormLabel>
               <FormInput value={form.telegramId} onChange={e => setForm({ ...form, telegramId: e.target.value })} placeholder="-1001234567890" required />
             </FormGroup>
             <FormGroup>
@@ -67,29 +67,29 @@ export const ChannelModal: React.FC = () => {
           </div>
 
           <FormGroup>
-            <FormLabel>Nombre de membres (estimé)</FormLabel>
+            <FormLabel>Member count (estimated)</FormLabel>
             <FormInput type="number" min="0" value={form.memberCount} onChange={e => setForm({ ...form, memberCount: parseInt(e.target.value) || 0 })} />
           </FormGroup>
         </FormSection>
 
-        <FormSection title="Récompense">
+        <FormSection title="Reward">
           <FormGroup>
-            <FormLabel>Récompense pour rejoindre ($)</FormLabel>
-            <FormInput type="number" step="0.01" min="0" value={form.joinReward} onChange={e => setForm({ ...form, joinReward: parseFloat(e.target.value) || 0 })} placeholder="0 = pas de récompense" />
+            <FormLabel>Join reward ($)</FormLabel>
+            <FormInput type="number" step="0.01" min="0" value={form.joinReward} onChange={e => setForm({ ...form, joinReward: parseFloat(e.target.value) || 0 })} placeholder="0 = no reward" />
           </FormGroup>
         </FormSection>
 
-        <FormSection title="Paramètres">
+        <FormSection title="Settings">
           <div className="space-y-4">
-            <ToggleSwitch enabled={form.isMandatory} onChange={v => setForm({ ...form, isMandatory: v })} label="Obligatoire pour utiliser le bot" />
-            <ToggleSwitch enabled={form.verificationEnabled} onChange={v => setForm({ ...form, verificationEnabled: v })} label="Vérification automatique des membres" />
-            <ToggleSwitch enabled={form.botIsAdmin} onChange={v => setForm({ ...form, botIsAdmin: v })} label="Le bot est admin (requis pour vérification)" />
-            <ToggleSwitch enabled={form.isActive} onChange={v => setForm({ ...form, isActive: v })} label="Actif" />
+            <ToggleSwitch enabled={form.isMandatory} onChange={v => setForm({ ...form, isMandatory: v })} label="Required to use the bot" />
+            <ToggleSwitch enabled={form.verificationEnabled} onChange={v => setForm({ ...form, verificationEnabled: v })} label="Automatic member verification" />
+            <ToggleSwitch enabled={form.botIsAdmin} onChange={v => setForm({ ...form, botIsAdmin: v })} label="Bot is admin (required for verification)" />
+            <ToggleSwitch enabled={form.isActive} onChange={v => setForm({ ...form, isActive: v })} label="Active" />
           </div>
         </FormSection>
 
         <FormActions>
-          <Button type="button" variant="secondary" onClick={closeModal}>Annuler</Button>
+          <Button type="button" variant="secondary" onClick={closeModal}>Cancel</Button>
           <Button type="submit">{isEdit ? 'Save' : 'Add'}</Button>
         </FormActions>
       </form>

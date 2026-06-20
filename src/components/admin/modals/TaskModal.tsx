@@ -64,64 +64,64 @@ export const TaskModal: React.FC = () => {
   };
 
   return (
-    <Modal title={isEdit ? 'Modifier la tâche' : 'Nouvelle tâche'} size="lg">
+    <Modal title={isEdit ? 'Edit task' : 'New task'} size="lg">
       <form onSubmit={handleSubmit} className="space-y-6">
-        <FormSection title="Informations générales">
+        <FormSection title="General information">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <FormGroup>
-              <FormLabel required>Type de tâche</FormLabel>
+              <FormLabel required>Task type</FormLabel>
               <FormSelect value={form.type} onChange={e => setForm({ ...form, type: e.target.value as Task['type'] })}>
-                <option value="join_channel">Rejoindre un canal</option>
-                <option value="join_group">Rejoindre un groupe</option>
-                <option value="start_bot">Démarrer un bot</option>
-                <option value="invite_friends">Inviter des amis</option>
-                <option value="daily">Mission quotidienne</option>
-                <option value="special">Événement spécial</option>
-                <option value="social">Réseaux sociaux</option>
-                <option value="watch_video">Regarder une vidéo</option>
+                <option value="join_channel">Join a channel</option>
+                <option value="join_group">Join a group</option>
+                <option value="start_bot">Start a bot</option>
+                <option value="invite_friends">Invite friends</option>
+                <option value="daily">Daily mission</option>
+                <option value="special">Special event</option>
+                <option value="social">Social networks</option>
+                <option value="watch_video">Watch a video</option>
               </FormSelect>
             </FormGroup>
             <FormGroup>
-              <FormLabel>Icône</FormLabel>
+              <FormLabel>Icon</FormLabel>
               <FormInput value={form.icon} onChange={e => setForm({ ...form, icon: e.target.value })} placeholder="📋" />
             </FormGroup>
           </div>
 
           <FormGroup>
-            <FormLabel required>Titre</FormLabel>
-            <FormInput value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} placeholder="Titre de la tâche" required />
+            <FormLabel required>Title</FormLabel>
+            <FormInput value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} placeholder="Task title" required />
           </FormGroup>
 
           <FormGroup>
             <FormLabel required>Description</FormLabel>
-            <FormTextarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} placeholder="Description de la tâche..." rows={3} required />
+            <FormTextarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} placeholder="Task description..." rows={3} required />
           </FormGroup>
         </FormSection>
 
-        <FormSection title="Récompense">
+        <FormSection title="Reward">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <FormGroup>
-              <FormLabel required>Montant (TON)</FormLabel>
+              <FormLabel required>Amount (TON)</FormLabel>
               <FormInput type="number" step="0.01" min="0" value={form.reward} onChange={e => setForm({ ...form, reward: parseFloat(e.target.value) || 0 })} />
             </FormGroup>
             <FormGroup>
-              <FormLabel>Priorité d'affichage</FormLabel>
+              <FormLabel>Display priority</FormLabel>
               <FormInput type="number" min="0" value={form.priority} onChange={e => setForm({ ...form, priority: parseInt(e.target.value) || 0 })} />
             </FormGroup>
           </div>
 
           {/* Promotion */}
           <div className="pt-2">
-            <ToggleSwitch enabled={form.hasPromotion} onChange={v => setForm({ ...form, hasPromotion: v })} label="Activer une promotion" />
+            <ToggleSwitch enabled={form.hasPromotion} onChange={v => setForm({ ...form, hasPromotion: v })} label="Enable a promotion" />
           </div>
           {form.hasPromotion && (
             <div className="grid grid-cols-2 gap-4 mt-3 p-3 rounded-xl bg-amber-500/5 border border-amber-500/20">
               <FormGroup>
-                <FormLabel required>Multiplicateur</FormLabel>
-                <FormInput type="number" min="2" step="1" value={form.promotionMultiplier} onChange={e => setForm({ ...form, promotionMultiplier: parseInt(e.target.value) || 2 })} placeholder="Ex: 2 pour ×2" />
+                <FormLabel required>Multiplier</FormLabel>
+                <FormInput type="number" min="2" step="1" value={form.promotionMultiplier} onChange={e => setForm({ ...form, promotionMultiplier: parseInt(e.target.value) || 2 })} placeholder="e.g. 2 for ×2" />
               </FormGroup>
               <FormGroup>
-                <FormLabel required>Fin de la promo</FormLabel>
+                <FormLabel required>Promo end date</FormLabel>
                 <FormInput type="date" value={form.promotionEndsAt} onChange={e => setForm({ ...form, promotionEndsAt: e.target.value })} />
               </FormGroup>
             </div>
@@ -129,14 +129,14 @@ export const TaskModal: React.FC = () => {
         </FormSection>
 
         {(form.type === 'join_channel' || form.type === 'join_group' || form.type === 'start_bot') && (
-          <FormSection title="Cible Telegram">
+          <FormSection title="Telegram target">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <FormGroup>
-                <FormLabel required>URL Telegram</FormLabel>
+                <FormLabel required>Telegram URL</FormLabel>
                 <FormInput value={form.targetUrl} onChange={e => setForm({ ...form, targetUrl: e.target.value })} placeholder="https://t.me/..." />
               </FormGroup>
               <FormGroup>
-                <FormLabel>ID Telegram (vérification)</FormLabel>
+                <FormLabel>Telegram ID (verification)</FormLabel>
                 <FormInput value={form.targetId} onChange={e => setForm({ ...form, targetId: e.target.value })} placeholder="-1001234567890" />
               </FormGroup>
             </div>
@@ -144,74 +144,74 @@ export const TaskModal: React.FC = () => {
         )}
 
         {form.type === 'watch_video' && (
-          <FormSection title="Vidéo à regarder">
+          <FormSection title="Video to watch">
             <FormGroup>
-              <FormLabel required>URL de la vidéo</FormLabel>
+              <FormLabel required>Video URL</FormLabel>
               <FormInput value={form.targetUrl} onChange={e => setForm({ ...form, targetUrl: e.target.value })} placeholder="https://www.youtube.com/watch?v=..." />
             </FormGroup>
-            <p className="text-xs text-slate-500 mt-1">L'utilisateur doit rester 20 secondes sur la page avant de pouvoir valider.</p>
+            <p className="text-xs text-slate-500 mt-1">The user must stay on the page for 20 seconds before being able to validate.</p>
           </FormSection>
         )}
 
         {form.type === 'social' && (
-          <FormSection title="Compte à suivre">
+          <FormSection title="Account to follow">
             <FormGroup>
-              <FormLabel required>URL du profil</FormLabel>
-              <FormInput value={form.targetUrl} onChange={e => setForm({ ...form, targetUrl: e.target.value })} placeholder="https://x.com/... ou https://instagram.com/... ou https://tiktok.com/@..." />
+              <FormLabel required>Profile URL</FormLabel>
+              <FormInput value={form.targetUrl} onChange={e => setForm({ ...form, targetUrl: e.target.value })} placeholder="https://x.com/... or https://instagram.com/... or https://tiktok.com/@..." />
             </FormGroup>
-            <p className="text-xs text-slate-500 mt-1">Supporte X, Instagram, TikTok, Discord, YouTube. Le logo est détecté automatiquement.</p>
+            <p className="text-xs text-slate-500 mt-1">Supports X, Instagram, TikTok, Discord, YouTube. Logo is detected automatically.</p>
           </FormSection>
         )}
 
         {form.type === 'invite_friends' && (
-          <FormSection title="Condition d'invitation">
+          <FormSection title="Invitation condition">
             <FormGroup>
-              <FormLabel required>Nombre d'amis à inviter</FormLabel>
+              <FormLabel required>Number of friends to invite</FormLabel>
               <FormInput type="number" min="1" value={form.requiredCount} onChange={e => setForm({ ...form, requiredCount: parseInt(e.target.value) || 1 })} />
             </FormGroup>
           </FormSection>
         )}
 
-        <FormSection title="Paramètres avancés">
+        <FormSection title="Advanced settings">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <FormGroup>
-              <FormLabel>Méthode de vérification</FormLabel>
+              <FormLabel>Verification method</FormLabel>
               <FormSelect value={form.verificationMethod} onChange={e => setForm({ ...form, verificationMethod: e.target.value as Task['verificationMethod'] })}>
-                <option value="auto">Automatique</option>
-                <option value="api">API externe</option>
-                <option value="manual">Manuelle</option>
+                <option value="auto">Automatic</option>
+                <option value="api">External API</option>
+                <option value="manual">Manual</option>
               </FormSelect>
             </FormGroup>
             <FormGroup>
-              <FormLabel>Max complétions (global)</FormLabel>
-              <FormInput type="number" min="0" value={form.maxCompletions || ''} onChange={e => setForm({ ...form, maxCompletions: parseInt(e.target.value) || undefined })} placeholder="Illimité" />
+              <FormLabel>Max completions (global)</FormLabel>
+              <FormInput type="number" min="0" value={form.maxCompletions || ''} onChange={e => setForm({ ...form, maxCompletions: parseInt(e.target.value) || undefined })} placeholder="Unlimited" />
             </FormGroup>
             <FormGroup>
-              <FormLabel>Max par utilisateur</FormLabel>
-              <FormInput type="number" min="0" value={form.maxPerUser || ''} onChange={e => setForm({ ...form, maxPerUser: parseInt(e.target.value) || undefined })} placeholder="Illimité" />
+              <FormLabel>Max per user</FormLabel>
+              <FormInput type="number" min="0" value={form.maxPerUser || ''} onChange={e => setForm({ ...form, maxPerUser: parseInt(e.target.value) || undefined })} placeholder="Unlimited" />
             </FormGroup>
           </div>
 
           {form.type === 'daily' && (
             <FormGroup>
-              <FormLabel>Cooldown (heures)</FormLabel>
+              <FormLabel>Cooldown (hours)</FormLabel>
               <FormInput type="number" min="0" value={form.cooldownHours} onChange={e => setForm({ ...form, cooldownHours: parseInt(e.target.value) || 0 })} />
             </FormGroup>
           )}
 
           <FormGroup>
-            <FormLabel>Date d'expiration</FormLabel>
+            <FormLabel>Expiry date</FormLabel>
             <FormInput type="date" value={form.expiresAt} onChange={e => setForm({ ...form, expiresAt: e.target.value })} />
           </FormGroup>
 
           <div className="flex items-center gap-6 pt-2 flex-wrap">
-            <ToggleSwitch enabled={form.isActive} onChange={v => setForm({ ...form, isActive: v })} label="Tâche active" />
-            <ToggleSwitch enabled={form.isPromoTask} onChange={v => setForm({ ...form, isPromoTask: v })} label="🎯 Tâche promo (vérification manuelle)" />
+            <ToggleSwitch enabled={form.isActive} onChange={v => setForm({ ...form, isActive: v })} label="Task active" />
+            <ToggleSwitch enabled={form.isPromoTask} onChange={v => setForm({ ...form, isPromoTask: v })} label="🎯 Promo task (manual verification)" />
           </div>
         </FormSection>
 
         <FormActions>
-          <Button type="button" variant="secondary" onClick={closeModal}>Annuler</Button>
+          <Button type="button" variant="secondary" onClick={closeModal}>Cancel</Button>
           <Button type="submit">{isEdit ? 'Save' : 'Create task'}</Button>
         </FormActions>
       </form>

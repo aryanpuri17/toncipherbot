@@ -36,14 +36,14 @@ const taskTypeIcons: Record<string, React.ReactNode> = {
 };
 
 const taskTypeLabels: Record<string, string> = {
-  join_channel: 'Canal',
-  join_group: 'Groupe',
+  join_channel: 'Channel',
+  join_group: 'Group',
   start_bot: 'Bot',
-  invite_friends: 'Invitation',
-  daily: 'Quotidien',
-  special: 'Spécial',
+  invite_friends: 'Invite',
+  daily: 'Daily',
+  special: 'Special',
   social: 'Social',
-  watch_video: 'Vidéo',
+  watch_video: 'Video',
 };
 
 const taskTypeColors: Record<string, string> = {
@@ -118,21 +118,21 @@ export const AdminTasks: React.FC = () => {
 
   function timeAgo(iso: string) {
     const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
-    if (diff < 60) return 'À l\'instant';
-    if (diff < 3600) return `Il y a ${Math.floor(diff / 60)} min`;
-    if (diff < 86400) return `Il y a ${Math.floor(diff / 3600)} h`;
-    return `Il y a ${Math.floor(diff / 86400)} j`;
+    if (diff < 60) return 'Just now';
+    if (diff < 3600) return `${Math.floor(diff / 60)} min ago`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)} h ago`;
+    return `${Math.floor(diff / 86400)} d ago`;
   }
 
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-white">Tâches</h2>
-          <p className="text-slate-400 text-sm mt-1">{tasks.length} tâches configurées</p>
+          <h2 className="text-2xl font-bold text-white">Tasks</h2>
+          <p className="text-slate-400 text-sm mt-1">{tasks.length} tasks configured</p>
         </div>
         <button onClick={() => openModal('task')} className="btn-primary px-4 py-2.5 rounded-xl text-sm font-medium text-white flex items-center gap-2">
-          <Plus className="w-4 h-4" /> Nouvelle tâche
+          <Plus className="w-4 h-4" /> New task
         </button>
       </div>
 
@@ -156,9 +156,9 @@ export const AdminTasks: React.FC = () => {
       {tasks.length === 0 ? (
         <div className="glass-card p-10 text-center">
           <AlertCircle className="w-10 h-10 text-slate-600 mx-auto mb-3" />
-          <p className="text-sm text-slate-400">Aucune tâche configurée</p>
+          <p className="text-sm text-slate-400">No tasks configured</p>
           <button onClick={() => openModal('task')} className="mt-4 btn-primary px-4 py-2 rounded-xl text-sm font-medium text-white">
-            Créer la première tâche
+            Create first task
           </button>
         </div>
       ) : (
@@ -188,11 +188,11 @@ export const AdminTasks: React.FC = () => {
                     <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
                       <span className="text-emerald-400 font-semibold">+{task.reward.toFixed(2)} TON</span>
                       {isPromoActive && <span className="text-amber-400">→ +{(task.reward * task.promotion!.multiplier).toFixed(2)} TON (promo)</span>}
-                      <span>✅ {task.totalCompletions.toLocaleString()} complétions</span>
+                      <span>✅ {task.totalCompletions.toLocaleString()} completions</span>
                       {task.maxCompletions && <span>📊 Max: {task.maxCompletions}</span>}
                       {task.cooldownHours && <span>⏱️ Cooldown: {task.cooldownHours}h</span>}
-                      {task.expiresAt && <span>📅 Expire: {new Date(task.expiresAt).toLocaleDateString('fr-FR')}</span>}
-                      {task.promotion && <span className="text-amber-400/70">Promo jusqu'au {new Date(task.promotion.endsAt).toLocaleDateString('fr-FR')}</span>}
+                      {task.expiresAt && <span>📅 Expires: {new Date(task.expiresAt).toLocaleDateString('en-US')}</span>}
+                      {task.promotion && <span className="text-amber-400/70">Promo until {new Date(task.promotion.endsAt).toLocaleDateString('en-US')}</span>}
                     </div>
                   </div>
 
@@ -219,7 +219,7 @@ export const AdminTasks: React.FC = () => {
                 {task.maxCompletions && (
                   <div className="mt-3 pt-3 border-t border-white/5">
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs text-slate-500">Progression</span>
+                      <span className="text-xs text-slate-500">Progress</span>
                       <span className="text-xs text-slate-400">{task.totalCompletions}/{task.maxCompletions}</span>
                     </div>
                     <div className="progress-bar">
@@ -241,11 +241,11 @@ export const AdminTasks: React.FC = () => {
         <div className="flex items-center justify-between">
           <div>
             <h3 className="text-lg font-bold text-white flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-blue-400" /> Campagnes utilisateurs
+              <Sparkles className="w-5 h-5 text-blue-400" /> User campaigns
             </h3>
             <p className="text-slate-400 text-sm mt-0.5">
-              Tâches créées par les utilisateurs — approbation requise
-              {pendingUserTasksCount > 0 && <span className="ml-2 text-amber-400 font-semibold">({pendingUserTasksCount} en attente)</span>}
+              Tasks created by users — approval required
+              {pendingUserTasksCount > 0 && <span className="ml-2 text-amber-400 font-semibold">({pendingUserTasksCount} pending)</span>}
             </p>
           </div>
           <button onClick={() => void fetchUserTasks()} className="p-2 rounded-lg hover:bg-white/5 text-slate-500">
@@ -256,9 +256,9 @@ export const AdminTasks: React.FC = () => {
         {/* Filter tabs */}
         <div className="flex gap-2">
           {[
-            { value: 'pending_approval', label: 'En attente' },
-            { value: 'active',           label: 'Actives' },
-            { value: 'all',              label: 'Toutes' },
+            { value: 'pending_approval', label: 'Pending' },
+            { value: 'active',           label: 'Active' },
+            { value: 'all',              label: 'All' },
           ].map(f => (
             <button key={f.value} onClick={() => setUtFilter(f.value)}
               className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${utFilter === f.value ? 'bg-blue-500/15 text-blue-400 border border-blue-500/30' : 'glass-card-light text-slate-400'}`}>
@@ -274,7 +274,7 @@ export const AdminTasks: React.FC = () => {
         ) : userTasks.length === 0 ? (
           <div className="glass-card p-8 text-center">
             <Sparkles className="w-8 h-8 text-slate-600 mx-auto mb-3" />
-            <p className="text-sm text-slate-400">Aucune campagne {utFilter === 'pending_approval' ? 'en attente' : ''}</p>
+            <p className="text-sm text-slate-400">No {utFilter === 'pending_approval' ? 'pending ' : ''}campaigns</p>
           </div>
         ) : (
           <div className="space-y-3">
@@ -300,10 +300,10 @@ export const AdminTasks: React.FC = () => {
                       </div>
                       <p className="text-xs text-slate-400 mb-1">{task.description}</p>
                       <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-[11px] text-slate-500">
-                        <span>👤 {task.firstName} @{task.username || 'inconnu'} (<code>{task.creatorId}</code>)</span>
+                        <span>👤 {task.firstName} @{task.username || 'unknown'} (<code>{task.creatorId}</code>)</span>
                         <span>🔗 <a href={task.targetUrl} target="_blank" rel="noreferrer" className="text-blue-400 hover:underline">{task.targetUrl}</a></span>
                         <span>💰 {task.reward.toFixed(4)} TON/exec — Budget: {task.totalBudget.toFixed(3)} TON</span>
-                        <span>📊 {task.completions}/{task.maxCompletions} complétions</span>
+                        <span>📊 {task.completions}/{task.maxCompletions} completions</span>
                         <span>🕐 {timeAgo(task.createdAt)}</span>
                       </div>
                     </div>
@@ -320,13 +320,13 @@ export const AdminTasks: React.FC = () => {
                         disabled={isActionLoading}
                         className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-semibold hover:bg-emerald-500/25 transition-all disabled:opacity-40"
                       >
-                        {isActionLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <><CheckCircle className="w-3.5 h-3.5" /> Approuver</>}
+                        {isActionLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <><CheckCircle className="w-3.5 h-3.5" /> Approve</>}
                       </button>
                       <button
                         onClick={() => setUtRejectOpen(task.id)}
                         className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-semibold hover:bg-red-500/20 transition-all"
                       >
-                        <XCircle className="w-3.5 h-3.5" /> Refuser
+                        <XCircle className="w-3.5 h-3.5" /> Reject
                       </button>
                     </div>
                   )}
@@ -337,7 +337,7 @@ export const AdminTasks: React.FC = () => {
                         type="text"
                         value={utRejectNotes[task.id] ?? ''}
                         onChange={e => setUtRejectNotes(prev => ({ ...prev, [task.id]: e.target.value }))}
-                        placeholder="Motif du refus (optionnel)..."
+                        placeholder="Reason for rejection (optional)..."
                         className="w-full px-3 py-2 bg-white/5 border border-red-500/20 rounded-xl text-white text-xs focus:outline-none"
                       />
                       <div className="flex gap-2">
@@ -346,9 +346,9 @@ export const AdminTasks: React.FC = () => {
                           disabled={isActionLoading}
                           className="flex-1 py-2 rounded-xl bg-red-500/15 border border-red-500/30 text-red-400 text-xs font-semibold disabled:opacity-40"
                         >
-                          {isActionLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin mx-auto" /> : 'Confirmer le refus'}
+                          {isActionLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin mx-auto" /> : 'Confirm rejection'}
                         </button>
-                        <button onClick={() => setUtRejectOpen(null)} className="flex-1 py-2 rounded-xl bg-white/5 text-slate-400 text-xs">Annuler</button>
+                        <button onClick={() => setUtRejectOpen(null)} className="flex-1 py-2 rounded-xl bg-white/5 text-slate-400 text-xs">Cancel</button>
                       </div>
                     </div>
                   )}
@@ -363,14 +363,14 @@ export const AdminTasks: React.FC = () => {
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="text-lg font-bold text-white">Soumissions de preuves</h3>
+            <h3 className="text-lg font-bold text-white">Proof submissions</h3>
             <p className="text-slate-400 text-sm mt-0.5">
-              {pendingSubmissions.length} en attente · {allSubmissions.length} total
+              {pendingSubmissions.length} pending · {allSubmissions.length} total
             </p>
           </div>
           {pendingSubmissions.length > 0 && (
             <span className="px-2.5 py-1 rounded-full bg-amber-500/15 border border-amber-500/20 text-amber-400 text-xs font-semibold">
-              {pendingSubmissions.length} à traiter
+              {pendingSubmissions.length} to review
             </span>
           )}
         </div>
@@ -378,7 +378,7 @@ export const AdminTasks: React.FC = () => {
         {allSubmissions.length === 0 ? (
           <div className="glass-card p-8 text-center">
             <FileText className="w-8 h-8 text-slate-600 mx-auto mb-3" />
-            <p className="text-sm text-slate-400">Aucune soumission pour l'instant</p>
+            <p className="text-sm text-slate-400">No submissions yet</p>
           </div>
         ) : (
           <div className="space-y-3">
@@ -402,20 +402,20 @@ export const AdminTasks: React.FC = () => {
                       <p className="text-[10px] text-slate-500 mt-0.5">{timeAgo(sub.createdAt)}</p>
                     </div>
                     <div>
-                      {sub.status === 'approved' && <span className="text-xs font-medium text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded-lg">Approuvé</span>}
-                      {sub.status === 'rejected' && <span className="text-xs font-medium text-red-400 bg-red-500/10 px-2 py-1 rounded-lg">Refusé</span>}
-                      {sub.status === 'pending' && <span className="text-xs font-medium text-amber-400 bg-amber-500/10 px-2 py-1 rounded-lg">En attente</span>}
+                      {sub.status === 'approved' && <span className="text-xs font-medium text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded-lg">Approved</span>}
+                      {sub.status === 'rejected' && <span className="text-xs font-medium text-red-400 bg-red-500/10 px-2 py-1 rounded-lg">Rejected</span>}
+                      {sub.status === 'pending' && <span className="text-xs font-medium text-amber-400 bg-amber-500/10 px-2 py-1 rounded-lg">Pending</span>}
                     </div>
                   </div>
 
                   {/* Proof — image and/or text */}
                   <div className="p-3 rounded-lg bg-white/[0.03] border border-white/8 space-y-2">
-                    <p className="text-[10px] text-slate-500 uppercase tracking-wider">Preuve soumise</p>
+                    <p className="text-[10px] text-slate-500 uppercase tracking-wider">Submitted proof</p>
                     {sub.proofImageBase64 && (
                       <a href={sub.proofImageBase64} target="_blank" rel="noreferrer">
                         <img
                           src={sub.proofImageBase64}
-                          alt="Capture d'écran"
+                          alt="Screenshot"
                           className="max-h-56 rounded-lg object-contain w-full bg-black/20 cursor-pointer hover:opacity-90 transition-opacity"
                         />
                       </a>
@@ -424,12 +424,12 @@ export const AdminTasks: React.FC = () => {
                       <p className="text-xs text-slate-300 leading-relaxed break-all">{sub.proofText}</p>
                     )}
                     {!sub.proofImageBase64 && !sub.proofText && (
-                      <p className="text-xs text-slate-500 italic">Aucune preuve fournie</p>
+                      <p className="text-xs text-slate-500 italic">No proof provided</p>
                     )}
                   </div>
 
                   {sub.adminNote && (
-                    <p className="text-xs text-slate-500">Note admin: <span className="text-slate-400">{sub.adminNote}</span></p>
+                    <p className="text-xs text-slate-500">Admin note: <span className="text-slate-400">{sub.adminNote}</span></p>
                   )}
 
                   {/* Actions — pending only */}
@@ -441,13 +441,13 @@ export const AdminTasks: React.FC = () => {
                             onClick={() => handleApprove(sub.id)}
                             className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-semibold hover:bg-emerald-500/25 transition-all"
                           >
-                            <CheckCircle className="w-3.5 h-3.5" /> Approuver
+                            <CheckCircle className="w-3.5 h-3.5" /> Approve
                           </button>
                           <button
                             onClick={() => setRejectOpen(sub.id)}
                             className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-semibold hover:bg-red-500/20 transition-all"
                           >
-                            <XCircle className="w-3.5 h-3.5" /> Refuser
+                            <XCircle className="w-3.5 h-3.5" /> Reject
                           </button>
                         </div>
                       ) : (
@@ -456,7 +456,7 @@ export const AdminTasks: React.FC = () => {
                             type="text"
                             value={rejectNotes[sub.id] ?? ''}
                             onChange={e => setRejectNotes(prev => ({ ...prev, [sub.id]: e.target.value }))}
-                            placeholder="Motif du refus (optionnel)..."
+                            placeholder="Reason for rejection (optional)..."
                             className="w-full px-3 py-2 bg-white/5 border border-red-500/20 rounded-xl text-white text-xs focus:outline-none focus:border-red-500/40"
                           />
                           <div className="flex gap-2">
@@ -464,13 +464,13 @@ export const AdminTasks: React.FC = () => {
                               onClick={() => handleReject(sub.id)}
                               className="flex-1 py-2 rounded-xl bg-red-500/15 border border-red-500/30 text-red-400 text-xs font-semibold hover:bg-red-500/25 transition-all"
                             >
-                              Confirmer le refus
+                              Confirm rejection
                             </button>
                             <button
                               onClick={() => setRejectOpen(null)}
                               className="flex-1 py-2 rounded-xl bg-white/5 text-slate-400 text-xs font-medium hover:bg-white/10 transition-all"
                             >
-                              Annuler
+                              Cancel
                             </button>
                           </div>
                         </div>

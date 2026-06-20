@@ -46,89 +46,89 @@ export const CryptoModal: React.FC = () => {
   };
 
   return (
-    <Modal title={isEdit ? 'Modifier le réseau crypto' : 'Ajouter un réseau crypto'} size="lg">
+    <Modal title={isEdit ? 'Edit crypto network' : 'Add crypto network'} size="lg">
       <form onSubmit={handleSubmit} className="space-y-6">
-        <FormSection title="Informations de base">
+        <FormSection title="Basic information">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <FormGroup>
-              <FormLabel required>Nom</FormLabel>
+              <FormLabel required>Name</FormLabel>
               <FormInput value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Tether" required />
             </FormGroup>
             <FormGroup>
-              <FormLabel required>Symbole</FormLabel>
+              <FormLabel required>Symbol</FormLabel>
               <FormInput value={form.symbol} onChange={e => setForm({ ...form, symbol: e.target.value })} placeholder="USDT" required />
             </FormGroup>
             <FormGroup>
-              <FormLabel required>Réseau</FormLabel>
+              <FormLabel required>Network</FormLabel>
               <FormInput value={form.network} onChange={e => setForm({ ...form, network: e.target.value })} placeholder="TRC20, BEP20, TON..." required />
             </FormGroup>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <FormGroup>
-              <FormLabel>Décimales</FormLabel>
+              <FormLabel>Decimals</FormLabel>
               <FormInput type="number" min="0" max="18" value={form.decimals} onChange={e => setForm({ ...form, decimals: parseInt(e.target.value) || 18 })} />
             </FormGroup>
             <FormGroup>
-              <FormLabel>Priorité d'affichage</FormLabel>
+              <FormLabel>Display priority</FormLabel>
               <FormInput type="number" min="1" value={form.priority} onChange={e => setForm({ ...form, priority: parseInt(e.target.value) || 1 })} />
             </FormGroup>
           </div>
 
           <FormGroup>
-            <FormLabel>Adresse du contrat (si token)</FormLabel>
+            <FormLabel>Contract address (if token)</FormLabel>
             <FormInput value={form.contractAddress} onChange={e => setForm({ ...form, contractAddress: e.target.value })} placeholder="0x..." />
           </FormGroup>
 
           <FormGroup>
-            <FormLabel>URL de l'explorateur</FormLabel>
+            <FormLabel>Explorer URL</FormLabel>
             <FormInput value={form.explorerUrl} onChange={e => setForm({ ...form, explorerUrl: e.target.value })} placeholder="https://tronscan.org/#/transaction/" />
           </FormGroup>
         </FormSection>
 
-        <FormSection title="Limites de dépôt">
+        <FormSection title="Deposit limits">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <FormGroup>
-              <FormLabel>Dépôt minimum</FormLabel>
+              <FormLabel>Minimum deposit</FormLabel>
               <FormInput type="number" step="0.01" min="0" value={form.minDeposit} onChange={e => setForm({ ...form, minDeposit: parseFloat(e.target.value) || 0 })} />
             </FormGroup>
             <FormGroup>
-              <FormLabel>Dépôt maximum</FormLabel>
+              <FormLabel>Maximum deposit</FormLabel>
               <FormInput type="number" step="0.01" min="0" value={form.maxDeposit} onChange={e => setForm({ ...form, maxDeposit: parseFloat(e.target.value) || 0 })} />
             </FormGroup>
           </div>
           <FormGroup>
-            <FormLabel>Confirmations requises</FormLabel>
+            <FormLabel>Required confirmations</FormLabel>
             <FormInput type="number" min="1" value={form.requiredConfirmations} onChange={e => setForm({ ...form, requiredConfirmations: parseInt(e.target.value) || 1 })} />
           </FormGroup>
         </FormSection>
 
-        <FormSection title="Limites de retrait">
+        <FormSection title="Withdrawal limits">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <FormGroup>
-              <FormLabel>Retrait minimum</FormLabel>
+              <FormLabel>Minimum withdrawal</FormLabel>
               <FormInput type="number" step="0.01" min="0" value={form.minWithdrawal} onChange={e => setForm({ ...form, minWithdrawal: parseFloat(e.target.value) || 0 })} />
             </FormGroup>
             <FormGroup>
-              <FormLabel>Retrait maximum</FormLabel>
+              <FormLabel>Maximum withdrawal</FormLabel>
               <FormInput type="number" step="0.01" min="0" value={form.maxWithdrawal} onChange={e => setForm({ ...form, maxWithdrawal: parseFloat(e.target.value) || 0 })} />
             </FormGroup>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <FormGroup>
-              <FormLabel>Frais de retrait</FormLabel>
+              <FormLabel>Withdrawal fee</FormLabel>
               <FormInput type="number" step="0.01" min="0" value={form.withdrawalFee} onChange={e => setForm({ ...form, withdrawalFee: parseFloat(e.target.value) || 0 })} />
             </FormGroup>
             <FormGroup>
-              <FormLabel>Type de frais</FormLabel>
+              <FormLabel>Fee type</FormLabel>
               <FormSelect value={form.withdrawalFeeType} onChange={e => setForm({ ...form, withdrawalFeeType: e.target.value as 'fixed' | 'percentage' })}>
-                <option value="fixed">Fixe</option>
-                <option value="percentage">Pourcentage</option>
+                <option value="fixed">Fixed</option>
+                <option value="percentage">Percentage</option>
               </FormSelect>
             </FormGroup>
             <FormGroup>
-              <FormLabel>Limite journalière</FormLabel>
+              <FormLabel>Daily limit</FormLabel>
               <FormInput type="number" step="0.01" min="0" value={form.dailyWithdrawalLimit} onChange={e => setForm({ ...form, dailyWithdrawalLimit: parseFloat(e.target.value) || 0 })} />
             </FormGroup>
           </div>
@@ -137,32 +137,32 @@ export const CryptoModal: React.FC = () => {
         <FormSection title="Wallets">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <FormGroup>
-              <FormLabel>Adresse Hot Wallet</FormLabel>
-              <FormInput value={form.hotWalletAddress} onChange={e => setForm({ ...form, hotWalletAddress: e.target.value })} placeholder="Adresse..." />
+              <FormLabel>Hot Wallet address</FormLabel>
+              <FormInput value={form.hotWalletAddress} onChange={e => setForm({ ...form, hotWalletAddress: e.target.value })} placeholder="Address..." />
             </FormGroup>
             <FormGroup>
-              <FormLabel>Balance Hot Wallet</FormLabel>
+              <FormLabel>Hot Wallet balance</FormLabel>
               <FormInput type="number" step="0.01" min="0" value={form.hotWalletBalance} onChange={e => setForm({ ...form, hotWalletBalance: parseFloat(e.target.value) || 0 })} />
             </FormGroup>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <FormGroup>
-              <FormLabel>Adresse Cold Wallet</FormLabel>
-              <FormInput value={form.coldWalletAddress} onChange={e => setForm({ ...form, coldWalletAddress: e.target.value })} placeholder="Adresse..." />
+              <FormLabel>Cold Wallet address</FormLabel>
+              <FormInput value={form.coldWalletAddress} onChange={e => setForm({ ...form, coldWalletAddress: e.target.value })} placeholder="Address..." />
             </FormGroup>
             <FormGroup>
-              <FormLabel>Balance Cold Wallet</FormLabel>
+              <FormLabel>Cold Wallet balance</FormLabel>
               <FormInput type="number" step="0.01" min="0" value={form.coldWalletBalance} onChange={e => setForm({ ...form, coldWalletBalance: parseFloat(e.target.value) || 0 })} />
             </FormGroup>
           </div>
         </FormSection>
 
-        <FormSection title="Retrait automatique">
+        <FormSection title="Auto withdrawal">
           <div className="space-y-4">
-            <ToggleSwitch enabled={form.autoWithdrawal} onChange={v => setForm({ ...form, autoWithdrawal: v })} label="Activer le retrait automatique" />
+            <ToggleSwitch enabled={form.autoWithdrawal} onChange={v => setForm({ ...form, autoWithdrawal: v })} label="Enable auto withdrawal" />
             {form.autoWithdrawal && (
               <FormGroup>
-                <FormLabel>Seuil de retrait automatique (montant max sans review)</FormLabel>
+                <FormLabel>Auto withdrawal threshold (max amount without review)</FormLabel>
                 <FormInput type="number" step="0.01" min="0" value={form.autoWithdrawalThreshold} onChange={e => setForm({ ...form, autoWithdrawalThreshold: parseFloat(e.target.value) || 0 })} />
               </FormGroup>
             )}
@@ -171,14 +171,14 @@ export const CryptoModal: React.FC = () => {
 
         <FormSection title="Activation">
           <div className="space-y-4">
-            <ToggleSwitch enabled={form.isActive} onChange={v => setForm({ ...form, isActive: v })} label="Réseau actif" />
-            <ToggleSwitch enabled={form.isDepositEnabled} onChange={v => setForm({ ...form, isDepositEnabled: v })} label="Dépôts activés" />
+            <ToggleSwitch enabled={form.isActive} onChange={v => setForm({ ...form, isActive: v })} label="Network active" />
+            <ToggleSwitch enabled={form.isDepositEnabled} onChange={v => setForm({ ...form, isDepositEnabled: v })} label="Deposits enabled" />
             <ToggleSwitch enabled={form.isWithdrawalEnabled} onChange={v => setForm({ ...form, isWithdrawalEnabled: v })} label="Withdrawals enabled" />
           </div>
         </FormSection>
 
         <FormActions>
-          <Button type="button" variant="secondary" onClick={closeModal}>Annuler</Button>
+          <Button type="button" variant="secondary" onClick={closeModal}>Cancel</Button>
           <Button type="submit">{isEdit ? 'Save' : 'Add'}</Button>
         </FormActions>
       </form>

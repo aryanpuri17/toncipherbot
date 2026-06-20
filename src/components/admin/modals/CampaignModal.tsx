@@ -41,77 +41,77 @@ export const CampaignModal: React.FC = () => {
   };
 
   return (
-    <Modal title={isEdit ? 'Modifier la campagne' : 'Nouvelle campagne'} size="lg">
+    <Modal title={isEdit ? 'Edit campaign' : 'New campaign'} size="lg">
       <form onSubmit={handleSubmit} className="space-y-6">
-        <FormSection title="Informations annonceur">
+        <FormSection title="Advertiser information">
           <FormGroup>
-            <FormLabel required>Nom de l'annonceur</FormLabel>
-            <FormInput value={form.advertiserName} onChange={e => setForm({ ...form, advertiserName: e.target.value })} placeholder="Nom de l'entreprise" required />
+            <FormLabel required>Advertiser name</FormLabel>
+            <FormInput value={form.advertiserName} onChange={e => setForm({ ...form, advertiserName: e.target.value })} placeholder="Company name" required />
           </FormGroup>
 
           <FormGroup>
-            <FormLabel>Description de la campagne</FormLabel>
-            <FormTextarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} rows={2} placeholder="Description optionnelle..." />
+            <FormLabel>Campaign description</FormLabel>
+            <FormTextarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} rows={2} placeholder="Optional description..." />
           </FormGroup>
         </FormSection>
 
-        <FormSection title="Cible">
+        <FormSection title="Target">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <FormGroup>
               <FormLabel required>Type</FormLabel>
               <FormSelect value={form.type} onChange={e => setForm({ ...form, type: e.target.value as Campaign['type'] })}>
-                <option value="channel">Canal Telegram</option>
-                <option value="group">Groupe Telegram</option>
-                <option value="bot">Bot Telegram</option>
+                <option value="channel">Telegram channel</option>
+                <option value="group">Telegram group</option>
+                <option value="bot">Telegram bot</option>
               </FormSelect>
             </FormGroup>
             <FormGroup>
-              <FormLabel required>Nom de la cible</FormLabel>
-              <FormInput value={form.targetName} onChange={e => setForm({ ...form, targetName: e.target.value })} placeholder="Nom du canal/groupe/bot" required />
+              <FormLabel required>Target name</FormLabel>
+              <FormInput value={form.targetName} onChange={e => setForm({ ...form, targetName: e.target.value })} placeholder="Channel/group/bot name" required />
             </FormGroup>
           </div>
 
           <FormGroup>
-            <FormLabel required>URL Telegram</FormLabel>
+            <FormLabel required>Telegram URL</FormLabel>
             <FormInput value={form.targetUrl} onChange={e => setForm({ ...form, targetUrl: e.target.value })} placeholder="https://t.me/..." required />
           </FormGroup>
         </FormSection>
 
-        <FormSection title="Budget & Récompenses">
+        <FormSection title="Budget & Rewards">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <FormGroup>
-              <FormLabel required>Budget total ($)</FormLabel>
+              <FormLabel required>Total budget ($)</FormLabel>
               <FormInput type="number" step="0.01" min="0" value={form.budget} onChange={e => setForm({ ...form, budget: parseFloat(e.target.value) || 0 })} />
             </FormGroup>
             <FormGroup>
-              <FormLabel required>Récompense par action ($)</FormLabel>
+              <FormLabel required>Reward per action ($)</FormLabel>
               <FormInput type="number" step="0.01" min="0" value={form.rewardPerAction} onChange={e => setForm({ ...form, rewardPerAction: parseFloat(e.target.value) || 0 })} />
             </FormGroup>
             <FormGroup>
-              <FormLabel required>Nombre max d'actions</FormLabel>
+              <FormLabel required>Max actions</FormLabel>
               <FormInput type="number" min="1" value={form.maxActions} onChange={e => setForm({ ...form, maxActions: parseInt(e.target.value) || 1 })} />
             </FormGroup>
           </div>
         </FormSection>
 
-        <FormSection title="Planification">
+        <FormSection title="Scheduling">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <FormGroup>
-              <FormLabel required>Date de début</FormLabel>
+              <FormLabel required>Start date</FormLabel>
               <FormInput type="date" value={form.startDate} onChange={e => setForm({ ...form, startDate: e.target.value })} required />
             </FormGroup>
             <FormGroup>
-              <FormLabel required>Date de fin</FormLabel>
+              <FormLabel required>End date</FormLabel>
               <FormInput type="date" value={form.endDate} onChange={e => setForm({ ...form, endDate: e.target.value })} required />
             </FormGroup>
           </div>
 
           <FormGroup>
-            <FormLabel>Statut</FormLabel>
+            <FormLabel>Status</FormLabel>
             <FormSelect value={form.status} onChange={e => setForm({ ...form, status: e.target.value as Campaign['status'] })}>
-              <option value="pending">En attente</option>
+              <option value="pending">Pending</option>
               <option value="active">Active</option>
-              <option value="paused">En pause</option>
+              <option value="paused">Paused</option>
             </FormSelect>
           </FormGroup>
         </FormSection>
@@ -119,22 +119,22 @@ export const CampaignModal: React.FC = () => {
         <FormSection title="Conditions">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <FormGroup>
-              <FormLabel>Niveau minimum utilisateur</FormLabel>
-              <FormInput type="number" min="0" value={form.minUserLevel || ''} onChange={e => setForm({ ...form, minUserLevel: parseInt(e.target.value) || undefined })} placeholder="Aucun" />
+              <FormLabel>Minimum user level</FormLabel>
+              <FormInput type="number" min="0" value={form.minUserLevel || ''} onChange={e => setForm({ ...form, minUserLevel: parseInt(e.target.value) || undefined })} placeholder="None" />
             </FormGroup>
             <FormGroup>
-              <FormLabel>Pays cible</FormLabel>
-              <FormInput value={form.targetCountry} onChange={e => setForm({ ...form, targetCountry: e.target.value })} placeholder="Tous" />
+              <FormLabel>Target country</FormLabel>
+              <FormInput value={form.targetCountry} onChange={e => setForm({ ...form, targetCountry: e.target.value })} placeholder="All" />
             </FormGroup>
           </div>
 
           <div className="pt-2">
-            <ToggleSwitch enabled={form.requireVerification} onChange={v => setForm({ ...form, requireVerification: v })} label="Vérification requise (bot doit être admin)" />
+            <ToggleSwitch enabled={form.requireVerification} onChange={v => setForm({ ...form, requireVerification: v })} label="Verification required (bot must be admin)" />
           </div>
         </FormSection>
 
         <FormActions>
-          <Button type="button" variant="secondary" onClick={closeModal}>Annuler</Button>
+          <Button type="button" variant="secondary" onClick={closeModal}>Cancel</Button>
           <Button type="submit">{isEdit ? 'Save' : 'Create campaign'}</Button>
         </FormActions>
       </form>
