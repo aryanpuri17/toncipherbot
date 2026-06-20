@@ -72,7 +72,7 @@ export const AdminAntiFraud: React.FC = () => {
           <h2 className="text-2xl font-bold text-white">Anti-Fraud</h2>
           <p className="text-slate-400 text-sm mt-1">Surveillance and fraud detection</p>
         </div>
-        <button onClick={() => void fetchAlerts()} className="p-2 rounded-lg hover:bg-white/5 text-slate-400 transition-colors" title="Actualiser">
+        <button onClick={() => void fetchAlerts()} className="p-2 rounded-lg hover:bg-white/5 text-slate-400 transition-colors" title="Refresh">
           <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
         </button>
       </div>

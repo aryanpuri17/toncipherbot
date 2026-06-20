@@ -51,13 +51,13 @@ export const AdminDeposits: React.FC = () => {
     <div className="space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-white">Dépôts</h2>
-          <p className="text-slate-400 text-sm mt-1">Gestion des dépôts crypto{lastRefresh ? ` · actualisé ${lastRefresh.toLocaleTimeString('fr-FR')}` : ''}</p>
+          <h2 className="text-2xl font-bold text-white">Deposits</h2>
+          <p className="text-slate-400 text-sm mt-1">Crypto deposit management{lastRefresh ? ` · refreshed ${lastRefresh.toLocaleTimeString('en-US')}` : ''}</p>
         </div>
         <button onClick={() => void fetchApiDeposits()} disabled={loading}
           className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-slate-400 hover:text-white text-xs font-medium transition-colors disabled:opacity-50">
           <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-          Actualiser
+          Refresh
         </button>
       </div>
 
@@ -65,7 +65,7 @@ export const AdminDeposits: React.FC = () => {
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
         {['all', 'completed', 'confirming', 'pending'].map(s => {
           const count = s === 'all' ? deposits.length : deposits.filter(d => d.status === s).length;
-          const label = s === 'all' ? 'Total' : s === 'completed' ? 'Complétés' : s === 'confirming' ? 'En confirmation' : 'En attente';
+          const label = s === 'all' ? 'Total' : s === 'completed' ? 'Completed' : s === 'confirming' ? 'Confirming' : 'Pending';
           return (
             <button key={s} onClick={() => setFilter(s)} className={`glass-card-light p-3 text-center transition-all ${filter === s ? 'border-blue-500/50 bg-blue-500/5' : ''}`}>
               <p className="text-xs text-slate-400">{label}</p>
@@ -80,18 +80,18 @@ export const AdminDeposits: React.FC = () => {
         <table className="w-full">
           <thead>
             <tr className="border-b border-white/5">
-              <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase">Utilisateur</th>
-              <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase">Montant</th>
-              <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase">Réseau</th>
+              <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase">User</th>
+              <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase">Amount</th>
+              <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase">Network</th>
               <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase">Confirmations</th>
-              <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase">Statut</th>
+              <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase">Status</th>
               <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase">Date</th>
             </tr>
           </thead>
           <tbody>
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-10 text-center text-sm text-slate-500">Aucun dépôt pour l'instant</td>
+                <td colSpan={6} className="px-4 py-10 text-center text-sm text-slate-500">No deposits yet</td>
               </tr>
             )}
             {filtered.map(tx => {
@@ -119,8 +119,8 @@ export const AdminDeposits: React.FC = () => {
                   </td>
                   <td className="px-4 py-3"><StatusBadge status={tx.status} /></td>
                   <td className="px-4 py-3">
-                    <p className="text-xs text-slate-400">{new Date(tx.createdAt).toLocaleDateString('fr-FR')}</p>
-                    <p className="text-[10px] text-slate-500">{new Date(tx.createdAt).toLocaleTimeString('fr-FR')}</p>
+                    <p className="text-xs text-slate-400">{new Date(tx.createdAt).toLocaleDateString('en-US')}</p>
+                    <p className="text-[10px] text-slate-500">{new Date(tx.createdAt).toLocaleTimeString('en-US')}</p>
                   </td>
                 </tr>
               );
@@ -164,10 +164,10 @@ export const AdminWithdrawals: React.FC = () => {
         setLastRefresh(new Date());
         setActionError('');
       } else {
-        setActionError(res.status === 401 ? 'Clé API admin invalide — configurez-la dans l\'onglet Sécurité.' : `Erreur serveur (${res.status}).`);
+        setActionError(res.status === 401 ? 'Invalid admin API key — configure it in the Security tab.' : `Server error (${res.status}).`);
       }
     } catch {
-      setActionError('Backend injoignable — vérifiez que le serveur tourne.');
+      setActionError('Backend unreachable — check that the server is running.');
     }
     setLoading(false);
   }, []);
@@ -186,7 +186,7 @@ export const AdminWithdrawals: React.FC = () => {
         body: JSON.stringify({ txHash: txHashInput[id] ?? '', txDate: txDateInput[id] ?? '' }),
       });
       if (!res.ok && res.status !== 409) {
-        setActionError(`Échec de l'approbation (${res.status}). Réessayez.`);
+        setActionError(`Approval failed (${res.status}). Please retry.`);
       } else {
         // Update status locally so the withdrawal stays visible with new status
         setAllWithdrawals(prev => prev.map(w =>
@@ -196,7 +196,7 @@ export const AdminWithdrawals: React.FC = () => {
         void fetchAll(); // sync with server in background
       }
     } catch {
-      setActionError('Approbation non envoyée — backend injoignable.');
+      setActionError('Approval not sent — backend unreachable.');
     }
     setActioning(null);
   };
@@ -210,7 +210,7 @@ export const AdminWithdrawals: React.FC = () => {
         body: JSON.stringify({ note: noteInput[id] ?? '' }),
       });
       if (!res.ok && res.status !== 409) {
-        setActionError(`Échec du refus (${res.status}). Réessayez.`);
+        setActionError(`Rejection failed (${res.status}). Please retry.`);
       } else {
         // Update status locally so the withdrawal stays visible with new status
         setAllWithdrawals(prev => prev.map(w =>
@@ -220,7 +220,7 @@ export const AdminWithdrawals: React.FC = () => {
         void fetchAll(); // sync with server in background
       }
     } catch {
-      setActionError('Refus non envoyé — backend injoignable.');
+      setActionError('Rejection not sent — backend unreachable.');
     }
     setActioning(null);
   };
@@ -249,7 +249,7 @@ export const AdminWithdrawals: React.FC = () => {
           <p className="text-slate-400 text-sm mt-1">Manual approval — verify deposits before sending</p>
         </div>
         <div className="flex items-center gap-2">
-          {lastRefresh && <span className="text-xs text-slate-500">Actualisé {lastRefresh.toLocaleTimeString('fr-FR')}</span>}
+          {lastRefresh && <span className="text-xs text-slate-500">Refreshed {lastRefresh.toLocaleTimeString('en-US')}</span>}
           <button onClick={() => void fetchAll()} className="p-2 rounded-lg hover:bg-white/5 text-slate-400" title="Actualiser">
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
@@ -259,16 +259,16 @@ export const AdminWithdrawals: React.FC = () => {
       {actionError && (
         <div className="glass-card p-3 border-red-500/30 bg-red-500/10 text-sm text-red-400 flex items-center justify-between">
           <span>⚠ {actionError}</span>
-          <button onClick={() => void fetchAll()} className="text-xs font-semibold underline hover:text-red-300">Réessayer</button>
+          <button onClick={() => void fetchAll()} className="text-xs font-semibold underline hover:text-red-300">Retry</button>
         </div>
       )}
 
       <div className="flex gap-2 flex-wrap">
         {([
-          { v: 'pending',   label: `⏳ En attente (${pending})`   },
-          { v: 'completed', label: `✓ Approuvés (${completed})`   },
-          { v: 'rejected',  label: `✗ Refusés (${rejected})`      },
-          { v: 'all',       label: `Tous (${allWithdrawals.length})` },
+          { v: 'pending',   label: `⏳ Pending (${pending})`    },
+          { v: 'completed', label: `✓ Approved (${completed})`  },
+          { v: 'rejected',  label: `✗ Rejected (${rejected})`   },
+          { v: 'all',       label: `All (${allWithdrawals.length})` },
         ] as const).map(({ v, label }) => (
           <button key={v} onClick={() => setFilter(v)}
             className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all ${filter === v ? 'bg-blue-500/15 text-blue-400 border border-blue-500/30' : 'bg-white/5 text-slate-400'}`}>
@@ -281,13 +281,13 @@ export const AdminWithdrawals: React.FC = () => {
         {loading && (
           <div className="glass-card p-8 text-center">
             <div className="w-6 h-6 border-2 border-blue-500/30 border-t-blue-400 rounded-full animate-spin mx-auto mb-2" />
-            <p className="text-sm text-slate-500">Chargement…</p>
+            <p className="text-sm text-slate-500">Loading…</p>
           </div>
         )}
         {!loading && withdrawals.length === 0 && (
           <div className="glass-card p-10 text-center">
             <p className="text-sm text-slate-500">
-              {filter === 'pending' ? 'Aucun retrait en attente 🎉' : `Aucun retrait "${filter}"`}
+              {filter === 'pending' ? 'No pending withdrawals 🎉' : `No "${filter}" withdrawals`}
             </p>
           </div>
         )}
@@ -310,14 +310,14 @@ export const AdminWithdrawals: React.FC = () => {
                     <p className="text-sm font-semibold text-white">{w.first_name} {w.last_name}
                       {w.username ? <span className="text-slate-400 font-normal"> @{w.username}</span> : null}
                     </p>
-                    {w.flagged && <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-500/20 text-amber-400">SIGNALÉ</span>}
-                    {w.banned  && <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-500/20 text-red-400">BANNI</span>}
+                    {w.flagged && <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-500/20 text-amber-400">FLAGGED</span>}
+                    {w.banned  && <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-500/20 text-red-400">BANNED</span>}
                   </div>
                   <p className="text-xs text-slate-500">ID: {w.telegram_id} · {new Date(w.created_at).toLocaleString('fr-FR')}</p>
                 </div>
                 <div className="text-right flex-shrink-0">
                   <p className="text-lg font-bold text-orange-400">−{w.amount.toFixed(2)} {w.currency}</p>
-                  <p className="text-xs text-slate-500">Reçoit: {netReceived.toFixed(2)} (frais {w.fee})</p>
+                  <p className="text-xs text-slate-500">Receives: {netReceived.toFixed(2)} (fee {w.fee})</p>
                 </div>
                 <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase flex-shrink-0 ${statusColor[w.status] ?? 'bg-white/10 text-slate-400'}`}>
                   {w.status}
@@ -329,21 +329,21 @@ export const AdminWithdrawals: React.FC = () => {
                   {/* Audit grid */}
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     <div className="p-3 rounded-lg bg-white/[0.03]">
-                      <p className="text-[10px] text-slate-500 mb-0.5">Dépôts reçus</p>
+                      <p className="text-[10px] text-slate-500 mb-0.5">Total deposited</p>
                       <p className="text-sm font-bold text-emerald-400">{w.total_deposited.toFixed(2)} TON</p>
                     </div>
                     <div className="p-3 rounded-lg bg-white/[0.03]">
-                      <p className="text-[10px] text-slate-500 mb-0.5">Retrait demandé</p>
+                      <p className="text-[10px] text-slate-500 mb-0.5">Requested withdrawal</p>
                       <p className="text-sm font-bold text-orange-400">{w.amount.toFixed(2)} {w.currency}</p>
                     </div>
                     <div className={`p-3 rounded-lg ${suspicious ? 'bg-amber-500/10 border border-amber-500/20' : 'bg-white/[0.03]'}`}>
-                      <p className="text-[10px] text-slate-500 mb-0.5">Ratio retrait/dépôt</p>
+                      <p className="text-[10px] text-slate-500 mb-0.5">Withdrawal/deposit ratio</p>
                       <p className={`text-sm font-bold ${depositRatio === null ? 'text-slate-400' : depositRatio > 1 ? 'text-amber-400' : 'text-emerald-400'}`}>
-                        {depositRatio !== null ? `${(depositRatio * 100).toFixed(0)}%` : '∞ (0 dépôt)'}
+                        {depositRatio !== null ? `${(depositRatio * 100).toFixed(0)}%` : '∞ (0 deposits)'}
                       </p>
                     </div>
                     <div className="p-3 rounded-lg bg-white/[0.03]">
-                      <p className="text-[10px] text-slate-500 mb-0.5">Réseau</p>
+                      <p className="text-[10px] text-slate-500 mb-0.5">Network</p>
                       <p className="text-sm font-bold text-white">{w.currency}/{w.network}</p>
                     </div>
                   </div>
@@ -352,15 +352,15 @@ export const AdminWithdrawals: React.FC = () => {
                     <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
                       <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
                       <p className="text-xs text-amber-300">
-                        {w.banned ? '⛔ Compte banni. ' : w.flagged ? '⚠️ Compte signalé par l\'anti-fraude. ' : ''}
-                        {depositRatio !== null && depositRatio > 1.5 ? `Le retrait (${w.amount.toFixed(2)}) dépasse les dépôts enregistrés (${w.total_deposited.toFixed(2)}).` : ''}
+                        {w.banned ? '⛔ Account banned. ' : w.flagged ? '⚠️ Account flagged by anti-fraud. ' : ''}
+                        {depositRatio !== null && depositRatio > 1.5 ? `The withdrawal (${w.amount.toFixed(2)}) exceeds recorded deposits (${w.total_deposited.toFixed(2)}).` : ''}
                       </p>
                     </div>
                   )}
 
                   {/* Full address */}
                   <div>
-                    <p className="text-xs text-slate-400 mb-1.5">Adresse de destination</p>
+                    <p className="text-xs text-slate-400 mb-1.5">Destination address</p>
                     <div className="flex items-center gap-2 p-3 rounded-lg bg-white/[0.03]">
                       <p className="text-xs text-white font-mono flex-1 break-all">{w.address}</p>
                       <button onClick={() => copyAddr(w.address, w.id)} className="p-1.5 rounded-lg hover:bg-white/5 text-slate-400 flex-shrink-0">
@@ -374,26 +374,26 @@ export const AdminWithdrawals: React.FC = () => {
                       <div className="flex gap-2">
                         <input type="text" value={txHashInput[w.id] ?? ''}
                           onChange={e => setTxHashInput(p => ({ ...p, [w.id]: e.target.value }))}
-                          placeholder="Hash TX (depuis tonscan.org après envoi — optionnel)"
+                          placeholder="TX Hash (from tonscan.org after sending — optional)"
                           className="flex-1 px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-xs text-white font-mono placeholder:text-slate-600 focus:outline-none focus:border-emerald-500/40" />
                         <button onClick={() => void doApprove(w.id)} disabled={isActioning}
                           className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-semibold hover:bg-emerald-500/25 disabled:opacity-40">
                           <CheckCircle className="w-3.5 h-3.5" />
-                          {isActioning ? 'En cours…' : 'Approuver'}
+                          {isActioning ? 'Processing…' : 'Approve'}
                         </button>
                       </div>
                       <input type="datetime-local" value={txDateInput[w.id] ?? ''}
                         onChange={e => setTxDateInput(p => ({ ...p, [w.id]: e.target.value }))}
                         className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-xs text-white placeholder:text-slate-600 focus:outline-none focus:border-emerald-500/40"
-                        title="Date/heure exacte de la transaction (laisser vide = heure actuelle)" />
+                        title="Exact transaction date/time (leave empty = current time)" />
                       <div className="flex gap-2">
                         <input type="text" value={noteInput[w.id] ?? ''}
                           onChange={e => setNoteInput(p => ({ ...p, [w.id]: e.target.value }))}
-                          placeholder="Motif du refus (optionnel)"
+                          placeholder="Rejection reason (optional)"
                           className="flex-1 px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-xs text-white placeholder:text-slate-600 focus:outline-none focus:border-red-500/40" />
                         <button onClick={() => void doReject(w.id)} disabled={isActioning}
                           className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-semibold hover:bg-red-500/20 disabled:opacity-40">
-                          <XCircle className="w-3.5 h-3.5" /> Refuser
+                          <XCircle className="w-3.5 h-3.5" /> Reject
                         </button>
                       </div>
                     </div>
@@ -404,7 +404,7 @@ export const AdminWithdrawals: React.FC = () => {
                       {w.status === 'completed'
                         ? <><CheckCircle className="w-4 h-4 text-emerald-400 flex-shrink-0" />
                             <div className="flex-1 min-w-0">
-                              <p className="text-xs text-emerald-400 font-medium">Approuvé {w.processed_at ? new Date(w.processed_at).toLocaleString('fr-FR') : ''}</p>
+                              <p className="text-xs text-emerald-400 font-medium">Approved {w.processed_at ? new Date(w.processed_at).toLocaleString('en-US') : ''}</p>
                               {w.tx_hash ? (
                                 <button
                                   onClick={() => openExternal(`https://tonscan.org/tx/${w.tx_hash}`)}
@@ -413,12 +413,12 @@ export const AdminWithdrawals: React.FC = () => {
                                   {w.tx_hash.length > 24 ? w.tx_hash.slice(0, 24) + '…' : w.tx_hash}
                                 </button>
                               ) : (
-                                <p className="text-[10px] text-slate-500 mt-0.5">Pas de TX Hash renseigné</p>
+                                <p className="text-[10px] text-slate-500 mt-0.5">No TX Hash provided</p>
                               )}
                             </div></>
                         : <><XCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
-                            <div><p className="text-xs text-red-400 font-medium">Refusé {w.processed_at ? new Date(w.processed_at).toLocaleString('fr-FR') : ''}</p>
-                              {w.admin_note && <p className="text-[10px] text-slate-500 mt-0.5">Motif : {w.admin_note}</p>}</div></>}
+                            <div><p className="text-xs text-red-400 font-medium">Rejected {w.processed_at ? new Date(w.processed_at).toLocaleString('en-US') : ''}</p>
+                              {w.admin_note && <p className="text-[10px] text-slate-500 mt-0.5">Reason: {w.admin_note}</p>}</div></>}
                     </div>
                   )}
                 </div>
@@ -438,7 +438,7 @@ export const AdminWallets: React.FC = () => {
     <div className="space-y-6 animate-fade-in">
       <div>
         <h2 className="text-2xl font-bold text-white">Wallets</h2>
-        <p className="text-slate-400 text-sm mt-1">Gestion des portefeuilles crypto</p>
+        <p className="text-slate-400 text-sm mt-1">Crypto wallet management</p>
       </div>
 
       {/* Wallet Overview */}
@@ -478,9 +478,9 @@ export const AdminWallets: React.FC = () => {
             </div>
 
             <div className="mt-4 flex items-center justify-between text-xs">
-              <span className="text-slate-500">Retrait auto</span>
+              <span className="text-slate-500">Auto withdrawal</span>
               <span className={`font-medium ${net.autoWithdrawal ? 'text-emerald-400' : 'text-red-400'}`}>
-                {net.autoWithdrawal ? '✓ Activé' : '✗ Désactivé'}
+                {net.autoWithdrawal ? '✓ Enabled' : '✗ Disabled'}
               </span>
             </div>
           </div>
@@ -491,10 +491,10 @@ export const AdminWallets: React.FC = () => {
       <div className="glass-card p-4 border-amber-500/20 bg-amber-500/5 flex items-start gap-3">
         <AlertTriangle className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
         <div>
-          <p className="text-sm font-semibold text-amber-400">Sécurité Wallet</p>
+          <p className="text-sm font-semibold text-amber-400">Wallet Security</p>
           <p className="text-xs text-slate-400 mt-1">
-            Séparation hot/cold wallet active. Anti-drain activé avec limite de retrait journalière. 
-            Toutes les transactions sont signées de manière sécurisée avec journalisation immuable.
+            Hot/cold wallet separation active. Anti-drain enabled with daily withdrawal limit.
+            All transactions are securely signed with immutable logging.
           </p>
         </div>
       </div>
@@ -509,11 +509,11 @@ export const AdminCrypto: React.FC = () => {
     <div className="space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-white">Crypto & Réseaux</h2>
-          <p className="text-slate-400 text-sm mt-1">Configuration des réseaux et paramètres de paiement</p>
+          <h2 className="text-2xl font-bold text-white">Crypto & Networks</h2>
+          <p className="text-slate-400 text-sm mt-1">Network configuration and payment settings</p>
         </div>
         <button onClick={() => openModal('crypto')} className="btn-primary px-4 py-2.5 rounded-xl text-sm font-medium text-white flex items-center gap-2">
-          <Plus className="w-4 h-4" /> Ajouter un réseau
+          <Plus className="w-4 h-4" /> Add network
         </button>
       </div>
 
@@ -527,7 +527,7 @@ export const AdminCrypto: React.FC = () => {
                 </div>
                 <div>
                   <h3 className="text-base font-semibold text-white">{net.name}</h3>
-                  <p className="text-xs text-slate-400">Réseau {net.network}</p>
+                  <p className="text-xs text-slate-400">Network {net.network}</p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -546,23 +546,23 @@ export const AdminCrypto: React.FC = () => {
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               <div className="p-3 rounded-lg bg-white/[0.03]">
-                <p className="text-xs text-slate-500 mb-1">Dépôt min</p>
+                <p className="text-xs text-slate-500 mb-1">Min deposit</p>
                 <p className="text-sm font-semibold text-white">{net.minDeposit} {net.symbol}</p>
               </div>
               <div className="p-3 rounded-lg bg-white/[0.03]">
-                <p className="text-xs text-slate-500 mb-1">Dépôt max</p>
+                <p className="text-xs text-slate-500 mb-1">Max deposit</p>
                 <p className="text-sm font-semibold text-white">{net.maxDeposit.toLocaleString()} {net.symbol}</p>
               </div>
               <div className="p-3 rounded-lg bg-white/[0.03]">
-                <p className="text-xs text-slate-500 mb-1">Retrait min</p>
+                <p className="text-xs text-slate-500 mb-1">Min withdrawal</p>
                 <p className="text-sm font-semibold text-white">{net.minWithdrawal} {net.symbol}</p>
               </div>
               <div className="p-3 rounded-lg bg-white/[0.03]">
-                <p className="text-xs text-slate-500 mb-1">Retrait max</p>
+                <p className="text-xs text-slate-500 mb-1">Max withdrawal</p>
                 <p className="text-sm font-semibold text-white">{net.maxWithdrawal.toLocaleString()} {net.symbol}</p>
               </div>
               <div className="p-3 rounded-lg bg-white/[0.03]">
-                <p className="text-xs text-slate-500 mb-1">Frais retrait</p>
+                <p className="text-xs text-slate-500 mb-1">Withdrawal fee</p>
                 <p className="text-sm font-semibold text-orange-400">{net.withdrawalFee} {net.symbol}</p>
               </div>
               <div className="p-3 rounded-lg bg-white/[0.03]">
@@ -570,11 +570,11 @@ export const AdminCrypto: React.FC = () => {
                 <p className="text-sm font-semibold text-blue-400">{net.requiredConfirmations}</p>
               </div>
               <div className="p-3 rounded-lg bg-white/[0.03]">
-                <p className="text-xs text-slate-500 mb-1">Limite journalière</p>
+                <p className="text-xs text-slate-500 mb-1">Daily limit</p>
                 <p className="text-sm font-semibold text-white">{net.dailyWithdrawalLimit.toLocaleString()} {net.symbol}</p>
               </div>
               <div className="p-3 rounded-lg bg-white/[0.03]">
-                <p className="text-xs text-slate-500 mb-1">Retrait auto</p>
+                <p className="text-xs text-slate-500 mb-1">Auto withdrawal</p>
                 <ToggleSwitch
                   enabled={net.autoWithdrawal}
                   onChange={(v) => updateCryptoNetwork(net.id, { autoWithdrawal: v })}

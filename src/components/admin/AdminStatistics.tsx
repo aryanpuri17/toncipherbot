@@ -48,7 +48,7 @@ export const AdminStatistics: React.FC = () => {
     adminFetch('/api/admin/stats')
       .then(r => r.ok ? r.json() : Promise.reject(r.status))
       .then((data: ServerStats) => { setStats(data); setError(''); })
-      .catch((e: unknown) => setError(e === 401 ? 'Clé admin invalide — reconnectez-vous.' : 'Erreur serveur'))
+      .catch((e: unknown) => setError(e === 401 ? 'Invalid admin key — please re-authenticate.' : 'Server error'))
       .finally(() => setLoading(false));
   }, []);
 
@@ -59,7 +59,7 @@ export const AdminStatistics: React.FC = () => {
   }, [loadStats]);
 
   const userGrowth = React.useMemo(() => {
-    const months = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const now = new Date();
     return Array.from({ length: 6 }, (_, i) => {
       const offset = i - 5;
@@ -85,8 +85,8 @@ export const AdminStatistics: React.FC = () => {
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
-        <h2 className="text-2xl font-bold text-white">Statistiques</h2>
-        <p className="text-slate-400 text-sm mt-1">Données en temps réel depuis le serveur</p>
+        <h2 className="text-2xl font-bold text-white">Statistics</h2>
+        <p className="text-slate-400 text-sm mt-1">Real-time data from the server</p>
       </div>
 
       {error && (
@@ -97,21 +97,21 @@ export const AdminStatistics: React.FC = () => {
       )}
 
       {loading && !stats ? (
-        <div className="text-slate-500 text-sm">Chargement…</div>
+        <div className="text-slate-500 text-sm">Loading…</div>
       ) : (
         <>
           {/* Main Stats */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <StatCard title="Total utilisateurs" value={(stats?.total_users ?? 0).toLocaleString()} icon={<Users className="w-5 h-5" />} color="blue" />
-            <StatCard title="Utilisateurs actifs" value={(stats ? stats.total_users - stats.banned_users - stats.flagged_users : 0).toLocaleString()} icon={<Activity className="w-5 h-5" />} color="green" />
-            <StatCard title="Alertes ouvertes" value={(stats?.open_alerts ?? 0).toLocaleString()} icon={<AlertTriangle className="w-5 h-5" />} color="orange" />
-            <StatCard title="Suspendus / Bannis" value={(stats?.flagged_users ?? 0 + (stats?.banned_users ?? 0)).toLocaleString()} icon={<Users className="w-5 h-5" />} color="purple" />
+            <StatCard title="Total users" value={(stats?.total_users ?? 0).toLocaleString()} icon={<Users className="w-5 h-5" />} color="blue" />
+            <StatCard title="Active users" value={(stats ? stats.total_users - stats.banned_users - stats.flagged_users : 0).toLocaleString()} icon={<Activity className="w-5 h-5" />} color="green" />
+            <StatCard title="Open alerts" value={(stats?.open_alerts ?? 0).toLocaleString()} icon={<AlertTriangle className="w-5 h-5" />} color="orange" />
+            <StatCard title="Flagged / Banned" value={(stats?.flagged_users ?? 0 + (stats?.banned_users ?? 0)).toLocaleString()} icon={<Users className="w-5 h-5" />} color="purple" />
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* User Growth — local store data */}
             <div className="glass-card p-5">
-              <h3 className="text-sm font-semibold text-white mb-4">Croissance utilisateurs</h3>
+              <h3 className="text-sm font-semibold text-white mb-4">User growth</h3>
               <ResponsiveContainer width="100%" height={280}>
                 <LineChart data={userGrowth}>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
@@ -125,9 +125,9 @@ export const AdminStatistics: React.FC = () => {
 
             {/* Task Distribution */}
             <div className="glass-card p-5">
-              <h3 className="text-sm font-semibold text-white mb-4">Répartition des tâches</h3>
+              <h3 className="text-sm font-semibold text-white mb-4">Task distribution</h3>
               {taskDistribution.length === 0 ? (
-                <p className="text-slate-500 text-sm text-center pt-10">Aucune tâche complétée</p>
+                <p className="text-slate-500 text-sm text-center pt-10">No tasks completed</p>
               ) : (
                 <div className="flex items-center gap-6">
                   <ResponsiveContainer width="50%" height={220}>
@@ -155,22 +155,22 @@ export const AdminStatistics: React.FC = () => {
 
           {/* Financial Overview — server stats */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <StatCard title="Dépôts totaux" value={`${(stats?.total_deposits_amount ?? 0).toFixed(2)} TON`} subtitle={`${stats?.total_deposits_count ?? 0} transactions`} icon={<Wallet className="w-5 h-5" />} color="green" />
+            <StatCard title="Total deposits" value={`${(stats?.total_deposits_amount ?? 0).toFixed(2)} TON`} subtitle={`${stats?.total_deposits_count ?? 0} transactions`} icon={<Wallet className="w-5 h-5" />} color="green" />
             <StatCard title="Total withdrawals" value={`${(stats?.total_withdrawals_amount ?? 0).toFixed(2)} TON`} subtitle={`${stats?.total_withdrawals_count ?? 0} transactions`} icon={<Wallet className="w-5 h-5" />} color="orange" />
             <StatCard title="Pending withdrawals" value={(stats?.pending_withdrawals ?? 0).toLocaleString()} icon={<DollarSign className="w-5 h-5" />} color="blue" />
-            <StatCard title="Tâches actives" value={tasks.filter(t => t.isActive).length.toLocaleString()} icon={<ListTodo className="w-5 h-5" />} color="purple" />
+            <StatCard title="Active tasks" value={tasks.filter(t => t.isActive).length.toLocaleString()} icon={<ListTodo className="w-5 h-5" />} color="purple" />
           </div>
 
           {/* Alert Breakdown */}
           {stats && stats.open_alerts > 0 && (
             <div className="glass-card p-5">
-              <h3 className="text-sm font-semibold text-white mb-4">Détail des alertes</h3>
+              <h3 className="text-sm font-semibold text-white mb-4">Alert breakdown</h3>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                 {[
-                  { label: 'Critiques', value: stats.critical_alerts, color: '#ef4444' },
-                  { label: 'Élevées', value: stats.high_alerts, color: '#f97316' },
-                  { label: 'Moyennes', value: stats.medium_alerts, color: '#f59e0b' },
-                  { label: 'Faibles', value: stats.low_alerts, color: '#64748b' },
+                  { label: 'Critical', value: stats.critical_alerts, color: '#ef4444' },
+                  { label: 'High', value: stats.high_alerts, color: '#f97316' },
+                  { label: 'Medium', value: stats.medium_alerts, color: '#f59e0b' },
+                  { label: 'Low', value: stats.low_alerts, color: '#64748b' },
                 ].map(a => (
                   <div key={a.label} className="text-center">
                     <div className="text-2xl font-black" style={{ color: a.color }}>{a.value}</div>
@@ -183,8 +183,8 @@ export const AdminStatistics: React.FC = () => {
 
           {/* Referral & Tasks */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <StatCard title="Bannis" value={(stats?.banned_users ?? 0).toLocaleString()} icon={<Users className="w-5 h-5" />} color="orange" />
-            <StatCard title="Signalés" value={(stats?.flagged_users ?? 0).toLocaleString()} icon={<TrendingUp className="w-5 h-5" />} color="purple" />
+            <StatCard title="Banned" value={(stats?.banned_users ?? 0).toLocaleString()} icon={<Users className="w-5 h-5" />} color="orange" />
+            <StatCard title="Flagged" value={(stats?.flagged_users ?? 0).toLocaleString()} icon={<TrendingUp className="w-5 h-5" />} color="purple" />
           </div>
         </>
       )}
