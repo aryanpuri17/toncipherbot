@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useAppStore } from '../../store/appStore';
 import { useTonConnectUI, useTonWallet } from '@tonconnect/ui-react';
-import { beginCell, Address } from '@ton/ton';
+
 import { ArrowDownLeft, ArrowUpRight, TrendingUp, Copy, CheckCircle, ChevronRight, AlertCircle, Wallet, Unlink } from 'lucide-react';
 import { haptic } from '../../lib/haptics';
 
@@ -22,13 +22,20 @@ async function fetchJettonWallet(ownerRawAddr: string): Promise<string> {
   return w;
 }
 
-/** Build the Jetton transfer payload cell */
-function buildJettonTransfer(opts: {
+/** Build the Jetton transfer payload cell — loads @ton/ton lazily to avoid Buffer crash at startup */
+async function buildJettonTransfer(opts: {
   amount: bigint;         // in nano USDT
   destination: string;   // platform wallet (friendly or raw)
   responseAddress: string; // user wallet (raw 0:hex)
   comment: string;
-}): string {
+}): Promise<string> {
+  // Polyfill Buffer before @ton/core initialises (it uses Buffer.alloc at module scope)
+  if (typeof globalThis.Buffer === 'undefined') {
+    const { Buffer: Buf } = await import('buffer');
+    (globalThis as Record<string, unknown>).Buffer = Buf;
+  }
+  const { beginCell, Address } = await import('@ton/ton');
+
   const forwardPayload = beginCell()
     .storeUint(0, 32)
     .storeStringTail(opts.comment)
@@ -381,7 +388,7 @@ export const MiniAppDeposit: React.FC = () => {
       const jettonWallet = await fetchJettonWallet(connectedAddr);
 
       // 2. Build Jetton transfer payload
-      const payload = buildJettonTransfer({
+      const payload = await buildJettonTransfer({
         amount:          BigInt(Math.round(usdtAmount * USDT_DECIMALS)),
         destination:     address,
         responseAddress: connectedAddr,
