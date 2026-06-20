@@ -448,56 +448,23 @@ export const MiniAppTasks: React.FC = () => {
   const handleVerify = async (card: CardTask) => {
     haptic.impact('light');
 
-    // ── INSTANT timer check — no loading shown, no async, no spinner ──────────
-    const needsTimer = card.type === 'social' || card.type === 'watch_video' || card.type === 'start_bot';
-    if (needsTimer) {
-      const entry = parseDeparture(localStorage.getItem(departKey(card.id)));
-      const elapsed = entry ? Date.now() - entry.ts : 0;
-      const required = entry?.ms ?? REQUIRED_MS;
-      if (!entry || elapsed < required) {
-        setTooEarlyInfo(prev => ({ ...prev, [card.id]: true }));
-        haptic.error();
-        return; // return immediately — no loading, no phase change
-      }
+    // ── INSTANT timer check — no loading, no spinner, all task types ───────────
+    const entry = parseDeparture(localStorage.getItem(departKey(card.id)));
+    const elapsed = entry ? Date.now() - entry.ts : 0;
+    const required = entry?.ms ?? REQUIRED_MS;
+    if (!entry || elapsed < required) {
+      setTooEarlyInfo(prev => ({ ...prev, [card.id]: true }));
+      haptic.error();
+      return; // instant — no loading, no phase change
     }
 
-    // Timer OK (or not needed) — clear any tooEarly flag, show loading
+    // Timer passed — credit immediately
     setTooEarlyInfo(prev => { const n = { ...prev }; delete n[card.id]; return n; });
-    setPhase(card.id, 'verifying');
-
-    // start_bot: check bot was actually started
-    if (card.type === 'start_bot' && card.source === 'api') {
-      try {
-        const res = await fetch(`/api/check-bot-verify?telegramId=${currentUser.telegramId}&taskId=${card.id}`);
-        const { verified } = await res.json() as { verified: boolean };
-        if (!verified) { setPhase(card.id, 'not_subscribed'); haptic.error(); return; }
-      } catch { /* allow on network error */ }
-    }
-
-    // join_channel / join_group: real Telegram membership check (5s timeout)
-    if (card.source === 'platform' && (card.type === 'join_channel' || card.type === 'join_group') && card.targetUrl) {
-      const chatRefMatch = card.targetUrl.match(/t\.me\/([^/?+]+)/);
-      const chatRef = chatRefMatch?.[1];
-      if (chatRef && !chatRef.startsWith('+')) {
-        try {
-          const ctrl = new AbortController();
-          const tId = setTimeout(() => ctrl.abort(), 5000);
-          const res = await fetch(
-            `/api/check-membership?telegram_id=${currentUser.telegramId}&chat_id=${encodeURIComponent(`@${chatRef}`)}`,
-            { signal: ctrl.signal },
-          );
-          clearTimeout(tId);
-          const { member } = await res.json() as { member: boolean };
-          if (!member) { setPhase(card.id, 'not_subscribed'); haptic.error(); return; }
-        } catch { /* timeout or network error — allow through */ }
-      }
-    }
-
-    // All checks passed — credit
     localStorage.removeItem(departKey(card.id));
     const autoKey = `depart_auto_${card.id}`;
     if (timerRefs.current[autoKey]) { clearTimeout(timerRefs.current[autoKey]); delete timerRefs.current[autoKey]; }
     setPhase(card.id, 'completing');
+
     if (card.source === 'api') {
       const ok = await creditApiTask(card.id, card.reward);
       if (!ok) return;
@@ -510,7 +477,7 @@ export const MiniAppTasks: React.FC = () => {
       timerRefs.current[`rm_${card.id}`] = setTimeout(() => {
         setTaskStates(prev => { const n = { ...prev }; delete n[card.id]; return n; });
       }, 2000);
-    }, 1500);
+    }, 1000);
   };
 
   // ── Card renderer ────────────────────────────────────────────────────────────
