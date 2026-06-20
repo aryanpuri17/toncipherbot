@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAppStore } from '../../store/appStore';
 import {
   Hash, Users, Bot, TrendingUp, Pause, Play, Trash2, PlusCircle,
@@ -46,6 +46,39 @@ const statusMap: Record<string, { label: string; dot: string; cls: string }> = {
   paused:           { label: 'En pause',    dot: 'bg-amber-400',   cls: 'text-amber-400 bg-amber-500/10 border-amber-500/25'      },
   rejected:         { label: 'Refusée',     dot: 'bg-red-400',     cls: 'text-red-400 bg-red-500/10 border-red-500/25'            },
   depleted:         { label: 'Terminée',    dot: 'bg-slate-500',   cls: 'text-slate-400 bg-white/5 border-white/10'               },
+};
+
+/** Fetches a proof image via JS (X-Init-Data header) and renders it as a blob URL.
+ * Avoids putting the initData credential into the URL (logs, referrer, browser history). */
+const ProofImage: React.FC<{ proofId: number; telegramId: number; initData: string }> = ({
+  proofId, telegramId, initData,
+}) => {
+  const [src, setSrc] = useState<string | null>(null);
+  const prevUrl = useRef<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const url = `/api/proof-image/${proofId}?telegramId=${telegramId}`;
+    fetch(url, { headers: initData ? { 'X-Init-Data': initData } : {} })
+      .then(r => r.ok ? r.blob() : Promise.reject())
+      .then(blob => {
+        if (cancelled) return;
+        const objectUrl = URL.createObjectURL(blob);
+        prevUrl.current = objectUrl;
+        setSrc(objectUrl);
+      })
+      .catch(() => { /* no-op — onError fallback handles missing images */ });
+    return () => {
+      cancelled = true;
+      if (prevUrl.current) { URL.revokeObjectURL(prevUrl.current); prevUrl.current = null; }
+    };
+  }, [proofId, telegramId, initData]);
+
+  if (!src) return null;
+  return (
+    <img src={src} alt="Preuve"
+      style={{ width: '100%', maxHeight: 200, objectFit: 'cover', display: 'block' }} />
+  );
 };
 
 const StatusBadge: React.FC<{ status: ApiUserTask['status'] }> = ({ status }) => {
@@ -295,12 +328,11 @@ export const MiniAppMyTasks: React.FC = () => {
                 border: '1px solid rgba(249,115,22,0.2)',
                 borderRadius: 16, overflow: 'hidden',
               }}>
-                {/* Screenshot */}
-                <img
-                  src={`/api/proof-image/${proof.id}?telegramId=${currentUser.telegramId}&initData=${encodeURIComponent(_getInitData())}`}
-                  alt="Preuve"
-                  style={{ width: '100%', maxHeight: 200, objectFit: 'cover', display: 'block' }}
-                  onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                {/* Screenshot — fetched via JS to keep initData out of the URL */}
+                <ProofImage
+                  proofId={proof.id}
+                  telegramId={currentUser.telegramId}
+                  initData={_getInitData()}
                 />
                 <div style={{ padding: '10px 12px' }}>
                   <p style={{ fontSize: 11, fontWeight: 700, color: '#f8fafc', marginBottom: 2 }}>
