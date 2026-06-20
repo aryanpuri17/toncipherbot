@@ -459,7 +459,9 @@ export default function App() {
             initData,
           }),
         }),
-        fetch(`${API}/api/user/transactions?telegram_id=${tgUser.id}`),
+        fetch(`${API}/api/user/transactions?telegram_id=${tgUser.id}`, {
+          headers: { 'X-Init-Data': initData },
+        }),
       ]);
 
       // Fresh device / cleared WebView storage: restore from the server-side
@@ -471,6 +473,7 @@ export default function App() {
           banned?: boolean; withdrawalBlocked?: boolean;
           appBalance?: number | null; appTotalEarnings?: number | null;
           appTasksCompleted?: number | null; appCompletedTasks?: string[];
+          claimedMilestoneIds?: string[];
         };
         if (typeof apiData.appBalance === 'number') {
           const localBalance = useAppStore.getState().currentUser.balanceMain;

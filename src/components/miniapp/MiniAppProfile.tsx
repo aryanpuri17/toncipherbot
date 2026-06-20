@@ -67,14 +67,14 @@ export const MiniAppProfile: React.FC = () => {
               alt={profile.firstName}
               onError={() => setImgError(true)}
               className="w-16 h-16 rounded-2xl object-cover"
-              style={{ boxShadow: '0 0 0 2px rgba(0,152,234,0.4)' }}
+              style={{ boxShadow: '0 0 0 2px rgba(139,92,246,0.40)' }}
             />
           ) : (
             <div
               className="w-16 h-16 rounded-2xl flex items-center justify-center text-xl font-bold text-white"
               style={{
-                background: 'linear-gradient(135deg, #0098EA, #0B5EA8)',
-                boxShadow: '0 0 0 2px rgba(0,152,234,0.4), 0 4px 16px rgba(0,152,234,0.2)',
+                background: 'linear-gradient(135deg, #8B5CF6, #6D28D9)',
+                boxShadow: '0 0 0 2px rgba(139,92,246,0.40), 0 4px 16px rgba(139,92,246,0.22)',
               }}
             >
               {profile.firstName?.charAt(0) ?? '?'}
@@ -110,20 +110,20 @@ export const MiniAppProfile: React.FC = () => {
             value: u.tasksCompleted,
             label: 'Tâches',
             format: (v: number) => v.toString(),
-            color: 'text-blue-400',
-            accent: 'rgba(59,130,246,0.08)',
-            border: 'rgba(59,130,246,0.15)',
-            bar: '#3b82f6',
+            color: 'text-violet-300',
+            accent: 'rgba(139,92,246,0.06)',
+            border: 'rgba(139,92,246,0.16)',
+            bar: '#8B5CF6',
             icon: '✅',
           },
           {
             value: u.referralCount,
             label: 'Filleuls',
             format: (v: number) => v.toString(),
-            color: 'text-purple-400',
-            accent: 'rgba(139,92,246,0.08)',
-            border: 'rgba(139,92,246,0.15)',
-            bar: '#8b5cf6',
+            color: 'text-violet-300',
+            accent: 'rgba(139,92,246,0.06)',
+            border: 'rgba(139,92,246,0.16)',
+            bar: '#8B5CF6',
             icon: '👥',
           },
           {
@@ -195,15 +195,15 @@ export const MiniAppProfile: React.FC = () => {
           <button
             onClick={() => { window.location.hash = '#admin'; setCurrentView('admin'); }}
             className="profile-menu-item w-full p-3.5 flex items-center gap-3"
-            style={{ borderColor: 'rgba(0,152,234,0.25)' }}
+            style={{ borderColor: 'rgba(139,92,246,0.28)' }}
           >
             <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-              style={{ background: 'rgba(0,152,234,0.15)' }}>
-              <Shield className="w-4 h-4" style={{ color: '#0098EA' }} />
+              style={{ background: 'rgba(139,92,246,0.14)', boxShadow: '0 3px 10px rgba(139,92,246,0.20)' }}>
+              <Shield className="w-4 h-4" style={{ color: '#C4B5FD' }} />
             </div>
             <span className="text-sm text-white flex-1 text-left">Panel Admin</span>
             <span className="text-[10px] font-bold px-2 py-0.5 rounded-full mr-1"
-              style={{ background: 'rgba(0,152,234,0.15)', color: '#0098EA', border: '1px solid rgba(0,152,234,0.3)' }}>
+              style={{ background: 'rgba(139,92,246,0.14)', color: '#C4B5FD', border: '1px solid rgba(139,92,246,0.28)' }}>
               ADMIN
             </span>
             <ChevronRight className="w-4 h-4 text-slate-500" />

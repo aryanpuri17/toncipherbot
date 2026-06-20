@@ -721,7 +721,7 @@ const mockPlatformConfig: PlatformConfig = {
   mainWallet: '',
   hotWalletThreshold: 10000,
   coldWalletThreshold: 100000,
-  referralBonusSignup: 1.00,
+  referralBonusSignup: 0.005,
   referralBonusActivity: 0.10,
   referralBonusDeposit: 5.00,
   referralBonusDepositPercent: 5,
@@ -865,14 +865,15 @@ interface AppState {
   resetDailyRefTask: () => void;
   checkLoginStreak: () => void;
   completeTask: (taskId: string) => void;
+  completeTaskSecure: (taskId: string) => Promise<{ success: boolean; earned?: number; error?: string }>;
   creditReferralBonus: (earned: number) => void;
-  submitWithdrawal: (networkId: string, amount: number, address: string) => { success: boolean; error?: string };
-  claimReferralMilestone: (id: string) => void;
+  submitWithdrawal: (networkId: string, amount: number, address: string) => Promise<{ success: boolean; error?: string }>;
+  claimReferralMilestone: (id: string) => Promise<void>;
   addReferralMilestone: (milestone: Omit<ReferralMilestone, 'id'>) => void;
   updateReferralMilestone: (id: string, data: Partial<ReferralMilestone>) => void;
   deleteReferralMilestone: (id: string) => void;
   initFromTelegram: (user: { id: number; first_name: string; last_name?: string; username?: string; photo_url?: string }) => void;
-  syncUserFromApi: (data: { referralCount: number; referralBalance: number; flagged: boolean; banned?: boolean; withdrawalBlocked?: boolean }) => void;
+  syncUserFromApi: (data: { referralCount: number; referralBalance: number; flagged: boolean; banned?: boolean; withdrawalBlocked?: boolean; claimedMilestoneIds?: string[] }) => void;
   adoptServerBalance: (data: { balance: number; totalEarnings: number; tasksCompleted: number; referralBalance: number; completedTaskIds: string[] }) => void;
   placeGameBet: (bet: number, win: number) => void;
   activatePromoEvent: (multiplier: number, hours: number, label: string) => void;
@@ -1177,6 +1178,59 @@ export const useAppStore = create<AppState>((set, get) => ({
     get().addNotification({ userId: state.currentUser.id, type: 'reward', title: 'Tâche complétée!', message: `+${earned.toFixed(2)} TON${multLabel} pour "${task.title}"`, isRead: false });
   },
 
+  completeTaskSecure: async (taskId) => {
+    const state = get();
+    const task  = state.tasks.find(t => t.id === taskId);
+    if (!task) return { success: false, error: 'Task not found' };
+    if (state.completedTaskIds.includes(taskId)) return { success: false, error: 'Already completed' };
+
+    const telegramId = state.currentUser.telegramId;
+    // No Telegram context (local dev / mock) — fall back to client-only completion
+    if (!telegramId) {
+      get().completeTask(taskId);
+      return { success: true, earned: task.reward };
+    }
+
+    const initData = (() => {
+      try {
+        return (window as unknown as { Telegram?: { WebApp?: { initData?: string } } })
+          .Telegram?.WebApp?.initData ?? '';
+      } catch { return ''; }
+    })();
+
+    try {
+      const res  = await fetch('/api/platform-tasks/complete', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ telegramId, taskId, initData }),
+      });
+      const body = await res.json() as { success?: boolean; earned?: number; error?: string };
+      if (!res.ok || !body.success) {
+        return { success: false, error: body.error ?? `Erreur ${res.status}` };
+      }
+      const earned = typeof body.earned === 'number' ? body.earned : task.reward;
+      // Apply local state — server already persisted the credit to app_balance
+      set(s => ({
+        completedTaskIds: [...s.completedTaskIds, taskId],
+        tasks: s.tasks.map(t => t.id === taskId ? { ...t, totalCompletions: t.totalCompletions + 1 } : t),
+        currentUser: {
+          ...s.currentUser,
+          balanceMain:         s.currentUser.balanceMain         + earned,
+          tasksCompleted:      s.currentUser.tasksCompleted      + 1,
+          dailyTasksCompleted: s.currentUser.dailyTasksCompleted + 1,
+          todayEarnings:       s.currentUser.todayEarnings       + earned,
+          totalEarnings:       s.currentUser.totalEarnings       + earned,
+        },
+      }));
+      get().addTransaction({ userId: state.currentUser.id, type: 'reward', amount: earned, currency: 'GRAM', status: 'completed', completedAt: new Date().toISOString() });
+      get().addNotification({ userId: state.currentUser.id, type: 'reward', title: 'Tâche complétée !', message: `+${earned.toFixed(4)} GRAM pour "${task.title}"`, isRead: false });
+      get().creditReferralBonus(earned);
+      return { success: true, earned };
+    } catch {
+      return { success: false, error: 'Serveur indisponible. Réessayez dans un instant.' };
+    }
+  },
+
   creditReferralBonus: (earned) => {
     const state = get();
     if (!state.currentUser.referredBy) return;
@@ -1242,34 +1296,72 @@ export const useAppStore = create<AppState>((set, get) => ({
       ...(data.banned             !== undefined && { status: data.banned ? 'banned' as const : s.currentUser.status }),
       ...(data.withdrawalBlocked  !== undefined && { withdrawalBlocked: data.withdrawalBlocked }),
     };
+    const serverClaimed = data.claimedMilestoneIds ?? [];
+    const mergedClaimed = serverClaimed.length > 0
+      ? Array.from(new Set([...s.claimedReferralMilestoneIds, ...serverClaimed]))
+      : s.claimedReferralMilestoneIds;
+    if (mergedClaimed !== s.claimedReferralMilestoneIds) {
+      try { localStorage.setItem('tc_claimed_milestones', JSON.stringify(mergedClaimed)); } catch { /* noop */ }
+    }
     return {
       currentUser: updatedUser,
       users: s.users.map(u => u.id === s.currentUser.id ? updatedUser : u),
       lastSyncedReferralBalance: data.referralBalance,
+      claimedReferralMilestoneIds: mergedClaimed,
     };
   }),
 
-  claimReferralMilestone: (id) => {
+  claimReferralMilestone: async (id) => {
     const state = get();
     if (state.claimedReferralMilestoneIds.includes(id)) return;
     const milestone = state.referralMilestones.find(m => m.id === id);
     if (!milestone || !milestone.isActive) return;
     if (state.currentUser.referralCount < milestone.referralCount) return;
-    const milestoneUpdate = {
-      balanceMain: state.currentUser.balanceMain + milestone.reward,
-      totalEarnings: state.currentUser.totalEarnings + milestone.reward,
-    };
-    const newIds = [...state.claimedReferralMilestoneIds, id];
-    localStorage.setItem('tc_claimed_milestones', JSON.stringify(newIds));
-    set(s => ({
-      claimedReferralMilestoneIds: [...s.claimedReferralMilestoneIds, id],
-      currentUser: { ...s.currentUser, ...milestoneUpdate },
-      users: s.users.map(u => u.id === state.currentUser.id ? { ...u, ...milestoneUpdate } : u),
-    }));
-    get().addTransaction({ userId: state.currentUser.id, type: 'reward', amount: milestone.reward, currency: 'TON', status: 'completed', completedAt: new Date().toISOString() });
+
+    // Dev mode (telegramId 0): skip server, apply locally
+    if (state.currentUser.telegramId === 0) {
+      const reward = milestone.reward;
+      const newIds = [...state.claimedReferralMilestoneIds, id];
+      localStorage.setItem('tc_claimed_milestones', JSON.stringify(newIds));
+      set(s => ({
+        claimedReferralMilestoneIds: newIds,
+        currentUser: { ...s.currentUser, balanceMain: s.currentUser.balanceMain + reward, totalEarnings: s.currentUser.totalEarnings + reward },
+        users: s.users.map(u => u.id === state.currentUser.id ? { ...u, balanceMain: u.balanceMain + reward, totalEarnings: u.totalEarnings + reward } : u),
+      }));
+      get().addTransaction({ userId: state.currentUser.id, type: 'reward', amount: reward, currency: 'TON', status: 'completed', completedAt: new Date().toISOString() });
+      return;
+    }
+
+    const initData = (window as unknown as { Telegram?: { WebApp?: { initData?: string } } })?.Telegram?.WebApp?.initData ?? '';
+    try {
+      const res = await fetch('/api/referral/milestone/claim', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ telegramId: state.currentUser.telegramId, milestoneId: id, initData }),
+      });
+      const body = await res.json() as { success?: boolean; reward?: number; newBalance?: number; error?: string };
+      if (!res.ok || !body.success) return;
+
+      const reward = body.reward ?? milestone.reward;
+      const newIds = [...get().claimedReferralMilestoneIds, id];
+      localStorage.setItem('tc_claimed_milestones', JSON.stringify(newIds));
+      set(s => {
+        const updatedUser = {
+          ...s.currentUser,
+          balanceMain:   typeof body.newBalance === 'number' ? body.newBalance : s.currentUser.balanceMain + reward,
+          totalEarnings: s.currentUser.totalEarnings + reward,
+        };
+        return {
+          claimedReferralMilestoneIds: newIds,
+          currentUser: updatedUser,
+          users: s.users.map(u => u.id === state.currentUser.id ? { ...u, ...updatedUser } : u),
+        };
+      });
+      get().addTransaction({ userId: state.currentUser.id, type: 'reward', amount: reward, currency: 'TON', status: 'completed', completedAt: new Date().toISOString() });
+    } catch { /* server unavailable — silently skip */ }
   },
 
-  submitWithdrawal: (networkId, amount, address) => {
+  submitWithdrawal: async (networkId, amount, address) => {
     const state = get();
     if (state.currentUser.status !== 'active') return { success: false, error: 'Compte suspendu ou banni. Contactez le support.' };
     if (state.currentUser.withdrawalBlocked) return { success: false, error: 'Retraits bloqués sur ce compte. Contactez le support.' };
@@ -1284,53 +1376,62 @@ export const useAppStore = create<AppState>((set, get) => ({
       return { success: false, error: `${state.currentUser.taskCredits.toFixed(2)} GRAM sont réservés à la création de campagnes et ne peuvent pas être retirés.` };
     }
     if (!address || address.trim().length < 20) return { success: false, error: 'Adresse invalide (trop courte)' };
-    // Per-user daily withdrawal limit
     const perUserDailyLimit = state.dailyLimits.find(l => l.type === 'withdrawal' && l.perUser && l.isActive);
     if (perUserDailyLimit && state.currentUser.dailyWithdrawn + amount > perUserDailyLimit.limit) {
       const remaining = Math.max(0, perUserDailyLimit.limit - state.currentUser.dailyWithdrawn);
       return { success: false, error: `Limite journalière atteinte. Restant: ${remaining.toFixed(2)} ${network.symbol}` };
     }
-    // Per-network daily limit
     if (network.dailyWithdrawalLimit > 0 && amount > network.dailyWithdrawalLimit) {
       return { success: false, error: `Limite réseau dépassée: max ${network.dailyWithdrawalLimit} ${network.symbol}/jour` };
     }
-    // Platform-wide pending withdrawals cap
-    const pendingCount = state.transactions.filter(t => t.type === 'withdrawal' && t.status === 'pending').length;
-    if (pendingCount >= state.platformConfig.maxPendingWithdrawals) {
-      return { success: false, error: 'Trop de retraits en attente. Réessayez plus tard.' };
-    }
-    set(s => ({
-      currentUser: {
-        ...s.currentUser,
-        balanceMain: s.currentUser.balanceMain - amount,
-        dailyWithdrawn: s.currentUser.dailyWithdrawn + amount,
-      },
-      users: s.users.map(u => u.id === state.currentUser.id
-        ? { ...u, balanceMain: u.balanceMain - amount, dailyWithdrawn: u.dailyWithdrawn + amount }
-        : u),
-    }));
-    // Generate the ID upfront so the local transaction and the backend record always match
-    const withdrawalId = generateId();
-    set(s => ({ transactions: [{ userId: state.currentUser.id, type: 'withdrawal' as const, amount, currency: network.symbol, network: network.network, address: address.trim(), status: 'pending' as const, fee: network.withdrawalFee, id: withdrawalId, createdAt: new Date().toISOString() }, ...s.transactions] }));
-    // Record in backend (fire-and-forget — app works offline too)
     const initData = (window as unknown as { Telegram?: { WebApp?: { initData?: string } } })?.Telegram?.WebApp?.initData ?? '';
-    void fetch('/api/withdrawal/create', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        id: withdrawalId,
-        telegramId: state.currentUser.telegramId,
-        username: state.currentUser.username,
-        firstName: state.currentUser.firstName,
-        amount,
-        currency: network.symbol,
-        network: network.network,
-        address: address.trim(),
-        fee: network.withdrawalFee,
-        initData,
-      }),
-    }).catch(() => {});
-    return { success: true };
+    try {
+      const res = await fetch('/api/withdrawal/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          telegramId: state.currentUser.telegramId,
+          username: state.currentUser.username,
+          firstName: state.currentUser.firstName,
+          amount,
+          currency: network.symbol,
+          network: network.network,
+          address: address.trim(),
+          fee: network.withdrawalFee,
+          initData,
+        }),
+      });
+      const body = await res.json() as { success?: boolean; id?: string; error?: string };
+      if (!res.ok || !body.success) {
+        return { success: false, error: body.error ?? `Erreur ${res.status}` };
+      }
+      const serverTxId = body.id!;
+      set(s => ({
+        currentUser: {
+          ...s.currentUser,
+          balanceMain: s.currentUser.balanceMain - amount,
+          dailyWithdrawn: s.currentUser.dailyWithdrawn + amount,
+        },
+        users: s.users.map(u => u.id === state.currentUser.id
+          ? { ...u, balanceMain: u.balanceMain - amount, dailyWithdrawn: u.dailyWithdrawn + amount }
+          : u),
+        transactions: [{
+          id: serverTxId,
+          userId: state.currentUser.id,
+          type: 'withdrawal' as const,
+          amount,
+          currency: network.symbol,
+          network: network.network,
+          address: address.trim(),
+          status: 'pending' as const,
+          fee: network.withdrawalFee,
+          createdAt: new Date().toISOString(),
+        }, ...s.transactions],
+      }));
+      return { success: true };
+    } catch {
+      return { success: false, error: 'Serveur indisponible. Réessayez.' };
+    }
   },
 
   toggleDemoMode: () => set(s => {
@@ -1367,6 +1468,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   recordGameResult: (game, bet, win) => {
+    const state = get();
     set(s => {
       if (s.demoMode) return {};
       const entry: GameResult = { game, bet, win, ts: Date.now() };
@@ -1374,6 +1476,41 @@ export const useAppStore = create<AppState>((set, get) => ({
       try { localStorage.setItem('tc_game_history', JSON.stringify(updated)); } catch { /* noop */ }
       return { gameHistory: updated };
     });
+    // Report result to server for validation and balance update.
+    // Skipped in demo mode and for dev accounts (telegramId === 0).
+    if (!state.demoMode && state.currentUser.telegramId !== 0) {
+      const initData = (window as unknown as { Telegram?: { WebApp?: { initData?: string } } })
+        ?.Telegram?.WebApp?.initData ?? '';
+      void fetch('/api/game/result', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          telegramId: state.currentUser.telegramId,
+          game,
+          bet: +bet.toFixed(6),
+          win: +win.toFixed(6),
+          initData,
+        }),
+      }).then(async res => {
+        if (!res.ok) return;
+        const body = await res.json() as { success?: boolean; newBalance?: number };
+        if (body.success && typeof body.newBalance === 'number') {
+          // Correct local balance to match server-authoritative value
+          set(s => {
+            if (s.demoMode) return {};
+            const updatedUser = { ...s.currentUser, balanceMain: body.newBalance! };
+            try {
+              const saved = JSON.parse(localStorage.getItem('tc_balance') || '{}') as Record<string, number>;
+              localStorage.setItem('tc_balance', JSON.stringify({ ...saved, balanceMain: body.newBalance }));
+            } catch { /* noop */ }
+            return {
+              currentUser: updatedUser,
+              users: s.users.map(u => u.id === s.currentUser.id ? { ...u, ...updatedUser } : u),
+            };
+          });
+        }
+      }).catch(() => { /* server unavailable — local state already updated */ });
+    }
   },
 
   activatePromoEvent: (multiplier, hours, label) => {
@@ -1503,9 +1640,27 @@ export const useAppStore = create<AppState>((set, get) => ({
   deleteAdminUser: (id) => set((s) => ({ adminUsers: s.adminUsers.filter(a => a.id !== id) })),
 
   // Referral Milestone CRUD
-  addReferralMilestone: (milestone) => set((s) => ({ referralMilestones: [...s.referralMilestones, { ...milestone, id: generateId() }].sort((a, b) => a.referralCount - b.referralCount) })),
-  updateReferralMilestone: (id, data) => set((s) => ({ referralMilestones: s.referralMilestones.map(m => m.id === id ? { ...m, ...data } : m) })),
-  deleteReferralMilestone: (id) => set((s) => ({ referralMilestones: s.referralMilestones.filter(m => m.id !== id) })),
+  addReferralMilestone: (milestone) => {
+    set(s => {
+      const updated = [...s.referralMilestones, { ...milestone, id: generateId() }].sort((a, b) => a.referralCount - b.referralCount);
+      void pushConfigToBackend('referralMilestones', updated);
+      return { referralMilestones: updated };
+    });
+  },
+  updateReferralMilestone: (id, data) => {
+    set(s => {
+      const updated = s.referralMilestones.map(m => m.id === id ? { ...m, ...data } : m);
+      void pushConfigToBackend('referralMilestones', updated);
+      return { referralMilestones: updated };
+    });
+  },
+  deleteReferralMilestone: (id) => {
+    set(s => {
+      const updated = s.referralMilestones.filter(m => m.id !== id);
+      void pushConfigToBackend('referralMilestones', updated);
+      return { referralMilestones: updated };
+    });
+  },
 
   // Others
   updateFraudAlert: (id, data) => set((s) => ({ fraudAlerts: s.fraudAlerts.map(a => a.id === id ? { ...a, ...data } : a) })),

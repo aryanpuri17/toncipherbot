@@ -154,7 +154,7 @@ function taskAvatarColor(name: string): string {
 
 export const MiniAppTasks: React.FC = () => {
   const {
-    tasks, completedTaskIds, completeTask, creditReferralBonus,
+    tasks, completedTaskIds, completeTaskSecure, creditReferralBonus,
     setMiniAppPage, currentUser, platformConfig,
   } = useAppStore();
 
@@ -171,6 +171,7 @@ export const MiniAppTasks: React.FC = () => {
   const [completedApiTaskIds, setCompletedApiTaskIds] = useState<string[]>([]);
   const [uploadingProofId, setUploadingProofId] = useState<string | null>(null);
   const [tooEarlyInfo, setTooEarlyInfo] = useState<Record<string, true>>({});
+  const [taskErrors, setTaskErrors] = useState<Record<string, string>>({});
 
 
   // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -328,11 +329,13 @@ export const MiniAppTasks: React.FC = () => {
       _creditLocally(taskId, reward);
       return true;
     }
+    const initData = (window as unknown as { Telegram?: { WebApp?: { initData?: string } } })
+      ?.Telegram?.WebApp?.initData ?? '';
     try {
       const res  = await fetch(`/api/user-tasks/${taskId}/complete`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ telegramId }),
+        body:    JSON.stringify({ telegramId, initData }),
       });
       const data = await res.json() as { success?: boolean; reward?: number; error?: string };
       if (data.success) {
@@ -354,14 +357,16 @@ export const MiniAppTasks: React.FC = () => {
   const recordDepart = (taskId: string) => {
     const tid = useAppStore.getState().currentUser.telegramId;
     if (!tid) return;
+    const initData = (window as unknown as { Telegram?: { WebApp?: { initData?: string } } })
+      ?.Telegram?.WebApp?.initData ?? '';
     void fetch('/api/task/depart', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ telegramId: tid, taskId }),
+      body: JSON.stringify({ telegramId: tid, taskId, initData }),
     }).catch(() => { /* silent — client-side timer still works */ });
   };
 
-  const handleStart = (card: CardTask) => {
+  const handleStart = async (card: CardTask) => {
     const phase = getPhase(card.id);
     if (phase === 'completing' || phase === 'done') return;
     if (card.source === 'platform' && completedTaskIds.includes(card.id)) return;
@@ -376,7 +381,13 @@ export const MiniAppTasks: React.FC = () => {
 
     if (card.isInstant) {
       setPhase(card.id, 'completing');
-      completeTask(card.id);
+      const res = await completeTaskSecure(card.id);
+      if (!res.success) {
+        setTaskErrors(prev => ({ ...prev, [card.id]: res.error ?? 'Erreur serveur' }));
+        setPhase(card.id, 'not_subscribed');
+        haptic.error();
+        return;
+      }
       timerRefs.current[card.id] = setTimeout(() => {
         setPhase(card.id, 'done');
         haptic.success();
@@ -408,7 +419,13 @@ export const MiniAppTasks: React.FC = () => {
       const ok = await creditApiTask(card.id, card.reward);
       if (!ok) return;
     } else {
-      completeTask(card.id);
+      const res = await completeTaskSecure(card.id);
+      if (!res.success) {
+        setTaskErrors(prev => ({ ...prev, [card.id]: res.error ?? 'Erreur serveur' }));
+        setPhase(card.id, 'not_subscribed');
+        haptic.error();
+        return;
+      }
     }
     timerRefs.current[card.id] = setTimeout(() => {
       setPhase(card.id, 'done');
@@ -428,7 +445,10 @@ export const MiniAppTasks: React.FC = () => {
       for (const key of keys) {
         const taskId = key.replace('tc_proof_sent_', '');
         try {
-          const res = await fetch(`/api/check-social-proof?telegramId=${tid}&taskId=${taskId}`);
+          const initData = (window as unknown as { Telegram?: { WebApp?: { initData?: string } } })?.Telegram?.WebApp?.initData ?? '';
+          const res = await fetch(`/api/check-social-proof?telegramId=${tid}&taskId=${taskId}`, {
+            headers: initData ? { 'X-Init-Data': initData } : {},
+          });
           const { status } = await res.json() as { status: string };
           if (status === 'approved') {
             localStorage.removeItem(key);
@@ -474,9 +494,10 @@ export const MiniAppTasks: React.FC = () => {
           try {
             const ctrl = new AbortController();
             const tId  = setTimeout(() => ctrl.abort(), 5000);
+            const memberInitData = (window as unknown as { Telegram?: { WebApp?: { initData?: string } } })?.Telegram?.WebApp?.initData ?? '';
             const res  = await fetch(
               `/api/check-membership?telegram_id=${currentUser.telegramId}&chat_id=${encodeURIComponent(`@${chatRef}`)}`,
-              { signal: ctrl.signal },
+              { signal: ctrl.signal, headers: memberInitData ? { 'X-Init-Data': memberInitData } : {} },
             );
             clearTimeout(tId);
             const { member } = await res.json() as { member: boolean };
@@ -496,7 +517,13 @@ export const MiniAppTasks: React.FC = () => {
       const ok = await creditApiTask(card.id, card.reward);
       if (!ok) return;
     } else {
-      completeTask(card.id);
+      const res = await completeTaskSecure(card.id);
+      if (!res.success) {
+        setTaskErrors(prev => ({ ...prev, [card.id]: res.error ?? 'Erreur serveur' }));
+        setPhase(card.id, 'not_subscribed');
+        haptic.error();
+        return;
+      }
     }
     timerRefs.current[card.id] = setTimeout(() => {
       setPhase(card.id, 'done');
@@ -510,9 +537,17 @@ export const MiniAppTasks: React.FC = () => {
   // ── Card renderer ────────────────────────────────────────────────────────────
 
   const handlePromoComplete = async (task: { id: string; reward: number }) => {
-    completeTask(task.id);
-    haptic.success();
+    const res = await completeTaskSecure(task.id);
+    if (res.success) haptic.success();
   };
+
+  // ── Signature colour tokens ────────────────────────────────────────────────
+  const SIG        = '#8B5CF6';
+  const SIG_LIGHT  = '#C4B5FD';
+  const SIG_GLOW   = 'rgba(139,92,246,0.20)';
+  const SIG_BG     = 'rgba(139,92,246,0.06)';
+  const SIG_BORDER = 'rgba(139,92,246,0.16)';
+  const SIG_ICON   = 'rgba(139,92,246,0.14)';
 
   const renderCard = (card: CardTask) => {
     const config      = typeConfig[card.type] ?? typeConfig.special;
@@ -526,13 +561,23 @@ export const MiniAppTasks: React.FC = () => {
     const displayReward = card.reward * (card.promoMultiplier ?? 1);
     const avatarBg      = card.source === 'api' ? taskAvatarColor(card.title) : null;
 
+    const cardBg     = isDone ? 'rgba(52,211,153,0.07)' : SIG_BG;
+    const cardBorder = isDone ? '1px solid rgba(52,211,153,0.22)' : `1px solid ${SIG_BORDER}`;
+    const iconBg     = isDone ? 'rgba(52,211,153,0.18)' : (avatarBg ? `${avatarBg}22` : SIG_ICON);
+    const iconBorder = isDone ? '1px solid rgba(52,211,153,0.3)' : `1px solid ${SIG_BORDER}`;
+    const iconGlow   = isDone ? '0 4px 14px rgba(52,211,153,0.25)' : `0 4px 14px ${SIG_GLOW}`;
+    const badgeLabel = isDone ? '✓ FAIT' : (config.label ?? 'TÂCHE');
+    const badgeBg    = isDone ? 'rgba(52,211,153,0.18)' : SIG_ICON;
+    const badgeColor = isDone ? '#34d399' : SIG_LIGHT;
+    const accentLine = isDone ? '#34d399' : SIG;
+
     const icon = (() => {
       if (isDone) return <CheckCircle style={{ width: 26, height: 26, color: '#34d399' }} />;
       const logo = getPlatformLogo(card.targetUrl ?? '', card.type, 34);
       if (logo) return logo;
       if (card.icon) return <span style={{ fontSize: 24 }}>{card.icon}</span>;
       if (avatarBg) return <span style={{ fontSize: 18, fontWeight: 800, color: avatarBg }}>{card.title.charAt(0).toUpperCase()}</span>;
-      return <span style={{ color: '#64748b' }}>{React.cloneElement(config.icon as React.ReactElement<{ style?: React.CSSProperties }>, { style: { width: 22, height: 22 } })}</span>;
+      return <span style={{ color: SIG_LIGHT }}>{React.cloneElement(config.icon as React.ReactElement<{ style?: React.CSSProperties }>, { style: { width: 22, height: 22 } })}</span>;
     })();
 
     const hasProgress = card.maxCompletions != null && card.maxCompletions > 0;
@@ -543,23 +588,26 @@ export const MiniAppTasks: React.FC = () => {
         disabled={disabled}
         style={{
           width: 38, height: 38, borderRadius: 10, flexShrink: 0,
-          background: disabled ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.07)',
-          border: '1px solid rgba(255,255,255,0.09)',
+          background: disabled ? 'rgba(255,255,255,0.03)' : SIG_ICON,
+          border: disabled ? '1px solid rgba(255,255,255,0.06)' : `1px solid ${SIG_BORDER}`,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           cursor: disabled ? 'not-allowed' : 'pointer',
         }}
       >
-        <ChevronRight style={{ width: 18, height: 18, color: disabled ? '#334155' : '#94a3b8' }} />
+        <ChevronRight style={{ width: 18, height: 18, color: disabled ? '#334155' : SIG_LIGHT }} />
       </button>
     );
 
     return (
-      <div key={card.id} style={{
-        background: isDone ? 'rgba(52,211,153,0.04)' : 'rgba(255,255,255,0.04)',
-        borderRadius: 14,
-        border: isDone ? '1px solid rgba(52,211,153,0.15)' : '1px solid rgba(255,255,255,0.06)',
-        overflow: 'hidden',
-      }}>
+      <div key={card.id} style={{ background: cardBg, borderRadius: 16, border: cardBorder, overflow: 'hidden', position: 'relative' }}>
+        {/* Type badge */}
+        <span style={{
+          position: 'absolute', top: 10, right: 10, zIndex: 2,
+          fontSize: 8, fontWeight: 800, padding: '2px 7px', borderRadius: 20,
+          background: badgeBg, color: badgeColor,
+          border: `1px solid ${badgeColor}44`, letterSpacing: '0.07em',
+        }}>{badgeLabel}</span>
+
         {/* Promo accent */}
         {card.promoMultiplier && (
           <div style={{ height: 2, background: 'linear-gradient(90deg, #f59e0b, #fbbf24)' }} />
@@ -569,14 +617,13 @@ export const MiniAppTasks: React.FC = () => {
           {/* Top row: icon + title/desc */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <div style={{
-              width: 48, height: 48, borderRadius: 12, flexShrink: 0,
-              background: avatarBg ? `${avatarBg}22` : 'rgba(255,255,255,0.06)',
-              border: '1px solid rgba(255,255,255,0.08)',
+              width: 48, height: 48, borderRadius: 14, flexShrink: 0,
+              background: iconBg, border: iconBorder, boxShadow: iconGlow,
               display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
             }}>
               {icon}
             </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ flex: 1, minWidth: 0, paddingRight: 44 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                 <span style={{ fontSize: 14, fontWeight: 700, color: '#f8fafc' }}>{card.title}</span>
                 {card.promoMultiplier && (
@@ -591,15 +638,18 @@ export const MiniAppTasks: React.FC = () => {
             </div>
           </div>
 
+          {/* Accent line */}
+          <div style={{ margin: '10px 0 0', height: '1.5px', borderRadius: 99, width: '40%', background: `linear-gradient(90deg,${accentLine},transparent)` }} />
+
           {/* Bottom row: reward + action */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <svg width="16" height="16" viewBox="0 0 56 56" fill="none" style={{ flexShrink: 0 }}>
                 <circle cx="28" cy="28" r="28" fill="#0098EA"/>
                 <path d="M37.5603 15.6277H18.4386C14.9228 15.6277 12.7547 19.4202 14.5145 22.4798L26.9572 44.1141C27.5004 45.0567 28.8567 45.0567 29.3999 44.1141L41.8427 22.4798C43.6025 19.4202 41.4344 15.6277 37.5603 15.6277Z" fill="white"/>
                 <path opacity="0.5" d="M28.0001 15.6277H18.4386C14.9228 15.6277 12.7547 19.4202 14.5145 22.4798L20.2931 32.4371L28.0001 15.6277Z" fill="white"/>
               </svg>
-              <span style={{ fontSize: 13, fontWeight: 800, color: card.promoMultiplier ? '#fbbf24' : '#60a5fa' }}>
+              <span style={{ fontSize: 13, fontWeight: 800, color: card.promoMultiplier ? '#fbbf24' : SIG_LIGHT }}>
                 {displayReward.toFixed(3)}
               </span>
               <span style={{ fontSize: 10, color: '#475569', fontWeight: 600 }}>GRAM</span>
@@ -690,14 +740,16 @@ export const MiniAppTasks: React.FC = () => {
 
         {phase === 'not_subscribed' && (
           <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', padding: '8px 14px', background: 'rgba(239,68,68,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-            <span style={{ fontSize: 11, color: '#f87171', fontWeight: 600 }}>
-              {(card.type === 'join_channel' || card.type === 'join_group')
-                ? 'Non membre — rejoins d\'abord le canal'
-                : (card.type === 'social' || card.type === 'watch_video')
-                  ? 'Trop tôt — reste 30s dans l\'app externe'
-                  : 'Non vérifié — réessaie'}
+            <span style={{ fontSize: 11, color: '#f87171', fontWeight: 600, flex: 1 }}>
+              {taskErrors[card.id] ?? (
+                (card.type === 'join_channel' || card.type === 'join_group')
+                  ? "Non membre — rejoins d'abord le canal"
+                  : (card.type === 'social' || card.type === 'watch_video')
+                    ? 'Trop tôt — reste 30s dans l\'app externe'
+                    : 'Non vérifié — réessaie'
+              )}
             </span>
-            <button onClick={() => void handleVerify(card)} style={{ padding: '5px 10px', borderRadius: 8, background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)', color: '#f87171', fontSize: 10, fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}>
+            <button onClick={() => { setTaskErrors(prev => { const n = { ...prev }; delete n[card.id]; return n; }); void handleVerify(card); }} style={{ padding: '5px 10px', borderRadius: 8, background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)', color: '#f87171', fontSize: 10, fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}>
               Réessayer
             </button>
           </div>
@@ -718,6 +770,7 @@ export const MiniAppTasks: React.FC = () => {
                 fd.append('file', file);
                 fd.append('telegramId', String(currentUser.telegramId));
                 fd.append('taskId', card.id);
+                fd.append('initData', (window as unknown as { Telegram?: { WebApp?: { initData?: string } } })?.Telegram?.WebApp?.initData ?? '');
                 try {
                   const res = await fetch('/api/submit-proof', { method: 'POST', body: fd });
                   if (res.ok) {
@@ -776,22 +829,25 @@ export const MiniAppTasks: React.FC = () => {
 
   const SectionHead = ({ title, hint, infoOnly }: { title: string; hint?: string; infoOnly?: boolean }) => (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, marginTop: 4 }}>
-      <span style={{ fontSize: 17, fontWeight: 800, color: '#f8fafc' }}>{title}</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ width: 3, height: 18, borderRadius: 99, background: `linear-gradient(180deg,${SIG},${SIG}55)`, flexShrink: 0 }} />
+        <span style={{ fontSize: 15, fontWeight: 800, color: '#f8fafc' }}>{title}</span>
+      </div>
       {!infoOnly && hint && (
         <button
           onClick={() => { localStorage.setItem('tc_create_type_hint', hint); setMiniAppPage('createTask'); }}
           style={{
-            width: 34, height: 34, borderRadius: 10,
-            background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
-            color: '#94a3b8', fontSize: 20, lineHeight: 1,
+            width: 30, height: 30, borderRadius: 9,
+            background: SIG_ICON, border: `1px solid ${SIG_BORDER}`,
+            color: SIG_LIGHT, fontSize: 18, lineHeight: 1,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             cursor: 'pointer', flexShrink: 0,
           }}
         >+</button>
       )}
       {infoOnly && (
-        <div style={{ width: 34, height: 34, borderRadius: 10, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <Star style={{ width: 15, height: 15, color: '#f59e0b' }} />
+        <div style={{ width: 30, height: 30, borderRadius: 9, background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <Star style={{ width: 14, height: 14, color: '#f59e0b' }} />
         </div>
       )}
     </div>

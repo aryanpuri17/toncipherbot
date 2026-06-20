@@ -131,9 +131,11 @@ const TxRow: React.FC<{ tx: Tx }> = ({ tx }) => {
         tx.type === 'deposit'    ? 'bg-emerald-500/20 text-emerald-400' :
         tx.type === 'withdrawal' ? 'bg-orange-500/20 text-orange-400'  :
         tx.type === 'reward' || tx.type === 'referral' || tx.type === 'bonus'
-                                 ? 'bg-blue-500/20 text-blue-400'      :
+                                 ? ''                                   :
                                    'bg-slate-500/20 text-slate-400'
-      }`}>
+      }`}
+      style={tx.type === 'reward' || tx.type === 'referral' || tx.type === 'bonus' ? { background: 'rgba(139,92,246,0.14)', color: '#C4B5FD', boxShadow: '0 3px 10px rgba(139,92,246,0.17)' } : {}}
+      >
         {TX_ICON[tx.type] ?? <TrendingUp className="w-4 h-4" />}
       </div>
       <div className="flex-1 min-w-0">
@@ -247,8 +249,11 @@ export const MiniAppWallet: React.FC = () => {
       {/* Transaction History */}
       <div>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold text-white">Historique</h2>
-          <button onClick={() => setMiniAppPage('history')} className="text-xs text-blue-400 flex items-center gap-1">
+          <div className="flex items-center gap-2">
+            <div style={{ width: 3, height: 16, borderRadius: 99, background: 'linear-gradient(180deg,#8B5CF6,#8B5CF655)', flexShrink: 0 }} />
+            <h2 className="text-sm font-semibold text-white">Historique</h2>
+          </div>
+          <button onClick={() => setMiniAppPage('history')} className="text-xs flex items-center gap-1" style={{ color: '#C4B5FD' }}>
             Tout voir <ChevronRight className="w-3 h-3" />
           </button>
         </div>
@@ -496,7 +501,8 @@ export const MiniAppDeposit: React.FC = () => {
           {depositNetworks.map(net => (
             <button key={net.id}
               onClick={() => { setSelectedId(net.id); setTxStatus('idle'); setTxError(''); setDepositAmount(''); }}
-              className={`p-3 rounded-xl text-center transition-all ${selectedId === net.id ? 'bg-blue-500/15 border border-blue-500/40 text-white' : 'glass-card-light text-slate-400 hover:text-white'}`}>
+              className={`p-3 rounded-xl text-center transition-all ${selectedId === net.id ? 'text-white' : 'glass-card-light text-slate-400 hover:text-white'}`}
+              style={selectedId === net.id ? { background: 'rgba(139,92,246,0.11)', border: '1px solid rgba(139,92,246,0.26)', boxShadow: '0 4px 14px rgba(139,92,246,0.16)' } : {}}>
               <span className="text-xl block mb-1">{networkIcon(net.symbol)}</span>
               <span className="text-xs font-medium">{displaySymbol(net.symbol)}</span>
               <span className="text-[9px] text-slate-500 block">{net.network}</span>
@@ -529,7 +535,7 @@ export const MiniAppDeposit: React.FC = () => {
             </div>
           ) : (
             <button onClick={() => tonConnectUI.openModal()}
-              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-blue-500/15 border border-blue-500/30 text-blue-400 text-sm font-semibold hover:bg-blue-500/25 transition-all">
+              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold transition-all" style={{ background: 'rgba(139,92,246,0.11)', border: '1px solid rgba(139,92,246,0.20)', color: '#C4B5FD' }}>
               <Wallet className="w-4 h-4" /> Connecter wallet
             </button>
           )}
@@ -734,6 +740,7 @@ export const MiniAppWithdraw: React.FC = () => {
   const [address, setAddress] = useState(() => localStorage.getItem('tc_last_wd_addr') ?? 'UQDCLLOiZ8_KzB_lJXPaTuinjyEemjbnzS3-VAZD6fU-Rp2S');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const connectedAddress = tonWallet?.account.address ?? '';
   // Both TON and USDT/TON use a TON address for withdrawal
@@ -766,17 +773,22 @@ export const MiniAppWithdraw: React.FC = () => {
   };
   const netReceived = parsedAmount - calcFee(parsedAmount);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
+    if (isSubmitting || !selected) return;
     setError('');
-    if (!selected) return;
-    const result = submitWithdrawal(selected.id, parsedAmount, address);
-    if (result.success) {
-      haptic.success();
-      // Keep address in localStorage so it's pre-filled next time
-      setSuccess(true);
-    } else {
-      haptic.error();
-      setError(result.error ?? 'Erreur inconnue');
+    setIsSubmitting(true);
+    try {
+      const result = await submitWithdrawal(selected.id, parsedAmount, address);
+      if (result.success) {
+        haptic.success();
+        localStorage.setItem('tc_last_wd_addr', address);
+        setSuccess(true);
+      } else {
+        haptic.error();
+        setError(result.error ?? 'Erreur inconnue');
+      }
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -963,10 +975,10 @@ export const MiniAppWithdraw: React.FC = () => {
 
       <button
         onClick={handleSubmit}
-        disabled={!parsedAmount || !address.trim()}
+        disabled={!parsedAmount || !address.trim() || isSubmitting}
         className="w-full btn-accent py-3.5 rounded-xl text-sm font-semibold text-white disabled:opacity-40 disabled:cursor-not-allowed"
       >
-        Retirer {parsedAmount > 0 ? parsedAmount.toFixed(2) : '0.00'} {displaySymbol(selected?.symbol ?? 'GRAM')}
+        {isSubmitting ? 'Envoi en cours…' : `Retirer ${parsedAmount > 0 ? parsedAmount.toFixed(2) : '0.00'} ${displaySymbol(selected?.symbol ?? 'GRAM')}`}
       </button>
     </div>
   );

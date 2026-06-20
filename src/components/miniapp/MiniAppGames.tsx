@@ -2986,7 +2986,7 @@ export const MiniAppGames: React.FC = () => {
               className="game-icon-wrap w-12 h-12 rounded-xl flex items-center justify-center shrink-0"
               style={{ background: `linear-gradient(135deg,${game.accentFrom}33,${game.accentTo}22)`, boxShadow: `0 4px 12px ${game.glow}` }}
             >
-              <span className="text-2xl">{game.emoji}</span>
+              <GameIcon id={game.id as string} color={game.accentFrom} size={28} />
             </div>
             <div>
               <p className="text-white font-bold text-sm">{game.title}</p>

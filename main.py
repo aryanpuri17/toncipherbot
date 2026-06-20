@@ -42,7 +42,7 @@ ADMIN_TELEGRAM_ID = int(os.getenv("ADMIN_TELEGRAM_ID", "0"))
 OFFICIAL_CHANNEL   = os.getenv("OFFICIAL_CHANNEL",   "@TonCipher_officiel")
 WITHDRAWAL_CHANNEL = os.getenv("WITHDRAWAL_CHANNEL", "@TonCipher_Pays")
 
-REFERRAL_BONUS_TON  = float(os.getenv("REFERRAL_BONUS_TON", "1.0"))
+REFERRAL_BONUS_TON  = float(os.getenv("REFERRAL_BONUS_TON", "0.005"))
 MAX_ACCOUNTS_PER_IP = int(os.getenv("MAX_ACCOUNTS_PER_IP", "3"))
 RATE_LIMIT_MAX      = int(os.getenv("RATE_LIMIT_MAX", "30"))  # requests / minute / IP
 RATE_LIMIT_WINDOW   = 60  # seconds
@@ -81,6 +81,60 @@ USDT_MIN_AMOUNT     = 0.1    # minimum USDT deposit (in USDT, not nano)
 
 _ton_price_cache: dict = {"price": None, "ts": 0}
 
+# ── Platform task definitions (server-authoritative) ──────────────────────────
+# Keys must match id values in frontend _defaultTasks.
+# verification: 'none'|'channel'|'bot'|'timer'|'referral'|'proof'
+# max_per_user: 0 = unlimited with cooldown, 1 = one-time only
+# ── Withdrawal security limits (overridable via env vars) ─────────────────────
+WD_MIN_AMOUNT  = float(os.getenv("WD_MIN_AMOUNT",  "0.1"))    # minimum per withdrawal (GRAM)
+WD_MAX_AMOUNT  = float(os.getenv("WD_MAX_AMOUNT",  "5000.0")) # maximum per withdrawal (GRAM)
+WD_DAILY_LIMIT = float(os.getenv("WD_DAILY_LIMIT", "1000.0")) # per-user daily total (GRAM)
+WD_MAX_PENDING = int(os.getenv("WD_MAX_PENDING",   "3"))       # max simultaneous pending per user
+WD_MIN_TASKS   = int(os.getenv("WD_MIN_TASKS",     "3"))       # min completed tasks before first withdrawal
+
+# ── Game security limits (server-authoritative) ────────────────────────────────
+# max_multiplier: maximum payout / bet ratio allowed (caps win reporting)
+GAME_CONFIG: dict[str, dict] = {
+    'Crash':     {'max_multiplier': 100.0,  'max_bet': 10.0},
+    'Dice':      {'max_multiplier': 6.0,    'max_bet':  5.0},
+    'Mines':     {'max_multiplier': 24.0,   'max_bet':  5.0},
+    'Wheel':     {'max_multiplier': 50.0,   'max_bet':  5.0},
+    'Jackpot':   {'max_multiplier': 100.0,  'max_bet':  2.0},
+    'Balloon':   {'max_multiplier': 100.0,  'max_bet':  5.0},
+    'Limbo':     {'max_multiplier': 1000.0, 'max_bet':  1.0},
+    'Blackjack': {'max_multiplier': 4.0,    'max_bet':  5.0},
+    'Plinko':    {'max_multiplier': 50.0,   'max_bet':  5.0},
+}
+GAME_MIN_BET        = float(os.getenv("GAME_MIN_BET",        "0.001"))
+GAME_DAILY_WIN_LIMIT = float(os.getenv("GAME_DAILY_WIN_LIMIT", "50.0"))
+
+# ── Referral milestone defaults (mirror of frontend _defaultReferralMilestones) ─
+# Admin can override via /api/admin/config key "referralMilestones".
+_DEFAULT_REFERRAL_MILESTONES: list[dict] = [
+    {"id": "1", "referralCount": 5,   "reward": 2.00,  "description": "Invitez 5 amis",   "isActive": True},
+    {"id": "2", "referralCount": 20,  "reward": 10.00, "description": "Invitez 20 amis",  "isActive": True},
+    {"id": "3", "referralCount": 50,  "reward": 30.00, "description": "Invitez 50 amis",  "isActive": True},
+    {"id": "4", "referralCount": 100, "reward": 75.00, "description": "Invitez 100 amis", "isActive": True},
+]
+MILESTONE_MAX_REWARD = float(os.getenv("MILESTONE_MAX_REWARD", "500.0"))
+
+# ── Platform task definitions (server-authoritative) ──────────────────────────
+# Keys must match id values in frontend _defaultTasks.
+# verification: 'none'|'channel'|'bot'|'timer'|'referral'|'proof'
+# max_per_user: 0 = unlimited with cooldown, 1 = one-time only
+PLATFORM_TASKS: dict[str, dict] = {
+    "1":  {"type": "daily",        "reward": 0.10,  "cooldown_hours": 24, "verification": "none",     "target": None,                 "max_per_user": 0},
+    "2":  {"type": "join_channel", "reward": 0.002, "cooldown_hours":  0, "verification": "channel",  "target": "@TonCipher_Official", "max_per_user": 1},
+    "3":  {"type": "join_channel", "reward": 0.002, "cooldown_hours":  0, "verification": "channel",  "target": "@TonCipher_Pays",     "max_per_user": 1},
+    "4":  {"type": "start_bot",    "reward": 0.002, "cooldown_hours":  0, "verification": "bot",      "target": None,                 "max_per_user": 1},
+    "5":  {"type": "special",      "reward": 1.50,  "cooldown_hours":  0, "verification": "referral", "target": None,                 "max_per_user": 1, "required_referrals": 3},
+    "6":  {"type": "special",      "reward": 0.80,  "cooldown_hours":  0, "verification": "proof",    "target": None,                 "max_per_user": 1},
+    "7":  {"type": "watch_video",  "reward": 0.002, "cooldown_hours":  0, "verification": "timer",    "target": None,                 "max_per_user": 1, "min_seconds": 20},
+    "8":  {"type": "social",       "reward": 0.002, "cooldown_hours":  0, "verification": "timer",    "target": None,                 "max_per_user": 1, "min_seconds": 30},
+    "9":  {"type": "social",       "reward": 0.002, "cooldown_hours":  0, "verification": "timer",    "target": None,                 "max_per_user": 1, "min_seconds": 30},
+    "10": {"type": "social",       "reward": 0.002, "cooldown_hours":  0, "verification": "timer",    "target": None,                 "max_per_user": 1, "min_seconds": 30},
+}
+
 # ── Server-Sent Events (real-time task updates) ───────────────────────────────
 
 _sse_queues: list[asyncio.Queue] = []
@@ -100,8 +154,17 @@ async def _sse_broadcast(event: str, data: dict) -> None:
         except ValueError: pass
 
 
+_SSE_MAX_CONNECTIONS = 500
+
 async def api_tasks_stream(request: web.Request) -> web.StreamResponse:
     """SSE endpoint — clients subscribe here for real-time task lifecycle events."""
+    if len(_sse_queues) >= _SSE_MAX_CONNECTIONS:
+        return web.Response(status=503, text="Too many SSE connections")
+
+    ip = _client_ip(request)
+    if _is_rate_limited(ip):
+        return web.Response(status=429, text="Rate limit exceeded")
+
     resp = web.StreamResponse()
     resp.headers["Content-Type"] = "text/event-stream"
     resp.headers["Cache-Control"] = "no-cache"
@@ -125,8 +188,11 @@ async def api_tasks_stream(request: web.Request) -> web.StreamResponse:
         except ValueError: pass
     return resp
 
-# In-memory rate-limit buckets  {ip: [timestamps]}
-_rate_buckets: dict[str, list[float]] = defaultdict(list)
+# In-memory rate-limit buckets  {ip: [timestamps]} and {telegram_id: [timestamps]}
+_rate_buckets:      dict[str, list[float]] = defaultdict(list)
+_user_rate_buckets: dict[int, list[float]] = defaultdict(list)
+# Tighter per-user limits for financial endpoints (10 req/min)
+USER_FINANCIAL_RATE_MAX = int(os.getenv("USER_FINANCIAL_RATE_MAX", "10"))
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -146,6 +212,35 @@ def _is_rate_limited(ip: str) -> bool:
     return False
 
 
+def _is_user_rate_limited(telegram_id: int, max_per_window: int = USER_FINANCIAL_RATE_MAX) -> bool:
+    """Per-user rate limit — not spoofable via X-Forwarded-For since telegram_id
+    comes from HMAC-validated initData."""
+    now = time.time()
+    cutoff = now - RATE_LIMIT_WINDOW
+    _user_rate_buckets[telegram_id] = bucket = [t for t in _user_rate_buckets[telegram_id] if t > cutoff]
+    if len(bucket) >= max_per_window:
+        return True
+    bucket.append(now)
+    return False
+
+
+async def _cleanup_rate_buckets() -> None:
+    """Periodically prune stale entries from the rate-limit dicts.
+    Without cleanup these grow unbounded for IPs/users that only make one request."""
+    while True:
+        await asyncio.sleep(600)  # every 10 minutes
+        now = time.time()
+        cutoff = now - RATE_LIMIT_WINDOW
+        dead_ips   = [k for k, v in list(_rate_buckets.items())      if not [t for t in v if t > cutoff]]
+        dead_users = [k for k, v in list(_user_rate_buckets.items())  if not [t for t in v if t > cutoff]]
+        for k in dead_ips:   _rate_buckets.pop(k, None)
+        for k in dead_users: _user_rate_buckets.pop(k, None)
+        if dead_ips or dead_users:
+            log.info("Rate bucket GC: removed %d IP + %d user entries", len(dead_ips), len(dead_users))
+
+
+_INIT_DATA_MAX_AGE = 86400  # 24 hours — Telegram recommends rejecting older tokens
+
 def _validate_init_data(init_data: str, bot_token: str) -> bool:
     if not init_data or not bot_token:
         return False
@@ -153,6 +248,10 @@ def _validate_init_data(init_data: str, bot_token: str) -> bool:
         parsed = dict(parse_qsl(init_data, keep_blank_values=True))
         check_hash = parsed.pop("hash", "")
         if not check_hash:
+            return False
+        # Reject initData older than 24 hours to prevent replay attacks
+        auth_date = int(parsed.get("auth_date", 0))
+        if auth_date and time.time() - auth_date > _INIT_DATA_MAX_AGE:
             return False
         data_check_string = "\n".join(f"{k}={v}" for k, v in sorted(parsed.items()))
         secret_key = hmac_lib.new(b"WebAppData", msg=bot_token.encode(), digestmod=hashlib.sha256).digest()
@@ -164,7 +263,13 @@ def _validate_init_data(init_data: str, bot_token: str) -> bool:
 
 def _check_admin_auth(request: web.Request) -> bool:
     if not ADMIN_SECRET:
-        log.warning("ADMIN_SECRET is not set — admin API is publicly accessible!")
+        # In production (BOT_TOKEN set) deny access entirely — an empty secret is
+        # indistinguishable from "no secret configured", which is a misconfiguration.
+        # In local dev (no BOT_TOKEN), allow access for convenience.
+        if BOT_TOKEN:
+            log.error("ADMIN_SECRET is not set — admin API is LOCKED until it is configured.")
+            return False
+        log.warning("ADMIN_SECRET is not set — admin API is open (dev mode only).")
         return True
     return request.headers.get("X-Admin-Key", "") == ADMIN_SECRET
 
@@ -530,6 +635,55 @@ async def init_db() -> None:
                 task_id     TEXT    NOT NULL,
                 departed_at TEXT    NOT NULL DEFAULT (datetime('now')),
                 PRIMARY KEY (telegram_id, task_id)
+            )
+        """)
+        # Server-authoritative platform task completion log.
+        # Each row is one completion event (daily tasks may have many rows per user).
+        # Used for dedup (one-time tasks) and cooldown checks (daily tasks).
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS platform_task_completions (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                telegram_id  INTEGER NOT NULL,
+                task_id      TEXT    NOT NULL,
+                completed_at TEXT    NOT NULL DEFAULT (datetime('now')),
+                earned       REAL    NOT NULL DEFAULT 0
+            )
+        """)
+        await db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_ptc_lookup"
+            " ON platform_task_completions(telegram_id, task_id, completed_at)"
+        )
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS game_rounds (
+                id           TEXT    PRIMARY KEY,
+                telegram_id  INTEGER NOT NULL,
+                game         TEXT    NOT NULL,
+                bet          REAL    NOT NULL,
+                win          REAL    NOT NULL DEFAULT 0,
+                multiplier   REAL    NOT NULL DEFAULT 0,
+                status       TEXT    NOT NULL DEFAULT 'completed',
+                created_at   TEXT    NOT NULL DEFAULT (datetime('now'))
+            )
+        """)
+        await db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_gr_lookup"
+            " ON game_rounds(telegram_id, created_at)"
+        )
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS milestone_claims (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                telegram_id  INTEGER NOT NULL,
+                milestone_id TEXT    NOT NULL,
+                reward       REAL    NOT NULL,
+                claimed_at   TEXT    NOT NULL DEFAULT (datetime('now')),
+                UNIQUE(telegram_id, milestone_id)
+            )
+        """)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS welcome_bonus_claims (
+                telegram_id  INTEGER PRIMARY KEY,
+                reward       REAL    NOT NULL,
+                claimed_at   TEXT    NOT NULL DEFAULT (datetime('now'))
             )
         """)
         # A given on-chain tx hash may only be credited once — blocks deposit replay
@@ -928,9 +1082,15 @@ async def api_user_init(request: web.Request) -> web.Response:
     violations: list[str] = []
     ip_count = 0
 
-    if BOT_TOKEN and init_data:
-        if not _validate_init_data(init_data, BOT_TOKEN):
+    if BOT_TOKEN:
+        if not init_data:
+            violations.append("missing_init_data")
+        elif not _validate_init_data(init_data, BOT_TOKEN):
             violations.append("invalid_init_data")
+        elif _init_data_user_id(init_data) != telegram_id:
+            # Valid initData but for a different user — active impersonation attempt.
+            # Block immediately; don't return any account data.
+            return web.json_response({"error": "Identity mismatch"}, status=403, headers=_CORS)
 
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute("SELECT banned FROM users WHERE telegram_id = ?", (telegram_id,)) as cur:
@@ -986,6 +1146,21 @@ async def api_user_init(request: web.Request) -> web.Response:
         ) as cur:
             row = await cur.fetchone()
 
+        # Server-authoritative completions from platform_task_completions table.
+        # Merge these so clearing localStorage can't re-farm one-time tasks.
+        async with db.execute(
+            "SELECT DISTINCT task_id FROM platform_task_completions WHERE telegram_id = ?",
+            (telegram_id,)
+        ) as cur:
+            server_ptc = [r[0] async for r in cur]
+
+        # Claimed referral milestones — prevents re-claiming after localStorage clear.
+        async with db.execute(
+            "SELECT milestone_id FROM milestone_claims WHERE telegram_id = ?",
+            (telegram_id,)
+        ) as cur:
+            server_milestones = [r[0] async for r in cur]
+
     completed_tasks: list = []
     if row and row[8]:
         try:
@@ -994,17 +1169,20 @@ async def api_user_init(request: web.Request) -> web.Response:
                 completed_tasks = parsed_tasks
         except (ValueError, TypeError):
             pass
+    # Union: client-saved IDs + server-confirmed IDs (server wins on conflicts)
+    completed_tasks = list(set(completed_tasks) | set(server_ptc))
 
     return web.json_response({
-        "referralCount":      row[0] if row else 0,
-        "referralBalance":    row[1] if row else 0.0,
-        "flagged":            bool(row[2]) if row else False,
-        "banned":             bool(row[3]) if row else False,
-        "withdrawalBlocked":  bool(row[4]) if row else False,
-        "appBalance":         row[5] if row else None,
-        "appTotalEarnings":   row[6] if row else None,
-        "appTasksCompleted":  row[7] if row else None,
-        "appCompletedTasks":  completed_tasks,
+        "referralCount":        row[0] if row else 0,
+        "referralBalance":      row[1] if row else 0.0,
+        "flagged":              bool(row[2]) if row else False,
+        "banned":               bool(row[3]) if row else False,
+        "withdrawalBlocked":    bool(row[4]) if row else False,
+        "appBalance":           row[5] if row else None,
+        "appTotalEarnings":     row[6] if row else None,
+        "appTasksCompleted":    row[7] if row else None,
+        "appCompletedTasks":    completed_tasks,
+        "claimedMilestoneIds":  server_milestones,
     }, headers=_CORS)
 
 
@@ -1045,6 +1223,19 @@ async def api_user_referral(request: web.Request) -> web.Response:
                 )
                 await db.commit()
             return web.json_response({"success": False, "error": "Unauthorized"}, status=401, headers=_CORS)
+        # Ensure initData belongs to the referee — blocks fake referral registration
+        # using a valid but wrong user's initData (identity impersonation).
+        if _init_data_user_id(init_data) != referee_id:
+            async with aiosqlite.connect(DB_PATH) as db:
+                score = _risk_score(["identity_mismatch"])
+                await _log_fraud_alert(
+                    db, referee_id, referee_username,
+                    "identity_mismatch",
+                    f"Referral impersonation: initData user ≠ claimed referee_id={referee_id} from IP={ip}",
+                    score,
+                )
+                await db.commit()
+            return web.json_response({"success": False, "error": "Identity mismatch"}, status=403, headers=_CORS)
 
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute("SELECT referrer_id FROM referrals WHERE referee_id = ?", (referee_id,)) as cur:
@@ -1067,15 +1258,37 @@ async def api_user_referral(request: web.Request) -> web.Response:
         if referrer_ip and referee_ip and referrer_ip == referee_ip:
             violations.append("self_referral_ip")
 
-        if ref_row and ref_row[1]:
+        if ref_row and ref_row[1]:  # referee already flagged
             violations.append("multi_account_ip")
+
+        # Check referrer's referral velocity: > 5 new referrals in the last hour → suspicious
+        async with db.execute(
+            "SELECT COUNT(*) FROM referrals"
+            " WHERE referrer_id = ? AND created_at >= datetime('now', '-1 hour')",
+            (referrer_id,)
+        ) as cur:
+            (recent_refs,) = await cur.fetchone()
+        if int(recent_refs or 0) >= 5:
+            violations.append("referral_velocity")
 
         if violations:
             score = _risk_score(violations)
+            # Flag the referee
             await _log_fraud_alert(
                 db, referee_id, referee_username,
                 alert_type=", ".join(violations),
-                details=f"Referral referrer={referrer_id}({referrer_ip}) referee={referee_id}({referee_ip})",
+                details=f"Referral fraud: referrer={referrer_id}({referrer_ip}) referee={referee_id}({referee_ip})",
+                score=score,
+            )
+            # Also flag the referrer so admin sees both sides
+            await db.execute(
+                "UPDATE users SET flagged = 1 WHERE telegram_id = ? AND flagged = 0",
+                (referrer_id,)
+            )
+            await _log_fraud_alert(
+                db, referrer_id, "",
+                alert_type="referral_fraud_referrer",
+                details=f"Referred a suspicious account {referee_id} — violations: {', '.join(violations)}",
                 score=score,
             )
             await db.commit()
@@ -1127,6 +1340,10 @@ async def api_user_referral(request: web.Request) -> web.Response:
 # ── API — Leaderboard ──────────────────────────────────────────────────────────
 
 async def api_leaderboard(request: web.Request) -> web.Response:
+    ip = _client_ip(request)
+    if _is_rate_limited(ip):
+        return web.json_response({"error": "Rate limit exceeded"}, status=429, headers=_CORS)
+
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute("""
             SELECT telegram_id, username, first_name, referral_count
@@ -1188,6 +1405,15 @@ async def api_deposit_record(request: web.Request) -> web.Response:
 # ── API — Create withdrawal request (called by frontend on submit) ─────────────
 
 async def api_withdrawal_create(request: web.Request) -> web.Response:
+    """Create a withdrawal request with full server-side validation.
+
+    Security model:
+    - Transaction ID is generated SERVER-SIDE (client ID is ignored)
+    - app_balance is checked and atomically reserved before confirming
+    - Duplicate / concurrent requests blocked by the atomic UPDATE
+    - Daily limit, pending cap, min tasks all validated against DB (not client state)
+    - initData signature verifies the caller's Telegram identity
+    """
     ip = _client_ip(request)
     if _is_rate_limited(ip):
         return web.json_response({"error": "Rate limit exceeded"}, status=429, headers=_CORS)
@@ -1197,55 +1423,142 @@ async def api_withdrawal_create(request: web.Request) -> web.Response:
     except Exception:
         return web.json_response({"error": "Invalid JSON"}, status=400, headers=_CORS)
 
-    tx_id       = str(data.get("id", "")).strip() or _short_id()
     telegram_id = _parse_telegram_id(data.get("telegramId"))
     amount      = _parse_amount(data.get("amount"))
-    currency    = str(data.get("currency", "TON"))
-    network     = str(data.get("network",  "TON"))
-    address     = ( data.get("address") or "").strip()
+    currency    = str(data.get("currency", "TON"))[:10]
+    network     = str(data.get("network",  "TON"))[:20]
+    address     = (data.get("address") or "").strip()[:128]
     fee         = _parse_amount(data.get("fee")) or 0.0
     init_data   = str(data.get("initData", "")).strip()
 
-    if not telegram_id or amount is None or len(address) < 20:
-        return web.json_response({"error": "Invalid data"}, status=400, headers=_CORS)
+    # ── Basic input validation ─────────────────────────────────────────────────
+    if not telegram_id or amount is None:
+        return web.json_response({"error": "Données manquantes"}, status=400, headers=_CORS)
+    if len(address) < 20:
+        return web.json_response({"error": "Adresse invalide (trop courte)"}, status=400, headers=_CORS)
+    if amount < WD_MIN_AMOUNT:
+        return web.json_response(
+            {"error": f"Montant minimum : {WD_MIN_AMOUNT} GRAM"}, status=400, headers=_CORS
+        )
+    if amount > WD_MAX_AMOUNT:
+        return web.json_response(
+            {"error": f"Montant maximum : {WD_MAX_AMOUNT} GRAM"}, status=400, headers=_CORS
+        )
 
-    # Authenticate: verify initData signature and confirm the caller is who they claim
-    if BOT_TOKEN:
-        if not init_data or not _validate_init_data(init_data, BOT_TOKEN):
-            return web.json_response({"error": "Authentication required"}, status=401, headers=_CORS)
-        authed_id = _init_data_user_id(init_data)
-        if authed_id != telegram_id:
-            log.warning("Withdrawal impersonation attempt: claimed=%d authed=%d addr=%s",
-                        telegram_id, authed_id, address[:12])
-            return web.json_response({"error": "Identity mismatch"}, status=403, headers=_CORS)
+    # ── Identity verification ─────────────────────────────────────────────────
+    if not _verify_user_request(init_data, telegram_id):
+        if BOT_TOKEN:
+            authed_id = _init_data_user_id(init_data)
+            if authed_id and authed_id != telegram_id:
+                log.warning("Withdrawal impersonation: claimed=%d authed=%d addr=%s",
+                            telegram_id, authed_id, address[:12])
+            return web.json_response({"error": "Authentification requise"}, status=401, headers=_CORS)
+
+    if _is_user_rate_limited(telegram_id, max_per_window=5):
+        return web.json_response({"error": "Too many withdrawal attempts"}, status=429, headers=_CORS)
 
     async with aiosqlite.connect(DB_PATH) as db:
+        # ── User status check ──────────────────────────────────────────────────
         async with db.execute(
-            "SELECT banned, withdrawal_blocked FROM users WHERE telegram_id = ?", (telegram_id,)
-        ) as cur:
-            row = await cur.fetchone()
-        if row:
-            if row[0]:
-                return web.json_response({"error": "Account banned"}, status=403, headers=_CORS)
-            if row[1]:
-                return web.json_response({"error": "Withdrawals blocked"}, status=403, headers=_CORS)
-
-        await db.execute("""
-            INSERT OR IGNORE INTO transactions
-                (id, telegram_id, type, amount, currency, network, address, status, fee)
-            VALUES (?, ?, 'withdrawal', ?, ?, ?, ?, 'pending', ?)
-        """, (tx_id, telegram_id, amount, currency, network, address, fee))
-        await db.commit()
-
-        # Fetch user info for the notification
-        async with db.execute(
-            "SELECT username, first_name, flagged FROM users WHERE telegram_id = ?", (telegram_id,)
+            "SELECT banned, withdrawal_blocked, app_balance, app_tasks_completed,"
+            "       username, first_name, flagged"
+            " FROM users WHERE telegram_id = ?",
+            (telegram_id,)
         ) as cur:
             urow = await cur.fetchone()
 
-    uname    = urow[0] if urow else ""
-    fname    = urow[1] if urow else ""
-    is_flagged = bool(urow[2]) if urow else False
+        if not urow:
+            return web.json_response({"error": "Utilisateur introuvable"}, status=404, headers=_CORS)
+
+        banned, wd_blocked, app_balance, tasks_done, uname, fname, is_flagged = urow
+        app_balance  = float(app_balance  or 0)
+        tasks_done   = int(tasks_done or 0)
+
+        if banned:
+            return web.json_response({"error": "Compte banni"}, status=403, headers=_CORS)
+        if wd_blocked:
+            return web.json_response({"error": "Retraits bloqués sur ce compte"}, status=403, headers=_CORS)
+
+        # ── Minimum tasks requirement ──────────────────────────────────────────
+        if tasks_done < WD_MIN_TASKS:
+            return web.json_response(
+                {"error": f"Complétez au moins {WD_MIN_TASKS} tâches avant de retirer "
+                          f"({tasks_done}/{WD_MIN_TASKS})"},
+                status=400, headers=_CORS
+            )
+
+        # ── Server-side balance check ──────────────────────────────────────────
+        if app_balance < amount:
+            return web.json_response(
+                {"error": f"Solde insuffisant ({app_balance:.4f} GRAM disponibles)"},
+                status=400, headers=_CORS
+            )
+
+        # ── Pending withdrawal cap (anti double-spend) ─────────────────────────
+        async with db.execute(
+            "SELECT COUNT(*), COALESCE(SUM(amount),0)"
+            " FROM transactions"
+            " WHERE telegram_id = ? AND type = 'withdrawal' AND status = 'pending'",
+            (telegram_id,)
+        ) as cur:
+            pending_count, pending_sum = await cur.fetchone()
+        if pending_count >= WD_MAX_PENDING:
+            return web.json_response(
+                {"error": f"Vous avez déjà {pending_count} retraits en attente. "
+                          f"Attendez qu'ils soient traités."},
+                status=400, headers=_CORS
+            )
+        # Ensure pending + new request does not exceed actual balance
+        if float(pending_sum or 0) + amount > app_balance:
+            return web.json_response(
+                {"error": "Solde insuffisant (retrait en attente pris en compte)"},
+                status=400, headers=_CORS
+            )
+
+        # ── Daily limit check ─────────────────────────────────────────────────
+        async with db.execute(
+            "SELECT COALESCE(SUM(amount),0)"
+            " FROM transactions"
+            " WHERE telegram_id = ? AND type = 'withdrawal'"
+            "   AND status != 'rejected'"
+            "   AND DATE(created_at) = DATE('now')",
+            (telegram_id,)
+        ) as cur:
+            (daily_total,) = await cur.fetchone()
+        if float(daily_total or 0) + amount > WD_DAILY_LIMIT:
+            remaining = max(0, WD_DAILY_LIMIT - float(daily_total or 0))
+            return web.json_response(
+                {"error": f"Limite journalière atteinte. Restant aujourd'hui : {remaining:.2f} GRAM"},
+                status=400, headers=_CORS
+            )
+
+        # ── Atomic balance reservation ─────────────────────────────────────────
+        # Only succeeds if app_balance is still sufficient (race-condition-safe).
+        upd = await db.execute(
+            "UPDATE users SET app_balance = app_balance - ?"
+            " WHERE telegram_id = ? AND COALESCE(app_balance, 0) >= ?",
+            (amount, telegram_id, amount)
+        )
+        if upd.rowcount == 0:
+            return web.json_response(
+                {"error": "Solde insuffisant (actualisé) — réessayez"},
+                status=400, headers=_CORS
+            )
+
+        # ── Insert withdrawal record with SERVER-GENERATED id ──────────────────
+        tx_id = str(uuid.uuid4())
+        await db.execute(
+            "INSERT INTO transactions"
+            " (id, telegram_id, type, amount, currency, network, address, status, fee)"
+            " VALUES (?, ?, 'withdrawal', ?, ?, ?, ?, 'pending', ?)",
+            (tx_id, telegram_id, amount, currency, network, address, fee)
+        )
+        await db.commit()
+
+    # Fetch user info for the notification
+    uname  = uname  or ""
+    fname  = fname  or ""
+    is_flagged = bool(is_flagged)
 
     flag_warn = "\n⚠️ <b>Compte signalé (anti-fraude)</b> — vérification recommandée." if is_flagged else ""
     from datetime import datetime as _dt
@@ -1277,15 +1590,29 @@ async def api_withdrawal_create(request: web.Request) -> web.Response:
 # ── API — Check channel membership ────────────────────────────────────────────
 
 async def api_task_depart(request: web.Request) -> web.Response:
-    """Record server-side that a user left to complete a task (anti-cheat timer)."""
+    """Record server-side that a user left to complete a task (anti-cheat timer).
+
+    Requires valid Telegram initData so the departure record can't be forged
+    for an arbitrary telegramId. Without auth, an attacker could pre-seed a
+    departure record and immediately call verify-timer to fake the elapsed time.
+    """
+    ip = _client_ip(request)
+    if _is_rate_limited(ip):
+        return web.json_response({"error": "Rate limit exceeded"}, status=429, headers=_CORS)
+
     try:
         data        = await request.json()
-        telegram_id = int(data.get("telegramId", 0))
-        task_id     = str(data.get("taskId", "")).strip()
+        telegram_id = _parse_telegram_id(data.get("telegramId"))
+        task_id     = str(data.get("taskId", "")).strip()[:64]
+        init_data   = str(data.get("initData", "")).strip()
     except Exception:
         return web.json_response({"error": "Invalid JSON"}, status=400, headers=_CORS)
+
     if not telegram_id or not task_id:
         return web.json_response({"error": "Missing fields"}, status=400, headers=_CORS)
+
+    if not _verify_user_request(init_data, telegram_id):
+        return web.json_response({"error": "Authentication required"}, status=401, headers=_CORS)
 
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute(
@@ -1302,13 +1629,21 @@ async def api_task_verify_timer(request: web.Request) -> web.Response:
     Returns {ok: True} if verified, {ok: False, remaining: <seconds>} if too early.
     Also deletes the departure record on success so it cannot be reused.
     """
+    ip = _client_ip(request)
+    if _is_rate_limited(ip):
+        return web.json_response({"ok": False, "remaining": 30}, headers=_CORS)
+
     try:
-        telegram_id = int(request.rel_url.query.get("telegramId", 0))
-        task_id     = request.rel_url.query.get("taskId", "").strip()
-        required_s  = int(request.rel_url.query.get("requiredSeconds", 30))
+        telegram_id = _parse_telegram_id(request.rel_url.query.get("telegramId", 0))
+        task_id     = request.rel_url.query.get("taskId", "").strip()[:64]
+        required_s  = max(1, min(300, int(request.rel_url.query.get("requiredSeconds", 30))))
+        init_data   = request.rel_url.query.get("initData", "").strip()
     except Exception:
         return web.json_response({"ok": False, "remaining": 30}, headers=_CORS)
     if not telegram_id or not task_id:
+        return web.json_response({"ok": False, "remaining": 30}, headers=_CORS)
+
+    if not _verify_user_request(init_data, telegram_id):
         return web.json_response({"ok": False, "remaining": 30}, headers=_CORS)
 
     async with aiosqlite.connect(DB_PATH) as db:
@@ -1340,15 +1675,21 @@ async def api_task_verify_timer(request: web.Request) -> web.Response:
 
 
 async def api_check_membership(request: web.Request) -> web.Response:
-    """Return {member: bool} — whether user is in a given Telegram channel/group.
-    Query params:
-      telegram_id : user's Telegram ID
-      chat_id     : channel/group @username or numeric ID (defaults to OFFICIAL_CHANNEL)
-    """
+    """Return {member: bool} — whether user is in a given Telegram channel/group."""
+    ip = _client_ip(request)
+    if _is_rate_limited(ip):
+        return web.json_response({"member": True}, headers=_CORS)
     try:
         telegram_id = int(request.rel_url.query.get("telegram_id", 0))
     except (ValueError, TypeError):
         return web.json_response({"member": True}, headers=_CORS)
+
+    init_data = request.headers.get("X-Init-Data", "")
+    if BOT_TOKEN:
+        if not init_data or not _validate_init_data(init_data, BOT_TOKEN):
+            return web.json_response({"error": "Authentication required"}, status=401, headers=_CORS)
+        if telegram_id and _init_data_user_id(init_data) != telegram_id:
+            return web.json_response({"error": "Forbidden"}, status=403, headers=_CORS)
 
     chat_id = request.rel_url.query.get("chat_id", "").strip() or OFFICIAL_CHANNEL
 
@@ -1374,12 +1715,23 @@ async def api_check_membership(request: web.Request) -> web.Response:
 
 async def api_check_bot_start(request: web.Request) -> web.Response:
     """Return {started: bool} — whether the user has sent /start to the bot."""
+    ip = _client_ip(request)
+    if _is_rate_limited(ip):
+        return web.json_response({"started": False}, headers=_CORS)
     try:
         telegram_id = int(request.rel_url.query.get("telegram_id", 0))
     except (ValueError, TypeError):
         return web.json_response({"started": False}, headers=_CORS)
     if not telegram_id:
         return web.json_response({"started": False}, headers=_CORS)
+
+    init_data = request.headers.get("X-Init-Data", "")
+    if BOT_TOKEN:
+        if not init_data or not _validate_init_data(init_data, BOT_TOKEN):
+            return web.json_response({"error": "Authentication required"}, status=401, headers=_CORS)
+        if _init_data_user_id(init_data) != telegram_id:
+            return web.json_response({"error": "Forbidden"}, status=403, headers=_CORS)
+
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(
             "SELECT bot_started FROM users WHERE telegram_id = ?", (telegram_id,)
@@ -1394,6 +1746,10 @@ async def api_check_bot_start(request: web.Request) -> web.Response:
 async def api_user_withdrawal_status(request: web.Request) -> web.Response:
     """Return status of the caller's withdrawal transactions so the frontend can
     detect rejections and restore the locally-deducted balance."""
+    ip = _client_ip(request)
+    if _is_rate_limited(ip):
+        return web.json_response([], headers=_CORS)
+
     try:
         telegram_id = int(request.rel_url.query.get("telegram_id", 0))
     except (ValueError, TypeError):
@@ -1401,13 +1757,13 @@ async def api_user_withdrawal_status(request: web.Request) -> web.Response:
     if not telegram_id:
         return web.json_response([], headers=_CORS)
 
-    # Verify the request comes from the same user via initData
+    # Require authenticated initData so financial history is user-private
     init_data = request.headers.get("X-Init-Data", "")
-    if BOT_TOKEN and init_data and not _validate_init_data(init_data, BOT_TOKEN):
-        return web.json_response({"error": "Forbidden"}, status=403, headers=_CORS)
-    caller_id = _init_data_user_id(init_data) if init_data else 0
-    if caller_id and caller_id != telegram_id:
-        return web.json_response({"error": "Forbidden"}, status=403, headers=_CORS)
+    if BOT_TOKEN:
+        if not init_data or not _validate_init_data(init_data, BOT_TOKEN):
+            return web.json_response({"error": "Authentication required"}, status=401, headers=_CORS)
+        if _init_data_user_id(init_data) != telegram_id:
+            return web.json_response({"error": "Forbidden"}, status=403, headers=_CORS)
 
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute("""
@@ -1438,6 +1794,10 @@ async def api_user_withdrawal_status(request: web.Request) -> web.Response:
 async def api_user_transactions(request: web.Request) -> web.Response:
     """Return the caller's deposits and withdrawals so the wallet history
     survives app reloads (the frontend transaction list is in-memory)."""
+    ip = _client_ip(request)
+    if _is_rate_limited(ip):
+        return web.json_response([], headers=_CORS)
+
     try:
         telegram_id = int(request.rel_url.query.get("telegram_id", 0))
     except (ValueError, TypeError):
@@ -1445,13 +1805,13 @@ async def api_user_transactions(request: web.Request) -> web.Response:
     if not telegram_id:
         return web.json_response([], headers=_CORS)
 
-    # Verify the request comes from the same user via initData
+    # Require authenticated initData so financial history is user-private
     init_data = request.headers.get("X-Init-Data", "")
-    if BOT_TOKEN and init_data and not _validate_init_data(init_data, BOT_TOKEN):
-        return web.json_response({"error": "Forbidden"}, status=403, headers=_CORS)
-    caller_id = _init_data_user_id(init_data) if init_data else 0
-    if caller_id and caller_id != telegram_id:
-        return web.json_response({"error": "Forbidden"}, status=403, headers=_CORS)
+    if BOT_TOKEN:
+        if not init_data or not _validate_init_data(init_data, BOT_TOKEN):
+            return web.json_response({"error": "Authentication required"}, status=401, headers=_CORS)
+        if _init_data_user_id(init_data) != telegram_id:
+            return web.json_response({"error": "Forbidden"}, status=403, headers=_CORS)
 
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute("""
@@ -1499,17 +1859,6 @@ async def api_user_balance_set(request: web.Request) -> web.Response:
     if not _verify_user_request(init_data, telegram_id):
         return web.json_response({"error": "Authentication required"}, status=401, headers=_CORS)
 
-    def _nonneg(key: str) -> float | None:
-        try:
-            value = float(data.get(key, 0))
-        except (TypeError, ValueError):
-            return None
-        return value if math.isfinite(value) and 0 <= value <= 1e9 else None
-
-    balance = _nonneg("balance")
-    total   = _nonneg("totalEarnings")
-    if balance is None:
-        return web.json_response({"error": "Invalid balance"}, status=400, headers=_CORS)
     try:
         tasks_done = max(0, min(10_000_000, int(data.get("tasksCompleted", 0))))
     except (TypeError, ValueError):
@@ -1519,13 +1868,14 @@ async def api_user_balance_set(request: web.Request) -> web.Response:
     completed_tasks = [str(t)[:64] for t in raw_completed[:300]] if isinstance(raw_completed, list) else []
 
     async with aiosqlite.connect(DB_PATH) as db:
+        # Only sync task metadata — app_balance is managed server-side exclusively
+        # (tasks, deposits, game results, withdrawals all go through validated endpoints).
+        # Accepting a client-supplied balance here would allow localStorage manipulation attacks.
         await db.execute(
             """UPDATE users
-               SET app_balance = ?, app_total_earnings = ?, app_tasks_completed = ?,
-                   app_completed_tasks = ?
+               SET app_tasks_completed = ?, app_completed_tasks = ?
                WHERE telegram_id = ?""",
-            (balance, total if total is not None else 0.0, tasks_done,
-             json.dumps(completed_tasks), telegram_id),
+            (tasks_done, json.dumps(completed_tasks), telegram_id),
         )
         await db.commit()
 
@@ -1923,6 +2273,7 @@ _PUBLIC_CONFIG_KEYS = {
     "maintenanceMode", "maintenanceMessage", "registrationEnabled",
     "referralBonusSignup", "referralBonusActivity", "referralBonusDeposit",
     "referralBonusDepositPercent", "referralLevels", "referralCodeLength",
+    "referralMilestones",
     "streakBonusPerDay", "bonusTaskMultiplier",
     "depositBonusPercent", "firstDepositBonus",
     "botUsername", "appShortName",
@@ -2255,6 +2606,7 @@ async def api_user_task_create(request: web.Request) -> web.Response:
         return web.json_response({"error": "Invalid JSON"}, status=400, headers=_CORS)
 
     creator_id      = _parse_telegram_id(data.get("telegramId"))
+    init_data       = str(data.get("initData", ""))
     task_type       = str(data.get("type", "")).strip()
     title           = (data.get("title")       or "").strip()[:200]
     description     = (data.get("description") or "").strip()[:500]
@@ -2268,6 +2620,9 @@ async def api_user_task_create(request: web.Request) -> web.Response:
 
     if not creator_id or not task_type or not title or not target_url:
         return web.json_response({"error": "Missing required fields"}, status=400, headers=_CORS)
+
+    if not _verify_user_request(init_data, creator_id):
+        return web.json_response({"error": "Unauthorized"}, status=401, headers=_CORS)
     if task_type not in ("join_channel", "join_group", "start_bot", "watch_video", "social"):
         return web.json_response({"error": "Invalid task type"}, status=400, headers=_CORS)
     if reward is None or total_budget is None:
@@ -2308,12 +2663,23 @@ async def api_user_task_create(request: web.Request) -> web.Response:
 
 
 async def api_user_task_mine(request: web.Request) -> web.Response:
+    ip = _client_ip(request)
+    if _is_rate_limited(ip):
+        return web.json_response([], headers=_CORS)
+
     try:
         telegram_id = int(request.rel_url.query.get("telegram_id", 0))
     except (ValueError, TypeError):
         return web.json_response([], headers=_CORS)
     if not telegram_id:
         return web.json_response([], headers=_CORS)
+
+    init_data = request.headers.get("X-Init-Data", "")
+    if BOT_TOKEN:
+        if not init_data or not _validate_init_data(init_data, BOT_TOKEN):
+            return web.json_response({"error": "Authentication required"}, status=401, headers=_CORS)
+        if _init_data_user_id(init_data) != telegram_id:
+            return web.json_response({"error": "Forbidden"}, status=403, headers=_CORS)
 
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute("""
@@ -2343,6 +2709,10 @@ async def api_user_task_mine(request: web.Request) -> web.Response:
 
 
 async def api_user_task_available(request: web.Request) -> web.Response:
+    ip = _client_ip(request)
+    if _is_rate_limited(ip):
+        return web.json_response([], headers=_CORS)
+
     try:
         telegram_id = int(request.rel_url.query.get("telegram_id", 0))
     except (ValueError, TypeError):
@@ -2395,6 +2765,10 @@ async def api_user_task_complete(request: web.Request) -> web.Response:
         return web.json_response({"error": "Invalid telegramId"}, status=400, headers=_CORS)
     if not telegram_id:
         return web.json_response({"error": "Missing telegramId"}, status=400, headers=_CORS)
+
+    init_data = str(data.get("initData", ""))
+    if not _verify_user_request(init_data, telegram_id):
+        return web.json_response({"error": "Unauthorized"}, status=401, headers=_CORS)
 
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(
@@ -2484,6 +2858,9 @@ async def api_user_task_complete(request: web.Request) -> web.Response:
 
 async def api_check_bot_verify(request: web.Request) -> web.Response:
     """Return whether user confirmed via bot deep-link for a start_bot task."""
+    ip = _client_ip(request)
+    if _is_rate_limited(ip):
+        return web.json_response({"verified": False}, headers=_CORS)
     try:
         telegram_id = int(request.rel_url.query.get("telegramId", 0))
         task_id     = request.rel_url.query.get("taskId", "")
@@ -2491,6 +2868,13 @@ async def api_check_bot_verify(request: web.Request) -> web.Response:
         return web.json_response({"error": "Bad params"}, status=400, headers=_CORS)
     if not telegram_id or not task_id:
         return web.json_response({"verified": False}, headers=_CORS)
+
+    init_data = request.headers.get("X-Init-Data", "")
+    if BOT_TOKEN:
+        if not init_data or not _validate_init_data(init_data, BOT_TOKEN):
+            return web.json_response({"error": "Authentication required"}, status=401, headers=_CORS)
+        if _init_data_user_id(init_data) != telegram_id:
+            return web.json_response({"error": "Forbidden"}, status=403, headers=_CORS)
 
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(
@@ -2502,26 +2886,40 @@ async def api_check_bot_verify(request: web.Request) -> web.Response:
     return web.json_response({"verified": row is not None}, headers=_CORS)
 
 
+_PROOF_MAX_BYTES = 5 * 1024 * 1024  # 5 MB
+
 async def api_submit_proof_miniapp(request: web.Request) -> web.Response:
     """Accept a proof screenshot uploaded directly from the mini-app."""
+    ip = _client_ip(request)
+    if _is_rate_limited(ip):
+        return web.json_response({"error": "Rate limit exceeded"}, status=429, headers=_CORS)
+
     from aiogram.types import BufferedInputFile
     try:
         reader = await request.multipart()
         telegram_id: int | None = None
         task_id: str | None = None
         file_bytes: bytes | None = None
+        init_data: str = ""
         async for field in reader:
             if field.name == "telegramId":
-                telegram_id = int(await field.read())
+                telegram_id = int(await field.read(64))
             elif field.name == "taskId":
-                task_id = (await field.read()).decode("utf-8")
+                task_id = (await field.read(128)).decode("utf-8")
+            elif field.name == "initData":
+                init_data = (await field.read(4096)).decode("utf-8")
             elif field.name == "file":
-                file_bytes = await field.read()
+                file_bytes = await field.read(_PROOF_MAX_BYTES)
+                if len(file_bytes) >= _PROOF_MAX_BYTES:
+                    return web.json_response({"error": "File too large (max 5 MB)"}, status=413, headers=_CORS)
     except Exception:
         return web.json_response({"error": "Invalid request"}, status=400, headers=_CORS)
 
     if not telegram_id or not task_id or not file_bytes:
         return web.json_response({"error": "Missing fields"}, status=400, headers=_CORS)
+
+    if not _verify_user_request(init_data, telegram_id):
+        return web.json_response({"error": "Unauthorized"}, status=401, headers=_CORS)
 
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(
@@ -2580,6 +2978,9 @@ async def api_submit_proof_miniapp(request: web.Request) -> web.Response:
 
 async def api_check_social_proof(request: web.Request) -> web.Response:
     """Return approval status for a submitted social proof screenshot."""
+    ip = _client_ip(request)
+    if _is_rate_limited(ip):
+        return web.json_response({"status": "none"}, headers=_CORS)
     try:
         telegram_id = int(request.rel_url.query.get("telegramId", 0))
         task_id     = request.rel_url.query.get("taskId", "")
@@ -2587,6 +2988,13 @@ async def api_check_social_proof(request: web.Request) -> web.Response:
         return web.json_response({"error": "Bad params"}, status=400, headers=_CORS)
     if not telegram_id or not task_id:
         return web.json_response({"status": "none"}, headers=_CORS)
+
+    init_data = request.headers.get("X-Init-Data", "")
+    if BOT_TOKEN:
+        if not init_data or not _validate_init_data(init_data, BOT_TOKEN):
+            return web.json_response({"error": "Authentication required"}, status=401, headers=_CORS)
+        if _init_data_user_id(init_data) != telegram_id:
+            return web.json_response({"error": "Forbidden"}, status=403, headers=_CORS)
 
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(
@@ -2654,6 +3062,10 @@ async def _verify_task_completion(task_id: str, telegram_id: int) -> bool | None
 
 
 async def api_user_task_pause(request: web.Request) -> web.Response:
+    ip = _client_ip(request)
+    if _is_rate_limited(ip):
+        return web.json_response({"error": "Rate limit exceeded"}, status=429, headers=_CORS)
+
     task_id = request.match_info.get("id")
     try:
         data = await request.json()
@@ -2666,6 +3078,10 @@ async def api_user_task_pause(request: web.Request) -> web.Response:
         return web.json_response({"error": "Invalid telegramId"}, status=400, headers=_CORS)
     if not telegram_id:
         return web.json_response({"error": "Missing telegramId"}, status=400, headers=_CORS)
+
+    init_data = str(data.get("initData", ""))
+    if not _verify_user_request(init_data, telegram_id):
+        return web.json_response({"error": "Unauthorized"}, status=401, headers=_CORS)
 
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(
@@ -2689,6 +3105,10 @@ async def api_user_task_pause(request: web.Request) -> web.Response:
 
 
 async def api_user_task_delete(request: web.Request) -> web.Response:
+    ip = _client_ip(request)
+    if _is_rate_limited(ip):
+        return web.json_response({"error": "Rate limit exceeded"}, status=429, headers=_CORS)
+
     task_id = request.match_info.get("id")
     try:
         data = await request.json()
@@ -2701,6 +3121,10 @@ async def api_user_task_delete(request: web.Request) -> web.Response:
         return web.json_response({"error": "Invalid telegramId"}, status=400, headers=_CORS)
     if not telegram_id:
         return web.json_response({"error": "Missing telegramId"}, status=400, headers=_CORS)
+
+    init_data = str(data.get("initData", ""))
+    if not _verify_user_request(init_data, telegram_id):
+        return web.json_response({"error": "Unauthorized"}, status=401, headers=_CORS)
 
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(
@@ -2726,6 +3150,10 @@ async def api_user_task_delete(request: web.Request) -> web.Response:
 
 
 async def api_user_task_fund(request: web.Request) -> web.Response:
+    ip = _client_ip(request)
+    if _is_rate_limited(ip):
+        return web.json_response({"error": "Rate limit exceeded"}, status=429, headers=_CORS)
+
     task_id = request.match_info.get("id")
     try:
         data = await request.json()
@@ -2738,6 +3166,11 @@ async def api_user_task_fund(request: web.Request) -> web.Response:
         return web.json_response({"error": "Invalid telegramId"}, status=400, headers=_CORS)
     if not telegram_id:
         return web.json_response({"error": "Missing telegramId"}, status=400, headers=_CORS)
+
+    init_data = str(data.get("initData", ""))
+    if not _verify_user_request(init_data, telegram_id):
+        return web.json_response({"error": "Unauthorized"}, status=401, headers=_CORS)
+
     try:
         extra_executions = int(data.get("extraExecutions", 0))
     except (TypeError, ValueError):
@@ -2917,12 +3350,23 @@ async def api_admin_reject_user_task(request: web.Request) -> web.Response:
 
 async def api_pending_proofs(request: web.Request) -> web.Response:
     """Pending social proofs for tasks created by a given user."""
+    ip = _client_ip(request)
+    if _is_rate_limited(ip):
+        return web.json_response([], headers=_CORS)
+
     try:
         telegram_id = int(request.rel_url.query.get("telegramId", 0))
     except (ValueError, TypeError):
         return web.json_response([], headers=_CORS)
     if not telegram_id:
         return web.json_response([], headers=_CORS)
+
+    init_data = request.headers.get("X-Init-Data", "")
+    if BOT_TOKEN:
+        if not init_data or not _validate_init_data(init_data, BOT_TOKEN):
+            return web.json_response({"error": "Authentication required"}, status=401, headers=_CORS)
+        if _init_data_user_id(init_data) != telegram_id:
+            return web.json_response({"error": "Forbidden"}, status=403, headers=_CORS)
 
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(
@@ -2960,13 +3404,21 @@ async def api_pending_proofs(request: web.Request) -> web.Response:
 
 async def api_review_proof(request: web.Request) -> web.Response:
     """Creator approves or rejects a pending social proof."""
+    ip = _client_ip(request)
+    if _is_rate_limited(ip):
+        return web.json_response({"error": "Rate limit exceeded"}, status=429, headers=_CORS)
+
     proof_id = request.match_info.get("id", "")
     try:
         data        = await request.json()
         telegram_id = int(data.get("telegramId", 0))
         action      = data.get("action", "")
+        init_data   = str(data.get("initData", ""))
     except Exception:
         return web.json_response({"error": "Invalid JSON"}, status=400, headers=_CORS)
+
+    if not _verify_user_request(init_data, telegram_id):
+        return web.json_response({"error": "Unauthorized"}, status=401, headers=_CORS)
 
     if action not in ("approve", "reject"):
         return web.json_response({"error": "Invalid action"}, status=400, headers=_CORS)
@@ -3019,6 +3471,15 @@ async def api_proof_image(request: web.Request) -> web.Response:
     except (ValueError, TypeError):
         return web.Response(status=400)
 
+    # Accept initData from header only — the frontend uses JS fetch so the
+    # credential never appears in the URL (logs, referrer headers, browser history).
+    init_data = request.headers.get("X-Init-Data", "")
+    if BOT_TOKEN:
+        if not init_data or not _validate_init_data(init_data, BOT_TOKEN):
+            return web.Response(status=401, headers=_CORS)
+        if _init_data_user_id(init_data) != telegram_id:
+            return web.Response(status=403, headers=_CORS)
+
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(
             """
@@ -3051,12 +3512,20 @@ async def api_proof_image(request: web.Request) -> web.Response:
 
 async def api_report_proof_abuse(request: web.Request) -> web.Response:
     """Worker reports that a task creator is abusively rejecting proofs."""
+    ip = _client_ip(request)
+    if _is_rate_limited(ip):
+        return web.json_response({"error": "Rate limit exceeded"}, status=429, headers=_CORS)
+
     try:
         data        = await request.json()
         telegram_id = int(data.get("telegramId", 0))
         task_id     = data.get("taskId", "")
+        init_data   = str(data.get("initData", ""))
     except Exception:
         return web.json_response({"error": "Invalid JSON"}, status=400, headers=_CORS)
+
+    if not _verify_user_request(init_data, telegram_id):
+        return web.json_response({"error": "Unauthorized"}, status=401, headers=_CORS)
 
     if not telegram_id or not task_id:
         return web.json_response({"error": "Missing fields"}, status=400, headers=_CORS)
@@ -3127,8 +3596,14 @@ async def serve_app(request: web.Request) -> web.Response:
             content = f.read()
         return web.Response(
             body=content, content_type="text/html",
-            headers={"Cache-Control": "no-cache, no-store, must-revalidate",
-                     "Pragma": "no-cache", "Expires": "0"},
+            headers={
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache",
+                "Expires": "0",
+                "X-Content-Type-Options": "nosniff",
+                "Referrer-Policy": "no-referrer",
+                "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+            },
         )
     return web.Response(text="Building… please wait.", status=503)
 
@@ -3149,9 +3624,10 @@ async def serve_manifest(request: web.Request) -> web.Response:
 
 async def serve_image(request: web.Request) -> web.Response:
     filename = request.match_info["filename"]
-    if ".." in filename or filename.startswith("/"):
+    base_dir = os.path.realpath(os.path.join(DIST, "images"))
+    path     = os.path.realpath(os.path.join(base_dir, filename))
+    if not path.startswith(base_dir + os.sep) and path != base_dir:
         return web.Response(status=400)
-    path = os.path.join(DIST, "images", filename)
     if not os.path.isfile(path):
         return web.Response(status=404)
     ext = os.path.splitext(filename)[1].lower()
@@ -3201,6 +3677,10 @@ async def _fetch_ton_price_usd() -> float | None:
 
 async def api_ton_price(request: web.Request) -> web.Response:
     """Return current TON/USD price for the frontend."""
+    ip = _client_ip(request)
+    if _is_rate_limited(ip):
+        return web.json_response({"error": "Rate limit exceeded"}, status=429, headers=_CORS)
+
     price = await _fetch_ton_price_usd()
     if price:
         return web.json_response({"price": price}, headers=_CORS)
@@ -3210,6 +3690,10 @@ async def api_ton_price(request: web.Request) -> web.Response:
 async def api_usdt_deposit_register(request: web.Request) -> web.Response:
     """Frontend calls this when a user declares they sent USDT — store the hint
     so the on-chain monitor knows what to look for."""
+    ip = _client_ip(request)
+    if _is_rate_limited(ip):
+        return web.json_response({"error": "Rate limit exceeded"}, status=429, headers=_CORS)
+
     try:
         data = await request.json()
     except Exception:
@@ -3223,13 +3707,9 @@ async def api_usdt_deposit_register(request: web.Request) -> web.Response:
     if not telegram_id or amount is None:
         return web.json_response({"error": "Invalid data"}, status=400, headers=_CORS)
 
-    # Light auth: if initData is provided, verify it matches
     init_data = str(data.get("initData", "")).strip()
-    if BOT_TOKEN and init_data:
-        if not _validate_init_data(init_data, BOT_TOKEN):
-            return web.json_response({"error": "Auth failed"}, status=401, headers=_CORS)
-        if _init_data_user_id(init_data) != telegram_id:
-            return web.json_response({"error": "Identity mismatch"}, status=403, headers=_CORS)
+    if not _verify_user_request(init_data, telegram_id):
+        return web.json_response({"error": "Authentication required"}, status=401, headers=_CORS)
 
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("""
@@ -3380,10 +3860,539 @@ async def _monitor_usdt_jetton() -> None:
         await asyncio.sleep(120)  # check every 2 minutes
 
 
+# ── API — Platform task: secure server-side completion ───────────────────────
+
+async def api_platform_task_complete(request: web.Request) -> web.Response:
+    """Verify and credit a built-in platform task completion.
+
+    The server is authoritative for:
+    - Task existence and reward amount (from PLATFORM_TASKS — not client-supplied)
+    - Anti-dedup (one-time tasks: INSERT check; daily tasks: cooldown window)
+    - Type-specific verification (channel membership, bot start, timer elapsed, referral count)
+    - Balance credit (app_balance column in users table)
+
+    The frontend calls this instead of the old client-only completeTask() action.
+    """
+    ip = _client_ip(request)
+    if _is_rate_limited(ip):
+        return web.json_response({"error": "Rate limit exceeded"}, status=429, headers=_CORS)
+
+    try:
+        data = await request.json()
+    except Exception:
+        return web.json_response({"error": "Invalid JSON"}, status=400, headers=_CORS)
+
+    telegram_id = _parse_telegram_id(data.get("telegramId"))
+    if not telegram_id:
+        return web.json_response({"error": "Missing telegramId"}, status=400, headers=_CORS)
+
+    task_id = str(data.get("taskId", "")).strip()
+    if not task_id:
+        return web.json_response({"error": "Missing taskId"}, status=400, headers=_CORS)
+
+    init_data = str(data.get("initData", ""))
+    if not _verify_user_request(init_data, telegram_id):
+        return web.json_response({"error": "Unauthorized"}, status=401, headers=_CORS)
+
+    if _is_user_rate_limited(telegram_id):
+        return web.json_response({"error": "Rate limit exceeded"}, status=429, headers=_CORS)
+
+    task_cfg = PLATFORM_TASKS.get(task_id)
+    if not task_cfg:
+        return web.json_response({"error": "Unknown platform task"}, status=404, headers=_CORS)
+
+    verification   = task_cfg["verification"]
+    max_per_user   = task_cfg.get("max_per_user", 1)
+    cooldown_hours = float(task_cfg.get("cooldown_hours", 0))
+    reward         = float(task_cfg["reward"])
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        # Verify user exists and is active
+        async with db.execute(
+            "SELECT banned FROM users WHERE telegram_id = ?", (telegram_id,)
+        ) as cur:
+            u = await cur.fetchone()
+        if not u:
+            return web.json_response({"error": "User not found"}, status=404, headers=_CORS)
+        if u[0]:
+            return web.json_response({"error": "Account suspended"}, status=403, headers=_CORS)
+
+        # ── Dedup / cooldown ───────────────────────────────────────────────────
+        if cooldown_hours > 0:
+            # Daily-style: check last completion within cooldown window
+            async with db.execute(
+                "SELECT (julianday('now') - julianday(completed_at)) * 24.0"
+                " FROM platform_task_completions"
+                " WHERE telegram_id = ? AND task_id = ?"
+                " ORDER BY completed_at DESC LIMIT 1",
+                (telegram_id, task_id)
+            ) as cur:
+                last = await cur.fetchone()
+            if last and last[0] < cooldown_hours:
+                remaining_min = int((cooldown_hours - last[0]) * 60)
+                return web.json_response(
+                    {"error": f"Cooldown active. Try again in {remaining_min} minutes."},
+                    status=400, headers=_CORS
+                )
+        elif max_per_user == 1:
+            # One-time task: any previous completion blocks retry
+            async with db.execute(
+                "SELECT 1 FROM platform_task_completions"
+                " WHERE telegram_id = ? AND task_id = ? LIMIT 1",
+                (telegram_id, task_id)
+            ) as cur:
+                if await cur.fetchone():
+                    return web.json_response({"error": "Already completed"}, status=400, headers=_CORS)
+
+        # ── Type-specific verification ─────────────────────────────────────────
+        if verification == "channel":
+            target = task_cfg.get("target")
+            if target and bot:
+                is_member = await _is_chat_member(target, telegram_id)
+                if is_member is False:
+                    return web.json_response(
+                        {"error": "Not a member of the required channel. Please join and retry."},
+                        status=403, headers=_CORS
+                    )
+
+        elif verification == "bot":
+            async with db.execute(
+                "SELECT bot_started FROM users WHERE telegram_id = ?", (telegram_id,)
+            ) as cur:
+                brow = await cur.fetchone()
+            async with db.execute(
+                "SELECT 1 FROM bot_verifications WHERE telegram_id = ? LIMIT 1", (telegram_id,)
+            ) as cur:
+                bv = await cur.fetchone()
+            if not ((brow and brow[0]) or bv):
+                return web.json_response(
+                    {"error": "Please start the bot first (click Start in Telegram)."},
+                    status=403, headers=_CORS
+                )
+
+        elif verification == "timer":
+            min_s = int(task_cfg.get("min_seconds", 30))
+            async with db.execute(
+                "SELECT (julianday('now') - julianday(departed_at)) * 86400.0"
+                " FROM task_departures WHERE telegram_id = ? AND task_id = ?",
+                (telegram_id, task_id)
+            ) as cur:
+                dep = await cur.fetchone()
+            if dep is None:
+                return web.json_response(
+                    {"error": "No departure recorded. Please start the task first."},
+                    status=400, headers=_CORS
+                )
+            elapsed_s = dep[0]
+            if elapsed_s < min_s:
+                remaining = max(1, int(min_s - elapsed_s))
+                return web.json_response(
+                    {"error": f"Too early. Wait {remaining} more seconds."},
+                    status=400, headers=_CORS
+                )
+            # Consume the departure record so it cannot be reused for another attempt
+            await db.execute(
+                "DELETE FROM task_departures WHERE telegram_id = ? AND task_id = ?",
+                (telegram_id, task_id)
+            )
+
+        elif verification == "referral":
+            required = int(task_cfg.get("required_referrals", 3))
+            async with db.execute(
+                "SELECT referral_count FROM users WHERE telegram_id = ?", (telegram_id,)
+            ) as cur:
+                rrow = await cur.fetchone()
+            count = rrow[0] if rrow else 0
+            if count < required:
+                return web.json_response(
+                    {"error": f"Need {required} referrals. You have {count}."},
+                    status=400, headers=_CORS
+                )
+
+        elif verification == "proof":
+            async with db.execute(
+                "SELECT 1 FROM social_proofs"
+                " WHERE telegram_id = ? AND task_id = ? AND status = 'approved' LIMIT 1",
+                (telegram_id, task_id)
+            ) as cur:
+                proof = await cur.fetchone()
+            if not proof:
+                return web.json_response(
+                    {"error": "Proof not yet approved by the team."},
+                    status=403, headers=_CORS
+                )
+
+        # ── Record completion + credit balance + transaction log ───────────────
+        await db.execute(
+            "INSERT INTO platform_task_completions (telegram_id, task_id, earned)"
+            " VALUES (?, ?, ?)",
+            (telegram_id, task_id, reward)
+        )
+        await db.execute(
+            "UPDATE users SET app_balance = COALESCE(app_balance, 0) + ? WHERE telegram_id = ?",
+            (reward, telegram_id)
+        )
+        await db.execute(
+            "INSERT INTO transactions"
+            " (id, telegram_id, type, amount, currency, network, address, status)"
+            " VALUES (?, ?, 'reward', ?, 'GRAM', 'platform', '', 'completed')",
+            (str(uuid.uuid4()), telegram_id, reward)
+        )
+        await db.commit()
+
+    return web.json_response({"success": True, "earned": reward}, headers=_CORS)
+
+
+async def api_platform_tasks_completed(request: web.Request) -> web.Response:
+    """Return list of completed platform task IDs for a user.
+    Fetched on app init so server-side completions override a cleared localStorage.
+    """
+    ip = _client_ip(request)
+    if _is_rate_limited(ip):
+        return web.json_response([], headers=_CORS)
+
+    try:
+        telegram_id = _parse_telegram_id(request.rel_url.query.get("telegram_id", 0))
+    except Exception:
+        return web.json_response([], headers=_CORS)
+    if not telegram_id:
+        return web.json_response([], headers=_CORS)
+
+    init_data = request.headers.get("X-Init-Data", "")
+    if BOT_TOKEN:
+        if not init_data or not _validate_init_data(init_data, BOT_TOKEN):
+            return web.json_response({"error": "Authentication required"}, status=401, headers=_CORS)
+        if _init_data_user_id(init_data) != telegram_id:
+            return web.json_response({"error": "Forbidden"}, status=403, headers=_CORS)
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT DISTINCT task_id FROM platform_task_completions WHERE telegram_id = ?",
+            (telegram_id,)
+        ) as cur:
+            task_ids = [row[0] async for row in cur]
+
+    return web.json_response(task_ids, headers=_CORS)
+
+
+# ── API — Game result (server-side win validation) ────────────────────────────
+
+async def api_game_result(request: web.Request) -> web.Response:
+    """Record a completed game round and credit/debit app_balance.
+
+    Security model:
+    - initData signature verifies the Telegram identity
+    - Win is capped at bet × GAME_CONFIG[game]['max_multiplier']
+    - Per-user daily win total is enforced (GAME_DAILY_WIN_LIMIT)
+    - Rate-limited per IP like all other sensitive endpoints
+    - app_balance is updated atomically; losses are subtracted
+    """
+    ip = _client_ip(request)
+    if _is_rate_limited(ip):
+        return web.json_response({"error": "Rate limit exceeded"}, status=429, headers=_CORS)
+
+    try:
+        data = await request.json()
+    except Exception:
+        return web.json_response({"error": "Invalid JSON"}, status=400, headers=_CORS)
+
+    telegram_id = _parse_telegram_id(data.get("telegramId"))
+    init_data   = str(data.get("initData", "")).strip()
+    game        = str(data.get("game", "")).strip()[:32]
+    bet         = _parse_amount(data.get("bet"))
+    win         = _parse_amount(data.get("win"))
+
+    if not telegram_id or bet is None or win is None:
+        return web.json_response({"error": "Données manquantes"}, status=400, headers=_CORS)
+
+    if not _verify_user_request(init_data, telegram_id):
+        return web.json_response({"error": "Authentification requise"}, status=401, headers=_CORS)
+
+    if _is_user_rate_limited(telegram_id):
+        return web.json_response({"error": "Rate limit exceeded"}, status=429, headers=_CORS)
+
+    # Validate game name
+    game_cfg = GAME_CONFIG.get(game)
+    if not game_cfg:
+        return web.json_response({"error": f"Jeu inconnu : {game}"}, status=400, headers=_CORS)
+
+    # Validate bet
+    if bet < GAME_MIN_BET:
+        return web.json_response({"error": f"Mise minimale : {GAME_MIN_BET} GRAM"}, status=400, headers=_CORS)
+    if bet > game_cfg['max_bet']:
+        return web.json_response(
+            {"error": f"Mise maximale pour {game} : {game_cfg['max_bet']} GRAM"},
+            status=400, headers=_CORS
+        )
+
+    # Cap win at max multiplier — rejects any impossible payout
+    max_win = round(bet * game_cfg['max_multiplier'], 6)
+    if win > max_win:
+        log.warning("Game win cap triggered: user=%d game=%s bet=%.4f claimed_win=%.4f max=%.4f",
+                    telegram_id, game, bet, win, max_win)
+        win = max_win
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        # Check user exists and is not banned
+        async with db.execute(
+            "SELECT banned, app_balance FROM users WHERE telegram_id = ?", (telegram_id,)
+        ) as cur:
+            urow = await cur.fetchone()
+        if not urow:
+            return web.json_response({"error": "Utilisateur introuvable"}, status=404, headers=_CORS)
+        if urow[0]:
+            return web.json_response({"error": "Compte banni"}, status=403, headers=_CORS)
+
+        server_balance = float(urow[1] or 0)
+
+        # Validate server-side balance covers the bet (anti-overdraft)
+        if bet > server_balance:
+            return web.json_response(
+                {"error": f"Solde serveur insuffisant ({server_balance:.4f} GRAM)"},
+                status=400, headers=_CORS
+            )
+
+        # Daily win cap — sum of wins (not net) today
+        if win > 0:
+            async with db.execute(
+                "SELECT COALESCE(SUM(win), 0) FROM game_rounds"
+                " WHERE telegram_id = ? AND DATE(created_at) = DATE('now')",
+                (telegram_id,)
+            ) as cur:
+                (daily_won,) = await cur.fetchone()
+            if float(daily_won or 0) + win > GAME_DAILY_WIN_LIMIT:
+                remaining = max(0.0, GAME_DAILY_WIN_LIMIT - float(daily_won or 0))
+                return web.json_response(
+                    {"error": f"Limite de gains journalière atteinte. "
+                              f"Restant aujourd'hui : {remaining:.2f} GRAM"},
+                    status=400, headers=_CORS
+                )
+
+        # Compute multiplier for logging (0 on loss)
+        multiplier = round(win / bet, 4) if bet > 0 and win > 0 else 0.0
+        net = round(win - bet, 6)  # positive = win, negative = loss
+
+        # Atomic balance update
+        round_id = str(uuid.uuid4())
+        await db.execute(
+            "INSERT INTO game_rounds (id, telegram_id, game, bet, win, multiplier)"
+            " VALUES (?, ?, ?, ?, ?, ?)",
+            (round_id, telegram_id, game, bet, win, multiplier)
+        )
+        await db.execute(
+            "UPDATE users SET app_balance = MAX(0, COALESCE(app_balance, 0) + ?)"
+            " WHERE telegram_id = ?",
+            (net, telegram_id)
+        )
+        await db.commit()
+
+        # Return updated balance so the frontend can correct its local state
+        async with db.execute(
+            "SELECT app_balance FROM users WHERE telegram_id = ?", (telegram_id,)
+        ) as cur:
+            row = await cur.fetchone()
+        new_balance = float(row[0] or 0) if row else server_balance + net
+
+    return web.json_response({"success": True, "newBalance": new_balance}, headers=_CORS)
+
+
+# ── API — Referral milestone claim ────────────────────────────────────────────
+
+async def api_referral_milestone_claim(request: web.Request) -> web.Response:
+    """Claim a referral milestone reward — server validates referral_count and deduplicates.
+
+    Security model:
+    - initData signature verifies Telegram identity
+    - Milestone config read from platform_config (admin-writable), falls back to defaults
+    - referral_count checked against DB (not client state)
+    - UNIQUE(telegram_id, milestone_id) constraint blocks replay atomically
+    - reward capped at MILESTONE_MAX_REWARD to limit damage from misconfigured milestones
+    """
+    ip = _client_ip(request)
+    if _is_rate_limited(ip):
+        return web.json_response({"error": "Rate limit exceeded"}, status=429, headers=_CORS)
+
+    try:
+        data = await request.json()
+    except Exception:
+        return web.json_response({"error": "Invalid JSON"}, status=400, headers=_CORS)
+
+    telegram_id  = _parse_telegram_id(data.get("telegramId"))
+    milestone_id = str(data.get("milestoneId", "")).strip()[:64]
+    init_data    = str(data.get("initData", "")).strip()
+
+    if not telegram_id or not milestone_id:
+        return web.json_response({"error": "Données manquantes"}, status=400, headers=_CORS)
+
+    if not _verify_user_request(init_data, telegram_id):
+        return web.json_response({"error": "Authentification requise"}, status=401, headers=_CORS)
+
+    if _is_user_rate_limited(telegram_id, max_per_window=5):
+        return web.json_response({"error": "Rate limit exceeded"}, status=429, headers=_CORS)
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        # Load milestone config from platform_config (admin-overridable)
+        async with db.execute(
+            "SELECT value FROM platform_config WHERE key = 'referralMilestones'"
+        ) as cur:
+            cfg_row = await cur.fetchone()
+
+        milestones = _DEFAULT_REFERRAL_MILESTONES
+        if cfg_row:
+            try:
+                parsed = json.loads(cfg_row[0])
+                if isinstance(parsed, list) and parsed:
+                    milestones = parsed
+            except (ValueError, TypeError):
+                pass
+
+        # Find the requested milestone
+        milestone = next((m for m in milestones if str(m.get("id", "")) == milestone_id), None)
+        if not milestone:
+            return web.json_response({"error": "Milestone introuvable"}, status=404, headers=_CORS)
+        if not milestone.get("isActive", True):
+            return web.json_response({"error": "Milestone inactif"}, status=400, headers=_CORS)
+
+        reward            = float(milestone.get("reward", 0))
+        required_referrals = int(milestone.get("referralCount", 0))
+
+        if reward <= 0 or reward > MILESTONE_MAX_REWARD:
+            return web.json_response({"error": "Récompense invalide"}, status=400, headers=_CORS)
+
+        # Server-authoritative referral count check
+        async with db.execute(
+            "SELECT referral_count, banned FROM users WHERE telegram_id = ?", (telegram_id,)
+        ) as cur:
+            urow = await cur.fetchone()
+
+        if not urow:
+            return web.json_response({"error": "Utilisateur introuvable"}, status=404, headers=_CORS)
+        if urow[1]:
+            return web.json_response({"error": "Compte banni"}, status=403, headers=_CORS)
+
+        referral_count = int(urow[0] or 0)
+        if referral_count < required_referrals:
+            return web.json_response(
+                {"error": f"Filleuls insuffisants ({referral_count}/{required_referrals})"},
+                status=400, headers=_CORS,
+            )
+
+        # Atomic insert — UNIQUE constraint blocks re-claim
+        try:
+            await db.execute(
+                "INSERT INTO milestone_claims (telegram_id, milestone_id, reward) VALUES (?, ?, ?)",
+                (telegram_id, milestone_id, reward),
+            )
+        except aiosqlite.IntegrityError:
+            return web.json_response({"error": "Milestone déjà réclamé"}, status=409, headers=_CORS)
+
+        await db.execute(
+            "UPDATE users SET app_balance = COALESCE(app_balance, 0) + ? WHERE telegram_id = ?",
+            (reward, telegram_id),
+        )
+        await db.commit()
+
+        async with db.execute(
+            "SELECT app_balance FROM users WHERE telegram_id = ?", (telegram_id,)
+        ) as cur:
+            brow = await cur.fetchone()
+        new_balance = float(brow[0] or 0) if brow else reward
+
+    log.info("Milestone claimed: user=%d milestone=%s reward=%.2f", telegram_id, milestone_id, reward)
+    return web.json_response({"success": True, "reward": reward, "newBalance": new_balance}, headers=_CORS)
+
+
+# ── API — Welcome bonus (one-time, server-side dedup) ─────────────────────────
+
+async def api_welcome_bonus(request: web.Request) -> web.Response:
+    """Credit the one-time welcome bonus — server prevents re-claiming after localStorage clear.
+
+    Amount is read from platform_config key 'welcomeBonusAmount' (admin-configurable).
+    Enabled flag read from 'welcomeBonusEnabled'. Falls back to env var WELCOME_BONUS
+    (default 1.0) so it works before admin has configured it.
+    """
+    ip = _client_ip(request)
+    if _is_rate_limited(ip):
+        return web.json_response({"error": "Rate limit exceeded"}, status=429, headers=_CORS)
+
+    try:
+        data = await request.json()
+    except Exception:
+        return web.json_response({"error": "Invalid JSON"}, status=400, headers=_CORS)
+
+    telegram_id = _parse_telegram_id(data.get("telegramId"))
+    init_data   = str(data.get("initData", "")).strip()
+
+    if not telegram_id:
+        return web.json_response({"error": "telegramId requis"}, status=400, headers=_CORS)
+
+    if not _verify_user_request(init_data, telegram_id):
+        return web.json_response({"error": "Authentification requise"}, status=401, headers=_CORS)
+
+    if _is_user_rate_limited(telegram_id, max_per_window=3):
+        return web.json_response({"error": "Rate limit exceeded"}, status=429, headers=_CORS)
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        # Check user exists and is not banned
+        async with db.execute(
+            "SELECT banned FROM users WHERE telegram_id = ?", (telegram_id,)
+        ) as cur:
+            urow = await cur.fetchone()
+        if not urow:
+            return web.json_response({"error": "Utilisateur introuvable"}, status=404, headers=_CORS)
+        if urow[0]:
+            return web.json_response({"error": "Compte banni"}, status=403, headers=_CORS)
+
+        # Read bonus config from platform_config
+        bonus_enabled = True
+        bonus_amount  = float(os.getenv("WELCOME_BONUS", "1.0"))
+        async with db.execute(
+            "SELECT key, value FROM platform_config WHERE key IN ('welcomeBonusEnabled','welcomeBonusAmount')"
+        ) as cur:
+            async for key, value in cur:
+                try:
+                    parsed = json.loads(value)
+                    if key == "welcomeBonusEnabled":
+                        bonus_enabled = bool(parsed)
+                    elif key == "welcomeBonusAmount":
+                        v = float(parsed)
+                        if 0 < v <= 100:
+                            bonus_amount = v
+                except (ValueError, TypeError):
+                    pass
+
+        if not bonus_enabled or bonus_amount <= 0:
+            return web.json_response({"error": "Bonus désactivé"}, status=400, headers=_CORS)
+
+        # Atomic insert — PRIMARY KEY blocks re-claim
+        try:
+            await db.execute(
+                "INSERT INTO welcome_bonus_claims (telegram_id, reward) VALUES (?, ?)",
+                (telegram_id, bonus_amount),
+            )
+        except aiosqlite.IntegrityError:
+            return web.json_response({"error": "Bonus déjà réclamé"}, status=409, headers=_CORS)
+
+        await db.execute(
+            "UPDATE users SET app_balance = COALESCE(app_balance, 0) + ? WHERE telegram_id = ?",
+            (bonus_amount, telegram_id),
+        )
+        await db.commit()
+
+        async with db.execute(
+            "SELECT app_balance FROM users WHERE telegram_id = ?", (telegram_id,)
+        ) as cur:
+            brow = await cur.fetchone()
+        new_balance = float(brow[0] or 0) if brow else bonus_amount
+
+    log.info("Welcome bonus: user=%d reward=%.2f", telegram_id, bonus_amount)
+    return web.json_response({"success": True, "reward": bonus_amount, "newBalance": new_balance}, headers=_CORS)
+
+
 # ── Web Application ────────────────────────────────────────────────────────────
 
 async def start_web() -> None:
-    app = web.Application()
+    app = web.Application(client_max_size=6 * 1024 * 1024)  # 6 MB — covers proof screenshots
 
     # Static / health
     app.router.add_get("/health",                          health)
@@ -3394,10 +4403,15 @@ async def start_web() -> None:
     app.router.add_post("/api/user/init",                  api_user_init)
     app.router.add_post("/api/user/referral",              api_user_referral)
     app.router.add_post("/api/user/balance",               api_user_balance_set)
+    app.router.add_post("/api/user/welcome-bonus",         api_welcome_bonus)
     app.router.add_get( "/api/user/withdrawals",           api_user_withdrawal_status)
     app.router.add_get( "/api/user/transactions",          api_user_transactions)
-    app.router.add_post("/api/task/depart",                 api_task_depart)
-    app.router.add_get( "/api/task/verify-timer",           api_task_verify_timer)
+    app.router.add_post("/api/task/depart",                  api_task_depart)
+    app.router.add_get( "/api/task/verify-timer",            api_task_verify_timer)
+    app.router.add_post("/api/platform-tasks/complete",      api_platform_task_complete)
+    app.router.add_get( "/api/platform-tasks/completed",     api_platform_tasks_completed)
+    app.router.add_post("/api/game/result",                   api_game_result)
+    app.router.add_post("/api/referral/milestone/claim",      api_referral_milestone_claim)
     app.router.add_get( "/api/check-membership",           api_check_membership)
     app.router.add_get( "/api/check-bot-start",            api_check_bot_start)
     app.router.add_get( "/api/check-bot-verify",           api_check_bot_verify)
@@ -3488,7 +4502,7 @@ async def main() -> None:
         asyncio.ensure_future(backup_db_to_github())
     loop.add_signal_handler(signal.SIGTERM, _on_sigterm)
 
-    tasks: list = [start_web(), _monitor_usdt_jetton()]
+    tasks: list = [start_web(), _monitor_usdt_jetton(), _cleanup_rate_buckets()]
     if bot:
         tasks.append(dp.start_polling(bot, allowed_updates=["message", "callback_query"]))
     if GITHUB_TOKEN and DB_BACKUP_KEY:

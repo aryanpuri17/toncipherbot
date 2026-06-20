@@ -43,15 +43,38 @@ export const MiniAppOnboarding: React.FC<Props> = ({ onDone }) => {
   const bonusEnabled = platformConfig.welcomeBonusEnabled && platformConfig.welcomeBonusAmount > 0;
   const SLIDES = bonusEnabled ? 6 : 5;
 
-  const complete = (claimBonus: boolean) => {
+  const complete = async (claimBonus: boolean) => {
     if (claimBonus && bonusEnabled) {
       haptic.success();
-      const bonus = platformConfig.welcomeBonusAmount;
       const u = useAppStore.getState().currentUser;
-      updateUser(u.id, {
-        balanceMain:   +(u.balanceMain + bonus).toFixed(6),
-        totalEarnings: +(u.totalEarnings + bonus).toFixed(6),
-      });
+      const initData = (window as unknown as { Telegram?: { WebApp?: { initData?: string } } })
+        ?.Telegram?.WebApp?.initData ?? '';
+
+      if (u.telegramId === 0) {
+        // Dev mode — credit locally without server
+        const bonus = platformConfig.welcomeBonusAmount;
+        updateUser(u.id, {
+          balanceMain:   +(u.balanceMain + bonus).toFixed(6),
+          totalEarnings: +(u.totalEarnings + bonus).toFixed(6),
+        });
+      } else {
+        try {
+          const res = await fetch('/api/user/welcome-bonus', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ telegramId: u.telegramId, initData }),
+          });
+          const body = await res.json() as { success?: boolean; reward?: number; newBalance?: number; error?: string };
+          if (body.success && typeof body.newBalance === 'number') {
+            const reward = body.reward ?? platformConfig.welcomeBonusAmount;
+            updateUser(u.id, {
+              balanceMain:   +body.newBalance.toFixed(6),
+              totalEarnings: +(u.totalEarnings + reward).toFixed(6),
+            });
+          }
+          // If server returns 409 (already claimed) or error, skip silently
+        } catch { /* server unavailable — skip bonus */ }
+      }
     }
     try { localStorage.setItem('tc_onboarded', '1'); } catch {}
     onDone();
@@ -60,12 +83,12 @@ export const MiniAppOnboarding: React.FC<Props> = ({ onDone }) => {
   const next = () => {
     haptic.impact('light');
     if (slide < SLIDES - 1) setSlide(s => s + 1);
-    else complete(true);
+    else void complete(true);
   };
 
   const skip = () => {
     haptic.selection();
-    complete(false);
+    void complete(false);
   };
 
   const isLastSlide = slide === SLIDES - 1;
