@@ -1,14 +1,22 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAppStore } from '../../store/appStore';
 import {
-  Hash, Users, Bot, TrendingUp, Pause, Play, Trash2, PlusCircle,
+  TrendingUp, Pause, Play, Trash2, PlusCircle,
   AlertCircle, X, Loader2, Clock, RefreshCw,
 } from 'lucide-react';
 
+const TelegramLogo: React.FC<{ size?: number }> = ({ size = 18 }) => (
+  <svg width={size} height={size} viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+    <defs><linearGradient id="tgGrad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stopColor="#2AABEE"/><stop offset="100%" stopColor="#229ED9"/></linearGradient></defs>
+    <rect width="100" height="100" rx="22" fill="url(#tgGrad)"/>
+    <path fill="white" d="M22 49l11 4 4 13 6-8 13 10 11-42-45 23zm14 5l22-14-17 19 6 9-11-14z"/>
+  </svg>
+);
+
 const typeConfig: Record<string, { icon: React.ReactNode; bg: string; text: string; label: string }> = {
-  join_channel: { icon: <Hash className="w-4 h-4" />,  bg: 'bg-blue-500/20',   text: 'text-blue-400',   label: 'Channel' },
-  join_group:   { icon: <Users className="w-4 h-4" />, bg: 'bg-purple-500/20', text: 'text-purple-400', label: 'Group'   },
-  start_bot:    { icon: <Bot className="w-4 h-4" />,   bg: 'bg-cyan-500/20',   text: 'text-cyan-400',   label: 'Bot'     },
+  join_channel: { icon: <TelegramLogo size={18} />, bg: 'bg-blue-500/20',   text: 'text-blue-400',   label: 'Channel' },
+  join_group:   { icon: <TelegramLogo size={18} />, bg: 'bg-purple-500/20', text: 'text-purple-400', label: 'Group'   },
+  start_bot:    { icon: <TelegramLogo size={18} />, bg: 'bg-cyan-500/20',   text: 'text-cyan-400',   label: 'Bot'     },
 };
 
 interface PendingProof {

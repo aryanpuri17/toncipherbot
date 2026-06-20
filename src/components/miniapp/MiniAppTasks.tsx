@@ -295,7 +295,7 @@ export const MiniAppTasks: React.FC = () => {
       isInstant:        false,
     }));
 
-  const allCards = [...platformCards, ...apiCards];
+  const allCards = [...platformCards, ...apiCards].filter(c => c.type !== 'daily');
   allCardsRef.current = allCards;
   promoCardsRef.current = promoTasks.map(t => ({
     id: t.id, source: 'platform' as const, type: t.type, title: t.title,

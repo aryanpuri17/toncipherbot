@@ -191,6 +191,24 @@ export const MiniAppProfile: React.FC = () => {
           <ChevronRight className="w-4 h-4 text-slate-500" />
         </button>
 
+        <button
+          onClick={() => {
+            const tg = (window as unknown as { Telegram?: { WebApp?: { openTelegramLink?: (u: string) => void } } }).Telegram?.WebApp;
+            if (tg?.openTelegramLink) {
+              tg.openTelegramLink('https://t.me/puriaryan');
+            } else {
+              window.open('https://t.me/puriaryan', '_blank');
+            }
+          }}
+          className="profile-menu-item w-full p-3.5 flex items-center gap-3"
+        >
+          <div className="w-9 h-9 rounded-xl bg-blue-500/15 flex items-center justify-center flex-shrink-0">
+            <span className="text-base">🎧</span>
+          </div>
+          <span className="text-sm text-white flex-1 text-left">Support</span>
+          <ChevronRight className="w-4 h-4 text-slate-500" />
+        </button>
+
         {isAdmin && (
           <button
             onClick={() => { window.location.hash = '#admin'; setCurrentView('admin'); }}
