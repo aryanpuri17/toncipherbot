@@ -170,7 +170,7 @@ export const MiniAppTasks: React.FC = () => {
   const timerRefs                   = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const allCardsRef                 = useRef<CardTask[]>([]);
   const promoCardsRef               = useRef<CardTask[]>([]);
-  const [tick, setTick]             = useState(0); // 1-second ticker for countdown display
+  const [, setTick]                  = useState(0); // kept for periodic re-render if needed
 
   const [apiTasks,            setApiTasks]            = useState<ApiTask[]>([]);
   const [completedApiTaskIds, setCompletedApiTaskIds] = useState<string[]>([]);
@@ -618,10 +618,6 @@ export const MiniAppTasks: React.FC = () => {
     const displayReward = card.reward * (card.promoMultiplier ?? 1);
     const avatarBg      = card.source === 'api' ? taskAvatarColor(card.title) : null;
 
-    const _dEntry = phase === 'too_early' ? parseDeparture(localStorage.getItem(departKey(card.id))) : null;
-    void tick;
-    const remainingSec = _dEntry ? Math.max(0, Math.ceil((_dEntry.ms - (Date.now() - _dEntry.ts)) / 1000)) : 0;
-
     const icon = (() => {
       if (isDone) return <CheckCircle style={{ width: 26, height: 26, color: '#34d399' }} />;
       const logo = getPlatformLogo(card.targetUrl ?? '', card.type, 34);
@@ -742,43 +738,19 @@ export const MiniAppTasks: React.FC = () => {
           <div style={{
             borderTop: '1px solid rgba(255,255,255,0.06)',
             padding: '10px 14px',
-            background: remainingSec > 0 ? 'rgba(245,158,11,0.06)' : 'rgba(52,211,153,0.05)',
+            background: 'rgba(245,158,11,0.06)',
             display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
           }}>
-            {remainingSec > 0 ? (
-              <>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <div style={{
-                    width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
-                    background: 'rgba(245,158,11,0.12)', border: '2px solid rgba(245,158,11,0.4)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  }}>
-                    <span style={{ fontSize: 13, fontWeight: 900, color: '#fbbf24' }}>{remainingSec}</span>
-                  </div>
-                  <div>
-                    <span style={{ fontSize: 12, color: '#fbbf24', fontWeight: 700, display: 'block' }}>
-                      ⏳ {remainingSec}s restantes
-                    </span>
-                    <span style={{ fontSize: 10, color: '#92400e' }}>
-                      Reste dans l'app externe, puis reviens ici
-                    </span>
-                  </div>
-                </div>
-                <button onClick={() => handleJoin(card)} style={{ padding: '5px 10px', borderRadius: 8, background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.3)', color: '#fbbf24', fontSize: 10, fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}>
-                  Retourner
-                </button>
-              </>
-            ) : (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <div style={{ width: 36, height: 36, borderRadius: '50%', flexShrink: 0, background: 'rgba(52,211,153,0.1)', border: '2px solid rgba(52,211,153,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <span style={{ fontSize: 16 }}>↩</span>
-                </div>
-                <div>
-                  <span style={{ fontSize: 12, color: '#34d399', fontWeight: 700, display: 'block' }}>Reviens depuis l'application externe</span>
-                  <span style={{ fontSize: 10, color: '#166534' }}>Le mini-app détectera ton retour automatiquement</span>
-                </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Loader2 style={{ width: 18, height: 18, color: '#fbbf24', animation: 'spin 2s linear infinite', flexShrink: 0 }} />
+              <div>
+                <span style={{ fontSize: 12, color: '#fbbf24', fontWeight: 700, display: 'block' }}>En attente…</span>
+                <span style={{ fontSize: 10, color: '#92400e' }}>Reste dans l'app, puis reviens ici après 30s</span>
               </div>
-            )}
+            </div>
+            <button onClick={() => handleJoin(card)} style={{ padding: '5px 10px', borderRadius: 8, background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.3)', color: '#fbbf24', fontSize: 10, fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}>
+              Retourner
+            </button>
           </div>
         )}
 
