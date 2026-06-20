@@ -211,9 +211,10 @@ export const MiniAppTasks: React.FC = () => {
         : 'ready';
 
       if (remainingMs <= 0) {
-        // Stale entry from a previous session — clear it, force re-join
+        // Entry expired past grace window — force re-join from scratch
         if (elapsed > entry.ms + MAX_VERIFY_GRACE_MS) {
           localStorage.removeItem(key);
+          setTaskStates(prev => { const n = { ...prev }; delete n[id]; return n; });
           return;
         }
         setTaskStates(prev => ({ ...prev, [id]: { phase: afterPhase(entry) } }));
@@ -223,17 +224,7 @@ export const MiniAppTasks: React.FC = () => {
         localStorage.setItem(key, JSON.stringify(resetEntry));
         setTaskStates(prev => ({ ...prev, [id]: { phase: 'too_early' } }));
         haptic.error();
-
-        // Cancel old in-memory timeout and restart from full duration
-        const autoKey = `depart_auto_${id}`;
-        if (timerRefs.current[autoKey]) { clearTimeout(timerRefs.current[autoKey]); delete timerRefs.current[autoKey]; }
-        const entryType = entry.type ?? '';
-        if (entryType !== 'social' && entryType !== 'watch_video') {
-          timerRefs.current[autoKey] = setTimeout(() => {
-            delete timerRefs.current[autoKey];
-            setTaskStates(prev => ({ ...prev, [id]: { phase: afterPhase(resetEntry) } }));
-          }, resetEntry.ms);
-        }
+        // No in-memory timer: phase only unlocks when user leaves again and comes back
       }
     });
   };
@@ -413,19 +404,10 @@ export const MiniAppTasks: React.FC = () => {
 
   const handleJoin = (card: CardTask) => {
     if (!card.targetUrl) return;
-    const waitMs  = card.type === 'start_bot' ? REQUIRED_MS : card.type === 'watch_video' ? VIDEO_REQUIRED_MS : card.type === 'social' ? SOCIAL_REQUIRED_MS : CHANNEL_REQUIRED_MS;
-    const autoKey = `depart_auto_${card.id}`;
-    if (timerRefs.current[autoKey]) { clearTimeout(timerRefs.current[autoKey]); delete timerRefs.current[autoKey]; }
+    const waitMs = card.type === 'start_bot' ? REQUIRED_MS : card.type === 'watch_video' ? VIDEO_REQUIRED_MS : card.type === 'social' ? SOCIAL_REQUIRED_MS : CHANNEL_REQUIRED_MS;
     localStorage.setItem(departKey(card.id), JSON.stringify({ ts: Date.now(), ms: waitMs, type: card.type, source: card.source }));
     recordDepart(card.id);
     setPhase(card.id, 'too_early');
-    // Social/video: no in-memory timer — only a real return to app (checkDepartures) can unlock verify
-    if (card.type !== 'social' && card.type !== 'watch_video') {
-      timerRefs.current[autoKey] = setTimeout(() => {
-        delete timerRefs.current[autoKey];
-        setPhase(card.id, 'ready');
-      }, waitMs);
-    }
     openUrl(card.targetUrl);
   };
 
@@ -463,22 +445,12 @@ export const MiniAppTasks: React.FC = () => {
 
     if (card.targetUrl) openUrl(card.targetUrl);
 
-    const waitMs  = card.type === 'start_bot' ? REQUIRED_MS : card.type === 'watch_video' ? VIDEO_REQUIRED_MS : card.type === 'social' ? SOCIAL_REQUIRED_MS : CHANNEL_REQUIRED_MS;
-    const autoKey = `depart_auto_${card.id}`;
-    if (timerRefs.current[autoKey]) { clearTimeout(timerRefs.current[autoKey]); delete timerRefs.current[autoKey]; }
+    const waitMs = card.type === 'start_bot' ? REQUIRED_MS : card.type === 'watch_video' ? VIDEO_REQUIRED_MS : card.type === 'social' ? SOCIAL_REQUIRED_MS : CHANNEL_REQUIRED_MS;
     localStorage.setItem(departKey(card.id), JSON.stringify({ ts: Date.now(), ms: waitMs, type: card.type, source: card.source }));
     recordDepart(card.id);
     setPhase(card.id, 'too_early');
-
-    // Determine target phase after timer
-    const afterTimerPhase = (type: string, source: string): TaskPhase =>
-      source === 'api' && type === 'start_bot' ? 'needs_bot_confirm'
-      : 'ready';
-
-    timerRefs.current[autoKey] = setTimeout(() => {
-      delete timerRefs.current[autoKey];
-      setPhase(card.id, afterTimerPhase(card.type, card.source));
-    }, waitMs);
+    // No in-memory timer: phase only transitions to 'ready' via checkDepartures
+    // when the app regains visibility after the user actually left.
   };
 
   // ── Direct complete — no timer check (used after external verification) ─────
@@ -649,7 +621,6 @@ export const MiniAppTasks: React.FC = () => {
     const _dEntry = phase === 'too_early' ? parseDeparture(localStorage.getItem(departKey(card.id))) : null;
     void tick;
     const remainingSec = _dEntry ? Math.max(0, Math.ceil((_dEntry.ms - (Date.now() - _dEntry.ts)) / 1000)) : 0;
-    const isSocialOrVideo = card.type === 'social' || card.type === 'watch_video';
 
     const icon = (() => {
       if (isDone) return <CheckCircle style={{ width: 26, height: 26, color: '#34d399' }} />;
@@ -786,26 +757,27 @@ export const MiniAppTasks: React.FC = () => {
                   </div>
                   <div>
                     <span style={{ fontSize: 12, color: '#fbbf24', fontWeight: 700, display: 'block' }}>
-                      ⏳ Patience — {remainingSec}s restantes
+                      ⏳ {remainingSec}s restantes
                     </span>
                     <span style={{ fontSize: 10, color: '#92400e' }}>
-                      {isSocialOrVideo ? 'Reste sur la page avant de revenir' : 'Vérification automatique en cours…'}
+                      Reste dans l'app externe, puis reviens ici
                     </span>
                   </div>
                 </div>
-                {isSocialOrVideo && (
-                  <button onClick={() => handleJoin(card)} style={{ padding: '5px 10px', borderRadius: 8, background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.3)', color: '#fbbf24', fontSize: 10, fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}>
-                    Retourner
-                  </button>
-                )}
-              </>
-            ) : (
-              <>
-                <span style={{ fontSize: 12, color: '#34d399', fontWeight: 700 }}>✓ Temps écoulé — tu peux vérifier</span>
-                <button onClick={() => void handleVerify(card)} style={{ padding: '5px 12px', borderRadius: 8, background: 'rgba(52,211,153,0.15)', border: '1px solid rgba(52,211,153,0.3)', color: '#34d399', fontSize: 10, fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}>
-                  Vérifier
+                <button onClick={() => handleJoin(card)} style={{ padding: '5px 10px', borderRadius: 8, background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.3)', color: '#fbbf24', fontSize: 10, fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}>
+                  Retourner
                 </button>
               </>
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ width: 36, height: 36, borderRadius: '50%', flexShrink: 0, background: 'rgba(52,211,153,0.1)', border: '2px solid rgba(52,211,153,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <span style={{ fontSize: 16 }}>↩</span>
+                </div>
+                <div>
+                  <span style={{ fontSize: 12, color: '#34d399', fontWeight: 700, display: 'block' }}>Reviens depuis l'application externe</span>
+                  <span style={{ fontSize: 10, color: '#166534' }}>Le mini-app détectera ton retour automatiquement</span>
+                </div>
+              </div>
             )}
           </div>
         )}
