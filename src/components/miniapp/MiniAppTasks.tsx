@@ -170,6 +170,7 @@ export const MiniAppTasks: React.FC = () => {
   const [apiTasks,            setApiTasks]            = useState<ApiTask[]>([]);
   const [completedApiTaskIds, setCompletedApiTaskIds] = useState<string[]>([]);
   const [uploadingProofId, setUploadingProofId] = useState<string | null>(null);
+  const [tooEarlyInfo, setTooEarlyInfo] = useState<Record<string, true>>({});
 
 
   // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -196,6 +197,25 @@ export const MiniAppTasks: React.FC = () => {
     const snap = timerRefs.current;
     return () => { Object.values(snap).forEach(clearTimeout); };
   }, []);
+
+  // Restore pending phase on mount — critical for Android where the app can be
+  // destroyed while the user is in an external app and rebuilt on return.
+  useEffect(() => {
+    const completedIds = useAppStore.getState().completedTaskIds;
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key?.startsWith('tc_task_depart_')) continue;
+      const id = key.slice('tc_task_depart_'.length);
+      if (completedIds.includes(id)) { localStorage.removeItem(key); continue; }
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
+      try {
+        const parsed = JSON.parse(raw) as { ts: number };
+        if (!parsed.ts || Date.now() - parsed.ts > 3_600_000) { localStorage.removeItem(key); continue; }
+      } catch { localStorage.removeItem(key); continue; }
+      setPhase(id, 'pending');
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load server tasks on mount (user-created tasks visible to all)
   useEffect(() => {
@@ -427,64 +447,49 @@ export const MiniAppTasks: React.FC = () => {
 
   const handleVerify = async (card: CardTask) => {
     haptic.impact('light');
-    setPhase(card.id, 'verifying');
-    await new Promise<void>(r => setTimeout(r, 700));
 
-    // Tasks that require a timer (social, watch_video, start_bot)
+    // ── INSTANT timer check — no loading shown, no async, no spinner ──────────
     const needsTimer = card.type === 'social' || card.type === 'watch_video' || card.type === 'start_bot';
     if (needsTimer) {
       const entry = parseDeparture(localStorage.getItem(departKey(card.id)));
-      if (!entry) {
-        setPhase(card.id, 'not_subscribed');
+      const elapsed = entry ? Date.now() - entry.ts : 0;
+      const required = entry?.ms ?? REQUIRED_MS;
+      if (!entry || elapsed < required) {
+        setTooEarlyInfo(prev => ({ ...prev, [card.id]: true }));
         haptic.error();
-        return;
+        return; // return immediately — no loading, no phase change
       }
-      const elapsed = Date.now() - entry.ts;
-      if (elapsed < entry.ms) {
-        setPhase(card.id, 'not_subscribed');
-        haptic.error();
-        return;
-      }
-      // Server-side timer check (unbypassable)
-      try {
-        const requiredSeconds = Math.ceil(entry.ms / 1000);
-        const res = await fetch(`/api/task/verify-timer?telegramId=${currentUser.telegramId}&taskId=${encodeURIComponent(card.id)}&requiredSeconds=${requiredSeconds}`);
-        const data = await res.json() as { ok: boolean; noRecord?: boolean };
-        if (!data.ok) {
-          setPhase(card.id, 'not_subscribed');
-          haptic.error();
-          return;
-        }
-      } catch { /* server sleeping — client check already passed, allow */ }
     }
+
+    // Timer OK (or not needed) — clear any tooEarly flag, show loading
+    setTooEarlyInfo(prev => { const n = { ...prev }; delete n[card.id]; return n; });
+    setPhase(card.id, 'verifying');
 
     // start_bot: check bot was actually started
     if (card.type === 'start_bot' && card.source === 'api') {
       try {
         const res = await fetch(`/api/check-bot-verify?telegramId=${currentUser.telegramId}&taskId=${card.id}`);
         const { verified } = await res.json() as { verified: boolean };
-        if (!verified) {
-          setPhase(card.id, 'not_subscribed');
-          haptic.error();
-          return;
-        }
+        if (!verified) { setPhase(card.id, 'not_subscribed'); haptic.error(); return; }
       } catch { /* allow on network error */ }
     }
 
-    // join_channel / join_group: real Telegram membership check
+    // join_channel / join_group: real Telegram membership check (5s timeout)
     if (card.source === 'platform' && (card.type === 'join_channel' || card.type === 'join_group') && card.targetUrl) {
       const chatRefMatch = card.targetUrl.match(/t\.me\/([^/?+]+)/);
-      const chatRef = chatRefMatch ? `@${chatRefMatch[1]}` : null;
-      if (chatRef) {
+      const chatRef = chatRefMatch?.[1];
+      if (chatRef && !chatRef.startsWith('+')) {
         try {
-          const res = await fetch(`/api/check-membership?telegram_id=${currentUser.telegramId}&chat_id=${encodeURIComponent(chatRef)}`);
+          const ctrl = new AbortController();
+          const tId = setTimeout(() => ctrl.abort(), 5000);
+          const res = await fetch(
+            `/api/check-membership?telegram_id=${currentUser.telegramId}&chat_id=${encodeURIComponent(`@${chatRef}`)}`,
+            { signal: ctrl.signal },
+          );
+          clearTimeout(tId);
           const { member } = await res.json() as { member: boolean };
-          if (!member) {
-            setPhase(card.id, 'not_subscribed');
-            haptic.error();
-            return;
-          }
-        } catch { /* allow on network error */ }
+          if (!member) { setPhase(card.id, 'not_subscribed'); haptic.error(); return; }
+        } catch { /* timeout or network error — allow through */ }
       }
     }
 
@@ -626,8 +631,13 @@ export const MiniAppTasks: React.FC = () => {
                 </span>
               </div>
             )}
-            {!isDone && phase === 'pending' && arrowBtn(() => {}, true)}
-            {!isDone && phase === 'not_subscribed' && arrowBtn(() => {}, true)}
+            {!isDone && phase === 'pending' && arrowBtn(() => {
+              if (card.targetUrl) openUrl(card.targetUrl);
+              setTooEarlyInfo(prev => { const n = { ...prev }; delete n[card.id]; return n; });
+            }, false)}
+            {!isDone && phase === 'not_subscribed' && arrowBtn(() => {
+              if (card.targetUrl) { openUrl(card.targetUrl); setPhase(card.id, 'pending'); }
+            }, false)}
           </div>
         </div>
 
@@ -636,23 +646,47 @@ export const MiniAppTasks: React.FC = () => {
           <div style={{
             borderTop: '1px solid rgba(255,255,255,0.06)',
             padding: '10px 14px',
-            background: 'rgba(245,158,11,0.06)',
+            background: tooEarlyInfo[card.id] ? 'rgba(239,68,68,0.06)' : 'rgba(245,158,11,0.06)',
             display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Loader2 style={{ width: 16, height: 16, color: '#fbbf24', animation: 'spin 2s linear infinite', flexShrink: 0 }} />
-              <span style={{ fontSize: 11, color: '#fbbf24', fontWeight: 600 }}>
-                Rejoins, puis reviens cliquer sur Vérifier
-              </span>
-            </div>
-            <button onClick={() => void handleVerify(card)} style={{
-              padding: '6px 12px', borderRadius: 8, flexShrink: 0,
-              background: 'rgba(52,211,153,0.15)', border: '1px solid rgba(52,211,153,0.3)',
-              color: '#34d399', fontSize: 11, fontWeight: 700, cursor: 'pointer',
-              display: 'flex', alignItems: 'center', gap: 4,
-            }}>
-              <ShieldCheck style={{ width: 12, height: 12 }} /> Vérifier
-            </button>
+            {tooEarlyInfo[card.id] ? (
+              <>
+                <span style={{ fontSize: 11, color: '#f87171', fontWeight: 600 }}>
+                  Revenu trop tôt — retourne encore un moment
+                </span>
+                <button
+                  onClick={() => {
+                    if (card.targetUrl) openUrl(card.targetUrl);
+                    setTooEarlyInfo(prev => { const n = { ...prev }; delete n[card.id]; return n; });
+                  }}
+                  style={{
+                    padding: '6px 12px', borderRadius: 8, flexShrink: 0,
+                    background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)',
+                    color: '#f87171', fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', gap: 4,
+                  }}
+                >
+                  <ChevronRight style={{ width: 12, height: 12 }} /> Retourner
+                </button>
+              </>
+            ) : (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Loader2 style={{ width: 16, height: 16, color: '#fbbf24', animation: 'spin 2s linear infinite', flexShrink: 0 }} />
+                  <span style={{ fontSize: 11, color: '#fbbf24', fontWeight: 600 }}>
+                    Rejoins, puis reviens cliquer sur Vérifier
+                  </span>
+                </div>
+                <button onClick={() => void handleVerify(card)} style={{
+                  padding: '6px 12px', borderRadius: 8, flexShrink: 0,
+                  background: 'rgba(52,211,153,0.15)', border: '1px solid rgba(52,211,153,0.3)',
+                  color: '#34d399', fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', gap: 4,
+                }}>
+                  <ShieldCheck style={{ width: 12, height: 12 }} /> Vérifier
+                </button>
+              </>
+            )}
           </div>
         )}
 
