@@ -81,6 +81,23 @@ USDT_MIN_AMOUNT     = 0.1    # minimum USDT deposit (in USDT, not nano)
 
 _ton_price_cache: dict = {"price": None, "ts": 0}
 
+# ── Platform task definitions (server-authoritative) ──────────────────────────
+# Keys must match id values in frontend _defaultTasks.
+# verification: 'none'|'channel'|'bot'|'timer'|'referral'|'proof'
+# max_per_user: 0 = unlimited with cooldown, 1 = one-time only
+PLATFORM_TASKS: dict[str, dict] = {
+    "1":  {"type": "daily",        "reward": 0.10,  "cooldown_hours": 24, "verification": "none",     "target": None,                 "max_per_user": 0},
+    "2":  {"type": "join_channel", "reward": 0.002, "cooldown_hours":  0, "verification": "channel",  "target": "@TonCipher_Official", "max_per_user": 1},
+    "3":  {"type": "join_channel", "reward": 0.002, "cooldown_hours":  0, "verification": "channel",  "target": "@TonCipher_Pays",     "max_per_user": 1},
+    "4":  {"type": "start_bot",    "reward": 0.002, "cooldown_hours":  0, "verification": "bot",      "target": None,                 "max_per_user": 1},
+    "5":  {"type": "special",      "reward": 1.50,  "cooldown_hours":  0, "verification": "referral", "target": None,                 "max_per_user": 1, "required_referrals": 3},
+    "6":  {"type": "special",      "reward": 0.80,  "cooldown_hours":  0, "verification": "proof",    "target": None,                 "max_per_user": 1},
+    "7":  {"type": "watch_video",  "reward": 0.002, "cooldown_hours":  0, "verification": "timer",    "target": None,                 "max_per_user": 1, "min_seconds": 20},
+    "8":  {"type": "social",       "reward": 0.002, "cooldown_hours":  0, "verification": "timer",    "target": None,                 "max_per_user": 1, "min_seconds": 30},
+    "9":  {"type": "social",       "reward": 0.002, "cooldown_hours":  0, "verification": "timer",    "target": None,                 "max_per_user": 1, "min_seconds": 30},
+    "10": {"type": "social",       "reward": 0.002, "cooldown_hours":  0, "verification": "timer",    "target": None,                 "max_per_user": 1, "min_seconds": 30},
+}
+
 # ── Server-Sent Events (real-time task updates) ───────────────────────────────
 
 _sse_queues: list[asyncio.Queue] = []
@@ -532,6 +549,22 @@ async def init_db() -> None:
                 PRIMARY KEY (telegram_id, task_id)
             )
         """)
+        # Server-authoritative platform task completion log.
+        # Each row is one completion event (daily tasks may have many rows per user).
+        # Used for dedup (one-time tasks) and cooldown checks (daily tasks).
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS platform_task_completions (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                telegram_id  INTEGER NOT NULL,
+                task_id      TEXT    NOT NULL,
+                completed_at TEXT    NOT NULL DEFAULT (datetime('now')),
+                earned       REAL    NOT NULL DEFAULT 0
+            )
+        """)
+        await db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_ptc_lookup"
+            " ON platform_task_completions(telegram_id, task_id, completed_at)"
+        )
         # A given on-chain tx hash may only be credited once — blocks deposit replay
         await db.execute("""
             CREATE UNIQUE INDEX IF NOT EXISTS idx_deposit_txhash
@@ -986,6 +1019,14 @@ async def api_user_init(request: web.Request) -> web.Response:
         ) as cur:
             row = await cur.fetchone()
 
+        # Server-authoritative completions from platform_task_completions table.
+        # Merge these so clearing localStorage can't re-farm one-time tasks.
+        async with db.execute(
+            "SELECT DISTINCT task_id FROM platform_task_completions WHERE telegram_id = ?",
+            (telegram_id,)
+        ) as cur:
+            server_ptc = [r[0] async for r in cur]
+
     completed_tasks: list = []
     if row and row[8]:
         try:
@@ -994,6 +1035,8 @@ async def api_user_init(request: web.Request) -> web.Response:
                 completed_tasks = parsed_tasks
         except (ValueError, TypeError):
             pass
+    # Union: client-saved IDs + server-confirmed IDs (server wins on conflicts)
+    completed_tasks = list(set(completed_tasks) | set(server_ptc))
 
     return web.json_response({
         "referralCount":      row[0] if row else 0,
@@ -3380,6 +3423,207 @@ async def _monitor_usdt_jetton() -> None:
         await asyncio.sleep(120)  # check every 2 minutes
 
 
+# ── API — Platform task: secure server-side completion ───────────────────────
+
+async def api_platform_task_complete(request: web.Request) -> web.Response:
+    """Verify and credit a built-in platform task completion.
+
+    The server is authoritative for:
+    - Task existence and reward amount (from PLATFORM_TASKS — not client-supplied)
+    - Anti-dedup (one-time tasks: INSERT check; daily tasks: cooldown window)
+    - Type-specific verification (channel membership, bot start, timer elapsed, referral count)
+    - Balance credit (app_balance column in users table)
+
+    The frontend calls this instead of the old client-only completeTask() action.
+    """
+    ip = _client_ip(request)
+    if _is_rate_limited(ip):
+        return web.json_response({"error": "Rate limit exceeded"}, status=429, headers=_CORS)
+
+    try:
+        data = await request.json()
+    except Exception:
+        return web.json_response({"error": "Invalid JSON"}, status=400, headers=_CORS)
+
+    telegram_id = _parse_telegram_id(data.get("telegramId"))
+    if not telegram_id:
+        return web.json_response({"error": "Missing telegramId"}, status=400, headers=_CORS)
+
+    task_id = str(data.get("taskId", "")).strip()
+    if not task_id:
+        return web.json_response({"error": "Missing taskId"}, status=400, headers=_CORS)
+
+    init_data = str(data.get("initData", ""))
+    if not _verify_user_request(init_data, telegram_id):
+        return web.json_response({"error": "Unauthorized"}, status=401, headers=_CORS)
+
+    task_cfg = PLATFORM_TASKS.get(task_id)
+    if not task_cfg:
+        return web.json_response({"error": "Unknown platform task"}, status=404, headers=_CORS)
+
+    verification   = task_cfg["verification"]
+    max_per_user   = task_cfg.get("max_per_user", 1)
+    cooldown_hours = float(task_cfg.get("cooldown_hours", 0))
+    reward         = float(task_cfg["reward"])
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        # Verify user exists and is active
+        async with db.execute(
+            "SELECT banned FROM users WHERE telegram_id = ?", (telegram_id,)
+        ) as cur:
+            u = await cur.fetchone()
+        if not u:
+            return web.json_response({"error": "User not found"}, status=404, headers=_CORS)
+        if u[0]:
+            return web.json_response({"error": "Account suspended"}, status=403, headers=_CORS)
+
+        # ── Dedup / cooldown ───────────────────────────────────────────────────
+        if cooldown_hours > 0:
+            # Daily-style: check last completion within cooldown window
+            async with db.execute(
+                "SELECT (julianday('now') - julianday(completed_at)) * 24.0"
+                " FROM platform_task_completions"
+                " WHERE telegram_id = ? AND task_id = ?"
+                " ORDER BY completed_at DESC LIMIT 1",
+                (telegram_id, task_id)
+            ) as cur:
+                last = await cur.fetchone()
+            if last and last[0] < cooldown_hours:
+                remaining_min = int((cooldown_hours - last[0]) * 60)
+                return web.json_response(
+                    {"error": f"Cooldown active. Try again in {remaining_min} minutes."},
+                    status=400, headers=_CORS
+                )
+        elif max_per_user == 1:
+            # One-time task: any previous completion blocks retry
+            async with db.execute(
+                "SELECT 1 FROM platform_task_completions"
+                " WHERE telegram_id = ? AND task_id = ? LIMIT 1",
+                (telegram_id, task_id)
+            ) as cur:
+                if await cur.fetchone():
+                    return web.json_response({"error": "Already completed"}, status=400, headers=_CORS)
+
+        # ── Type-specific verification ─────────────────────────────────────────
+        if verification == "channel":
+            target = task_cfg.get("target")
+            if target and bot:
+                is_member = await _is_chat_member(target, telegram_id)
+                if is_member is False:
+                    return web.json_response(
+                        {"error": "Not a member of the required channel. Please join and retry."},
+                        status=403, headers=_CORS
+                    )
+
+        elif verification == "bot":
+            async with db.execute(
+                "SELECT bot_started FROM users WHERE telegram_id = ?", (telegram_id,)
+            ) as cur:
+                brow = await cur.fetchone()
+            async with db.execute(
+                "SELECT 1 FROM bot_verifications WHERE telegram_id = ? LIMIT 1", (telegram_id,)
+            ) as cur:
+                bv = await cur.fetchone()
+            if not ((brow and brow[0]) or bv):
+                return web.json_response(
+                    {"error": "Please start the bot first (click Start in Telegram)."},
+                    status=403, headers=_CORS
+                )
+
+        elif verification == "timer":
+            min_s = int(task_cfg.get("min_seconds", 30))
+            async with db.execute(
+                "SELECT (julianday('now') - julianday(departed_at)) * 86400.0"
+                " FROM task_departures WHERE telegram_id = ? AND task_id = ?",
+                (telegram_id, task_id)
+            ) as cur:
+                dep = await cur.fetchone()
+            if dep is None:
+                return web.json_response(
+                    {"error": "No departure recorded. Please start the task first."},
+                    status=400, headers=_CORS
+                )
+            elapsed_s = dep[0]
+            if elapsed_s < min_s:
+                remaining = max(1, int(min_s - elapsed_s))
+                return web.json_response(
+                    {"error": f"Too early. Wait {remaining} more seconds."},
+                    status=400, headers=_CORS
+                )
+            # Consume the departure record so it cannot be reused for another attempt
+            await db.execute(
+                "DELETE FROM task_departures WHERE telegram_id = ? AND task_id = ?",
+                (telegram_id, task_id)
+            )
+
+        elif verification == "referral":
+            required = int(task_cfg.get("required_referrals", 3))
+            async with db.execute(
+                "SELECT referral_count FROM users WHERE telegram_id = ?", (telegram_id,)
+            ) as cur:
+                rrow = await cur.fetchone()
+            count = rrow[0] if rrow else 0
+            if count < required:
+                return web.json_response(
+                    {"error": f"Need {required} referrals. You have {count}."},
+                    status=400, headers=_CORS
+                )
+
+        elif verification == "proof":
+            async with db.execute(
+                "SELECT 1 FROM social_proofs"
+                " WHERE telegram_id = ? AND task_id = ? AND status = 'approved' LIMIT 1",
+                (telegram_id, task_id)
+            ) as cur:
+                proof = await cur.fetchone()
+            if not proof:
+                return web.json_response(
+                    {"error": "Proof not yet approved by the team."},
+                    status=403, headers=_CORS
+                )
+
+        # ── Record completion + credit balance + transaction log ───────────────
+        await db.execute(
+            "INSERT INTO platform_task_completions (telegram_id, task_id, earned)"
+            " VALUES (?, ?, ?)",
+            (telegram_id, task_id, reward)
+        )
+        await db.execute(
+            "UPDATE users SET app_balance = COALESCE(app_balance, 0) + ? WHERE telegram_id = ?",
+            (reward, telegram_id)
+        )
+        await db.execute(
+            "INSERT INTO transactions"
+            " (id, telegram_id, type, amount, currency, network, address, status)"
+            " VALUES (?, ?, 'reward', ?, 'GRAM', 'platform', '', 'completed')",
+            (str(uuid.uuid4()), telegram_id, reward)
+        )
+        await db.commit()
+
+    return web.json_response({"success": True, "earned": reward}, headers=_CORS)
+
+
+async def api_platform_tasks_completed(request: web.Request) -> web.Response:
+    """Return list of completed platform task IDs for a user.
+    Fetched on app init so server-side completions override a cleared localStorage.
+    """
+    try:
+        telegram_id = _parse_telegram_id(request.rel_url.query.get("telegram_id", 0))
+    except Exception:
+        return web.json_response([], headers=_CORS)
+    if not telegram_id:
+        return web.json_response([], headers=_CORS)
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT DISTINCT task_id FROM platform_task_completions WHERE telegram_id = ?",
+            (telegram_id,)
+        ) as cur:
+            task_ids = [row[0] async for row in cur]
+
+    return web.json_response(task_ids, headers=_CORS)
+
+
 # ── Web Application ────────────────────────────────────────────────────────────
 
 async def start_web() -> None:
@@ -3396,8 +3640,10 @@ async def start_web() -> None:
     app.router.add_post("/api/user/balance",               api_user_balance_set)
     app.router.add_get( "/api/user/withdrawals",           api_user_withdrawal_status)
     app.router.add_get( "/api/user/transactions",          api_user_transactions)
-    app.router.add_post("/api/task/depart",                 api_task_depart)
-    app.router.add_get( "/api/task/verify-timer",           api_task_verify_timer)
+    app.router.add_post("/api/task/depart",                  api_task_depart)
+    app.router.add_get( "/api/task/verify-timer",            api_task_verify_timer)
+    app.router.add_post("/api/platform-tasks/complete",      api_platform_task_complete)
+    app.router.add_get( "/api/platform-tasks/completed",     api_platform_tasks_completed)
     app.router.add_get( "/api/check-membership",           api_check_membership)
     app.router.add_get( "/api/check-bot-start",            api_check_bot_start)
     app.router.add_get( "/api/check-bot-verify",           api_check_bot_verify)

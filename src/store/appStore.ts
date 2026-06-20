@@ -865,6 +865,7 @@ interface AppState {
   resetDailyRefTask: () => void;
   checkLoginStreak: () => void;
   completeTask: (taskId: string) => void;
+  completeTaskSecure: (taskId: string) => Promise<{ success: boolean; earned?: number; error?: string }>;
   creditReferralBonus: (earned: number) => void;
   submitWithdrawal: (networkId: string, amount: number, address: string) => { success: boolean; error?: string };
   claimReferralMilestone: (id: string) => void;
@@ -1175,6 +1176,59 @@ export const useAppStore = create<AppState>((set, get) => ({
     get().addTransaction({ userId: state.currentUser.id, type: 'reward', amount: earned, currency: rewardCurrency, status: 'completed', completedAt: new Date().toISOString() });
     const multLabel = multiplier > 1 ? ` (×${multiplier.toFixed(1)} boost!)` : '';
     get().addNotification({ userId: state.currentUser.id, type: 'reward', title: 'Tâche complétée!', message: `+${earned.toFixed(2)} TON${multLabel} pour "${task.title}"`, isRead: false });
+  },
+
+  completeTaskSecure: async (taskId) => {
+    const state = get();
+    const task  = state.tasks.find(t => t.id === taskId);
+    if (!task) return { success: false, error: 'Task not found' };
+    if (state.completedTaskIds.includes(taskId)) return { success: false, error: 'Already completed' };
+
+    const telegramId = state.currentUser.telegramId;
+    // No Telegram context (local dev / mock) — fall back to client-only completion
+    if (!telegramId) {
+      get().completeTask(taskId);
+      return { success: true, earned: task.reward };
+    }
+
+    const initData = (() => {
+      try {
+        return (window as unknown as { Telegram?: { WebApp?: { initData?: string } } })
+          .Telegram?.WebApp?.initData ?? '';
+      } catch { return ''; }
+    })();
+
+    try {
+      const res  = await fetch('/api/platform-tasks/complete', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ telegramId, taskId, initData }),
+      });
+      const body = await res.json() as { success?: boolean; earned?: number; error?: string };
+      if (!res.ok || !body.success) {
+        return { success: false, error: body.error ?? `Erreur ${res.status}` };
+      }
+      const earned = typeof body.earned === 'number' ? body.earned : task.reward;
+      // Apply local state — server already persisted the credit to app_balance
+      set(s => ({
+        completedTaskIds: [...s.completedTaskIds, taskId],
+        tasks: s.tasks.map(t => t.id === taskId ? { ...t, totalCompletions: t.totalCompletions + 1 } : t),
+        currentUser: {
+          ...s.currentUser,
+          balanceMain:         s.currentUser.balanceMain         + earned,
+          tasksCompleted:      s.currentUser.tasksCompleted      + 1,
+          dailyTasksCompleted: s.currentUser.dailyTasksCompleted + 1,
+          todayEarnings:       s.currentUser.todayEarnings       + earned,
+          totalEarnings:       s.currentUser.totalEarnings       + earned,
+        },
+      }));
+      get().addTransaction({ userId: state.currentUser.id, type: 'reward', amount: earned, currency: 'GRAM', status: 'completed', completedAt: new Date().toISOString() });
+      get().addNotification({ userId: state.currentUser.id, type: 'reward', title: 'Tâche complétée !', message: `+${earned.toFixed(4)} GRAM pour "${task.title}"`, isRead: false });
+      get().creditReferralBonus(earned);
+      return { success: true, earned };
+    } catch {
+      return { success: false, error: 'Serveur indisponible. Réessayez dans un instant.' };
+    }
   },
 
   creditReferralBonus: (earned) => {

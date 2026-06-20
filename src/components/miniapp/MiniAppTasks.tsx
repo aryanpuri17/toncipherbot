@@ -154,7 +154,7 @@ function taskAvatarColor(name: string): string {
 
 export const MiniAppTasks: React.FC = () => {
   const {
-    tasks, completedTaskIds, completeTask, creditReferralBonus,
+    tasks, completedTaskIds, completeTaskSecure, creditReferralBonus,
     setMiniAppPage, currentUser, platformConfig,
   } = useAppStore();
 
@@ -171,6 +171,7 @@ export const MiniAppTasks: React.FC = () => {
   const [completedApiTaskIds, setCompletedApiTaskIds] = useState<string[]>([]);
   const [uploadingProofId, setUploadingProofId] = useState<string | null>(null);
   const [tooEarlyInfo, setTooEarlyInfo] = useState<Record<string, true>>({});
+  const [taskErrors, setTaskErrors] = useState<Record<string, string>>({});
 
 
   // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -361,7 +362,7 @@ export const MiniAppTasks: React.FC = () => {
     }).catch(() => { /* silent — client-side timer still works */ });
   };
 
-  const handleStart = (card: CardTask) => {
+  const handleStart = async (card: CardTask) => {
     const phase = getPhase(card.id);
     if (phase === 'completing' || phase === 'done') return;
     if (card.source === 'platform' && completedTaskIds.includes(card.id)) return;
@@ -376,7 +377,13 @@ export const MiniAppTasks: React.FC = () => {
 
     if (card.isInstant) {
       setPhase(card.id, 'completing');
-      completeTask(card.id);
+      const res = await completeTaskSecure(card.id);
+      if (!res.success) {
+        setTaskErrors(prev => ({ ...prev, [card.id]: res.error ?? 'Erreur serveur' }));
+        setPhase(card.id, 'not_subscribed');
+        haptic.error();
+        return;
+      }
       timerRefs.current[card.id] = setTimeout(() => {
         setPhase(card.id, 'done');
         haptic.success();
@@ -408,7 +415,13 @@ export const MiniAppTasks: React.FC = () => {
       const ok = await creditApiTask(card.id, card.reward);
       if (!ok) return;
     } else {
-      completeTask(card.id);
+      const res = await completeTaskSecure(card.id);
+      if (!res.success) {
+        setTaskErrors(prev => ({ ...prev, [card.id]: res.error ?? 'Erreur serveur' }));
+        setPhase(card.id, 'not_subscribed');
+        haptic.error();
+        return;
+      }
     }
     timerRefs.current[card.id] = setTimeout(() => {
       setPhase(card.id, 'done');
@@ -496,7 +509,13 @@ export const MiniAppTasks: React.FC = () => {
       const ok = await creditApiTask(card.id, card.reward);
       if (!ok) return;
     } else {
-      completeTask(card.id);
+      const res = await completeTaskSecure(card.id);
+      if (!res.success) {
+        setTaskErrors(prev => ({ ...prev, [card.id]: res.error ?? 'Erreur serveur' }));
+        setPhase(card.id, 'not_subscribed');
+        haptic.error();
+        return;
+      }
     }
     timerRefs.current[card.id] = setTimeout(() => {
       setPhase(card.id, 'done');
@@ -510,8 +529,8 @@ export const MiniAppTasks: React.FC = () => {
   // ── Card renderer ────────────────────────────────────────────────────────────
 
   const handlePromoComplete = async (task: { id: string; reward: number }) => {
-    completeTask(task.id);
-    haptic.success();
+    const res = await completeTaskSecure(task.id);
+    if (res.success) haptic.success();
   };
 
   // ── Signature colour tokens ────────────────────────────────────────────────
@@ -713,14 +732,16 @@ export const MiniAppTasks: React.FC = () => {
 
         {phase === 'not_subscribed' && (
           <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', padding: '8px 14px', background: 'rgba(239,68,68,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-            <span style={{ fontSize: 11, color: '#f87171', fontWeight: 600 }}>
-              {(card.type === 'join_channel' || card.type === 'join_group')
-                ? 'Non membre — rejoins d\'abord le canal'
-                : (card.type === 'social' || card.type === 'watch_video')
-                  ? 'Trop tôt — reste 30s dans l\'app externe'
-                  : 'Non vérifié — réessaie'}
+            <span style={{ fontSize: 11, color: '#f87171', fontWeight: 600, flex: 1 }}>
+              {taskErrors[card.id] ?? (
+                (card.type === 'join_channel' || card.type === 'join_group')
+                  ? "Non membre — rejoins d'abord le canal"
+                  : (card.type === 'social' || card.type === 'watch_video')
+                    ? 'Trop tôt — reste 30s dans l\'app externe'
+                    : 'Non vérifié — réessaie'
+              )}
             </span>
-            <button onClick={() => void handleVerify(card)} style={{ padding: '5px 10px', borderRadius: 8, background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)', color: '#f87171', fontSize: 10, fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}>
+            <button onClick={() => { setTaskErrors(prev => { const n = { ...prev }; delete n[card.id]; return n; }); void handleVerify(card); }} style={{ padding: '5px 10px', borderRadius: 8, background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)', color: '#f87171', fontSize: 10, fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}>
               Réessayer
             </button>
           </div>
