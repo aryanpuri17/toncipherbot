@@ -92,6 +92,22 @@ WD_DAILY_LIMIT = float(os.getenv("WD_DAILY_LIMIT", "1000.0")) # per-user daily t
 WD_MAX_PENDING = int(os.getenv("WD_MAX_PENDING",   "3"))       # max simultaneous pending per user
 WD_MIN_TASKS   = int(os.getenv("WD_MIN_TASKS",     "3"))       # min completed tasks before first withdrawal
 
+# ── Game security limits (server-authoritative) ────────────────────────────────
+# max_multiplier: maximum payout / bet ratio allowed (caps win reporting)
+GAME_CONFIG: dict[str, dict] = {
+    'Crash':     {'max_multiplier': 100.0,  'max_bet': 10.0},
+    'Dice':      {'max_multiplier': 6.0,    'max_bet':  5.0},
+    'Mines':     {'max_multiplier': 24.0,   'max_bet':  5.0},
+    'Wheel':     {'max_multiplier': 50.0,   'max_bet':  5.0},
+    'Jackpot':   {'max_multiplier': 100.0,  'max_bet':  2.0},
+    'Balloon':   {'max_multiplier': 100.0,  'max_bet':  5.0},
+    'Limbo':     {'max_multiplier': 1000.0, 'max_bet':  1.0},
+    'Blackjack': {'max_multiplier': 4.0,    'max_bet':  5.0},
+    'Plinko':    {'max_multiplier': 50.0,   'max_bet':  5.0},
+}
+GAME_MIN_BET        = float(os.getenv("GAME_MIN_BET",        "0.001"))
+GAME_DAILY_WIN_LIMIT = float(os.getenv("GAME_DAILY_WIN_LIMIT", "50.0"))
+
 # ── Platform task definitions (server-authoritative) ──────────────────────────
 # Keys must match id values in frontend _defaultTasks.
 # verification: 'none'|'channel'|'bot'|'timer'|'referral'|'proof'
@@ -575,6 +591,22 @@ async def init_db() -> None:
         await db.execute(
             "CREATE INDEX IF NOT EXISTS idx_ptc_lookup"
             " ON platform_task_completions(telegram_id, task_id, completed_at)"
+        )
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS game_rounds (
+                id           TEXT    PRIMARY KEY,
+                telegram_id  INTEGER NOT NULL,
+                game         TEXT    NOT NULL,
+                bet          REAL    NOT NULL,
+                win          REAL    NOT NULL DEFAULT 0,
+                multiplier   REAL    NOT NULL DEFAULT 0,
+                status       TEXT    NOT NULL DEFAULT 'completed',
+                created_at   TEXT    NOT NULL DEFAULT (datetime('now'))
+            )
+        """)
+        await db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_gr_lookup"
+            " ON game_rounds(telegram_id, created_at)"
         )
         # A given on-chain tx hash may only be credited once — blocks deposit replay
         await db.execute("""
@@ -1646,17 +1678,6 @@ async def api_user_balance_set(request: web.Request) -> web.Response:
     if not _verify_user_request(init_data, telegram_id):
         return web.json_response({"error": "Authentication required"}, status=401, headers=_CORS)
 
-    def _nonneg(key: str) -> float | None:
-        try:
-            value = float(data.get(key, 0))
-        except (TypeError, ValueError):
-            return None
-        return value if math.isfinite(value) and 0 <= value <= 1e9 else None
-
-    balance = _nonneg("balance")
-    total   = _nonneg("totalEarnings")
-    if balance is None:
-        return web.json_response({"error": "Invalid balance"}, status=400, headers=_CORS)
     try:
         tasks_done = max(0, min(10_000_000, int(data.get("tasksCompleted", 0))))
     except (TypeError, ValueError):
@@ -1666,13 +1687,14 @@ async def api_user_balance_set(request: web.Request) -> web.Response:
     completed_tasks = [str(t)[:64] for t in raw_completed[:300]] if isinstance(raw_completed, list) else []
 
     async with aiosqlite.connect(DB_PATH) as db:
+        # Only sync task metadata — app_balance is managed server-side exclusively
+        # (tasks, deposits, game results, withdrawals all go through validated endpoints).
+        # Accepting a client-supplied balance here would allow localStorage manipulation attacks.
         await db.execute(
             """UPDATE users
-               SET app_balance = ?, app_total_earnings = ?, app_tasks_completed = ?,
-                   app_completed_tasks = ?
+               SET app_tasks_completed = ?, app_completed_tasks = ?
                WHERE telegram_id = ?""",
-            (balance, total if total is not None else 0.0, tasks_done,
-             json.dumps(completed_tasks), telegram_id),
+            (tasks_done, json.dumps(completed_tasks), telegram_id),
         )
         await db.commit()
 
@@ -3728,6 +3750,124 @@ async def api_platform_tasks_completed(request: web.Request) -> web.Response:
     return web.json_response(task_ids, headers=_CORS)
 
 
+# ── API — Game result (server-side win validation) ────────────────────────────
+
+async def api_game_result(request: web.Request) -> web.Response:
+    """Record a completed game round and credit/debit app_balance.
+
+    Security model:
+    - initData signature verifies the Telegram identity
+    - Win is capped at bet × GAME_CONFIG[game]['max_multiplier']
+    - Per-user daily win total is enforced (GAME_DAILY_WIN_LIMIT)
+    - Rate-limited per IP like all other sensitive endpoints
+    - app_balance is updated atomically; losses are subtracted
+    """
+    ip = _client_ip(request)
+    if _is_rate_limited(ip):
+        return web.json_response({"error": "Rate limit exceeded"}, status=429, headers=_CORS)
+
+    try:
+        data = await request.json()
+    except Exception:
+        return web.json_response({"error": "Invalid JSON"}, status=400, headers=_CORS)
+
+    telegram_id = _parse_telegram_id(data.get("telegramId"))
+    init_data   = str(data.get("initData", "")).strip()
+    game        = str(data.get("game", "")).strip()[:32]
+    bet         = _parse_amount(data.get("bet"))
+    win         = _parse_amount(data.get("win"))
+
+    if not telegram_id or bet is None or win is None:
+        return web.json_response({"error": "Données manquantes"}, status=400, headers=_CORS)
+
+    if not _verify_user_request(init_data, telegram_id):
+        return web.json_response({"error": "Authentification requise"}, status=401, headers=_CORS)
+
+    # Validate game name
+    game_cfg = GAME_CONFIG.get(game)
+    if not game_cfg:
+        return web.json_response({"error": f"Jeu inconnu : {game}"}, status=400, headers=_CORS)
+
+    # Validate bet
+    if bet < GAME_MIN_BET:
+        return web.json_response({"error": f"Mise minimale : {GAME_MIN_BET} GRAM"}, status=400, headers=_CORS)
+    if bet > game_cfg['max_bet']:
+        return web.json_response(
+            {"error": f"Mise maximale pour {game} : {game_cfg['max_bet']} GRAM"},
+            status=400, headers=_CORS
+        )
+
+    # Cap win at max multiplier — rejects any impossible payout
+    max_win = round(bet * game_cfg['max_multiplier'], 6)
+    if win > max_win:
+        log.warning("Game win cap triggered: user=%d game=%s bet=%.4f claimed_win=%.4f max=%.4f",
+                    telegram_id, game, bet, win, max_win)
+        win = max_win
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        # Check user exists and is not banned
+        async with db.execute(
+            "SELECT banned, app_balance FROM users WHERE telegram_id = ?", (telegram_id,)
+        ) as cur:
+            urow = await cur.fetchone()
+        if not urow:
+            return web.json_response({"error": "Utilisateur introuvable"}, status=404, headers=_CORS)
+        if urow[0]:
+            return web.json_response({"error": "Compte banni"}, status=403, headers=_CORS)
+
+        server_balance = float(urow[1] or 0)
+
+        # Validate server-side balance covers the bet (anti-overdraft)
+        if bet > server_balance:
+            return web.json_response(
+                {"error": f"Solde serveur insuffisant ({server_balance:.4f} GRAM)"},
+                status=400, headers=_CORS
+            )
+
+        # Daily win cap — sum of wins (not net) today
+        if win > 0:
+            async with db.execute(
+                "SELECT COALESCE(SUM(win), 0) FROM game_rounds"
+                " WHERE telegram_id = ? AND DATE(created_at) = DATE('now')",
+                (telegram_id,)
+            ) as cur:
+                (daily_won,) = await cur.fetchone()
+            if float(daily_won or 0) + win > GAME_DAILY_WIN_LIMIT:
+                remaining = max(0.0, GAME_DAILY_WIN_LIMIT - float(daily_won or 0))
+                return web.json_response(
+                    {"error": f"Limite de gains journalière atteinte. "
+                              f"Restant aujourd'hui : {remaining:.2f} GRAM"},
+                    status=400, headers=_CORS
+                )
+
+        # Compute multiplier for logging (0 on loss)
+        multiplier = round(win / bet, 4) if bet > 0 and win > 0 else 0.0
+        net = round(win - bet, 6)  # positive = win, negative = loss
+
+        # Atomic balance update
+        round_id = str(uuid.uuid4())
+        await db.execute(
+            "INSERT INTO game_rounds (id, telegram_id, game, bet, win, multiplier)"
+            " VALUES (?, ?, ?, ?, ?, ?)",
+            (round_id, telegram_id, game, bet, win, multiplier)
+        )
+        await db.execute(
+            "UPDATE users SET app_balance = MAX(0, COALESCE(app_balance, 0) + ?)"
+            " WHERE telegram_id = ?",
+            (net, telegram_id)
+        )
+        await db.commit()
+
+        # Return updated balance so the frontend can correct its local state
+        async with db.execute(
+            "SELECT app_balance FROM users WHERE telegram_id = ?", (telegram_id,)
+        ) as cur:
+            row = await cur.fetchone()
+        new_balance = float(row[0] or 0) if row else server_balance + net
+
+    return web.json_response({"success": True, "newBalance": new_balance}, headers=_CORS)
+
+
 # ── Web Application ────────────────────────────────────────────────────────────
 
 async def start_web() -> None:
@@ -3748,6 +3888,7 @@ async def start_web() -> None:
     app.router.add_get( "/api/task/verify-timer",            api_task_verify_timer)
     app.router.add_post("/api/platform-tasks/complete",      api_platform_task_complete)
     app.router.add_get( "/api/platform-tasks/completed",     api_platform_tasks_completed)
+    app.router.add_post("/api/game/result",                   api_game_result)
     app.router.add_get( "/api/check-membership",           api_check_membership)
     app.router.add_get( "/api/check-bot-start",            api_check_bot_start)
     app.router.add_get( "/api/check-bot-verify",           api_check_bot_verify)

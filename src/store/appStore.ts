@@ -1430,6 +1430,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   recordGameResult: (game, bet, win) => {
+    const state = get();
     set(s => {
       if (s.demoMode) return {};
       const entry: GameResult = { game, bet, win, ts: Date.now() };
@@ -1437,6 +1438,41 @@ export const useAppStore = create<AppState>((set, get) => ({
       try { localStorage.setItem('tc_game_history', JSON.stringify(updated)); } catch { /* noop */ }
       return { gameHistory: updated };
     });
+    // Report result to server for validation and balance update.
+    // Skipped in demo mode and for dev accounts (telegramId === 0).
+    if (!state.demoMode && state.currentUser.telegramId !== 0) {
+      const initData = (window as unknown as { Telegram?: { WebApp?: { initData?: string } } })
+        ?.Telegram?.WebApp?.initData ?? '';
+      void fetch('/api/game/result', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          telegramId: state.currentUser.telegramId,
+          game,
+          bet: +bet.toFixed(6),
+          win: +win.toFixed(6),
+          initData,
+        }),
+      }).then(async res => {
+        if (!res.ok) return;
+        const body = await res.json() as { success?: boolean; newBalance?: number };
+        if (body.success && typeof body.newBalance === 'number') {
+          // Correct local balance to match server-authoritative value
+          set(s => {
+            if (s.demoMode) return {};
+            const updatedUser = { ...s.currentUser, balanceMain: body.newBalance! };
+            try {
+              const saved = JSON.parse(localStorage.getItem('tc_balance') || '{}') as Record<string, number>;
+              localStorage.setItem('tc_balance', JSON.stringify({ ...saved, balanceMain: body.newBalance }));
+            } catch { /* noop */ }
+            return {
+              currentUser: updatedUser,
+              users: s.users.map(u => u.id === s.currentUser.id ? { ...u, ...updatedUser } : u),
+            };
+          });
+        }
+      }).catch(() => { /* server unavailable — local state already updated */ });
+    }
   },
 
   activatePromoEvent: (multiplier, hours, label) => {
