@@ -219,14 +219,21 @@ export const MiniAppTasks: React.FC = () => {
         }
         setTaskStates(prev => ({ ...prev, [id]: { phase: afterPhase(entry) } }));
       } else {
+        // User came back too early → RESET the full timer from NOW
+        const resetEntry: DepartEntry = { ...entry, ts: Date.now() };
+        localStorage.setItem(key, JSON.stringify(resetEntry));
         setTaskStates(prev => ({ ...prev, [id]: { phase: 'too_early' } }));
+        haptic.error();
+
+        // Cancel old in-memory timeout and restart from full duration
         const autoKey = `depart_auto_${id}`;
+        if (timerRefs.current[autoKey]) { clearTimeout(timerRefs.current[autoKey]); delete timerRefs.current[autoKey]; }
         const entryType = entry.type ?? '';
-        if (entryType !== 'social' && entryType !== 'watch_video' && !timerRefs.current[autoKey]) {
+        if (entryType !== 'social' && entryType !== 'watch_video') {
           timerRefs.current[autoKey] = setTimeout(() => {
             delete timerRefs.current[autoKey];
-            setTaskStates(prev => ({ ...prev, [id]: { phase: afterPhase(entry) } }));
-          }, remainingMs);
+            setTaskStates(prev => ({ ...prev, [id]: { phase: afterPhase(resetEntry) } }));
+          }, resetEntry.ms);
         }
       }
     });
@@ -543,6 +550,23 @@ export const MiniAppTasks: React.FC = () => {
       setPhase(card.id, 'not_subscribed');
       haptic.error();
       return;
+    }
+
+    // For platform join_channel / join_group: verify real Telegram membership via bot API
+    if (card.source === 'platform' && (card.type === 'join_channel' || card.type === 'join_group') && card.targetUrl) {
+      const chatRefMatch = card.targetUrl.match(/t\.me\/([^/?+]+)/);
+      const chatRef = chatRefMatch ? `@${chatRefMatch[1]}` : null;
+      if (chatRef) {
+        try {
+          const res = await fetch(`/api/check-membership?telegram_id=${currentUser.telegramId}&chat_id=${encodeURIComponent(chatRef)}`);
+          const { member } = await res.json() as { member: boolean };
+          if (!member) {
+            setPhase(card.id, 'not_subscribed');
+            haptic.error();
+            return;
+          }
+        } catch { /* network error → allow through, timer already validated */ }
+      }
     }
 
     localStorage.removeItem(departKey(card.id));
