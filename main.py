@@ -2587,6 +2587,10 @@ async def api_user_task_create(request: web.Request) -> web.Response:
 
 
 async def api_user_task_mine(request: web.Request) -> web.Response:
+    ip = _client_ip(request)
+    if _is_rate_limited(ip):
+        return web.json_response([], headers=_CORS)
+
     try:
         telegram_id = int(request.rel_url.query.get("telegram_id", 0))
     except (ValueError, TypeError):
@@ -3239,6 +3243,10 @@ async def api_admin_reject_user_task(request: web.Request) -> web.Response:
 
 async def api_pending_proofs(request: web.Request) -> web.Response:
     """Pending social proofs for tasks created by a given user."""
+    ip = _client_ip(request)
+    if _is_rate_limited(ip):
+        return web.json_response([], headers=_CORS)
+
     try:
         telegram_id = int(request.rel_url.query.get("telegramId", 0))
     except (ValueError, TypeError):
@@ -3282,13 +3290,21 @@ async def api_pending_proofs(request: web.Request) -> web.Response:
 
 async def api_review_proof(request: web.Request) -> web.Response:
     """Creator approves or rejects a pending social proof."""
+    ip = _client_ip(request)
+    if _is_rate_limited(ip):
+        return web.json_response({"error": "Rate limit exceeded"}, status=429, headers=_CORS)
+
     proof_id = request.match_info.get("id", "")
     try:
         data        = await request.json()
         telegram_id = int(data.get("telegramId", 0))
         action      = data.get("action", "")
+        init_data   = str(data.get("initData", ""))
     except Exception:
         return web.json_response({"error": "Invalid JSON"}, status=400, headers=_CORS)
+
+    if not _verify_user_request(init_data, telegram_id):
+        return web.json_response({"error": "Unauthorized"}, status=401, headers=_CORS)
 
     if action not in ("approve", "reject"):
         return web.json_response({"error": "Invalid action"}, status=400, headers=_CORS)
@@ -3373,12 +3389,20 @@ async def api_proof_image(request: web.Request) -> web.Response:
 
 async def api_report_proof_abuse(request: web.Request) -> web.Response:
     """Worker reports that a task creator is abusively rejecting proofs."""
+    ip = _client_ip(request)
+    if _is_rate_limited(ip):
+        return web.json_response({"error": "Rate limit exceeded"}, status=429, headers=_CORS)
+
     try:
         data        = await request.json()
         telegram_id = int(data.get("telegramId", 0))
         task_id     = data.get("taskId", "")
+        init_data   = str(data.get("initData", ""))
     except Exception:
         return web.json_response({"error": "Invalid JSON"}, status=400, headers=_CORS)
+
+    if not _verify_user_request(init_data, telegram_id):
+        return web.json_response({"error": "Unauthorized"}, status=401, headers=_CORS)
 
     if not telegram_id or not task_id:
         return web.json_response({"error": "Missing fields"}, status=400, headers=_CORS)

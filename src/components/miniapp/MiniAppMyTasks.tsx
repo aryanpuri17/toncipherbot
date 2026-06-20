@@ -204,7 +204,7 @@ export const MiniAppMyTasks: React.FC = () => {
       const res = await fetch(`/api/social-proof/${proof.id}/review`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ telegramId: currentUser.telegramId, action }),
+        body: JSON.stringify({ telegramId: currentUser.telegramId, action, initData: _getInitData() }),
       });
       const data = await res.json() as { success: boolean };
       if (data.success) {
