@@ -385,9 +385,15 @@ export const MiniAppDeposit: React.FC = () => {
       }).catch(() => {});
       setSuccessMsg(`✅ ${amount} GRAM credited to your account!`);
       setTxStatus('success');
-    } catch {
-      setTxStatus('error');
-      setTxError('Transaction cancelled or network error.');
+    } catch (e: unknown) {
+      const msg = (e instanceof Error ? e.message : String(e)).toLowerCase();
+      const isCancel = msg.includes('user reject') || msg.includes('cancel') || msg.includes('deny') || msg.includes('declined');
+      if (isCancel) {
+        setTxStatus('idle'); // user cancelled — silent reset
+      } else {
+        setTxStatus('error');
+        setTxError('Transaction failed. Please try again.');
+      }
     }
   };
 
@@ -442,14 +448,16 @@ export const MiniAppDeposit: React.FC = () => {
       setSuccessMsg(`✅ ${usdtAmount} USDT sent → +${gram} GRAM credited to your account!`);
       setTxStatus('success');
     } catch (e: unknown) {
-      setTxStatus('error');
-      const msg = e instanceof Error ? e.message : '';
-      if (msg.toLowerCase().includes('no usdt wallet')) {
-        setTxError('You do not have USDT in this wallet.');
-      } else if (msg.toLowerCase().includes('cancelled') || msg.toLowerCase().includes('cancel')) {
-        setTxError('Transaction cancelled.');
+      const msg = (e instanceof Error ? e.message : String(e)).toLowerCase();
+      const isCancel = msg.includes('user reject') || msg.includes('cancel') || msg.includes('deny') || msg.includes('declined');
+      if (isCancel) {
+        setTxStatus('idle'); // user cancelled — silent reset
+      } else if (msg.includes('no usdt wallet') || msg.includes('no jetton')) {
+        setTxStatus('error');
+        setTxError('No USDT found in this wallet. Top up your wallet first.');
       } else {
-        setTxError('Error during sending. Check your USDT balance and try again.');
+        setTxStatus('error');
+        setTxError('Transaction failed. Make sure you have enough USDT and at least 0.06 TON for gas.');
       }
     }
   };
@@ -609,7 +617,7 @@ export const MiniAppDeposit: React.FC = () => {
             </div>
           )}
 
-          {/* When wallet IS connected: show connect indicator + address + register button */}
+          {/* When wallet IS connected: show connect indicator + amount + send */}
           {isWalletConnected && (
             <>
               <div className="flex items-center justify-between p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
@@ -622,18 +630,6 @@ export const MiniAppDeposit: React.FC = () => {
                   <Unlink className="w-3 h-3" /> Disconnect
                 </button>
               </div>
-
-              {hasAddress && (
-                <div>
-                  <p className="text-xs text-slate-400 mb-1.5">USDT deposit address</p>
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1 px-3 py-2.5 bg-white/5 rounded-lg text-xs text-white font-mono truncate">{address}</div>
-                    <button onClick={handleCopy} className="p-2.5 rounded-lg bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 transition-colors">
-                      {copied ? <CheckCircle className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                    </button>
-                  </div>
-                </div>
-              )}
 
               <div>
                 <p className="text-xs text-slate-400 mb-2">Amount sent (USDT)</p>
@@ -677,6 +673,13 @@ export const MiniAppDeposit: React.FC = () => {
                   Unable to retrieve market price. Please try again later.
                 </p>
               )}
+              {/* Deposit code — same as GRAM, auto-included as Jetton comment */}
+              <div className="p-3 rounded-xl bg-purple-500/5 border border-purple-500/20 flex items-start gap-2">
+                <span className="text-purple-400 text-xs">🔒</span>
+                <p className="text-[10px] text-slate-400">
+                  Deposit code <span className="font-mono font-bold text-purple-300">{depositCode}</span> automatically included in the transaction.
+                </p>
+              </div>
               <button onClick={() => void handleSendUSDT()}
                 disabled={txStatus === 'pending' || !depositAmount || !hasAddress || !tonPrice}
                 className="w-full btn-primary py-3.5 rounded-xl text-sm font-semibold text-white disabled:opacity-40 disabled:cursor-not-allowed">
