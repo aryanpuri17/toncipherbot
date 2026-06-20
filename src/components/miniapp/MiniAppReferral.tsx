@@ -77,7 +77,7 @@ const Leaderboard: React.FC = () => {
         {data.map((user, i) => {
           const isMe = user.telegramId === currentUser.telegramId;
           return (
-            <div key={user.telegramId} className="glass-card-light p-3.5 flex items-center gap-3" style={isMe ? { border: '1px solid rgba(79,111,240,0.30)', background: 'rgba(79,111,240,0.07)' } : {}}>
+            <div key={user.telegramId} className="glass-card-light p-3.5 flex items-center gap-3" style={isMe ? { border: '1px solid rgba(124,58,237,0.35)', background: 'rgba(124,58,237,0.09)' } : {}}>
               <span className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${i === 0 ? 'bg-amber-500/20 text-amber-400' : i === 1 ? 'bg-slate-300/20 text-slate-300' : i === 2 ? 'bg-orange-700/20 text-orange-400' : 'bg-white/5 text-slate-400'}`}>
                 {i < 3 ? medals[i] : i + 1}
               </span>
@@ -182,14 +182,14 @@ export const MiniAppReferral: React.FC = () => {
         <button
           onClick={() => setTab('invite')}
           className="flex-1 py-2 rounded-lg text-sm font-semibold transition-all"
-          style={tab === 'invite' ? { background: 'rgba(79,111,240,0.18)', color: '#7B93F5', border: '1px solid rgba(79,111,240,0.30)' } : { color: '#64748b' }}
+          style={tab === 'invite' ? { background: 'rgba(124,58,237,0.22)', color: '#A78BFA', border: '1px solid rgba(124,58,237,0.35)' } : { color: '#64748b' }}
         >
           👥 Inviter
         </button>
         <button
           onClick={() => setTab('classement')}
           className="flex-1 py-2 rounded-lg text-sm font-semibold transition-all"
-          style={tab === 'classement' ? { background: 'rgba(79,111,240,0.18)', color: '#7B93F5', border: '1px solid rgba(79,111,240,0.30)' } : { color: '#64748b' }}
+          style={tab === 'classement' ? { background: 'rgba(124,58,237,0.22)', color: '#A78BFA', border: '1px solid rgba(124,58,237,0.35)' } : { color: '#64748b' }}
         >
           🏆 Classement
         </button>
@@ -246,7 +246,7 @@ export const MiniAppReferral: React.FC = () => {
             <button
               onClick={handleShare}
               className="flex items-center justify-center gap-2 py-3.5 rounded-xl text-white text-sm font-bold transition-all"
-              style={{ background: 'linear-gradient(135deg,#4F6FF0,#3B55D9)', boxShadow: '0 6px 20px rgba(79,111,240,0.35)' }}
+              style={{ background: 'linear-gradient(135deg,#7C3AED,#5B21B6)', boxShadow: '0 6px 20px rgba(124,58,237,0.40)' }}
             >
               <Share2 className="w-4 h-4" />
               Partager
@@ -274,7 +274,7 @@ export const MiniAppReferral: React.FC = () => {
           {/* How it works */}
           <div className="glass-card p-4 space-y-3">
             <div className="flex items-center gap-2">
-              <div style={{ width: 3, height: 14, borderRadius: 99, background: 'linear-gradient(180deg,#4F6FF0,#4F6FF055)' }} />
+              <div style={{ width: 3, height: 14, borderRadius: 99, background: 'linear-gradient(180deg,#7C3AED,#7C3AED55)' }} />
               <p className="text-xs font-bold text-slate-300 uppercase tracking-wider">Comment ça marche</p>
             </div>
             <div className="flex items-start gap-0">
@@ -287,7 +287,7 @@ export const MiniAppReferral: React.FC = () => {
                   <div className="flex flex-col items-center text-center flex-1 gap-2">
                     <div
                       className={`w-10 h-10 rounded-xl flex items-center justify-center ${step.sig ? '' : (step.color ?? '')}`}
-                      style={step.sig ? { background: 'rgba(79,111,240,0.18)', boxShadow: '0 4px 12px rgba(79,111,240,0.28)', color: '#7B93F5' } : {}}
+                      style={step.sig ? { background: 'rgba(124,58,237,0.22)', boxShadow: '0 4px 12px rgba(124,58,237,0.35)', color: '#A78BFA' } : {}}
                     >
                       {step.icon}
                     </div>
@@ -328,7 +328,7 @@ export const MiniAppReferral: React.FC = () => {
                           <div className="flex-1 h-1.5 rounded-full bg-white/10 overflow-hidden">
                             <div
                               className={`h-full rounded-full transition-all ${claimed ? 'bg-emerald-500' : unlocked ? 'bg-amber-500' : ''}`}
-                              style={{ width: `${progress * 100}%`, ...(!claimed && !unlocked ? { background: '#4F6FF0' } : {}) }}
+                              style={{ width: `${progress * 100}%`, ...(!claimed && !unlocked ? { background: '#7C3AED' } : {}) }}
                             />
                           </div>
                           <span className="text-[10px] text-slate-500 shrink-0">

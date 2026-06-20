@@ -515,12 +515,12 @@ export const MiniAppTasks: React.FC = () => {
   };
 
   // ── Signature colour tokens ────────────────────────────────────────────────
-  const SIG        = '#4F6FF0';
-  const SIG_LIGHT  = '#7B93F5';
-  const SIG_GLOW   = 'rgba(79,111,240,0.28)';
-  const SIG_BG     = 'rgba(79,111,240,0.08)';
-  const SIG_BORDER = 'rgba(79,111,240,0.20)';
-  const SIG_ICON   = 'rgba(79,111,240,0.18)';
+  const SIG        = '#7C3AED';
+  const SIG_LIGHT  = '#A78BFA';
+  const SIG_GLOW   = 'rgba(124,58,237,0.35)';
+  const SIG_BG     = 'rgba(124,58,237,0.10)';
+  const SIG_BORDER = 'rgba(124,58,237,0.28)';
+  const SIG_ICON   = 'rgba(124,58,237,0.22)';
 
   const renderCard = (card: CardTask) => {
     const config      = typeConfig[card.type] ?? typeConfig.special;

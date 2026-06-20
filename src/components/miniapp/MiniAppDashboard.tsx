@@ -151,16 +151,16 @@ export const MiniAppDashboard: React.FC = () => {
 
       {/* Quick Stats */}
       <div className="grid grid-cols-2 gap-3">
-        <div className="stat-card glass-card p-4 relative overflow-hidden" style={{ background: 'rgba(79,111,240,0.07)', border: '1px solid rgba(79,111,240,0.18)', borderRadius: 16 }}>
+        <div className="stat-card glass-card p-4 relative overflow-hidden" style={{ background: 'rgba(124,58,237,0.09)', border: '1px solid rgba(124,58,237,0.22)', borderRadius: 16 }}>
           <div className="relative">
-            <div className="w-9 h-9 rounded-xl flex items-center justify-center mb-2.5" style={{ background: 'rgba(79,111,240,0.18)', boxShadow: '0 4px 12px rgba(79,111,240,0.28)' }}>
-              <ListTodo className="w-4 h-4" style={{ color: '#7B93F5' }} />
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center mb-2.5" style={{ background: 'rgba(124,58,237,0.22)', boxShadow: '0 4px 12px rgba(124,58,237,0.35)' }}>
+              <ListTodo className="w-4 h-4" style={{ color: '#A78BFA' }} />
             </div>
             <p className="text-2xl font-bold text-white leading-none">
               <CountUp value={u.tasksCompleted} decimals={0} animateOnMount />
             </p>
             <p className="text-[11px] text-slate-400 mt-1">Tâches complétées</p>
-            <div className="absolute bottom-0 left-0 right-0 h-0.5 rounded-b-2xl" style={{ background: 'linear-gradient(90deg,#4F6FF0,transparent)' }} />
+            <div className="absolute bottom-0 left-0 right-0 h-0.5 rounded-b-2xl" style={{ background: 'linear-gradient(90deg,#7C3AED,transparent)' }} />
           </div>
         </div>
         <div className="stat-card glass-card p-4 relative overflow-hidden" style={{ background: 'rgba(16,185,129,0.07)', border: '1px solid rgba(16,185,129,0.18)', borderRadius: 16 }}>
@@ -211,10 +211,10 @@ export const MiniAppDashboard: React.FC = () => {
       <div>
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
-            <div style={{ width: 3, height: 16, borderRadius: 99, background: 'linear-gradient(180deg,#4F6FF0,#4F6FF055)', flexShrink: 0 }} />
+            <div style={{ width: 3, height: 16, borderRadius: 99, background: 'linear-gradient(180deg,#7C3AED,#7C3AED55)', flexShrink: 0 }} />
             <h2 className="text-sm font-semibold text-white">Tâches disponibles</h2>
           </div>
-          <button onClick={() => setMiniAppPage('tasks')} className="text-xs flex items-center gap-1 hover:underline" style={{ color: '#7B93F5' }}>
+          <button onClick={() => setMiniAppPage('tasks')} className="text-xs flex items-center gap-1 hover:underline" style={{ color: '#A78BFA' }}>
             Voir tout <ChevronRight className="w-3 h-3" />
           </button>
         </div>
@@ -223,9 +223,9 @@ export const MiniAppDashboard: React.FC = () => {
             const isPromoActive = task.promotion && new Date(task.promotion.endsAt) > new Date();
             const displayReward = task.reward * (isPromoActive ? task.promotion!.multiplier : 1);
             return (
-              <div key={task.id} className="p-3.5 flex items-center gap-3" style={{ background: isPromoActive ? 'rgba(245,158,11,0.07)' : 'rgba(79,111,240,0.07)', border: `1px solid ${isPromoActive ? 'rgba(245,158,11,0.25)' : 'rgba(79,111,240,0.18)'}`, borderRadius: 12 }}>
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(79,111,240,0.18)', boxShadow: '0 3px 10px rgba(79,111,240,0.25)' }}>
-                  {task.icon ? <span className="text-base">{task.icon}</span> : <ListTodo className="w-4 h-4" style={{ color: '#7B93F5' }} />}
+              <div key={task.id} className="p-3.5 flex items-center gap-3" style={{ background: isPromoActive ? 'rgba(245,158,11,0.07)' : 'rgba(124,58,237,0.09)', border: `1px solid ${isPromoActive ? 'rgba(245,158,11,0.25)' : 'rgba(124,58,237,0.22)'}`, borderRadius: 12 }}>
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(124,58,237,0.22)', boxShadow: '0 3px 10px rgba(124,58,237,0.30)' }}>
+                  {task.icon ? <span className="text-base">{task.icon}</span> : <ListTodo className="w-4 h-4" style={{ color: '#A78BFA' }} />}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5">

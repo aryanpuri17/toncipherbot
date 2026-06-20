@@ -134,7 +134,7 @@ const TxRow: React.FC<{ tx: Tx }> = ({ tx }) => {
                                  ? ''                                   :
                                    'bg-slate-500/20 text-slate-400'
       }`}
-      style={tx.type === 'reward' || tx.type === 'referral' || tx.type === 'bonus' ? { background: 'rgba(79,111,240,0.18)', color: '#7B93F5', boxShadow: '0 3px 10px rgba(79,111,240,0.25)' } : {}}
+      style={tx.type === 'reward' || tx.type === 'referral' || tx.type === 'bonus' ? { background: 'rgba(124,58,237,0.22)', color: '#A78BFA', boxShadow: '0 3px 10px rgba(124,58,237,0.30)' } : {}}
       >
         {TX_ICON[tx.type] ?? <TrendingUp className="w-4 h-4" />}
       </div>
@@ -250,10 +250,10 @@ export const MiniAppWallet: React.FC = () => {
       <div>
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
-            <div style={{ width: 3, height: 16, borderRadius: 99, background: 'linear-gradient(180deg,#4F6FF0,#4F6FF055)', flexShrink: 0 }} />
+            <div style={{ width: 3, height: 16, borderRadius: 99, background: 'linear-gradient(180deg,#7C3AED,#7C3AED55)', flexShrink: 0 }} />
             <h2 className="text-sm font-semibold text-white">Historique</h2>
           </div>
-          <button onClick={() => setMiniAppPage('history')} className="text-xs flex items-center gap-1" style={{ color: '#7B93F5' }}>
+          <button onClick={() => setMiniAppPage('history')} className="text-xs flex items-center gap-1" style={{ color: '#A78BFA' }}>
             Tout voir <ChevronRight className="w-3 h-3" />
           </button>
         </div>
@@ -502,7 +502,7 @@ export const MiniAppDeposit: React.FC = () => {
             <button key={net.id}
               onClick={() => { setSelectedId(net.id); setTxStatus('idle'); setTxError(''); setDepositAmount(''); }}
               className={`p-3 rounded-xl text-center transition-all ${selectedId === net.id ? 'text-white' : 'glass-card-light text-slate-400 hover:text-white'}`}
-              style={selectedId === net.id ? { background: 'rgba(79,111,240,0.15)', border: '1px solid rgba(79,111,240,0.38)', boxShadow: '0 4px 14px rgba(79,111,240,0.20)' } : {}}>
+              style={selectedId === net.id ? { background: 'rgba(124,58,237,0.18)', border: '1px solid rgba(124,58,237,0.45)', boxShadow: '0 4px 14px rgba(124,58,237,0.28)' } : {}}>
               <span className="text-xl block mb-1">{networkIcon(net.symbol)}</span>
               <span className="text-xs font-medium">{displaySymbol(net.symbol)}</span>
               <span className="text-[9px] text-slate-500 block">{net.network}</span>
@@ -535,7 +535,7 @@ export const MiniAppDeposit: React.FC = () => {
             </div>
           ) : (
             <button onClick={() => tonConnectUI.openModal()}
-              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold transition-all" style={{ background: 'rgba(79,111,240,0.15)', border: '1px solid rgba(79,111,240,0.30)', color: '#7B93F5' }}>
+              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold transition-all" style={{ background: 'rgba(124,58,237,0.18)', border: '1px solid rgba(124,58,237,0.35)', color: '#A78BFA' }}>
               <Wallet className="w-4 h-4" /> Connecter wallet
             </button>
           )}
