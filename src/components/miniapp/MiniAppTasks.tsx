@@ -445,7 +445,10 @@ export const MiniAppTasks: React.FC = () => {
       for (const key of keys) {
         const taskId = key.replace('tc_proof_sent_', '');
         try {
-          const res = await fetch(`/api/check-social-proof?telegramId=${tid}&taskId=${taskId}`);
+          const initData = (window as unknown as { Telegram?: { WebApp?: { initData?: string } } })?.Telegram?.WebApp?.initData ?? '';
+          const res = await fetch(`/api/check-social-proof?telegramId=${tid}&taskId=${taskId}`, {
+            headers: initData ? { 'X-Init-Data': initData } : {},
+          });
           const { status } = await res.json() as { status: string };
           if (status === 'approved') {
             localStorage.removeItem(key);
@@ -491,9 +494,10 @@ export const MiniAppTasks: React.FC = () => {
           try {
             const ctrl = new AbortController();
             const tId  = setTimeout(() => ctrl.abort(), 5000);
+            const memberInitData = (window as unknown as { Telegram?: { WebApp?: { initData?: string } } })?.Telegram?.WebApp?.initData ?? '';
             const res  = await fetch(
               `/api/check-membership?telegram_id=${currentUser.telegramId}&chat_id=${encodeURIComponent(`@${chatRef}`)}`,
-              { signal: ctrl.signal },
+              { signal: ctrl.signal, headers: memberInitData ? { 'X-Init-Data': memberInitData } : {} },
             );
             clearTimeout(tId);
             const { member } = await res.json() as { member: boolean };

@@ -1684,6 +1684,13 @@ async def api_check_membership(request: web.Request) -> web.Response:
     except (ValueError, TypeError):
         return web.json_response({"member": True}, headers=_CORS)
 
+    init_data = request.headers.get("X-Init-Data", "")
+    if BOT_TOKEN and telegram_id:
+        if not init_data or not _validate_init_data(init_data, BOT_TOKEN):
+            return web.json_response({"error": "Authentication required"}, status=401, headers=_CORS)
+        if _init_data_user_id(init_data) != telegram_id:
+            return web.json_response({"error": "Forbidden"}, status=403, headers=_CORS)
+
     chat_id = request.rel_url.query.get("chat_id", "").strip() or OFFICIAL_CHANNEL
 
     if not bot or not chat_id or not telegram_id:
@@ -1717,6 +1724,14 @@ async def api_check_bot_start(request: web.Request) -> web.Response:
         return web.json_response({"started": False}, headers=_CORS)
     if not telegram_id:
         return web.json_response({"started": False}, headers=_CORS)
+
+    init_data = request.headers.get("X-Init-Data", "")
+    if BOT_TOKEN:
+        if not init_data or not _validate_init_data(init_data, BOT_TOKEN):
+            return web.json_response({"error": "Authentication required"}, status=401, headers=_CORS)
+        if _init_data_user_id(init_data) != telegram_id:
+            return web.json_response({"error": "Forbidden"}, status=403, headers=_CORS)
+
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(
             "SELECT bot_started FROM users WHERE telegram_id = ?", (telegram_id,)
@@ -2854,6 +2869,13 @@ async def api_check_bot_verify(request: web.Request) -> web.Response:
     if not telegram_id or not task_id:
         return web.json_response({"verified": False}, headers=_CORS)
 
+    init_data = request.headers.get("X-Init-Data", "")
+    if BOT_TOKEN:
+        if not init_data or not _validate_init_data(init_data, BOT_TOKEN):
+            return web.json_response({"error": "Authentication required"}, status=401, headers=_CORS)
+        if _init_data_user_id(init_data) != telegram_id:
+            return web.json_response({"error": "Forbidden"}, status=403, headers=_CORS)
+
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(
             "SELECT id FROM bot_verifications WHERE telegram_id=? AND task_id=?",
@@ -2966,6 +2988,13 @@ async def api_check_social_proof(request: web.Request) -> web.Response:
         return web.json_response({"error": "Bad params"}, status=400, headers=_CORS)
     if not telegram_id or not task_id:
         return web.json_response({"status": "none"}, headers=_CORS)
+
+    init_data = request.headers.get("X-Init-Data", "")
+    if BOT_TOKEN:
+        if not init_data or not _validate_init_data(init_data, BOT_TOKEN):
+            return web.json_response({"error": "Authentication required"}, status=401, headers=_CORS)
+        if _init_data_user_id(init_data) != telegram_id:
+            return web.json_response({"error": "Forbidden"}, status=403, headers=_CORS)
 
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(
