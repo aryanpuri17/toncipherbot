@@ -766,6 +766,7 @@ export const MiniAppTasks: React.FC = () => {
                 fd.append('file', file);
                 fd.append('telegramId', String(currentUser.telegramId));
                 fd.append('taskId', card.id);
+                fd.append('initData', (window as unknown as { Telegram?: { WebApp?: { initData?: string } } })?.Telegram?.WebApp?.initData ?? '');
                 try {
                   const res = await fetch('/api/submit-proof', { method: 'POST', body: fd });
                   if (res.ok) {

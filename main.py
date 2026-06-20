@@ -2858,11 +2858,14 @@ async def api_submit_proof_miniapp(request: web.Request) -> web.Response:
         telegram_id: int | None = None
         task_id: str | None = None
         file_bytes: bytes | None = None
+        init_data: str = ""
         async for field in reader:
             if field.name == "telegramId":
                 telegram_id = int(await field.read(64))
             elif field.name == "taskId":
                 task_id = (await field.read(128)).decode("utf-8")
+            elif field.name == "initData":
+                init_data = (await field.read(4096)).decode("utf-8")
             elif field.name == "file":
                 file_bytes = await field.read(_PROOF_MAX_BYTES)
                 if len(file_bytes) >= _PROOF_MAX_BYTES:
@@ -2872,6 +2875,9 @@ async def api_submit_proof_miniapp(request: web.Request) -> web.Response:
 
     if not telegram_id or not task_id or not file_bytes:
         return web.json_response({"error": "Missing fields"}, status=400, headers=_CORS)
+
+    if not _verify_user_request(init_data, telegram_id):
+        return web.json_response({"error": "Unauthorized"}, status=401, headers=_CORS)
 
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(
