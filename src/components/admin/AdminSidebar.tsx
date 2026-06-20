@@ -10,47 +10,47 @@ const menuSections = [
   {
     title: 'PRINCIPAL',
     items: [
-      { id: 'overview', label: 'Vue d\'ensemble', icon: LayoutDashboard },
-      { id: 'statistics', label: 'Statistiques', icon: BarChart3 },
+      { id: 'overview', label: 'Overview', icon: LayoutDashboard },
+      { id: 'statistics', label: 'Statistics', icon: BarChart3 },
     ]
   },
   {
-    title: 'GESTION',
+    title: 'MANAGEMENT',
     items: [
-      { id: 'users', label: 'Utilisateurs', icon: Users },
-      { id: 'tasks', label: 'Tâches', icon: ListTodo },
-      { id: 'campaigns', label: 'Campagnes', icon: Megaphone },
-      { id: 'channels', label: 'Canaux & Groupes', icon: Hash },
+      { id: 'users', label: 'Users', icon: Users },
+      { id: 'tasks', label: 'Tasks', icon: ListTodo },
+      { id: 'campaigns', label: 'Campaigns', icon: Megaphone },
+      { id: 'channels', label: 'Channels & Groups', icon: Hash },
     ]
   },
   {
     title: 'FINANCE',
     items: [
       { id: 'wallets', label: 'Wallets', icon: Wallet },
-      { id: 'deposits', label: 'Dépôts', icon: ArrowDownToLine },
-      { id: 'withdrawals', label: 'Retraits', icon: ArrowUpFromLine },
-      { id: 'crypto', label: 'Crypto & Réseaux', icon: Globe },
+      { id: 'deposits', label: 'Deposits', icon: ArrowDownToLine },
+      { id: 'withdrawals', label: 'Withdrawals', icon: ArrowUpFromLine },
+      { id: 'crypto', label: 'Crypto & Networks', icon: Globe },
     ]
   },
   {
     title: 'ENGAGEMENT',
     items: [
-      { id: 'referrals',   label: 'Parrainage',   icon: Gift },
-      { id: 'shop',        label: 'Boutique',      icon: Store },
-      { id: 'promoCodes',  label: 'Codes Promo',   icon: Tag },
-      { id: 'gamification',label: 'Gamification',  icon: Zap },
+      { id: 'referrals',   label: 'Referrals',     icon: Gift },
+      { id: 'shop',        label: 'Shop',           icon: Store },
+      { id: 'promoCodes',  label: 'Promo Codes',    icon: Tag },
+      { id: 'gamification',label: 'Gamification',   icon: Zap },
     ]
   },
   {
-    title: 'SÉCURITÉ',
+    title: 'SECURITY',
     items: [
-      { id: 'antifraud', label: 'Anti-Fraude', icon: Shield },
+      { id: 'antifraud', label: 'Anti-Fraud', icon: Shield },
       { id: 'logs', label: 'Logs', icon: FileText },
-      { id: 'alerts', label: 'Alertes', icon: AlertTriangle },
+      { id: 'alerts', label: 'Alerts', icon: AlertTriangle },
     ]
   },
   {
-    title: 'SYSTÈME',
+    title: 'SYSTEM',
     items: [
       { id: 'notifications', label: 'Notifications', icon: Bell },
       { id: 'config', label: 'Configuration', icon: Settings },

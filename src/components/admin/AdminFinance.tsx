@@ -245,8 +245,8 @@ export const AdminWithdrawals: React.FC = () => {
     <div className="space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-white">Retraits</h2>
-          <p className="text-slate-400 text-sm mt-1">Approbation manuelle — vérifiez les dépôts avant d'envoyer</p>
+          <h2 className="text-2xl font-bold text-white">Withdrawals</h2>
+          <p className="text-slate-400 text-sm mt-1">Manual approval — verify deposits before sending</p>
         </div>
         <div className="flex items-center gap-2">
           {lastRefresh && <span className="text-xs text-slate-500">Actualisé {lastRefresh.toLocaleTimeString('fr-FR')}</span>}

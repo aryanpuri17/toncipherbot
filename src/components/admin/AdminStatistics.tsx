@@ -156,8 +156,8 @@ export const AdminStatistics: React.FC = () => {
           {/* Financial Overview — server stats */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <StatCard title="Dépôts totaux" value={`${(stats?.total_deposits_amount ?? 0).toFixed(2)} TON`} subtitle={`${stats?.total_deposits_count ?? 0} transactions`} icon={<Wallet className="w-5 h-5" />} color="green" />
-            <StatCard title="Retraits totaux" value={`${(stats?.total_withdrawals_amount ?? 0).toFixed(2)} TON`} subtitle={`${stats?.total_withdrawals_count ?? 0} transactions`} icon={<Wallet className="w-5 h-5" />} color="orange" />
-            <StatCard title="Retraits en attente" value={(stats?.pending_withdrawals ?? 0).toLocaleString()} icon={<DollarSign className="w-5 h-5" />} color="blue" />
+            <StatCard title="Total withdrawals" value={`${(stats?.total_withdrawals_amount ?? 0).toFixed(2)} TON`} subtitle={`${stats?.total_withdrawals_count ?? 0} transactions`} icon={<Wallet className="w-5 h-5" />} color="orange" />
+            <StatCard title="Pending withdrawals" value={(stats?.pending_withdrawals ?? 0).toLocaleString()} icon={<DollarSign className="w-5 h-5" />} color="blue" />
             <StatCard title="Tâches actives" value={tasks.filter(t => t.isActive).length.toLocaleString()} icon={<ListTodo className="w-5 h-5" />} color="purple" />
           </div>
 

@@ -135,7 +135,7 @@ export const CampaignModal: React.FC = () => {
 
         <FormActions>
           <Button type="button" variant="secondary" onClick={closeModal}>Annuler</Button>
-          <Button type="submit">{isEdit ? 'Enregistrer' : 'Créer la campagne'}</Button>
+          <Button type="submit">{isEdit ? 'Save' : 'Create campaign'}</Button>
         </FormActions>
       </form>
     </Modal>

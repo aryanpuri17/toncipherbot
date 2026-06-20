@@ -53,7 +53,7 @@ export const MessageTemplateModal: React.FC = () => {
               <option value="welcome">Bienvenue</option>
               <option value="task">Tâches</option>
               <option value="payment">Paiements</option>
-              <option value="referral">Parrainage</option>
+              <option value="referral">Referral</option>
               <option value="level">Niveaux</option>
               <option value="notification">Notifications</option>
               <option value="error">Erreurs</option>
@@ -99,7 +99,7 @@ export const MessageTemplateModal: React.FC = () => {
 
         <FormActions>
           <Button type="button" variant="secondary" onClick={closeModal}>Annuler</Button>
-          <Button type="submit">{isEdit ? 'Enregistrer' : 'Créer'}</Button>
+          <Button type="submit">{isEdit ? 'Save' : 'Create'}</Button>
         </FormActions>
       </form>
     </Modal>

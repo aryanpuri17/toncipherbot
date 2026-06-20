@@ -99,7 +99,7 @@ export const AntiFraudRuleModal: React.FC = () => {
 
         <FormActions>
           <Button type="button" variant="secondary" onClick={closeModal}>Annuler</Button>
-          <Button type="submit">{isEdit ? 'Enregistrer' : 'Créer'}</Button>
+          <Button type="submit">{isEdit ? 'Save' : 'Create'}</Button>
         </FormActions>
       </form>
     </Modal>
