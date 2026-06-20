@@ -22,10 +22,10 @@ const notifColor: Record<string, { bg: string; text: string; dot: string; unread
 
 function timeAgo(iso: string): string {
   const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
-  if (diff < 60)    return "À l'instant";
-  if (diff < 3600)  return `Il y a ${Math.floor(diff / 60)} min`;
-  if (diff < 86400) return `Il y a ${Math.floor(diff / 3600)} h`;
-  return `Il y a ${Math.floor(diff / 86400)} j`;
+  if (diff < 60)    return "Just now";
+  if (diff < 3600)  return `${Math.floor(diff / 60)} min ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)} h ago`;
+  return `${Math.floor(diff / 86400)} d ago`;
 }
 
 export const MiniAppNotifications: React.FC = () => {
@@ -53,7 +53,7 @@ export const MiniAppNotifications: React.FC = () => {
             <h1 className="text-xl font-bold text-white">Notifications</h1>
             {unread > 0 && (
               <p className="text-xs font-medium" style={{ color: '#0098EA' }}>
-                {unread} non lue{unread !== 1 ? 's' : ''}
+                {unread} unread
               </p>
             )}
           </div>
@@ -64,7 +64,7 @@ export const MiniAppNotifications: React.FC = () => {
             onClick={markAllNotificationsRead}
             className="text-xs text-slate-400 hover:text-white transition-colors px-2.5 py-1.5 rounded-lg hover:bg-white/5 border border-white/5"
           >
-            Tout lire
+            Mark all read
           </button>
         )}
       </div>
@@ -75,9 +75,9 @@ export const MiniAppNotifications: React.FC = () => {
           <div className="w-16 h-16 rounded-2xl bg-slate-800/60 flex items-center justify-center">
             <Bell className="w-7 h-7 text-slate-600" />
           </div>
-          <p className="text-sm font-semibold text-slate-400">Aucune notification</p>
+          <p className="text-sm font-semibold text-slate-400">No notifications</p>
           <p className="text-xs text-slate-600 text-center max-w-[200px]">
-            Vos dépôts, retraits et récompenses apparaîtront ici.
+            Your deposits, withdrawals and rewards will appear here.
           </p>
         </div>
       ) : (

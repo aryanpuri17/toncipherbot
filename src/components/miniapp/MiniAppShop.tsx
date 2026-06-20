@@ -30,7 +30,7 @@ export const MiniAppShop: React.FC = () => {
       setBuyResult({
         id: itemId,
         success: result.success,
-        message: result.success ? 'Article activé avec succès!' : (result.error ?? 'Erreur.'),
+        message: result.success ? 'Item activated successfully!' : (result.error ?? 'Error.'),
       });
       setTimeout(() => setBuyResult(null), 3500);
     }, 600);
@@ -46,8 +46,8 @@ export const MiniAppShop: React.FC = () => {
             className="p-2 rounded-lg hover:bg-white/5 text-slate-400 transition-colors"
           >←</button>
           <div>
-            <h1 className="text-xl font-bold text-white">Boutique</h1>
-            <p className="text-xs text-slate-500">Solde disponible</p>
+            <h1 className="text-xl font-bold text-white">Shop</h1>
+            <p className="text-xs text-slate-500">Available balance</p>
           </div>
         </div>
         <div
@@ -66,7 +66,7 @@ export const MiniAppShop: React.FC = () => {
       {confirmItem && (
         <div className="glass-card p-4 space-y-4 border border-amber-500/30 animate-slide-up">
           <div className="flex items-center justify-between">
-            <p className="text-sm font-bold text-white">Confirmer l'achat</p>
+            <p className="text-sm font-bold text-white">Confirm purchase</p>
             <button onClick={() => setConfirmItem(null)} className="p-1 rounded-lg hover:bg-white/5 text-slate-400">
               <X className="w-4 h-4" />
             </button>
@@ -82,11 +82,11 @@ export const MiniAppShop: React.FC = () => {
           </div>
           <div className="flex items-center justify-between px-1">
             <div>
-              <p className="text-xs text-slate-500">Prix</p>
+              <p className="text-xs text-slate-500">Price</p>
               <p className="text-lg font-bold text-amber-400">{confirmItem.price.toFixed(2)} TON</p>
             </div>
             <div className="text-right">
-              <p className="text-xs text-slate-500">Solde après achat</p>
+              <p className="text-xs text-slate-500">Balance after purchase</p>
               <p className={`text-sm font-semibold ${currentUser.balanceMain - confirmItem.price < 0 ? 'text-red-400' : 'text-emerald-400'}`}>
                 {(currentUser.balanceMain - confirmItem.price).toFixed(2)} GRAM
               </p>
@@ -95,7 +95,7 @@ export const MiniAppShop: React.FC = () => {
           {currentUser.balanceMain < confirmItem.price && (
             <div className="flex items-center gap-2 p-2.5 rounded-lg bg-red-500/5 border border-red-500/20">
               <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
-              <p className="text-xs text-red-400">Solde insuffisant pour cet achat</p>
+              <p className="text-xs text-red-400">Insufficient balance for this purchase</p>
             </div>
           )}
           <div className="flex gap-3">
@@ -103,7 +103,7 @@ export const MiniAppShop: React.FC = () => {
               onClick={() => setConfirmItem(null)}
               className="flex-1 py-2.5 rounded-xl bg-white/5 border border-white/10 text-slate-300 text-sm font-medium hover:bg-white/10 transition-colors"
             >
-              Annuler
+              Cancel
             </button>
             <button
               onClick={() => handleBuy(confirmItem.id)}
@@ -115,7 +115,7 @@ export const MiniAppShop: React.FC = () => {
               ) : (
                 <ShoppingCart className="w-4 h-4" />
               )}
-              Confirmer l'achat
+              Confirm purchase
             </button>
           </div>
         </div>
@@ -138,7 +138,7 @@ export const MiniAppShop: React.FC = () => {
                     : { background: 'rgba(255,255,255,0.04)', color: '#94a3b8', borderColor: 'transparent' }
                 }
               >
-                {cat === 'all' ? '🛒 Tout' : `${meta?.emoji ?? ''} ${meta?.label ?? cat}`}
+                {cat === 'all' ? '🛒 All' : `${meta?.emoji ?? ''} ${meta?.label ?? cat}`}
               </button>
             );
           })}
@@ -164,19 +164,19 @@ export const MiniAppShop: React.FC = () => {
                     <h3 className="text-sm font-semibold text-white">{item.name}</h3>
                     {isSoldOut && (
                       <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-red-500/20 text-red-400 border border-red-500/20">
-                        Épuisé
+                        Sold out
                       </span>
                     )}
                     {item.maxPurchases != null && !isSoldOut && (
                       <span className="px-2 py-0.5 rounded-full text-[9px] font-semibold text-amber-400 bg-amber-500/10 border border-amber-500/20">
-                        {item.maxPurchases - item.purchases} restants
+                        {item.maxPurchases - item.purchases} left
                       </span>
                     )}
                   </div>
                   <p className="text-xs text-slate-400 leading-relaxed">{item.description}</p>
                   {item.duration && (
                     <span className="inline-flex items-center gap-1 mt-1 px-1.5 py-0.5 rounded-md text-[9px] font-semibold bg-blue-500/10 border border-blue-500/15 text-blue-400">
-                      ⏱ {item.duration >= 24 ? `${item.duration / 24}j` : `${item.duration}h`}
+                      ⏱ {item.duration >= 24 ? `${item.duration / 24}d` : `${item.duration}h`}
                     </span>
                   )}
                 </div>
@@ -198,7 +198,7 @@ export const MiniAppShop: React.FC = () => {
                   <span className="text-lg font-bold text-amber-400">{item.price.toFixed(2)} TON</span>
                   {!canAfford && !isSoldOut && (
                     <p className="flex items-center gap-1 text-[10px] text-red-400 mt-0.5">
-                      <AlertCircle className="w-2.5 h-2.5" /> Solde insuffisant
+                      <AlertCircle className="w-2.5 h-2.5" /> Insufficient balance
                     </p>
                   )}
                 </div>
@@ -212,7 +212,7 @@ export const MiniAppShop: React.FC = () => {
                   ) : (
                     <ShoppingCart className="w-3.5 h-3.5" />
                   )}
-                  {isSoldOut ? 'Épuisé' : isBuying ? 'Achat…' : 'Acheter'}
+                  {isSoldOut ? 'Sold out' : isBuying ? 'Buying…' : 'Buy'}
                 </button>
               </div>
             </div>
@@ -225,9 +225,9 @@ export const MiniAppShop: React.FC = () => {
               🛒
             </div>
             <div>
-              <p className="text-sm font-semibold text-white mb-1">Boutique bientôt disponible</p>
+              <p className="text-sm font-semibold text-white mb-1">Shop coming soon</p>
               <p className="text-xs text-slate-500 leading-relaxed max-w-[220px]">
-                De nouveaux articles numériques arrivent prochainement. Reste connecté !
+                New digital items are on the way. Stay tuned!
               </p>
             </div>
           </div>

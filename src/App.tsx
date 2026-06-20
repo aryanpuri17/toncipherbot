@@ -40,8 +40,8 @@ const MiniAppSettings: React.FC = () => {
       <div className="flex items-center gap-3">
         <button onClick={() => setMiniAppPage('profile')} className="p-2 rounded-lg hover:bg-white/5 text-slate-400">←</button>
         <div>
-          <h1 className="text-xl font-bold text-white">Paramètres</h1>
-          <p className="text-xs text-slate-500">Gérez vos préférences</p>
+          <h1 className="text-xl font-bold text-white">Settings</h1>
+          <p className="text-xs text-slate-500">Manage your preferences</p>
         </div>
       </div>
       <div className="space-y-2">
@@ -54,7 +54,7 @@ const MiniAppSettings: React.FC = () => {
           </div>
           <div className="flex-1 text-left">
             <p className="text-sm font-semibold text-white">Notifications</p>
-            <p className="text-xs text-slate-400">Dépôts, récompenses et alertes</p>
+            <p className="text-xs text-slate-400">Deposits, rewards and alerts</p>
           </div>
           <ChevronRight className="w-4 h-4 text-slate-500" />
         </button>
@@ -69,7 +69,7 @@ const MiniAppSettings: React.FC = () => {
               <Info className="w-4 h-4" style={{ color: '#0098EA' }} />
             </div>
             <div>
-              <p className="text-sm font-semibold text-white">À propos</p>
+              <p className="text-sm font-semibold text-white">About</p>
               <p className="text-xs text-slate-400">TonCipher v1.0</p>
             </div>
           </div>
@@ -80,12 +80,12 @@ const MiniAppSettings: React.FC = () => {
             </div>
             {platformConfig.mainChannel && (
               <div className="flex items-center justify-between">
-                <span className="text-xs text-slate-500">Canal</span>
+                <span className="text-xs text-slate-500">Channel</span>
                 <span className="text-xs font-semibold text-white">{platformConfig.mainChannel}</span>
               </div>
             )}
             <div className="flex items-center justify-between">
-              <span className="text-xs text-slate-500">Réseau</span>
+              <span className="text-xs text-slate-500">Network</span>
               <span className="text-xs font-semibold" style={{ color: '#0098EA' }}>TON Blockchain</span>
             </div>
           </div>
@@ -146,10 +146,10 @@ const MiniAppPageContent: React.FC = () => {
 const AdminMobileNav: React.FC = () => {
   const { adminPage, setAdminPage } = useAppStore();
   const tabs = [
-    { id: 'overview',     icon: '📊', label: 'Accueil' },
+    { id: 'overview',     icon: '📊', label: 'Home' },
     { id: 'users',        icon: '👥', label: 'Users' },
     { id: 'withdrawals',  icon: '💰', label: 'Finance' },
-    { id: 'antifraud',    icon: '🛡️', label: 'Sécurité' },
+    { id: 'antifraud',    icon: '🛡️', label: 'Security' },
     { id: 'config',       icon: '⚙️', label: 'Config' },
   ];
   return (
@@ -198,14 +198,14 @@ const AdminPanel: React.FC = () => {
 
             <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              <span className="text-xs font-medium text-emerald-400">Système en ligne</span>
+              <span className="text-xs font-medium text-emerald-400">System online</span>
             </div>
 
             <div className="flex items-center gap-3 ml-auto">
               <button
                 onClick={() => setAdminPage('alerts')}
                 className="p-2 rounded-lg hover:bg-white/5 text-slate-400 relative"
-                title="Alertes"
+                title="Alerts"
               >
                 <Bell className="w-5 h-5" />
                 {unreadCount > 0 && (
@@ -304,7 +304,7 @@ const MiniAppHeader: React.FC = () => {
             className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-medium hover:bg-blue-500/20 transition-colors"
           >
             <Wallet className="w-3.5 h-3.5" />
-            Connecter
+            Connect
           </button>
         )}
       </div>
@@ -384,7 +384,7 @@ export default function App() {
       resetDailyTasks();
     }
 
-    // 1am reset — resets daily referral task (Challenge Parrainage)
+    // 1am reset — resets daily referral task (Referral Challenge)
     const now = new Date();
     const today1am = `${today}-1am`;
     if (now.getHours() >= 1 && localStorage.getItem('tc_ref_daily_reset_1am') !== today1am) {

@@ -542,7 +542,7 @@ const _savedReferralMilestones: ReferralMilestone[] = (() => {
 
 const mockUsers: User[] = [
   {
-    id: '1', telegramId: 0, username: 'vous', firstName: 'Vous', lastName: '',
+    id: '1', telegramId: 0, username: 'you', firstName: 'You', lastName: '',
     balanceMain: _savedBalance.balanceMain ?? 1.0, totalEarnings: _savedBalance.totalEarnings ?? 0, todayEarnings: _savedBalance.todayEarnings ?? 0, tasksCompleted: _savedBalance.tasksCompleted ?? 0, taskCredits: _savedBalance.taskCredits ?? 0,
     referralCount: 0, referralDailyCount: 0, loginStreak: _savedBalance.loginStreak ?? 0, referralCode: 'START00',
     riskScore: 0, status: 'active', createdAt: new Date().toISOString(), lastActive: new Date().toISOString(),
@@ -552,16 +552,16 @@ const mockUsers: User[] = [
 ];
 
 const _defaultTasks: Task[] = [
-  { id: '1', type: 'daily', title: 'Mission Quotidienne', description: 'Connectez-vous chaque jour pour gagner', reward: 0.10, rewardType: 'main', cooldownHours: 24, isActive: true, totalCompletions: 0, createdAt: new Date().toISOString(), verificationMethod: 'auto', priority: 0, maxPerUser: 1, icon: '📅', createdByUserId: 'platform' },
-  { id: '2', type: 'join_channel', title: 'Rejoindre TonCipher Officiel', description: 'Abonnez-vous à notre canal officiel pour rester informé', reward: 0.002, rewardType: 'main', targetUrl: 'https://t.me/TonCipher_Official', isActive: true, totalCompletions: 0, maxCompletions: 1000, createdAt: new Date(Date.now() - 5 * 86400000).toISOString(), verificationMethod: 'auto', priority: 8, icon: '📢', createdByUserId: 'platform' },
-  { id: '3', type: 'join_channel', title: 'Rejoindre TonCipher Paiements', description: 'Rejoignez notre canal de suivi des paiements', reward: 0.002, rewardType: 'main', targetUrl: 'https://t.me/TonCipher_Pays', isActive: true, totalCompletions: 0, maxCompletions: 500, createdAt: new Date(Date.now() - 3 * 86400000).toISOString(), verificationMethod: 'auto', priority: 7, icon: '💸', createdByUserId: 'platform' },
-  { id: '4', type: 'start_bot', title: 'Démarrer @TonCipher_bot', description: 'Ouvrez le bot TonCipher et appuyez sur le bouton Start', reward: 0.002, rewardType: 'main', targetUrl: 'https://t.me/TonCipher_bot', isActive: true, totalCompletions: 0, maxCompletions: 200, createdAt: new Date(Date.now() - 1 * 86400000).toISOString(), verificationMethod: 'auto', priority: 5, icon: '🤖', createdByUserId: 'platform' },
-  { id: '5', type: 'special', title: '🏆 Challenge Parrainage', description: 'Invitez 3 amis à rejoindre TonCipher. La vérification est automatique dès que vous avez 3 filleuls.', reward: 1.50, rewardType: 'main', isActive: true, totalCompletions: 0, createdAt: new Date(Date.now() - 2 * 86400000).toISOString(), verificationMethod: 'auto_referral', requiredCount: 3, priority: 10, isPromoTask: true, icon: '🏆', createdByUserId: 'platform' },
-  { id: '6', type: 'special', title: '📢 Partage Communauté', description: 'Partagez TonCipher dans un groupe Telegram de 100+ membres. Soumettez un lien ou une description de votre preuve — l\'équipe validera sous 24h.', reward: 0.80, rewardType: 'main', isActive: true, totalCompletions: 0, createdAt: new Date(Date.now() - 1 * 86400000).toISOString(), verificationMethod: 'manual', priority: 9, isPromoTask: true, icon: '📢', createdByUserId: 'platform' },
-  { id: '7', type: 'watch_video', title: 'Regarder notre vidéo YouTube', description: 'Regardez la vidéo pendant au moins 20 secondes pour valider', reward: 0.002, rewardType: 'main', targetUrl: '', isActive: false, totalCompletions: 0, maxCompletions: 500, createdAt: new Date(Date.now() - 4 * 86400000).toISOString(), verificationMethod: 'auto', priority: 6, icon: '▶️', createdByUserId: 'platform' },
-  { id: '8', type: 'social', title: 'Nous suivre sur X (Twitter)', description: 'Suivez notre compte officiel sur X et restez informé des dernières news', reward: 0.002, rewardType: 'main', targetUrl: '', isActive: false, totalCompletions: 0, maxCompletions: 800, createdAt: new Date(Date.now() - 3 * 86400000).toISOString(), verificationMethod: 'auto', priority: 4, icon: '🐦', createdByUserId: 'platform' },
-  { id: '9', type: 'social', title: 'Nous suivre sur Instagram', description: 'Suivez notre compte Instagram pour voir nos dernières publications', reward: 0.002, rewardType: 'main', targetUrl: '', isActive: false, totalCompletions: 0, maxCompletions: 800, createdAt: new Date(Date.now() - 3 * 86400000).toISOString(), verificationMethod: 'auto', priority: 3, icon: '📸', createdByUserId: 'platform' },
-  { id: '10', type: 'social', title: 'Nous suivre sur TikTok', description: 'Abonnez-vous à notre TikTok et regardez nos vidéos exclusives', reward: 0.002, rewardType: 'main', targetUrl: '', isActive: false, totalCompletions: 0, maxCompletions: 800, createdAt: new Date(Date.now() - 2 * 86400000).toISOString(), verificationMethod: 'auto', priority: 2, icon: '🎵', createdByUserId: 'platform' },
+  { id: '1', type: 'daily', title: 'Daily Mission', description: 'Log in every day to earn', reward: 0.10, rewardType: 'main', cooldownHours: 24, isActive: true, totalCompletions: 0, createdAt: new Date().toISOString(), verificationMethod: 'auto', priority: 0, maxPerUser: 1, icon: '📅', createdByUserId: 'platform' },
+  { id: '2', type: 'join_channel', title: 'Join TonCipher Official', description: 'Subscribe to our official channel to stay informed', reward: 0.002, rewardType: 'main', targetUrl: 'https://t.me/TonCipher_Official', isActive: true, totalCompletions: 0, maxCompletions: 1000, createdAt: new Date(Date.now() - 5 * 86400000).toISOString(), verificationMethod: 'auto', priority: 8, icon: '📢', createdByUserId: 'platform' },
+  { id: '3', type: 'join_channel', title: 'Join TonCipher Payments', description: 'Join our payment tracking channel', reward: 0.002, rewardType: 'main', targetUrl: 'https://t.me/TonCipher_Pays', isActive: true, totalCompletions: 0, maxCompletions: 500, createdAt: new Date(Date.now() - 3 * 86400000).toISOString(), verificationMethod: 'auto', priority: 7, icon: '💸', createdByUserId: 'platform' },
+  { id: '4', type: 'start_bot', title: 'Start @TonCipher_bot', description: 'Open the TonCipher bot and press the Start button', reward: 0.002, rewardType: 'main', targetUrl: 'https://t.me/TonCipher_bot', isActive: true, totalCompletions: 0, maxCompletions: 200, createdAt: new Date(Date.now() - 1 * 86400000).toISOString(), verificationMethod: 'auto', priority: 5, icon: '🤖', createdByUserId: 'platform' },
+  { id: '5', type: 'special', title: '🏆 Referral Challenge', description: 'Invite 3 friends to join TonCipher. Verification is automatic once you have 3 referrals.', reward: 1.50, rewardType: 'main', isActive: true, totalCompletions: 0, createdAt: new Date(Date.now() - 2 * 86400000).toISOString(), verificationMethod: 'auto_referral', requiredCount: 3, priority: 10, isPromoTask: true, icon: '🏆', createdByUserId: 'platform' },
+  { id: '6', type: 'special', title: '📢 Community Share', description: 'Share TonCipher in a Telegram group with 100+ members. Submit a link or description as proof — the team will validate within 24h.', reward: 0.80, rewardType: 'main', isActive: true, totalCompletions: 0, createdAt: new Date(Date.now() - 1 * 86400000).toISOString(), verificationMethod: 'manual', priority: 9, isPromoTask: true, icon: '📢', createdByUserId: 'platform' },
+  { id: '7', type: 'watch_video', title: 'Watch our YouTube video', description: 'Watch the video for at least 20 seconds to validate', reward: 0.002, rewardType: 'main', targetUrl: '', isActive: false, totalCompletions: 0, maxCompletions: 500, createdAt: new Date(Date.now() - 4 * 86400000).toISOString(), verificationMethod: 'auto', priority: 6, icon: '▶️', createdByUserId: 'platform' },
+  { id: '8', type: 'social', title: 'Follow us on X (Twitter)', description: 'Follow our official X account and stay up to date with the latest news', reward: 0.002, rewardType: 'main', targetUrl: '', isActive: false, totalCompletions: 0, maxCompletions: 800, createdAt: new Date(Date.now() - 3 * 86400000).toISOString(), verificationMethod: 'auto', priority: 4, icon: '🐦', createdByUserId: 'platform' },
+  { id: '9', type: 'social', title: 'Follow us on Instagram', description: 'Follow our Instagram account to see our latest posts', reward: 0.002, rewardType: 'main', targetUrl: '', isActive: false, totalCompletions: 0, maxCompletions: 800, createdAt: new Date(Date.now() - 3 * 86400000).toISOString(), verificationMethod: 'auto', priority: 3, icon: '📸', createdByUserId: 'platform' },
+  { id: '10', type: 'social', title: 'Follow us on TikTok', description: 'Subscribe to our TikTok and watch our exclusive videos', reward: 0.002, rewardType: 'main', targetUrl: '', isActive: false, totalCompletions: 0, maxCompletions: 800, createdAt: new Date(Date.now() - 2 * 86400000).toISOString(), verificationMethod: 'auto', priority: 2, icon: '🎵', createdByUserId: 'platform' },
 ];
 // Merge saved tasks (user/admin-created) with defaults; defaults fill any missing IDs
 const mockTasks: Task[] = (() => {
@@ -581,8 +581,8 @@ const mockTasks: Task[] = (() => {
 })();
 
 const _defaultPromoCodes: PromoCode[] = [
-  { id: '1', code: 'LAUNCH50', reward: 0.50, currency: 'main', maxUses: 500, currentUses: 127, isActive: true, description: 'Code de lancement officiel', createdAt: new Date(Date.now() - 10 * 86400000).toISOString() },
-  { id: '2', code: 'VIP200', reward: 2.00, currency: 'main', maxUses: 20, currentUses: 3, isActive: true, expiresAt: new Date(Date.now() + 7 * 86400000).toISOString(), description: 'Code VIP exclusif — 7 jours', createdAt: new Date().toISOString() },
+  { id: '1', code: 'LAUNCH50', reward: 0.50, currency: 'main', maxUses: 500, currentUses: 127, isActive: true, description: 'Official launch code', createdAt: new Date(Date.now() - 10 * 86400000).toISOString() },
+  { id: '2', code: 'VIP200', reward: 2.00, currency: 'main', maxUses: 20, currentUses: 3, isActive: true, expiresAt: new Date(Date.now() + 7 * 86400000).toISOString(), description: 'Exclusive VIP code — 7 days', createdAt: new Date().toISOString() },
 ];
 const mockPromoCodes: PromoCode[] = _savedPromoCodes.length > 0 ? _savedPromoCodes : _defaultPromoCodes;
 
@@ -606,22 +606,22 @@ const mockCryptoNetworks: CryptoNetwork[] = [
 ];
 
 const mockLevelConfigs: LevelConfig[] = [
-  { level: 1, xpRequired: 0, title: 'Débutant', color: '#94a3b8', reward: 0, rewardType: 'main', unlocks: [] },
+  { level: 1, xpRequired: 0, title: 'Beginner', color: '#94a3b8', reward: 0, rewardType: 'main', unlocks: [] },
   { level: 2, xpRequired: 100, title: 'Novice', color: '#94a3b8', reward: 0.50, rewardType: 'main', unlocks: ['daily_task'] },
-  { level: 3, xpRequired: 300, title: 'Apprenti', color: '#22c55e', reward: 1.00, rewardType: 'main', unlocks: ['referral'] },
-  { level: 5, xpRequired: 800, title: 'Explorateur', color: '#22c55e', reward: 2.00, rewardType: 'main', unlocks: ['special_tasks'] },
-  { level: 10, xpRequired: 2500, title: 'Avancé', color: '#3b82f6', reward: 5.00, rewardType: 'main', unlocks: ['premium_tasks'], badge: 'level_10' },
+  { level: 3, xpRequired: 300, title: 'Apprentice', color: '#22c55e', reward: 1.00, rewardType: 'main', unlocks: ['referral'] },
+  { level: 5, xpRequired: 800, title: 'Explorer', color: '#22c55e', reward: 2.00, rewardType: 'main', unlocks: ['special_tasks'] },
+  { level: 10, xpRequired: 2500, title: 'Advanced', color: '#3b82f6', reward: 5.00, rewardType: 'main', unlocks: ['premium_tasks'], badge: 'level_10' },
   { level: 15, xpRequired: 5000, title: 'Expert', color: '#8b5cf6', reward: 10.00, rewardType: 'main', unlocks: ['vip_tasks'], badge: 'level_15' },
-  { level: 20, xpRequired: 10000, title: 'Maître', color: '#f59e0b', reward: 25.00, rewardType: 'main', unlocks: ['master_badge'], badge: 'level_20' },
-  { level: 25, xpRequired: 20000, title: 'Légende', color: '#ef4444', reward: 50.00, rewardType: 'main', unlocks: ['legend_badge'], badge: 'level_25' },
+  { level: 20, xpRequired: 10000, title: 'Master', color: '#f59e0b', reward: 25.00, rewardType: 'main', unlocks: ['master_badge'], badge: 'level_20' },
+  { level: 25, xpRequired: 20000, title: 'Legend', color: '#ef4444', reward: 50.00, rewardType: 'main', unlocks: ['legend_badge'], badge: 'level_25' },
 ];
 
 const mockBadgeConfigs: BadgeConfig[] = [
-  { id: '1', name: 'Early Adopter', description: 'Inscrit dans les 100 premiers', icon: '🌟', condition: 'first_100_users', conditionType: 'special', conditionValue: 100, reward: 5.00, isActive: true },
-  { id: '2', name: 'Task Master', description: '100+ tâches complétées', icon: '🎯', condition: 'tasks_completed', conditionType: 'tasks', conditionValue: 100, reward: 10.00, isActive: true },
-  { id: '3', name: 'Referral King', description: '20+ filleuls actifs', icon: '👑', condition: 'referral_count', conditionType: 'referrals', conditionValue: 20, reward: 15.00, isActive: true },
-  { id: '4', name: 'Whale', description: '1000$+ de dépôts totaux', icon: '🐋', condition: 'total_deposits', conditionType: 'deposit', conditionValue: 1000, reward: 25.00, isActive: true },
-  { id: '5', name: 'Streak Champion', description: '14+ jours consécutifs', icon: '🔥', condition: 'streak_days', conditionType: 'streak', conditionValue: 14, reward: 20.00, isActive: true },
+  { id: '1', name: 'Early Adopter', description: 'Registered among the first 100', icon: '🌟', condition: 'first_100_users', conditionType: 'special', conditionValue: 100, reward: 5.00, isActive: true },
+  { id: '2', name: 'Task Master', description: '100+ tasks completed', icon: '🎯', condition: 'tasks_completed', conditionType: 'tasks', conditionValue: 100, reward: 10.00, isActive: true },
+  { id: '3', name: 'Referral King', description: '20+ active referrals', icon: '👑', condition: 'referral_count', conditionType: 'referrals', conditionValue: 20, reward: 15.00, isActive: true },
+  { id: '4', name: 'Whale', description: '$1000+ in total deposits', icon: '🐋', condition: 'total_deposits', conditionType: 'deposit', conditionValue: 1000, reward: 25.00, isActive: true },
+  { id: '5', name: 'Streak Champion', description: '14+ consecutive days', icon: '🔥', condition: 'streak_days', conditionType: 'streak', conditionValue: 14, reward: 20.00, isActive: true },
 ];
 
 const mockReferralConfigs: ReferralConfig[] = [
@@ -634,48 +634,48 @@ const mockReferralConfigs: ReferralConfig[] = [
 ];
 
 const mockAntiFraudRules: AntiFraudRule[] = [
-  { id: '1', name: 'IP Duplicate Detection', type: 'ip_duplicate', isActive: true, threshold: 3, action: 'flag', severity: 'medium', description: 'Détecte plusieurs comptes avec la même IP' },
-  { id: '2', name: 'Device Fingerprint Check', type: 'device_duplicate', isActive: true, threshold: 2, action: 'suspend', severity: 'high', description: 'Détecte plusieurs comptes avec le même appareil' },
-  { id: '3', name: 'VPN/Proxy Detection', type: 'vpn', isActive: true, threshold: 1, action: 'flag', severity: 'medium', description: 'Détecte les connexions VPN ou proxy' },
-  { id: '4', name: 'Referral Abuse', type: 'referral_abuse', isActive: true, threshold: 50, action: 'review', severity: 'high', description: 'Trop de filleuls en peu de temps' },
-  { id: '5', name: 'Bot Behavior', type: 'behavior', isActive: true, threshold: 90, action: 'ban', severity: 'critical', description: 'Comportement automatisé détecté' },
-  { id: '6', name: 'Withdrawal Pattern', type: 'withdrawal_pattern', isActive: true, threshold: 5, action: 'block_withdrawal', severity: 'high', description: 'Pattern de retrait suspect' },
+  { id: '1', name: 'IP Duplicate Detection', type: 'ip_duplicate', isActive: true, threshold: 3, action: 'flag', severity: 'medium', description: 'Detects multiple accounts with the same IP' },
+  { id: '2', name: 'Device Fingerprint Check', type: 'device_duplicate', isActive: true, threshold: 2, action: 'suspend', severity: 'high', description: 'Detects multiple accounts on the same device' },
+  { id: '3', name: 'VPN/Proxy Detection', type: 'vpn', isActive: true, threshold: 1, action: 'flag', severity: 'medium', description: 'Detects VPN or proxy connections' },
+  { id: '4', name: 'Referral Abuse', type: 'referral_abuse', isActive: true, threshold: 50, action: 'review', severity: 'high', description: 'Too many referrals in a short time' },
+  { id: '5', name: 'Bot Behavior', type: 'behavior', isActive: true, threshold: 90, action: 'ban', severity: 'critical', description: 'Automated behavior detected' },
+  { id: '6', name: 'Withdrawal Pattern', type: 'withdrawal_pattern', isActive: true, threshold: 5, action: 'block_withdrawal', severity: 'high', description: 'Suspicious withdrawal pattern' },
 ];
 
 const mockMessageTemplates: MessageTemplate[] = [
-  { id: '1', key: 'welcome', name: 'Message de bienvenue', category: 'welcome', content: '👋 Bienvenue sur TonCipher, {firstName}!\n\n🎁 Votre bonus de bienvenue: {welcomeBonus}$\n\n📱 Commencez à gagner maintenant!', variables: ['firstName', 'welcomeBonus'], isActive: true },
-  { id: '2', key: 'deposit_confirmed', name: 'Dépôt confirmé', category: 'payment', content: '✅ Dépôt confirmé!\n\n💰 Montant: {amount} {currency}\n🔗 TX: {txHash}\n\nVotre nouveau solde: {newBalance}$', variables: ['amount', 'currency', 'txHash', 'newBalance'], isActive: true },
-  { id: '3', key: 'withdrawal_sent', name: 'Retrait envoyé', category: 'payment', content: '📤 Retrait envoyé!\n\n💰 Montant: {amount} {currency}\n📍 Adresse: {address}\n🔗 TX: {txHash}', variables: ['amount', 'currency', 'address', 'txHash'], isActive: true },
-  { id: '4', key: 'task_completed', name: 'Tâche complétée', category: 'task', content: '✅ Tâche complétée!\n\n📋 {taskName}\n💰 Récompense: +{reward}$\n⭐ XP: +{xp}', variables: ['taskName', 'reward', 'xp'], isActive: true },
-  { id: '5', key: 'level_up', name: 'Niveau supérieur', category: 'level', content: '🎉 Félicitations {firstName}!\n\n⬆️ Vous êtes passé au niveau {level}!\n🏆 Titre: {levelTitle}\n💰 Bonus: +{reward}$', variables: ['firstName', 'level', 'levelTitle', 'reward'], isActive: true },
-  { id: '6', key: 'referral_bonus', name: 'Bonus parrainage', category: 'referral', content: '👥 Nouveau filleul!\n\n{referralName} s\'est inscrit avec votre code!\n💰 Bonus: +{bonus}$', variables: ['referralName', 'bonus'], isActive: true },
+  { id: '1', key: 'welcome', name: 'Welcome message', category: 'welcome', content: '👋 Welcome to TonCipher, {firstName}!\n\n🎁 Your welcome bonus: {welcomeBonus}$\n\n📱 Start earning now!', variables: ['firstName', 'welcomeBonus'], isActive: true },
+  { id: '2', key: 'deposit_confirmed', name: 'Deposit confirmed', category: 'payment', content: '✅ Deposit confirmed!\n\n💰 Amount: {amount} {currency}\n🔗 TX: {txHash}\n\nYour new balance: {newBalance}$', variables: ['amount', 'currency', 'txHash', 'newBalance'], isActive: true },
+  { id: '3', key: 'withdrawal_sent', name: 'Withdrawal sent', category: 'payment', content: '📤 Withdrawal sent!\n\n💰 Amount: {amount} {currency}\n📍 Address: {address}\n🔗 TX: {txHash}', variables: ['amount', 'currency', 'address', 'txHash'], isActive: true },
+  { id: '4', key: 'task_completed', name: 'Task completed', category: 'task', content: '✅ Task completed!\n\n📋 {taskName}\n💰 Reward: +{reward}$\n⭐ XP: +{xp}', variables: ['taskName', 'reward', 'xp'], isActive: true },
+  { id: '5', key: 'level_up', name: 'Level up', category: 'level', content: '🎉 Congratulations {firstName}!\n\n⬆️ You reached level {level}!\n🏆 Title: {levelTitle}\n💰 Bonus: +{reward}$', variables: ['firstName', 'level', 'levelTitle', 'reward'], isActive: true },
+  { id: '6', key: 'referral_bonus', name: 'Referral bonus', category: 'referral', content: '👥 New referral!\n\n{referralName} signed up with your code!\n💰 Bonus: +{bonus}$', variables: ['referralName', 'bonus'], isActive: true },
 ];
 
 const mockBotCommands: BotCommand[] = [
-  { id: '1', command: '/start', description: 'Démarrer le bot', response: '', isActive: true, requiresAdmin: false, category: 'general' },
-  { id: '2', command: '/help', description: 'Afficher l\'aide', response: '📚 Commandes disponibles:\n\n/wallet - Voir votre solde\n/tasks - Voir les tâches\n/referral - Votre lien de parrainage\n/withdraw - Faire un retrait', isActive: true, requiresAdmin: false, category: 'general' },
-  { id: '3', command: '/wallet', description: 'Voir le solde', response: '', isActive: true, requiresAdmin: false, category: 'wallet' },
-  { id: '4', command: '/tasks', description: 'Voir les tâches', response: '', isActive: true, requiresAdmin: false, category: 'tasks' },
-  { id: '5', command: '/referral', description: 'Lien de parrainage', response: '', isActive: true, requiresAdmin: false, category: 'referral' },
-  { id: '6', command: '/withdraw', description: 'Faire un retrait', response: '', isActive: true, requiresAdmin: false, category: 'wallet' },
-  { id: '7', command: '/admin', description: 'Menu admin', response: '', isActive: true, requiresAdmin: true, category: 'admin' },
-  { id: '8', command: '/broadcast', description: 'Envoyer un message à tous', response: '', isActive: true, requiresAdmin: true, category: 'admin' },
+  { id: '1', command: '/start', description: 'Start the bot', response: '', isActive: true, requiresAdmin: false, category: 'general' },
+  { id: '2', command: '/help', description: 'Show help', response: '📚 Available commands:\n\n/wallet - View your balance\n/tasks - View tasks\n/referral - Your referral link\n/withdraw - Make a withdrawal', isActive: true, requiresAdmin: false, category: 'general' },
+  { id: '3', command: '/wallet', description: 'View balance', response: '', isActive: true, requiresAdmin: false, category: 'wallet' },
+  { id: '4', command: '/tasks', description: 'View tasks', response: '', isActive: true, requiresAdmin: false, category: 'tasks' },
+  { id: '5', command: '/referral', description: 'Referral link', response: '', isActive: true, requiresAdmin: false, category: 'referral' },
+  { id: '6', command: '/withdraw', description: 'Make a withdrawal', response: '', isActive: true, requiresAdmin: false, category: 'wallet' },
+  { id: '7', command: '/admin', description: 'Admin menu', response: '', isActive: true, requiresAdmin: true, category: 'admin' },
+  { id: '8', command: '/broadcast', description: 'Send a message to everyone', response: '', isActive: true, requiresAdmin: true, category: 'admin' },
 ];
 
 const mockWelcomeSteps: WelcomeStep[] = [
-  { id: '1', order: 1, type: 'message', content: 'Bienvenue sur TonCipher! 🚀', isRequired: true, isActive: true },
-  { id: '2', order: 2, type: 'mandatory_join', content: 'Rejoignez nos canaux obligatoires pour continuer', isRequired: true, isActive: true },
-  { id: '3', order: 3, type: 'referral_check', content: 'Avez-vous un code de parrainage?', isRequired: false, isActive: true },
-  { id: '4', order: 4, type: 'wallet_create', content: 'Création de votre portefeuille...', isRequired: true, isActive: true },
-  { id: '5', order: 5, type: 'bonus', content: 'Voici votre bonus de bienvenue!', isRequired: false, isActive: true, bonus: 1.00 },
+  { id: '1', order: 1, type: 'message', content: 'Welcome to TonCipher! 🚀', isRequired: true, isActive: true },
+  { id: '2', order: 2, type: 'mandatory_join', content: 'Join our mandatory channels to continue', isRequired: true, isActive: true },
+  { id: '3', order: 3, type: 'referral_check', content: 'Do you have a referral code?', isRequired: false, isActive: true },
+  { id: '4', order: 4, type: 'wallet_create', content: 'Creating your wallet...', isRequired: true, isActive: true },
+  { id: '5', order: 5, type: 'bonus', content: 'Here is your welcome bonus!', isRequired: false, isActive: true, bonus: 1.00 },
 ];
 
 const mockWithdrawalRules: WithdrawalRule[] = [
-  { id: '1', name: 'Minimum de tâches', condition: 'min_tasks', value: 10, isActive: true, errorMessage: 'Vous devez compléter au moins 10 tâches avant de retirer' },
-  { id: '2', name: 'Niveau minimum', condition: 'min_level', value: 3, isActive: true, errorMessage: 'Vous devez être au moins niveau 3 pour retirer' },
-  { id: '3', name: 'Âge du compte', condition: 'account_age', value: 7, isActive: true, errorMessage: 'Votre compte doit avoir au moins 7 jours' },
-  { id: '4', name: 'Vérification requise', condition: 'verification', value: 500, isActive: true, errorMessage: 'Vérification requise pour les retraits supérieurs à 500$' },
-  { id: '5', name: 'Pas de fraude', condition: 'no_fraud', value: 50, isActive: true, errorMessage: 'Votre score de risque est trop élevé' },
+  { id: '1', name: 'Minimum tasks', condition: 'min_tasks', value: 10, isActive: true, errorMessage: 'You must complete at least 10 tasks before withdrawing' },
+  { id: '2', name: 'Minimum level', condition: 'min_level', value: 3, isActive: true, errorMessage: 'You must be at least level 3 to withdraw' },
+  { id: '3', name: 'Account age', condition: 'account_age', value: 7, isActive: true, errorMessage: 'Your account must be at least 7 days old' },
+  { id: '4', name: 'Verification required', condition: 'verification', value: 500, isActive: true, errorMessage: 'Verification required for withdrawals above $500' },
+  { id: '5', name: 'No fraud', condition: 'no_fraud', value: 50, isActive: true, errorMessage: 'Your risk score is too high' },
 ];
 
 const mockDailyLimits: DailyLimit[] = [
@@ -695,10 +695,10 @@ const mockAdminUsers: AdminUser[] = [
 ];
 
 const _defaultReferralMilestones: ReferralMilestone[] = [
-  { id: '1', referralCount: 5, reward: 2.00, description: 'Invitez 5 amis', isActive: true },
-  { id: '2', referralCount: 20, reward: 10.00, description: 'Invitez 20 amis', isActive: true },
-  { id: '3', referralCount: 50, reward: 30.00, description: 'Invitez 50 amis', isActive: true },
-  { id: '4', referralCount: 100, reward: 75.00, description: 'Invitez 100 amis', isActive: true },
+  { id: '1', referralCount: 5, reward: 2.00, description: 'Invite 5 friends', isActive: true },
+  { id: '2', referralCount: 20, reward: 10.00, description: 'Invite 20 friends', isActive: true },
+  { id: '3', referralCount: 50, reward: 30.00, description: 'Invite 50 friends', isActive: true },
+  { id: '4', referralCount: 100, reward: 75.00, description: 'Invite 100 friends', isActive: true },
 ];
 const mockReferralMilestones: ReferralMilestone[] = _savedReferralMilestones.length > 0 ? _savedReferralMilestones : _defaultReferralMilestones;
 
@@ -767,7 +767,7 @@ const mockPlatformConfig: PlatformConfig = {
   firstDepositBonus: 10,
   minDepositForBonus: 50,
   maintenanceMode: false,
-  maintenanceMessage: 'Le bot est en maintenance. Veuillez réessayer plus tard.',
+  maintenanceMessage: 'The bot is under maintenance. Please try again later.',
   registrationEnabled: true,
   welcomeBonusEnabled: false,
   welcomeBonusAmount: 0,
@@ -1058,8 +1058,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     get().addNotification({
       userId: tx.userId,
       type: 'deposit',
-      title: 'Dépôt confirmé! 🎉',
-      message: `+${tx.amount.toFixed(2)} ${tx.currency} crédité sur votre compte.`,
+      title: 'Deposit confirmed! 🎉',
+      message: `+${tx.amount.toFixed(2)} ${tx.currency} credited to your account.`,
       isRead: false,
     });
   },
@@ -1089,8 +1089,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     get().addNotification({
       userId,
       type: 'deposit',
-      title: 'Dépôt reçu! 🎉',
-      message: `+${amount.toFixed(2)} ${currency} crédité automatiquement.`,
+      title: 'Deposit received! 🎉',
+      message: `+${amount.toFixed(2)} ${currency} automatically credited.`,
       isRead: false,
     });
   },
@@ -1104,7 +1104,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   })),
 
   resetDailyRefTask: () => set(s => {
-    // Remove task '5' (Challenge Parrainage) from completedTaskIds so it can be reclaimed today
+    // Remove task '5' (Referral Challenge) from completedTaskIds so it can be reclaimed today
     const newCompleted = s.completedTaskIds.filter(id => id !== '5');
     localStorage.setItem('tc_completed_tasks', JSON.stringify(newCompleted));
     // New baseline = current lifetime count — today's count starts from 0
@@ -1137,7 +1137,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const task = state.tasks.find(t => t.id === taskId);
     if (!task || state.completedTaskIds.includes(taskId)) return;
     if (state.currentUser.dailyTasksCompleted >= state.platformConfig.maxDailyTasks) {
-      get().addNotification({ userId: state.currentUser.id, type: 'system', title: 'Limite atteinte', message: `Maximum ${state.platformConfig.maxDailyTasks} tâches par jour. Revenez demain !`, isRead: false });
+      get().addNotification({ userId: state.currentUser.id, type: 'system', title: 'Limit reached', message: `Maximum ${state.platformConfig.maxDailyTasks} tasks per day. Come back tomorrow!`, isRead: false });
       return;
     }
     const isPromoActive = task.promotion && new Date(task.promotion.endsAt) > new Date();
@@ -1175,7 +1175,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const rewardCurrency = task.rewardType === 'main' ? 'TON' : task.rewardType.toUpperCase();
     get().addTransaction({ userId: state.currentUser.id, type: 'reward', amount: earned, currency: rewardCurrency, status: 'completed', completedAt: new Date().toISOString() });
     const multLabel = multiplier > 1 ? ` (×${multiplier.toFixed(1)} boost!)` : '';
-    get().addNotification({ userId: state.currentUser.id, type: 'reward', title: 'Tâche complétée!', message: `+${earned.toFixed(2)} TON${multLabel} pour "${task.title}"`, isRead: false });
+    get().addNotification({ userId: state.currentUser.id, type: 'reward', title: 'Task completed!', message: `+${earned.toFixed(2)} TON${multLabel} for "${task.title}"`, isRead: false });
   },
 
   completeTaskSecure: async (taskId) => {
@@ -1206,7 +1206,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       });
       const body = await res.json() as { success?: boolean; earned?: number; error?: string };
       if (!res.ok || !body.success) {
-        return { success: false, error: body.error ?? `Erreur ${res.status}` };
+        return { success: false, error: body.error ?? `Error ${res.status}` };
       }
       const earned = typeof body.earned === 'number' ? body.earned : task.reward;
       // Apply local state — server already persisted the credit to app_balance
@@ -1223,7 +1223,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         },
       }));
       get().addTransaction({ userId: state.currentUser.id, type: 'reward', amount: earned, currency: 'GRAM', status: 'completed', completedAt: new Date().toISOString() });
-      get().addNotification({ userId: state.currentUser.id, type: 'reward', title: 'Tâche complétée !', message: `+${earned.toFixed(4)} GRAM pour "${task.title}"`, isRead: false });
+      get().addNotification({ userId: state.currentUser.id, type: 'reward', title: 'Task completed!', message: `+${earned.toFixed(4)} GRAM for "${task.title}"`, isRead: false });
       get().creditReferralBonus(earned);
       return { success: true, earned };
     } catch {
@@ -1363,26 +1363,26 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   submitWithdrawal: async (networkId, amount, address) => {
     const state = get();
-    if (state.currentUser.status !== 'active') return { success: false, error: 'Compte suspendu ou banni. Contactez le support.' };
-    if (state.currentUser.withdrawalBlocked) return { success: false, error: 'Retraits bloqués sur ce compte. Contactez le support.' };
+    if (state.currentUser.status !== 'active') return { success: false, error: 'Account suspended or banned. Contact support.' };
+    if (state.currentUser.withdrawalBlocked) return { success: false, error: 'Withdrawals blocked on this account. Contact support.' };
     const network = state.cryptoNetworks.find(n => n.id === networkId);
-    if (!network) return { success: false, error: 'Réseau invalide' };
-    if (!network.isWithdrawalEnabled) return { success: false, error: 'Retraits désactivés pour ce réseau' };
+    if (!network) return { success: false, error: 'Invalid network' };
+    if (!network.isWithdrawalEnabled) return { success: false, error: 'Withdrawals disabled for this network' };
     if (amount < network.minWithdrawal) return { success: false, error: `Minimum: ${network.minWithdrawal} ${network.symbol}` };
     if (amount > network.maxWithdrawal) return { success: false, error: `Maximum: ${network.maxWithdrawal} ${network.symbol}` };
-    if (state.currentUser.balanceMain < amount) return { success: false, error: 'Solde insuffisant' };
+    if (state.currentUser.balanceMain < amount) return { success: false, error: 'Insufficient balance' };
     const maxWithdrawable = state.currentUser.balanceMain - state.currentUser.taskCredits;
     if (amount > maxWithdrawable) {
-      return { success: false, error: `${state.currentUser.taskCredits.toFixed(2)} GRAM sont réservés à la création de campagnes et ne peuvent pas être retirés.` };
+      return { success: false, error: `${state.currentUser.taskCredits.toFixed(2)} GRAM are reserved for campaign creation and cannot be withdrawn.` };
     }
-    if (!address || address.trim().length < 20) return { success: false, error: 'Adresse invalide (trop courte)' };
+    if (!address || address.trim().length < 20) return { success: false, error: 'Invalid address (too short)' };
     const perUserDailyLimit = state.dailyLimits.find(l => l.type === 'withdrawal' && l.perUser && l.isActive);
     if (perUserDailyLimit && state.currentUser.dailyWithdrawn + amount > perUserDailyLimit.limit) {
       const remaining = Math.max(0, perUserDailyLimit.limit - state.currentUser.dailyWithdrawn);
-      return { success: false, error: `Limite journalière atteinte. Restant: ${remaining.toFixed(2)} ${network.symbol}` };
+      return { success: false, error: `Daily limit reached. Remaining: ${remaining.toFixed(2)} ${network.symbol}` };
     }
     if (network.dailyWithdrawalLimit > 0 && amount > network.dailyWithdrawalLimit) {
-      return { success: false, error: `Limite réseau dépassée: max ${network.dailyWithdrawalLimit} ${network.symbol}/jour` };
+      return { success: false, error: `Network limit exceeded: max ${network.dailyWithdrawalLimit} ${network.symbol}/day` };
     }
     const initData = (window as unknown as { Telegram?: { WebApp?: { initData?: string } } })?.Telegram?.WebApp?.initData ?? '';
     try {
@@ -1403,7 +1403,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       });
       const body = await res.json() as { success?: boolean; id?: string; error?: string };
       if (!res.ok || !body.success) {
-        return { success: false, error: body.error ?? `Erreur ${res.status}` };
+        return { success: false, error: body.error ?? `Error ${res.status}` };
       }
       const serverTxId = body.id!;
       set(s => ({
@@ -1703,11 +1703,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   submitTaskProof: (taskId, proofText, imageBase64) => {
     const state = get();
     const task = state.tasks.find(t => t.id === taskId);
-    if (!task) return { success: false, error: 'Tâche introuvable.' };
-    if (!proofText.trim() && !imageBase64) return { success: false, error: 'Ajoutez une capture d\'écran ou une description.' };
+    if (!task) return { success: false, error: 'Task not found.' };
+    if (!proofText.trim() && !imageBase64) return { success: false, error: 'Add a screenshot or a description.' };
     const existing = state.taskSubmissions.find(s => s.taskId === taskId && s.userId === state.currentUser.id);
-    if (existing?.status === 'pending') return { success: false, error: 'Une soumission est déjà en attente de validation.' };
-    if (existing?.status === 'approved') return { success: false, error: 'Votre preuve a déjà été validée.' };
+    if (existing?.status === 'pending') return { success: false, error: 'A submission is already pending validation.' };
+    if (existing?.status === 'approved') return { success: false, error: 'Your proof has already been validated.' };
     set(s => ({
       taskSubmissions: [{
         id: generateId(),
@@ -1746,9 +1746,9 @@ export const useAppStore = create<AppState>((set, get) => ({
         currentUser: s.currentUser.id === submission.userId ? { ...s.currentUser, ...balanceUpdate } : s.currentUser,
       }));
       get().addTransaction({ userId: submission.userId, type: 'reward', amount: task.reward, currency: 'TON', status: 'completed', completedAt: new Date().toISOString() });
-      get().addNotification({ userId: submission.userId, type: 'reward', title: 'Tâche promo validée! 🎉', message: `+${task.reward.toFixed(2)} GRAM crédité pour "${task.title}".`, isRead: false });
+      get().addNotification({ userId: submission.userId, type: 'reward', title: 'Promo task approved! 🎉', message: `+${task.reward.toFixed(2)} GRAM credited for "${task.title}".`, isRead: false });
     } else if (status === 'rejected') {
-      get().addNotification({ userId: submission.userId, type: 'alert', title: 'Preuve refusée', message: `Votre soumission pour "${task?.title}" a été refusée.${adminNote ? ` Motif: ${adminNote}` : ''}`, isRead: false });
+      get().addNotification({ userId: submission.userId, type: 'alert', title: 'Proof rejected', message: `Your submission for "${task?.title}" was rejected.${adminNote ? ` Reason: ${adminNote}` : ''}`, isRead: false });
     }
   },
 
@@ -1759,9 +1759,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   buyShopItem: (itemId) => {
     const state = get();
     const item = state.shopItems.find(i => i.id === itemId);
-    if (!item || !item.isActive) return { success: false, error: 'Article introuvable.' };
-    if (item.maxPurchases != null && item.purchases >= item.maxPurchases) return { success: false, error: 'Stock épuisé.' };
-    if (state.currentUser.balanceMain < item.price) return { success: false, error: `Solde insuffisant. Requis: ${item.price.toFixed(2)} TON.` };
+    if (!item || !item.isActive) return { success: false, error: 'Item not found.' };
+    if (item.maxPurchases != null && item.purchases >= item.maxPurchases) return { success: false, error: 'Out of stock.' };
+    if (state.currentUser.balanceMain < item.price) return { success: false, error: `Insufficient balance. Required: ${item.price.toFixed(2)} TON.` };
 
     const balanceUpdate: Partial<typeof state.currentUser> = { balanceMain: state.currentUser.balanceMain - item.price };
     if (item.type === 'task_credit') {

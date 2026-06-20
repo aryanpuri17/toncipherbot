@@ -4,12 +4,12 @@ import { LayoutDashboard, Wallet, ListTodo, Users, User, Dices } from 'lucide-re
 import { haptic } from '../../lib/haptics';
 
 const navItems = [
-  { id: 'dashboard', label: 'Home',   icon: LayoutDashboard },
-  { id: 'tasks',     label: 'Tâches', icon: ListTodo },
-  { id: 'games',     label: 'Jeux',   icon: Dices },
-  { id: 'referral',  label: 'Amis',   icon: Users },
-  { id: 'wallet',    label: 'Wallet', icon: Wallet },
-  { id: 'profile',   label: 'Profil', icon: User },
+  { id: 'dashboard', label: 'Home',     icon: LayoutDashboard },
+  { id: 'tasks',     label: 'Tasks',    icon: ListTodo },
+  { id: 'games',     label: 'Games',    icon: Dices },
+  { id: 'referral',  label: 'Friends',  icon: Users },
+  { id: 'wallet',    label: 'Wallet',   icon: Wallet },
+  { id: 'profile',   label: 'Profile',  icon: User },
 ];
 
 const subPageToNav: Record<string, string> = {
@@ -43,7 +43,7 @@ export const MiniAppNav: React.FC = () => {
     <nav className="fixed bottom-0 left-0 right-0 z-50 nav-bar">
       <div className="relative grid grid-cols-6 max-w-lg mx-auto px-2 py-1">
 
-        {/* Pill glissante — couleur TON */}
+        {/* Sliding pill — TON color */}
         <span
           className="absolute top-1 bottom-1 rounded-xl pointer-events-none nav-pill"
           style={{

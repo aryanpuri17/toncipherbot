@@ -111,10 +111,10 @@ GAME_DAILY_WIN_LIMIT = float(os.getenv("GAME_DAILY_WIN_LIMIT", "50.0"))
 # ── Referral milestone defaults (mirror of frontend _defaultReferralMilestones) ─
 # Admin can override via /api/admin/config key "referralMilestones".
 _DEFAULT_REFERRAL_MILESTONES: list[dict] = [
-    {"id": "1", "referralCount": 5,   "reward": 2.00,  "description": "Invitez 5 amis",   "isActive": True},
-    {"id": "2", "referralCount": 20,  "reward": 10.00, "description": "Invitez 20 amis",  "isActive": True},
-    {"id": "3", "referralCount": 50,  "reward": 30.00, "description": "Invitez 50 amis",  "isActive": True},
-    {"id": "4", "referralCount": 100, "reward": 75.00, "description": "Invitez 100 amis", "isActive": True},
+    {"id": "1", "referralCount": 5,   "reward": 2.00,  "description": "Invite 5 friends",   "isActive": True},
+    {"id": "2", "referralCount": 20,  "reward": 10.00, "description": "Invite 20 friends",  "isActive": True},
+    {"id": "3", "referralCount": 50,  "reward": 30.00, "description": "Invite 50 friends",  "isActive": True},
+    {"id": "4", "referralCount": 100, "reward": 75.00, "description": "Invite 100 friends", "isActive": True},
 ]
 MILESTONE_MAX_REWARD = float(os.getenv("MILESTONE_MAX_REWARD", "500.0"))
 
@@ -791,11 +791,11 @@ async def cmd_start(msg: types.Message):
                     )
                     await db.commit()
                 await msg.answer(
-                    "✅ <b>Visite confirmée !</b>\n\nRevenez dans l'app et appuyez sur <b>Vérifier</b> pour recevoir votre récompense.",
+                    "✅ <b>Visit confirmed!</b>\n\nReturn to the app and tap <b>Verify</b> to receive your reward.",
                     parse_mode="HTML",
                 )
             else:
-                await msg.answer("❌ Lien invalide.")
+                await msg.answer("❌ Invalid link.")
         return
 
     # ── Social proof request ──
@@ -813,33 +813,33 @@ async def cmd_start(msg: types.Message):
                     )
                     await db.commit()
                 await msg.answer(
-                    "📸 <b>Envoyez maintenant votre screenshot</b> comme preuve que vous avez effectué l'action.\n\n"
-                    "• Instagram / TikTok : screenshot du profil avec le bouton <i>Abonné</i>\n"
-                    "• X (Twitter) : screenshot du profil avec <i>Suivi(e)</i>\n"
-                    "• Discord : screenshot du serveur rejoint",
+                    "📸 <b>Now send your screenshot</b> as proof that you completed the action.\n\n"
+                    "• Instagram / TikTok: screenshot of the profile with the <i>Following</i> button\n"
+                    "• X (Twitter): screenshot of the profile with <i>Following</i>\n"
+                    "• Discord: screenshot of the joined server",
                     parse_mode="HTML",
                 )
             else:
-                await msg.answer("❌ Lien invalide.")
+                await msg.answer("❌ Invalid link.")
         return
 
     if not WEBAPP_URL:
-        await msg.answer("⚙️ <b>TonCipher</b> — configuration en cours.", parse_mode="HTML")
+        await msg.answer("⚙️ <b>TonCipher</b> — setting up, please wait.", parse_mode="HTML")
         return
-    first_name = msg.from_user.first_name or "là"
+    first_name = msg.from_user.first_name or "there"
     kb = InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(text="🚀 Ouvrir l'app", web_app=WebAppInfo(url=WEBAPP_URL))
+        InlineKeyboardButton(text="🚀 Open App", web_app=WebAppInfo(url=WEBAPP_URL))
     ]])
     await msg.answer(
-        f"👋 Salut <b>{first_name}</b> !\n\n"
-        f"Bienvenue sur <b>TonCipher</b> — la plateforme qui te permet de gagner de vrais <b>TON</b> 💎\n\n"
-        f"<b>🎯 Ce que tu peux faire :</b>\n"
-        f"• ✅ Accomplir des tâches simples (rejoindre des canaux, réseaux sociaux…)\n"
-        f"• 🎰 Jouer à des jeux (Mines, Roue, Jackpot, Aviator…)\n"
-        f"• 👥 Parrainer des amis et gagner des commissions\n"
-        f"• 💸 Retirer tes gains en TON directement dans ton wallet\n\n"
-        f"<b>💡 C'est gratuit, sans investissement obligatoire.</b>\n\n"
-        f"⬇️ Lance l'app et commence à gagner !",
+        f"👋 Hey <b>{first_name}</b>!\n\n"
+        f"Welcome to <b>TonCipher</b> — the platform where you earn real <b>TON</b> 💎\n\n"
+        f"<b>🎯 What you can do:</b>\n"
+        f"• ✅ Complete simple tasks (join channels, follow on social media…)\n"
+        f"• 🎰 Play games (Mines, Wheel, Jackpot, Aviator…)\n"
+        f"• 👥 Refer friends and earn commissions\n"
+        f"• 💸 Withdraw your earnings in TON directly to your wallet\n\n"
+        f"<b>💡 It's free — no investment required.</b>\n\n"
+        f"⬇️ Launch the app and start earning!",
         parse_mode="HTML",
         reply_markup=kb,
     )
@@ -855,10 +855,10 @@ async def cmd_credit(msg: types.Message):
     args = (msg.text or "").split(maxsplit=3)[1:]
     if len(args) < 2:
         await msg.reply(
-            "❌ Usage : <code>/credit &lt;id_ou_@username&gt; &lt;montant&gt; [note]</code>\n\n"
-            "Exemples :\n"
+            "❌ Usage: <code>/credit &lt;id_or_@username&gt; &lt;amount&gt; [note]</code>\n\n"
+            "Examples:\n"
             "<code>/credit 123456789 5.00</code>\n"
-            "<code>/credit @monami 10 Cadeau</code>",
+            "<code>/credit @myfriend 10 Gift</code>",
             parse_mode="HTML",
         )
         return
@@ -867,14 +867,14 @@ async def cmd_credit(msg: types.Message):
     try:
         amount = float(args[1])
     except ValueError:
-        await msg.reply("❌ Montant invalide.", parse_mode="HTML")
+        await msg.reply("❌ Invalid amount.", parse_mode="HTML")
         return
 
     if not (0 < amount <= 100_000):
-        await msg.reply("❌ Montant doit être entre 0 et 100 000 GRAM.", parse_mode="HTML")
+        await msg.reply("❌ Amount must be between 0 and 100,000 GRAM.", parse_mode="HTML")
         return
 
-    note = args[2] if len(args) > 2 else "Crédit admin"
+    note = args[2] if len(args) > 2 else "Admin credit"
 
     async with aiosqlite.connect(DB_PATH) as db:
         if target_raw.startswith("@"):
@@ -887,7 +887,7 @@ async def cmd_credit(msg: types.Message):
             try:
                 tid = int(target_raw)
             except ValueError:
-                await msg.reply("❌ ID invalide. Utilisez un nombre ou @username.", parse_mode="HTML")
+                await msg.reply("❌ Invalid ID. Please use a number or @username.", parse_mode="HTML")
                 return
             async with db.execute(
                 "SELECT telegram_id, first_name, username FROM users WHERE telegram_id = ?",
@@ -896,11 +896,11 @@ async def cmd_credit(msg: types.Message):
                 row = await cur.fetchone()
 
         if not row:
-            await msg.reply(f"❌ Utilisateur introuvable : <code>{target_raw}</code>", parse_mode="HTML")
+            await msg.reply(f"❌ User not found: <code>{target_raw}</code>", parse_mode="HTML")
             return
 
         target_id  = row[0]
-        first_name = row[1] or "Utilisateur"
+        first_name = row[1] or "User"
         username   = row[2]
 
         await db.execute(
@@ -919,15 +919,15 @@ async def cmd_credit(msg: types.Message):
         await db.commit()
 
     try:
-        note_line = f"\n📝 <i>{note}</i>" if note != "Crédit admin" else ""
+        note_line = f"\n📝 <i>{note}</i>" if note != "Admin credit" else ""
         await bot.send_message(
             target_id,
-            f"💎 <b>Crédit reçu !</b>\n\n"
-            f"Bonjour <b>{first_name}</b> 👋\n\n"
-            f"L'équipe TonCipher vous a crédité :\n"
+            f"💎 <b>Credit received!</b>\n\n"
+            f"Hello <b>{first_name}</b> 👋\n\n"
+            f"The TonCipher team has credited your account:\n"
             f"<b>+{amount:.4f} GRAM</b>{note_line}\n\n"
-            f"Votre solde a été mis à jour instantanément.\n"
-            f"Merci de votre confiance en TonCipher ! 🙏",
+            f"Your balance has been updated instantly.\n"
+            f"Thank you for trusting TonCipher! 🙏",
             parse_mode="HTML",
         )
     except Exception:
@@ -935,7 +935,7 @@ async def cmd_credit(msg: types.Message):
 
     username_part = f" (@{username})" if username else ""
     await msg.reply(
-        f"✅ <b>Crédit envoyé !</b>\n\n"
+        f"✅ <b>Credit sent!</b>\n\n"
         f"👤 {first_name}{username_part}\n"
         f"🆔 <code>{target_id}</code>\n"
         f"💎 <b>+{amount:.4f} GRAM</b>\n"
@@ -967,7 +967,7 @@ async def handle_proof_photo(msg: types.Message) -> None:
             trow = await cur.fetchone()
 
         creator_id = trow[0] if trow else None
-        task_title = trow[1] if trow else f"Tâche #{task_id}"
+        task_title = trow[1] if trow else f"Task #{task_id}"
 
         async with db.execute(
             "INSERT INTO social_proofs (telegram_id, task_id, file_id, creator_id) VALUES (?,?,?,?)",
@@ -984,11 +984,11 @@ async def handle_proof_photo(msg: types.Message) -> None:
         user_display = f"@{username}" if username else f"ID {uid}"
         kb = InlineKeyboardMarkup(inline_keyboard=[[
             InlineKeyboardButton(
-                text="✅ Approuver",
+                text="✅ Approve",
                 callback_data=f"proof_ok_{proof_id}_{uid}_{task_id}",
             ),
             InlineKeyboardButton(
-                text="❌ Refuser",
+                text="❌ Reject",
                 callback_data=f"proof_ko_{proof_id}_{uid}_{task_id}",
             ),
         ]])
@@ -997,9 +997,9 @@ async def handle_proof_photo(msg: types.Message) -> None:
                 notify_id,
                 photo=file_id,
                 caption=(
-                    f"📸 <b>Preuve à valider</b>\n\n"
-                    f"Tâche : <b>{task_title}</b>\n"
-                    f"Utilisateur : {user_display} (<code>{uid}</code>)"
+                    f"📸 <b>Proof pending review</b>\n\n"
+                    f"Task: <b>{task_title}</b>\n"
+                    f"User: {user_display} (<code>{uid}</code>)"
                 ),
                 parse_mode="HTML",
                 reply_markup=kb,
@@ -1008,8 +1008,8 @@ async def handle_proof_photo(msg: types.Message) -> None:
             pass
 
     await msg.answer(
-        "⏳ <b>Preuve reçue !</b>\n\nElle est en cours de vérification par notre équipe. "
-        "Vous recevrez une notification dès la validation.",
+        "⏳ <b>Proof received!</b>\n\nIt is being reviewed by our team. "
+        "You will receive a notification once it has been validated.",
         parse_mode="HTML",
     )
 
@@ -1019,7 +1019,7 @@ async def handle_proof_photo(msg: types.Message) -> None:
 @dp.callback_query(F.data.startswith("proof_"))
 async def handle_proof_callback(cb: types.CallbackQuery) -> None:
     if cb.from_user.id != ADMIN_TELEGRAM_ID:
-        await cb.answer("Non autorisé")
+        await cb.answer("Unauthorized")
         return
 
     parts    = cb.data.split("_")  # proof_ok_<proofId>_<userId>_<taskId>
@@ -1043,21 +1043,21 @@ async def handle_proof_callback(cb: types.CallbackQuery) -> None:
         pass
 
     if action == "ok":
-        await cb.answer("✅ Approuvé")
+        await cb.answer("✅ Approved")
         try:
             await bot.send_message(
                 user_tg,
-                "✅ <b>Preuve validée !</b>\n\nRevenez dans l'app — votre récompense va être créditée automatiquement.",
+                "✅ <b>Proof approved!</b>\n\nReturn to the app — your reward will be credited automatically.",
                 parse_mode="HTML",
             )
         except Exception:
             pass
     else:
-        await cb.answer("❌ Refusé")
+        await cb.answer("❌ Rejected")
         try:
             await bot.send_message(
                 user_tg,
-                "❌ Votre preuve n'a pas été acceptée. Assurez-vous d'effectuer l'action demandée et renvoyez un screenshot plus clair.",
+                "❌ Your proof was not accepted. Please make sure you completed the required action and resubmit a clearer screenshot.",
                 parse_mode="HTML",
             )
         except Exception:
@@ -1159,12 +1159,12 @@ async def api_user_init(request: web.Request) -> web.Response:
             await db.execute("UPDATE users SET flagged = 1 WHERE telegram_id = ?", (telegram_id,))
             sev_label = _severity(score).upper()
             await _notify_admin(
-                f"⚠️ <b>Activité suspecte [{sev_label}]</b>\n"
-                f"👤 @{username or 'inconnu'} (ID: <code>{telegram_id}</code>)\n"
-                f"🚨 Raisons: {', '.join(violations)}\n"
-                f"📊 Score risque: {score}/100\n"
-                f"ℹ️ Ce compte est <b>signalé</b> — aucun ban automatique.\n"
-                f"👉 Vérifie l'admin panel pour décider."
+                f"⚠️ <b>Suspicious activity [{sev_label}]</b>\n"
+                f"👤 @{username or 'unknown'} (ID: <code>{telegram_id}</code>)\n"
+                f"🚨 Reasons: {', '.join(violations)}\n"
+                f"📊 Risk score: {score}/100\n"
+                f"ℹ️ This account is <b>flagged</b> — no automatic ban.\n"
+                f"👉 Check the admin panel to decide."
             )
 
         await db.commit()
@@ -1353,10 +1353,10 @@ async def api_user_referral(request: web.Request) -> web.Response:
         try:
             await bot.send_message(
                 referrer_id,
-                f"🎉 <b>Nouveau filleul !</b>\n\n"
-                f"@{referee_username} vient de rejoindre TonCipher via votre lien.\n"
-                f"💰 Bonus crédité : <b>+{REFERRAL_BONUS_TON:.2f} TON</b>\n"
-                f"💎 Filleuls : <b>{new_count}</b>  ·  Solde parrainage : <b>{new_balance:.2f} TON</b>",
+                f"🎉 <b>New referral!</b>\n\n"
+                f"@{referee_username} just joined TonCipher via your link.\n"
+                f"💰 Bonus credited: <b>+{REFERRAL_BONUS_TON:.2f} TON</b>\n"
+                f"💎 Referrals: <b>{new_count}</b>  ·  Referral balance: <b>{new_balance:.2f} TON</b>",
                 parse_mode="HTML",
             )
         except Exception as e:
@@ -1465,16 +1465,16 @@ async def api_withdrawal_create(request: web.Request) -> web.Response:
 
     # ── Basic input validation ─────────────────────────────────────────────────
     if not telegram_id or amount is None:
-        return web.json_response({"error": "Données manquantes"}, status=400, headers=_CORS)
+        return web.json_response({"error": "Missing data"}, status=400, headers=_CORS)
     if len(address) < 20:
-        return web.json_response({"error": "Adresse invalide (trop courte)"}, status=400, headers=_CORS)
+        return web.json_response({"error": "Invalid address (too short)"}, status=400, headers=_CORS)
     if amount < WD_MIN_AMOUNT:
         return web.json_response(
-            {"error": f"Montant minimum : {WD_MIN_AMOUNT} GRAM"}, status=400, headers=_CORS
+            {"error": f"Minimum amount: {WD_MIN_AMOUNT} GRAM"}, status=400, headers=_CORS
         )
     if amount > WD_MAX_AMOUNT:
         return web.json_response(
-            {"error": f"Montant maximum : {WD_MAX_AMOUNT} GRAM"}, status=400, headers=_CORS
+            {"error": f"Maximum amount: {WD_MAX_AMOUNT} GRAM"}, status=400, headers=_CORS
         )
 
     # ── Identity verification ─────────────────────────────────────────────────
@@ -1484,7 +1484,7 @@ async def api_withdrawal_create(request: web.Request) -> web.Response:
             if authed_id and authed_id != telegram_id:
                 log.warning("Withdrawal impersonation: claimed=%d authed=%d addr=%s",
                             telegram_id, authed_id, address[:12])
-            return web.json_response({"error": "Authentification requise"}, status=401, headers=_CORS)
+            return web.json_response({"error": "Authentication required"}, status=401, headers=_CORS)
 
     if _is_user_rate_limited(telegram_id, max_per_window=5):
         return web.json_response({"error": "Too many withdrawal attempts"}, status=429, headers=_CORS)
@@ -1500,21 +1500,21 @@ async def api_withdrawal_create(request: web.Request) -> web.Response:
             urow = await cur.fetchone()
 
         if not urow:
-            return web.json_response({"error": "Utilisateur introuvable"}, status=404, headers=_CORS)
+            return web.json_response({"error": "User not found"}, status=404, headers=_CORS)
 
         banned, wd_blocked, app_balance, tasks_done, uname, fname, is_flagged = urow
         app_balance  = float(app_balance  or 0)
         tasks_done   = int(tasks_done or 0)
 
         if banned:
-            return web.json_response({"error": "Compte banni"}, status=403, headers=_CORS)
+            return web.json_response({"error": "Account suspended"}, status=403, headers=_CORS)
         if wd_blocked:
-            return web.json_response({"error": "Retraits bloqués sur ce compte"}, status=403, headers=_CORS)
+            return web.json_response({"error": "Withdrawals are blocked on this account"}, status=403, headers=_CORS)
 
         # ── Minimum tasks requirement ──────────────────────────────────────────
         if tasks_done < WD_MIN_TASKS:
             return web.json_response(
-                {"error": f"Complétez au moins {WD_MIN_TASKS} tâches avant de retirer "
+                {"error": f"Please complete at least {WD_MIN_TASKS} tasks before withdrawing "
                           f"({tasks_done}/{WD_MIN_TASKS})"},
                 status=400, headers=_CORS
             )
@@ -1522,7 +1522,7 @@ async def api_withdrawal_create(request: web.Request) -> web.Response:
         # ── Server-side balance check ──────────────────────────────────────────
         if app_balance < amount:
             return web.json_response(
-                {"error": f"Solde insuffisant ({app_balance:.4f} GRAM disponibles)"},
+                {"error": f"Insufficient balance ({app_balance:.4f} GRAM available)"},
                 status=400, headers=_CORS
             )
 
@@ -1536,14 +1536,14 @@ async def api_withdrawal_create(request: web.Request) -> web.Response:
             pending_count, pending_sum = await cur.fetchone()
         if pending_count >= WD_MAX_PENDING:
             return web.json_response(
-                {"error": f"Vous avez déjà {pending_count} retraits en attente. "
-                          f"Attendez qu'ils soient traités."},
+                {"error": f"You already have {pending_count} pending withdrawals. "
+                          f"Please wait for them to be processed."},
                 status=400, headers=_CORS
             )
         # Ensure pending + new request does not exceed actual balance
         if float(pending_sum or 0) + amount > app_balance:
             return web.json_response(
-                {"error": "Solde insuffisant (retrait en attente pris en compte)"},
+                {"error": "Insufficient balance (pending withdrawal taken into account)"},
                 status=400, headers=_CORS
             )
 
@@ -1560,7 +1560,7 @@ async def api_withdrawal_create(request: web.Request) -> web.Response:
         if float(daily_total or 0) + amount > WD_DAILY_LIMIT:
             remaining = max(0, WD_DAILY_LIMIT - float(daily_total or 0))
             return web.json_response(
-                {"error": f"Limite journalière atteinte. Restant aujourd'hui : {remaining:.2f} GRAM"},
+                {"error": f"Daily limit reached. Remaining today: {remaining:.2f} GRAM"},
                 status=400, headers=_CORS
             )
 
@@ -1573,7 +1573,7 @@ async def api_withdrawal_create(request: web.Request) -> web.Response:
         )
         if upd.rowcount == 0:
             return web.json_response(
-                {"error": "Solde insuffisant (actualisé) — réessayez"},
+                {"error": "Insufficient balance (refreshed) — please try again"},
                 status=400, headers=_CORS
             )
 
@@ -1592,27 +1592,27 @@ async def api_withdrawal_create(request: web.Request) -> web.Response:
     fname  = fname  or ""
     is_flagged = bool(is_flagged)
 
-    flag_warn = "\n⚠️ <b>Compte signalé (anti-fraude)</b> — vérification recommandée." if is_flagged else ""
+    flag_warn = "\n⚠️ <b>Flagged account (anti-fraud)</b> — verification recommended." if is_flagged else ""
     from datetime import datetime as _dt
-    now_str = _dt.utcnow().strftime("%d/%m/%Y à %H:%M UTC")
+    now_str = _dt.utcnow().strftime("%d/%m/%Y at %H:%M UTC")
     admin_msg = (
         f"━━━━━━━━━━━━━━━━━━━━━\n"
-        f"💸 <b>DEMANDE DE RETRAIT</b>{flag_warn}\n"
+        f"💸 <b>WITHDRAWAL REQUEST</b>{flag_warn}\n"
         f"━━━━━━━━━━━━━━━━━━━━━\n"
-        f"👤 <b>Utilisateur :</b> {fname} @{uname or 'inconnu'}\n"
-        f"🆔 <b>Telegram ID :</b> <code>{telegram_id}</code>\n"
+        f"👤 <b>User:</b> {fname} @{uname or 'unknown'}\n"
+        f"🆔 <b>Telegram ID:</b> <code>{telegram_id}</code>\n"
         f"━━━━━━━━━━━━━━━━━━━━━\n"
-        f"💰 <b>Montant :</b> <b>{amount:.4f} {currency}</b>\n"
-        f"🌐 <b>Réseau :</b> {network}\n"
-        f"🏷️ <b>Frais :</b> {fee}\n"
+        f"💰 <b>Amount:</b> <b>{amount:.4f} {currency}</b>\n"
+        f"🌐 <b>Network:</b> {network}\n"
+        f"🏷️ <b>Fee:</b> {fee}\n"
         f"━━━━━━━━━━━━━━━━━━━━━\n"
-        f"📬 <b>Adresse :</b>\n<code>{address}</code>\n"
+        f"📬 <b>Address:</b>\n<code>{address}</code>\n"
         f"━━━━━━━━━━━━━━━━━━━━━\n"
-        f"🔖 <b>Référence :</b> <code>{tx_id}</code>\n"
-        f"🕐 <b>Date :</b> {now_str}\n"
+        f"🔖 <b>Reference:</b> <code>{tx_id}</code>\n"
+        f"🕐 <b>Date:</b> {now_str}\n"
         f"━━━━━━━━━━━━━━━━━━━━━"
     )
-    await _notify_admin(admin_msg + "\n\n👉 <b>Ouvre l'admin pour approuver ou refuser.</b>")
+    await _notify_admin(admin_msg + "\n\n👉 <b>Open the admin panel to approve or reject.</b>")
 
     log.info("Withdrawal request: id=%s telegram_id=%d amount=%.2f %s → %s",
              tx_id, telegram_id, amount, currency, address[:12])
@@ -2138,12 +2138,12 @@ async def api_admin_credit_user(request: web.Request) -> web.Response:
     try:
         amount = float(data.get("amount", 0))
     except (TypeError, ValueError):
-        return web.json_response({"error": "Montant invalide"}, status=400, headers=_CORS)
+        return web.json_response({"error": "Invalid amount"}, status=400, headers=_CORS)
 
     if not (0 < amount <= 100_000):
-        return web.json_response({"error": "Le montant doit être entre 0 et 100 000"}, status=400, headers=_CORS)
+        return web.json_response({"error": "Amount must be between 0 and 100,000"}, status=400, headers=_CORS)
 
-    note = str(data.get("note", "")).strip()[:200] or "Crédit administrateur"
+    note = str(data.get("note", "")).strip()[:200] or "Administrator credit"
 
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(
@@ -2152,9 +2152,9 @@ async def api_admin_credit_user(request: web.Request) -> web.Response:
         ) as cur:
             row = await cur.fetchone()
         if not row:
-            return web.json_response({"error": "Utilisateur introuvable"}, status=404, headers=_CORS)
+            return web.json_response({"error": "User not found"}, status=404, headers=_CORS)
 
-        first_name = row[1] or "Utilisateur"
+        first_name = row[1] or "User"
         username   = row[2]
 
         # Credit balance + total earnings
@@ -2179,15 +2179,15 @@ async def api_admin_credit_user(request: web.Request) -> web.Response:
     # Telegram notification (non-blocking)
     try:
         username_part = f" (@{username})" if username else ""
-        note_line     = f"\n📝 <i>{note}</i>" if note != "Crédit administrateur" else ""
+        note_line     = f"\n📝 <i>{note}</i>" if note != "Administrator credit" else ""
         await bot.send_message(
             telegram_id,
-            f"💎 <b>Crédit reçu !</b>\n\n"
-            f"Bonjour <b>{first_name}</b>{username_part} 👋\n\n"
-            f"L'équipe TonCipher vous a crédité :\n"
+            f"💎 <b>Credit received!</b>\n\n"
+            f"Hello <b>{first_name}</b>{username_part} 👋\n\n"
+            f"The TonCipher team has credited your account:\n"
             f"<b>+{amount:.4f} GRAM</b>{note_line}\n\n"
-            f"Votre solde a été mis à jour instantanément.\n"
-            f"Merci de votre confiance en TonCipher ! 🙏",
+            f"Your balance has been updated instantly.\n"
+            f"Thank you for trusting TonCipher! 🙏",
             parse_mode="HTML",
         )
     except Exception:
@@ -2456,24 +2456,24 @@ async def api_admin_approve_withdrawal(request: web.Request) -> web.Response:
 
     tx_link = f"https://tonscan.org/tx/{tx_hash}" if tx_hash else ""
     if bot and tx_row:
-        first_name = tx_row[4] or "cher utilisateur"
+        first_name = tx_row[4] or "valued user"
         username_part = f" (@{tx_row[5]})" if tx_row[5] else ""
         addr_short = tx_row[3][:8] + "…" + tx_row[3][-6:] if tx_row[3] and len(tx_row[3]) > 14 else (tx_row[3] or "")
         tx_hash_short = (tx_hash[:16] + "…") if len(tx_hash) > 16 else tx_hash
         try:
             await bot.send_message(
                 tx_row[0],
-                f"✅ <b>Retrait approuvé !</b>\n\n"
-                f"Félicitations <b>{first_name}</b>{username_part} 🎉\n\n"
-                f"Votre retrait a été traité avec succès et envoyé à votre adresse.\n\n"
+                f"✅ <b>Withdrawal approved!</b>\n\n"
+                f"Congratulations <b>{first_name}</b>{username_part} 🎉\n\n"
+                f"Your withdrawal has been successfully processed and sent to your address.\n\n"
                 f"━━━━━━━━━━━━━━━━━━━━\n"
-                f"💎 Montant envoyé : <b>{tx_row[1]:.4f} {tx_row[2]}</b>\n"
-                f"📍 Adresse : <code>{addr_short}</code>\n"
-                + (f"🔗 TX Hash : <code>{tx_hash_short}</code>\n"
-                   f'<a href="{tx_link}">👁 Voir sur TonScan</a>\n' if tx_link else "")
+                f"💎 Amount sent: <b>{tx_row[1]:.4f} {tx_row[2]}</b>\n"
+                f"📍 Address: <code>{addr_short}</code>\n"
+                + (f"🔗 TX Hash: <code>{tx_hash_short}</code>\n"
+                   f'<a href="{tx_link}">👁 View on TonScan</a>\n' if tx_link else "")
                 + f"━━━━━━━━━━━━━━━━━━━━\n\n"
-                f"Merci de votre confiance en TonCipher ! 🙏\n"
-                f"Continuez à accomplir des tâches et profitez de nos jeux pour gagner encore plus de TON ! 🚀",
+                f"Thank you for trusting TonCipher! 🙏\n"
+                f"Keep completing tasks and enjoy our games to earn even more TON! 🚀",
                 parse_mode="HTML",
                 disable_web_page_preview=False,
             )
@@ -2481,25 +2481,25 @@ async def api_admin_approve_withdrawal(request: web.Request) -> web.Response:
             pass
 
     if tx_row:
-        first_name_pub = tx_row[4] or "Utilisateur"
+        first_name_pub = tx_row[4] or "User"
         # processed_at from DB (SQLite returns "YYYY-MM-DD HH:MM:SS")
         try:
             from datetime import datetime as _dt2
             processed_dt = _dt2.strptime(tx_row[5], "%Y-%m-%d %H:%M:%S")
-            approved_str = processed_dt.strftime("%d/%m/%Y à %H:%M:%S UTC")
+            approved_str = processed_dt.strftime("%d/%m/%Y at %H:%M:%S UTC")
         except Exception:
             from datetime import datetime as _dt2
-            approved_str = _dt2.utcnow().strftime("%d/%m/%Y à %H:%M:%S UTC")
+            approved_str = _dt2.utcnow().strftime("%d/%m/%Y at %H:%M:%S UTC")
         await _notify_channel(
             await _configured_withdrawal_channel(),
             f"━━━━━━━━━━━━━━━━━━━━━\n"
-            f"✅ <b>RETRAIT APPROUVÉ</b>\n"
+            f"✅ <b>WITHDRAWAL APPROVED</b>\n"
             f"━━━━━━━━━━━━━━━━━━━━━\n"
-            f"👤 <b>Bénéficiaire :</b> {first_name_pub}\n"
-            f"💰 <b>Montant :</b> {tx_row[1]:.4f} {tx_row[2]}\n"
-            f"🕐 <b>Approuvé le :</b> {approved_str}\n"
+            f"👤 <b>Recipient:</b> {first_name_pub}\n"
+            f"💰 <b>Amount:</b> {tx_row[1]:.4f} {tx_row[2]}\n"
+            f"🕐 <b>Approved on:</b> {approved_str}\n"
             f"━━━━━━━━━━━━━━━━━━━━━\n"
-            + (f'🔗 <a href="{tx_link}">Voir la transaction sur TonScan</a>\n' if tx_link else "📭 Aucun TX Hash fourni\n")
+            + (f'🔗 <a href="{tx_link}">View transaction on TonScan</a>\n' if tx_link else "📭 No TX Hash provided\n")
             + f"━━━━━━━━━━━━━━━━━━━━━",
         )
 
@@ -2544,21 +2544,21 @@ async def api_admin_reject_withdrawal(request: web.Request) -> web.Response:
         await db.commit()
 
     if bot and tx_row:
-        first_name = tx_row[3] or "cher utilisateur"
+        first_name = tx_row[3] or "valued user"
         username_part = f" (@{tx_row[4]})" if tx_row[4] else ""
         try:
             await bot.send_message(
                 tx_row[0],
-                f"❌ <b>Retrait non traité</b>\n\n"
-                f"Bonjour <b>{first_name}</b>{username_part},\n\n"
-                f"Votre demande de retrait n'a pas pu être traitée pour le moment.\n\n"
+                f"❌ <b>Withdrawal unsuccessful</b>\n\n"
+                f"Hello <b>{first_name}</b>{username_part},\n\n"
+                f"Your withdrawal request could not be processed at this time.\n\n"
                 f"━━━━━━━━━━━━━━━━━━━━\n"
-                f"💎 Montant : <b>{tx_row[1]:.4f} {tx_row[2]}</b>\n"
-                + (f"📝 Motif : {note}\n" if note else "📝 Aucun motif précisé.\n")
+                f"💎 Amount: <b>{tx_row[1]:.4f} {tx_row[2]}</b>\n"
+                + (f"📝 Reason: {note}\n" if note else "📝 No reason specified.\n")
                 + f"━━━━━━━━━━━━━━━━━━━━\n\n"
-                f"✅ <b>Bonne nouvelle :</b> votre solde de <b>{tx_row[1]:.4f} {tx_row[2]}</b> "
-                f"a été automatiquement recrédité sur votre compte.\n\n"
-                f"Si vous pensez qu'il s'agit d'une erreur, contactez notre support : @TonCipher_bot 💬",
+                f"✅ <b>Good news:</b> your balance of <b>{tx_row[1]:.4f} {tx_row[2]}</b> "
+                f"has been automatically restored to your account.\n\n"
+                f"If you believe this is an error, please contact our support: @TonCipher_bot 💬",
                 parse_mode="HTML",
             )
         except Exception:
@@ -2682,13 +2682,13 @@ async def api_user_task_create(request: web.Request) -> web.Response:
     uname = urow[0] if urow else ""
     fname = urow[1] if urow else ""
     await _notify_admin(
-        f"📋 <b>Nouvelle tâche à approuver</b>\n"
-        f"👤 {fname} @{uname or 'inconnu'} (ID: <code>{creator_id}</code>)\n"
+        f"📋 <b>New task pending approval</b>\n"
+        f"👤 {fname} @{uname or 'unknown'} (ID: <code>{creator_id}</code>)\n"
         f"📝 {title}\n"
         f"🔗 {target_url}\n"
         f"💰 Budget: {total_budget:.3f} TON ({max_completions} × {reward:.4f} TON)\n"
         f"🆔 <code>{task_id}</code>\n"
-        f"👉 Admin panel → Approuver / Refuser"
+        f"👉 Admin panel → Approve / Reject"
     )
     return web.json_response({"success": True, "id": task_id}, headers=_CORS)
 
@@ -2959,14 +2959,14 @@ async def api_submit_proof_miniapp(request: web.Request) -> web.Response:
             trow = await cur.fetchone()
 
     creator_id  = trow[0] if trow else None
-    task_title  = trow[1] if trow else f"Tâche #{task_id}"
+    task_title  = trow[1] if trow else f"Task #{task_id}"
     notify_id   = creator_id if creator_id else ADMIN_TELEGRAM_ID
     if not notify_id:
         return web.json_response({"error": "No admin configured"}, status=500, headers=_CORS)
 
     kb = InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(text="✅ Approuver", callback_data=f"proof_ok_PENDING_{telegram_id}_{task_id}"),
-        InlineKeyboardButton(text="❌ Refuser",   callback_data=f"proof_ko_PENDING_{telegram_id}_{task_id}"),
+        InlineKeyboardButton(text="✅ Approve", callback_data=f"proof_ok_PENDING_{telegram_id}_{task_id}"),
+        InlineKeyboardButton(text="❌ Reject",  callback_data=f"proof_ko_PENDING_{telegram_id}_{task_id}"),
     ]])
     try:
         photo_input = BufferedInputFile(file_bytes, filename="proof.jpg")
@@ -2974,9 +2974,9 @@ async def api_submit_proof_miniapp(request: web.Request) -> web.Response:
             notify_id,
             photo=photo_input,
             caption=(
-                f"📸 <b>Preuve à valider</b>\n\n"
-                f"Tâche : <b>{task_title}</b>\n"
-                f"Utilisateur : <code>{telegram_id}</code>"
+                f"📸 <b>Proof pending review</b>\n\n"
+                f"Task: <b>{task_title}</b>\n"
+                f"User: <code>{telegram_id}</code>"
             ),
             parse_mode="HTML",
             reply_markup=kb,
@@ -2996,8 +2996,8 @@ async def api_submit_proof_miniapp(request: web.Request) -> web.Response:
     # Update the Telegram message buttons with the real proof_id
     if proof_id is not None:
         kb2 = InlineKeyboardMarkup(inline_keyboard=[[
-            InlineKeyboardButton(text="✅ Approuver", callback_data=f"proof_ok_{proof_id}_{telegram_id}_{task_id}"),
-            InlineKeyboardButton(text="❌ Refuser",   callback_data=f"proof_ko_{proof_id}_{telegram_id}_{task_id}"),
+            InlineKeyboardButton(text="✅ Approve", callback_data=f"proof_ok_{proof_id}_{telegram_id}_{task_id}"),
+            InlineKeyboardButton(text="❌ Reject",  callback_data=f"proof_ko_{proof_id}_{telegram_id}_{task_id}"),
         ]])
         try:
             await bot.edit_message_reply_markup(notify_id, sent.message_id, reply_markup=kb2)
@@ -3326,9 +3326,9 @@ async def api_admin_approve_user_task(request: web.Request) -> web.Response:
         try:
             await bot.send_message(
                 task[0],
-                f"✅ <b>Tâche approuvée !</b>\n\n"
-                f"📋 <b>{task[1]}</b> est maintenant active.\n"
-                f"Les utilisateurs peuvent la compléter dès maintenant.",
+                f"✅ <b>Task approved!</b>\n\n"
+                f"📋 <b>{task[1]}</b> is now active.\n"
+                f"Users can start completing it right away.",
                 parse_mode="HTML",
             )
         except Exception:
@@ -3367,10 +3367,10 @@ async def api_admin_reject_user_task(request: web.Request) -> web.Response:
         try:
             await bot.send_message(
                 task[0],
-                f"❌ <b>Tâche refusée</b>\n\n"
+                f"❌ <b>Task rejected</b>\n\n"
                 f"📋 <b>{task[1]}</b>\n"
-                f"💰 Remboursement de <b>{float(task[2]):.3f} TON</b> en cours.\n"
-                + (f"📝 Motif : {note}" if note else ""),
+                f"💰 Refund of <b>{float(task[2]):.3f} TON</b> in progress.\n"
+                + (f"📝 Reason: {note}" if note else ""),
                 parse_mode="HTML",
             )
         except Exception:
@@ -3482,9 +3482,9 @@ async def api_review_proof(request: web.Request) -> web.Response:
         await db.commit()
 
     worker_msg = (
-        "✅ <b>Preuve validée !</b>\n\nRevenez dans l'app — votre récompense sera créditée automatiquement."
+        "✅ <b>Proof approved!</b>\n\nReturn to the app — your reward will be credited automatically."
         if action == "approve"
-        else "❌ Votre preuve a été refusée. Si vous pensez que c'est injuste, vous pouvez contester depuis l'app."
+        else "❌ Your proof has been rejected. If you believe this is unfair, you can dispute it from the app."
     )
     try:
         await bot.send_message(worker_tg, worker_msg, parse_mode="HTML")
@@ -3586,8 +3586,8 @@ async def api_report_proof_abuse(request: web.Request) -> web.Response:
         severity   = "high" if rejection_count >= 5 else "medium"
         risk_score = min(100, rejection_count * 15)
         details    = (
-            f"Signalement d'abus par worker {telegram_id} · tâche '{task_title}' ({task_id}) · "
-            f"creator {creator_id} · {rejection_count} refus en 7 jours"
+            f"Abuse report by worker {telegram_id} · task '{task_title}' ({task_id}) · "
+            f"creator {creator_id} · {rejection_count} rejections in 7 days"
         )
         await db.execute(
             """
@@ -3602,11 +3602,11 @@ async def api_report_proof_abuse(request: web.Request) -> web.Response:
         try:
             await bot.send_message(
                 ADMIN_TELEGRAM_ID,
-                f"⚠️ <b>Signalement d'abus — preuves</b>\n\n"
+                f"⚠️ <b>Abuse report — proofs</b>\n\n"
                 f"Creator ID: <code>{creator_id}</code>\n"
-                f"Tâche: {task_title}\n"
-                f"Refus en 7 jours: {rejection_count}\n"
-                f"Signalé par: <code>{telegram_id}</code>",
+                f"Task: {task_title}\n"
+                f"Rejections in 7 days: {rejection_count}\n"
+                f"Reported by: <code>{telegram_id}</code>",
                 parse_mode="HTML",
             )
         except Exception:
@@ -3873,8 +3873,8 @@ async def _monitor_usdt_jetton() -> None:
                             try:
                                 await bot.send_message(
                                     telegram_id,
-                                    f"✅ Dépôt USDT confirmé !\n"
-                                    f"{usdt_amount:.4f} USDT → *{gram_amount:.4f} GRAM* crédité sur votre compte.",
+                                    f"✅ USDT deposit confirmed!\n"
+                                    f"{usdt_amount:.4f} USDT → *{gram_amount:.4f} GRAM* credited to your account.",
                                     parse_mode="Markdown",
                                 )
                             except Exception:
@@ -4134,10 +4134,10 @@ async def api_game_result(request: web.Request) -> web.Response:
     win         = _parse_amount(data.get("win"))
 
     if not telegram_id or bet is None or win is None:
-        return web.json_response({"error": "Données manquantes"}, status=400, headers=_CORS)
+        return web.json_response({"error": "Missing data"}, status=400, headers=_CORS)
 
     if not _verify_user_request(init_data, telegram_id):
-        return web.json_response({"error": "Authentification requise"}, status=401, headers=_CORS)
+        return web.json_response({"error": "Authentication required"}, status=401, headers=_CORS)
 
     if _is_user_rate_limited(telegram_id):
         return web.json_response({"error": "Rate limit exceeded"}, status=429, headers=_CORS)
@@ -4145,14 +4145,14 @@ async def api_game_result(request: web.Request) -> web.Response:
     # Validate game name
     game_cfg = GAME_CONFIG.get(game)
     if not game_cfg:
-        return web.json_response({"error": f"Jeu inconnu : {game}"}, status=400, headers=_CORS)
+        return web.json_response({"error": f"Unknown game: {game}"}, status=400, headers=_CORS)
 
     # Validate bet
     if bet < GAME_MIN_BET:
-        return web.json_response({"error": f"Mise minimale : {GAME_MIN_BET} GRAM"}, status=400, headers=_CORS)
+        return web.json_response({"error": f"Minimum bet: {GAME_MIN_BET} GRAM"}, status=400, headers=_CORS)
     if bet > game_cfg['max_bet']:
         return web.json_response(
-            {"error": f"Mise maximale pour {game} : {game_cfg['max_bet']} GRAM"},
+            {"error": f"Maximum bet for {game}: {game_cfg['max_bet']} GRAM"},
             status=400, headers=_CORS
         )
 
@@ -4170,16 +4170,16 @@ async def api_game_result(request: web.Request) -> web.Response:
         ) as cur:
             urow = await cur.fetchone()
         if not urow:
-            return web.json_response({"error": "Utilisateur introuvable"}, status=404, headers=_CORS)
+            return web.json_response({"error": "User not found"}, status=404, headers=_CORS)
         if urow[0]:
-            return web.json_response({"error": "Compte banni"}, status=403, headers=_CORS)
+            return web.json_response({"error": "Account suspended"}, status=403, headers=_CORS)
 
         server_balance = float(urow[1] or 0)
 
         # Validate server-side balance covers the bet (anti-overdraft)
         if bet > server_balance:
             return web.json_response(
-                {"error": f"Solde serveur insuffisant ({server_balance:.4f} GRAM)"},
+                {"error": f"Insufficient server balance ({server_balance:.4f} GRAM)"},
                 status=400, headers=_CORS
             )
 
@@ -4194,8 +4194,8 @@ async def api_game_result(request: web.Request) -> web.Response:
             if float(daily_won or 0) + win > GAME_DAILY_WIN_LIMIT:
                 remaining = max(0.0, GAME_DAILY_WIN_LIMIT - float(daily_won or 0))
                 return web.json_response(
-                    {"error": f"Limite de gains journalière atteinte. "
-                              f"Restant aujourd'hui : {remaining:.2f} GRAM"},
+                    {"error": f"Daily win limit reached. "
+                              f"Remaining today: {remaining:.2f} GRAM"},
                     status=400, headers=_CORS
                 )
 
@@ -4253,10 +4253,10 @@ async def api_referral_milestone_claim(request: web.Request) -> web.Response:
     init_data    = str(data.get("initData", "")).strip()
 
     if not telegram_id or not milestone_id:
-        return web.json_response({"error": "Données manquantes"}, status=400, headers=_CORS)
+        return web.json_response({"error": "Missing data"}, status=400, headers=_CORS)
 
     if not _verify_user_request(init_data, telegram_id):
-        return web.json_response({"error": "Authentification requise"}, status=401, headers=_CORS)
+        return web.json_response({"error": "Authentication required"}, status=401, headers=_CORS)
 
     if _is_user_rate_limited(telegram_id, max_per_window=5):
         return web.json_response({"error": "Rate limit exceeded"}, status=429, headers=_CORS)
@@ -4280,15 +4280,15 @@ async def api_referral_milestone_claim(request: web.Request) -> web.Response:
         # Find the requested milestone
         milestone = next((m for m in milestones if str(m.get("id", "")) == milestone_id), None)
         if not milestone:
-            return web.json_response({"error": "Milestone introuvable"}, status=404, headers=_CORS)
+            return web.json_response({"error": "Milestone not found"}, status=404, headers=_CORS)
         if not milestone.get("isActive", True):
-            return web.json_response({"error": "Milestone inactif"}, status=400, headers=_CORS)
+            return web.json_response({"error": "Milestone inactive"}, status=400, headers=_CORS)
 
         reward            = float(milestone.get("reward", 0))
         required_referrals = int(milestone.get("referralCount", 0))
 
         if reward <= 0 or reward > MILESTONE_MAX_REWARD:
-            return web.json_response({"error": "Récompense invalide"}, status=400, headers=_CORS)
+            return web.json_response({"error": "Invalid reward"}, status=400, headers=_CORS)
 
         # Server-authoritative referral count check
         async with db.execute(
@@ -4297,14 +4297,14 @@ async def api_referral_milestone_claim(request: web.Request) -> web.Response:
             urow = await cur.fetchone()
 
         if not urow:
-            return web.json_response({"error": "Utilisateur introuvable"}, status=404, headers=_CORS)
+            return web.json_response({"error": "User not found"}, status=404, headers=_CORS)
         if urow[1]:
-            return web.json_response({"error": "Compte banni"}, status=403, headers=_CORS)
+            return web.json_response({"error": "Account suspended"}, status=403, headers=_CORS)
 
         referral_count = int(urow[0] or 0)
         if referral_count < required_referrals:
             return web.json_response(
-                {"error": f"Filleuls insuffisants ({referral_count}/{required_referrals})"},
+                {"error": f"Insufficient referrals ({referral_count}/{required_referrals})"},
                 status=400, headers=_CORS,
             )
 
@@ -4315,7 +4315,7 @@ async def api_referral_milestone_claim(request: web.Request) -> web.Response:
                 (telegram_id, milestone_id, reward),
             )
         except aiosqlite.IntegrityError:
-            return web.json_response({"error": "Milestone déjà réclamé"}, status=409, headers=_CORS)
+            return web.json_response({"error": "Milestone already claimed"}, status=409, headers=_CORS)
 
         await db.execute(
             "UPDATE users SET app_balance = COALESCE(app_balance, 0) + ? WHERE telegram_id = ?",
@@ -4355,10 +4355,10 @@ async def api_welcome_bonus(request: web.Request) -> web.Response:
     init_data   = str(data.get("initData", "")).strip()
 
     if not telegram_id:
-        return web.json_response({"error": "telegramId requis"}, status=400, headers=_CORS)
+        return web.json_response({"error": "telegramId required"}, status=400, headers=_CORS)
 
     if not _verify_user_request(init_data, telegram_id):
-        return web.json_response({"error": "Authentification requise"}, status=401, headers=_CORS)
+        return web.json_response({"error": "Authentication required"}, status=401, headers=_CORS)
 
     if _is_user_rate_limited(telegram_id, max_per_window=3):
         return web.json_response({"error": "Rate limit exceeded"}, status=429, headers=_CORS)
@@ -4370,9 +4370,9 @@ async def api_welcome_bonus(request: web.Request) -> web.Response:
         ) as cur:
             urow = await cur.fetchone()
         if not urow:
-            return web.json_response({"error": "Utilisateur introuvable"}, status=404, headers=_CORS)
+            return web.json_response({"error": "User not found"}, status=404, headers=_CORS)
         if urow[0]:
-            return web.json_response({"error": "Compte banni"}, status=403, headers=_CORS)
+            return web.json_response({"error": "Account suspended"}, status=403, headers=_CORS)
 
         # Read bonus config from platform_config
         bonus_enabled = True
@@ -4393,7 +4393,7 @@ async def api_welcome_bonus(request: web.Request) -> web.Response:
                     pass
 
         if not bonus_enabled or bonus_amount <= 0:
-            return web.json_response({"error": "Bonus désactivé"}, status=400, headers=_CORS)
+            return web.json_response({"error": "Bonus disabled"}, status=400, headers=_CORS)
 
         # Atomic insert — PRIMARY KEY blocks re-claim
         try:
@@ -4402,7 +4402,7 @@ async def api_welcome_bonus(request: web.Request) -> web.Response:
                 (telegram_id, bonus_amount),
             )
         except aiosqlite.IntegrityError:
-            return web.json_response({"error": "Bonus déjà réclamé"}, status=409, headers=_CORS)
+            return web.json_response({"error": "Bonus already claimed"}, status=409, headers=_CORS)
 
         await db.execute(
             "UPDATE users SET app_balance = COALESCE(app_balance, 0) + ? WHERE telegram_id = ?",
@@ -4441,9 +4441,9 @@ async def api_admin_broadcast(request: web.Request) -> web.Response:
     pin        = bool(data.get("pin", False))
 
     if not message:
-        return web.json_response({"error": "message requis"}, status=400, headers=_CORS)
+        return web.json_response({"error": "message required"}, status=400, headers=_CORS)
     if len(message) > 4096:
-        return web.json_response({"error": "message trop long (max 4096 chars)"}, status=400, headers=_CORS)
+        return web.json_response({"error": "message too long (max 4096 chars)"}, status=400, headers=_CORS)
 
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute("SELECT telegram_id FROM users WHERE banned = 0") as cur:

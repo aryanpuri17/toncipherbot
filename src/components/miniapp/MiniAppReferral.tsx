@@ -30,15 +30,15 @@ const Leaderboard: React.FC = () => {
   if (loading) return (
     <div className="glass-card p-10 text-center">
       <div className="w-8 h-8 border-2 border-blue-500/30 border-t-blue-400 rounded-full animate-spin mx-auto mb-3" />
-      <p className="text-sm text-slate-400">Chargement…</p>
+      <p className="text-sm text-slate-400">Loading…</p>
     </div>
   );
 
   if (data.length === 0) return (
     <div className="glass-card p-10 text-center space-y-3">
       <Trophy className="w-10 h-10 text-slate-600 mx-auto" />
-      <p className="text-sm font-medium text-slate-300">Soyez le premier !</p>
-      <p className="text-xs text-slate-500">Invitez des amis pour apparaître dans le classement.</p>
+      <p className="text-sm font-medium text-slate-300">Be the first!</p>
+      <p className="text-xs text-slate-500">Invite friends to appear on the leaderboard.</p>
     </div>
   );
 
@@ -46,7 +46,7 @@ const Leaderboard: React.FC = () => {
     <div className="space-y-4">
       <div className="text-center">
         <p className="text-sm text-slate-400">
-          {currentRank > 0 ? `Votre rang : #${currentRank}` : 'Invitez des amis pour apparaître ici'}
+          {currentRank > 0 ? `Your rank: #${currentRank}` : 'Invite friends to appear here'}
         </p>
       </div>
 
@@ -65,7 +65,7 @@ const Leaderboard: React.FC = () => {
               <p className="text-xs font-semibold text-white mb-0.5 max-w-[72px] truncate text-center">
                 @{user.username || user.firstName}
               </p>
-              <p className="text-[10px] text-slate-400 mb-2">{user.referralCount} filleul{user.referralCount !== 1 ? 's' : ''}</p>
+              <p className="text-[10px] text-slate-400 mb-2">{user.referralCount} referral{user.referralCount !== 1 ? 's' : ''}</p>
               <div className={`w-20 ${heights[i]} rounded-t-xl bg-gradient-to-t ${rank === 1 ? 'from-amber-500/20 to-amber-500/40' : rank === 2 ? 'from-slate-400/20 to-slate-400/30' : 'from-orange-800/20 to-orange-800/30'}`} />
             </div>
           );
@@ -87,9 +87,9 @@ const Leaderboard: React.FC = () => {
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-white truncate">
                   @{user.username || user.firstName}
-                  {isMe && <span className="text-blue-400 text-[10px] ml-1">(vous)</span>}
+                  {isMe && <span className="text-blue-400 text-[10px] ml-1">(you)</span>}
                 </p>
-                <p className="text-xs text-slate-500">{user.referralCount} filleul{user.referralCount !== 1 ? 's' : ''}</p>
+                <p className="text-xs text-slate-500">{user.referralCount} referral{user.referralCount !== 1 ? 's' : ''}</p>
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
                 <Users className="w-3.5 h-3.5 text-purple-400" />
@@ -108,8 +108,8 @@ const Leaderboard: React.FC = () => {
             {currentUser.firstName?.charAt(0) ?? '?'}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-white">@{currentUser.username} <span className="text-blue-400 text-[10px]">(vous)</span></p>
-            <p className="text-xs text-slate-500">{currentUser.referralCount} filleul{currentUser.referralCount !== 1 ? 's' : ''}</p>
+            <p className="text-sm font-medium text-white">@{currentUser.username} <span className="text-blue-400 text-[10px]">(you)</span></p>
+            <p className="text-xs text-slate-500">{currentUser.referralCount} referral{currentUser.referralCount !== 1 ? 's' : ''}</p>
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
             <Users className="w-3.5 h-3.5 text-purple-400" />
@@ -135,16 +135,16 @@ export const MiniAppReferral: React.FC = () => {
     lastSyncedReferralBalance,
   } = useAppStore();
 
-  // Default to 'classement' if navigated here as the old leaderboard route
-  const [tab, setTab] = useState<'invite' | 'classement'>(
-    miniAppPage === 'leaderboard' ? 'classement' : 'invite'
+  // Default to 'leaderboard' if navigated here as the old leaderboard route
+  const [tab, setTab] = useState<'invite' | 'leaderboard'>(
+    miniAppPage === 'leaderboard' ? 'leaderboard' : 'invite'
   );
   const [copied, setCopied] = useState(false);
   const [toast,  setToast]  = useState(false);
 
   // Keep tab in sync if miniAppPage changes while component is already mounted
   useEffect(() => {
-    if (miniAppPage === 'leaderboard') setTab('classement');
+    if (miniAppPage === 'leaderboard') setTab('leaderboard');
     else if (miniAppPage === 'referral') setTab('invite');
   }, [miniAppPage]);
 
@@ -158,7 +158,7 @@ export const MiniAppReferral: React.FC = () => {
   };
 
   const handleShare = () => {
-    const msg = `🎯 Rejoins TonCipher et gagne du GRAM en complétant des tâches simples!\n${referralLink}`;
+    const msg = `🎯 Join TonCipher and earn GRAM by completing simple tasks!\n${referralLink}`;
     const tg = (window as unknown as { Telegram?: { WebApp?: { openTelegramLink?: (u: string) => void } } }).Telegram?.WebApp;
     const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(referralLink)}&text=${encodeURIComponent(msg)}`;
     if (tg?.openTelegramLink) tg.openTelegramLink(shareUrl);
@@ -184,14 +184,14 @@ export const MiniAppReferral: React.FC = () => {
           className="flex-1 py-2 rounded-lg text-sm font-semibold transition-all"
           style={tab === 'invite' ? { background: 'rgba(139,92,246,0.14)', color: '#C4B5FD', border: '1px solid rgba(139,92,246,0.20)' } : { color: '#64748b' }}
         >
-          👥 Inviter
+          👥 Invite
         </button>
         <button
-          onClick={() => setTab('classement')}
+          onClick={() => setTab('leaderboard')}
           className="flex-1 py-2 rounded-lg text-sm font-semibold transition-all"
-          style={tab === 'classement' ? { background: 'rgba(139,92,246,0.14)', color: '#C4B5FD', border: '1px solid rgba(139,92,246,0.20)' } : { color: '#64748b' }}
+          style={tab === 'leaderboard' ? { background: 'rgba(139,92,246,0.14)', color: '#C4B5FD', border: '1px solid rgba(139,92,246,0.20)' } : { color: '#64748b' }}
         >
-          🏆 Classement
+          🏆 Leaderboard
         </button>
       </div>
 
@@ -200,7 +200,7 @@ export const MiniAppReferral: React.FC = () => {
         <div className="space-y-4">
           {/* Hero card — uses real API balance */}
           <div className="relative overflow-hidden rounded-2xl p-5 referral-hero-card">
-            {/* Réseau de nœuds SVG animé */}
+            {/* Animated node network SVG */}
             <svg className="absolute inset-0 w-full h-full opacity-[0.12] pointer-events-none" viewBox="0 0 340 160" preserveAspectRatio="xMidYMid slice">
               <line x1="170" y1="80" x2="60"  y2="30"  stroke="#0098EA" strokeWidth="1" className="referral-line" style={{ animationDelay: '0s' }} />
               <line x1="170" y1="80" x2="280" y2="30"  stroke="#0098EA" strokeWidth="1" className="referral-line" style={{ animationDelay: '0.2s' }} />
@@ -215,27 +215,27 @@ export const MiniAppReferral: React.FC = () => {
             </svg>
 
             <div className="relative">
-              <p className="text-[#7DD4FC] text-xs font-medium uppercase tracking-widest mb-1">Programme de parrainage</p>
+              <p className="text-[#7DD4FC] text-xs font-medium uppercase tracking-widest mb-1">Referral program</p>
               <h2 className="text-2xl font-bold text-white mb-4">
-                Invitez vos amis<br />
-                <span style={{ color: '#0098EA' }}>gagnez du GRAM</span> 💎
+                Invite your friends<br />
+                <span style={{ color: '#0098EA' }}>earn GRAM</span> 💎
               </h2>
               <div className="grid grid-cols-2 gap-2">
                 <div className="rounded-xl bg-white/10 px-3 py-2.5">
                   <p className="text-2xl font-bold text-white leading-none">{currentUser.referralCount}</p>
-                  <p className="text-[11px] text-blue-200 mt-0.5">Ami{currentUser.referralCount !== 1 ? 's' : ''} invité{currentUser.referralCount !== 1 ? 's' : ''}</p>
+                  <p className="text-[11px] text-blue-200 mt-0.5">Friend{currentUser.referralCount !== 1 ? 's' : ''} invited</p>
                 </div>
                 <div className="rounded-xl bg-white/10 px-3 py-2.5">
                   <p className="text-2xl font-bold text-emerald-300 leading-none">{totalEarned.toFixed(2)}</p>
-                  <p className="text-[11px] text-blue-200 mt-0.5">GRAM gagnés</p>
+                  <p className="text-[11px] text-blue-200 mt-0.5">GRAM earned</p>
                 </div>
                 <div className="rounded-xl bg-white/10 px-3 py-2.5">
                   <p className="text-xl font-bold text-amber-300 leading-none">+{SIGNUP_BONUS.toFixed(2)}</p>
-                  <p className="text-[11px] text-blue-200 mt-0.5">GRAM / ami inscrit</p>
+                  <p className="text-[11px] text-blue-200 mt-0.5">GRAM / friend joined</p>
                 </div>
                 <div className="rounded-xl bg-white/10 px-3 py-2.5">
                   <p className="text-xl font-bold text-sky-300 leading-none">{DEPOSIT_PCT}%</p>
-                  <p className="text-[11px] text-blue-200 mt-0.5">sur chaque tâche</p>
+                  <p className="text-[11px] text-blue-200 mt-0.5">on each task</p>
                 </div>
               </div>
             </div>
@@ -249,14 +249,14 @@ export const MiniAppReferral: React.FC = () => {
               style={{ background: 'linear-gradient(135deg,#8B5CF6,#6D28D9)', boxShadow: '0 6px 20px rgba(139,92,246,0.22)' }}
             >
               <Share2 className="w-4 h-4" />
-              Partager
+              Share
             </button>
             <button
               onClick={handleCopy}
               className={`flex items-center justify-center gap-2 py-3.5 rounded-xl border text-sm font-bold transition-all ${copied ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-400' : 'bg-white/5 border-white/15 text-white hover:bg-white/10'}`}
             >
               {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-              {copied ? 'Copié !' : 'Copier'}
+              {copied ? 'Copied!' : 'Copy'}
             </button>
           </div>
 
@@ -275,13 +275,13 @@ export const MiniAppReferral: React.FC = () => {
           <div className="glass-card p-4 space-y-3">
             <div className="flex items-center gap-2">
               <div style={{ width: 3, height: 14, borderRadius: 99, background: 'linear-gradient(180deg,#8B5CF6,#8B5CF655)' }} />
-              <p className="text-xs font-bold text-slate-300 uppercase tracking-wider">Comment ça marche</p>
+              <p className="text-xs font-bold text-slate-300 uppercase tracking-wider">How it works</p>
             </div>
             <div className="flex items-start gap-0">
               {[
-                { icon: <Share2 className="w-4 h-4" />, sig: true,  label: 'Partagez',     sub: 'Envoyez votre lien à un ami' },
-                { icon: <Users  className="w-4 h-4" />, sig: false, color: 'bg-purple-500/20 text-purple-400', label: "Il s'inscrit", sub: 'Via votre lien Telegram' },
-                { icon: <Gift   className="w-4 h-4" />, sig: false, color: 'bg-emerald-500/20 text-emerald-400', label: 'Vous gagnez', sub: `+${SIGNUP_BONUS.toFixed(2)} GRAM + ${DEPOSIT_PCT}% tâches` },
+                { icon: <Share2 className="w-4 h-4" />, sig: true,  label: 'Share',     sub: 'Send your link to a friend' },
+                { icon: <Users  className="w-4 h-4" />, sig: false, color: 'bg-purple-500/20 text-purple-400', label: "They sign up", sub: 'Via your Telegram link' },
+                { icon: <Gift   className="w-4 h-4" />, sig: false, color: 'bg-emerald-500/20 text-emerald-400', label: 'You earn', sub: `+${SIGNUP_BONUS.toFixed(2)} GRAM + ${DEPOSIT_PCT}% tasks` },
               ].map((step, i) => (
                 <React.Fragment key={i}>
                   <div className="flex flex-col items-center text-center flex-1 gap-2">
@@ -308,7 +308,7 @@ export const MiniAppReferral: React.FC = () => {
           {/* Milestones */}
           {activeMilestones.length > 0 && (
             <div className="space-y-3">
-              <p className="text-xs font-bold text-slate-300 uppercase tracking-wider">Primes de palier</p>
+              <p className="text-xs font-bold text-slate-300 uppercase tracking-wider">Milestone rewards</p>
               {activeMilestones.map(milestone => {
                 const claimed  = claimedReferralMilestoneIds.includes(milestone.id);
                 const unlocked = currentUser.referralCount >= milestone.referralCount;
@@ -341,11 +341,11 @@ export const MiniAppReferral: React.FC = () => {
                           onClick={() => claimReferralMilestone(milestone.id)}
                           className="shrink-0 flex items-center gap-1 px-3 py-1.5 rounded-lg bg-amber-500/20 border border-amber-500/30 text-amber-400 text-xs font-semibold hover:bg-amber-500/30 transition-all"
                         >
-                          Réclamer <ChevronRight className="w-3 h-3" />
+                          Claim <ChevronRight className="w-3 h-3" />
                         </button>
                       )}
                       {claimed && (
-                        <span className="shrink-0 text-xs font-medium text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded-lg">Réclamé</span>
+                        <span className="shrink-0 text-xs font-medium text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded-lg">Claimed</span>
                       )}
                     </div>
                   </div>
@@ -357,13 +357,13 @@ export const MiniAppReferral: React.FC = () => {
       )}
 
       {/* ── CLASSEMENT TAB ── */}
-      {tab === 'classement' && <Leaderboard />}
+      {tab === 'leaderboard' && <Leaderboard />}
 
       {/* Copy toast */}
       {toast && (
         <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-xl bg-emerald-500 text-white text-xs font-semibold shadow-lg shadow-emerald-500/30 flex items-center gap-2 pointer-events-none">
           <Check className="w-3.5 h-3.5" />
-          Lien copié !
+          Link copied!
         </div>
       )}
     </div>
