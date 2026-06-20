@@ -76,11 +76,17 @@ export const MiniAppMyTasks: React.FC = () => {
   const [proofActionId,    setProofActionId]    = useState<number | null>(null);
   const [proofError,       setProofError]       = useState('');
 
+  const _getInitData = () =>
+    (window as unknown as { Telegram?: { WebApp?: { initData?: string } } })?.Telegram?.WebApp?.initData ?? '';
+
   const fetchTasks = useCallback(async () => {
     const telegramId = currentUser.telegramId;
     if (!telegramId) { setLoading(false); return; }
     try {
-      const res  = await fetch(`/api/user-tasks/mine?telegram_id=${telegramId}`);
+      const initData = _getInitData();
+      const res  = await fetch(`/api/user-tasks/mine?telegram_id=${telegramId}`, {
+        headers: initData ? { 'X-Init-Data': initData } : {},
+      });
       const data = await res.json() as ApiUserTask[];
       setTasks(data);
 
@@ -113,9 +119,6 @@ export const MiniAppMyTasks: React.FC = () => {
       setLoading(false);
     }
   }, [currentUser.telegramId]);
-
-  const _getInitData = () =>
-    (window as unknown as { Telegram?: { WebApp?: { initData?: string } } })?.Telegram?.WebApp?.initData ?? '';
 
   const fetchPendingProofs = useCallback(async () => {
     if (!currentUser.telegramId) return;

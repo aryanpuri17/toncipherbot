@@ -2659,6 +2659,13 @@ async def api_user_task_mine(request: web.Request) -> web.Response:
     if not telegram_id:
         return web.json_response([], headers=_CORS)
 
+    init_data = request.headers.get("X-Init-Data", "")
+    if BOT_TOKEN:
+        if not init_data or not _validate_init_data(init_data, BOT_TOKEN):
+            return web.json_response({"error": "Authentication required"}, status=401, headers=_CORS)
+        if _init_data_user_id(init_data) != telegram_id:
+            return web.json_response({"error": "Forbidden"}, status=403, headers=_CORS)
+
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute("""
             SELECT id, type, title, description, target_url, reward, total_budget, spent,
@@ -4021,6 +4028,13 @@ async def api_platform_tasks_completed(request: web.Request) -> web.Response:
         return web.json_response([], headers=_CORS)
     if not telegram_id:
         return web.json_response([], headers=_CORS)
+
+    init_data = request.headers.get("X-Init-Data", "")
+    if BOT_TOKEN:
+        if not init_data or not _validate_init_data(init_data, BOT_TOKEN):
+            return web.json_response({"error": "Authentication required"}, status=401, headers=_CORS)
+        if _init_data_user_id(init_data) != telegram_id:
+            return web.json_response({"error": "Forbidden"}, status=403, headers=_CORS)
 
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(
