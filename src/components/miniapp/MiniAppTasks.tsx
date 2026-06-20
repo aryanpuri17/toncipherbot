@@ -329,11 +329,13 @@ export const MiniAppTasks: React.FC = () => {
       _creditLocally(taskId, reward);
       return true;
     }
+    const initData = (window as unknown as { Telegram?: { WebApp?: { initData?: string } } })
+      ?.Telegram?.WebApp?.initData ?? '';
     try {
       const res  = await fetch(`/api/user-tasks/${taskId}/complete`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ telegramId }),
+        body:    JSON.stringify({ telegramId, initData }),
       });
       const data = await res.json() as { success?: boolean; reward?: number; error?: string };
       if (data.success) {

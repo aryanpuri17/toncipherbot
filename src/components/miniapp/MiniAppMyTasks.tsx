@@ -128,6 +128,9 @@ export const MiniAppMyTasks: React.FC = () => {
     void fetchPendingProofs();
   }, [fetchTasks, fetchPendingProofs]);
 
+  const _getInitData = () =>
+    (window as unknown as { Telegram?: { WebApp?: { initData?: string } } })?.Telegram?.WebApp?.initData ?? '';
+
   const callApi = async (url: string, body: object): Promise<{ success: boolean; refund?: number; status?: string }> => {
     const res  = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     return await res.json() as { success: boolean; refund?: number; status?: string };
@@ -137,7 +140,7 @@ export const MiniAppMyTasks: React.FC = () => {
     setActionLoading(task.id);
     setApiError('');
     try {
-      const r = await callApi(`/api/user-tasks/${task.id}/pause`, { telegramId: currentUser.telegramId });
+      const r = await callApi(`/api/user-tasks/${task.id}/pause`, { telegramId: currentUser.telegramId, initData: _getInitData() });
       if (r.success) await fetchTasks();
     } catch { setApiError('Erreur réseau.'); }
     finally { setActionLoading(null); }
@@ -147,7 +150,7 @@ export const MiniAppMyTasks: React.FC = () => {
     setActionLoading(task.id);
     setApiError('');
     try {
-      const r = await callApi(`/api/user-tasks/${task.id}/delete`, { telegramId: currentUser.telegramId });
+      const r = await callApi(`/api/user-tasks/${task.id}/delete`, { telegramId: currentUser.telegramId, initData: _getInitData() });
       if (r.success) {
         const refund = r.refund ?? 0;
         if (refund > 0) updateUser(currentUser.id, { balanceMain: useAppStore.getState().currentUser.balanceMain + refund });
@@ -174,6 +177,7 @@ export const MiniAppMyTasks: React.FC = () => {
     try {
       const r = await callApi(`/api/user-tasks/${task.id}/fund`, {
         telegramId:      currentUser.telegramId,
+        initData:        _getInitData(),
         extraExecutions: additionalExecs,
         extraBudget:     additionalCost,
       });

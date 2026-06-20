@@ -200,6 +200,8 @@ def _is_rate_limited(ip: str) -> bool:
     return False
 
 
+_INIT_DATA_MAX_AGE = 86400  # 24 hours — Telegram recommends rejecting older tokens
+
 def _validate_init_data(init_data: str, bot_token: str) -> bool:
     if not init_data or not bot_token:
         return False
@@ -207,6 +209,10 @@ def _validate_init_data(init_data: str, bot_token: str) -> bool:
         parsed = dict(parse_qsl(init_data, keep_blank_values=True))
         check_hash = parsed.pop("hash", "")
         if not check_hash:
+            return False
+        # Reject initData older than 24 hours to prevent replay attacks
+        auth_date = int(parsed.get("auth_date", 0))
+        if auth_date and time.time() - auth_date > _INIT_DATA_MAX_AGE:
             return False
         data_check_string = "\n".join(f"{k}={v}" for k, v in sorted(parsed.items()))
         secret_key = hmac_lib.new(b"WebAppData", msg=bot_token.encode(), digestmod=hashlib.sha256).digest()
@@ -1276,6 +1282,10 @@ async def api_user_referral(request: web.Request) -> web.Response:
 # ── API — Leaderboard ──────────────────────────────────────────────────────────
 
 async def api_leaderboard(request: web.Request) -> web.Response:
+    ip = _client_ip(request)
+    if _is_rate_limited(ip):
+        return web.json_response({"error": "Rate limit exceeded"}, status=429, headers=_CORS)
+
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute("""
             SELECT telegram_id, username, first_name, referral_count
@@ -1660,6 +1670,10 @@ async def api_check_bot_start(request: web.Request) -> web.Response:
 async def api_user_withdrawal_status(request: web.Request) -> web.Response:
     """Return status of the caller's withdrawal transactions so the frontend can
     detect rejections and restore the locally-deducted balance."""
+    ip = _client_ip(request)
+    if _is_rate_limited(ip):
+        return web.json_response([], headers=_CORS)
+
     try:
         telegram_id = int(request.rel_url.query.get("telegram_id", 0))
     except (ValueError, TypeError):
@@ -1704,6 +1718,10 @@ async def api_user_withdrawal_status(request: web.Request) -> web.Response:
 async def api_user_transactions(request: web.Request) -> web.Response:
     """Return the caller's deposits and withdrawals so the wallet history
     survives app reloads (the frontend transaction list is in-memory)."""
+    ip = _client_ip(request)
+    if _is_rate_limited(ip):
+        return web.json_response([], headers=_CORS)
+
     try:
         telegram_id = int(request.rel_url.query.get("telegram_id", 0))
     except (ValueError, TypeError):
@@ -2512,6 +2530,7 @@ async def api_user_task_create(request: web.Request) -> web.Response:
         return web.json_response({"error": "Invalid JSON"}, status=400, headers=_CORS)
 
     creator_id      = _parse_telegram_id(data.get("telegramId"))
+    init_data       = str(data.get("initData", ""))
     task_type       = str(data.get("type", "")).strip()
     title           = (data.get("title")       or "").strip()[:200]
     description     = (data.get("description") or "").strip()[:500]
@@ -2525,6 +2544,9 @@ async def api_user_task_create(request: web.Request) -> web.Response:
 
     if not creator_id or not task_type or not title or not target_url:
         return web.json_response({"error": "Missing required fields"}, status=400, headers=_CORS)
+
+    if not _verify_user_request(init_data, creator_id):
+        return web.json_response({"error": "Unauthorized"}, status=401, headers=_CORS)
     if task_type not in ("join_channel", "join_group", "start_bot", "watch_video", "social"):
         return web.json_response({"error": "Invalid task type"}, status=400, headers=_CORS)
     if reward is None or total_budget is None:
@@ -2653,6 +2675,10 @@ async def api_user_task_complete(request: web.Request) -> web.Response:
     if not telegram_id:
         return web.json_response({"error": "Missing telegramId"}, status=400, headers=_CORS)
 
+    init_data = str(data.get("initData", ""))
+    if not _verify_user_request(init_data, telegram_id):
+        return web.json_response({"error": "Unauthorized"}, status=401, headers=_CORS)
+
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(
             "SELECT status, reward, creator_id FROM user_tasks WHERE id = ?",
@@ -2762,8 +2788,14 @@ async def api_check_bot_verify(request: web.Request) -> web.Response:
     return web.json_response({"verified": row is not None}, headers=_CORS)
 
 
+_PROOF_MAX_BYTES = 5 * 1024 * 1024  # 5 MB
+
 async def api_submit_proof_miniapp(request: web.Request) -> web.Response:
     """Accept a proof screenshot uploaded directly from the mini-app."""
+    ip = _client_ip(request)
+    if _is_rate_limited(ip):
+        return web.json_response({"error": "Rate limit exceeded"}, status=429, headers=_CORS)
+
     from aiogram.types import BufferedInputFile
     try:
         reader = await request.multipart()
@@ -2772,11 +2804,13 @@ async def api_submit_proof_miniapp(request: web.Request) -> web.Response:
         file_bytes: bytes | None = None
         async for field in reader:
             if field.name == "telegramId":
-                telegram_id = int(await field.read())
+                telegram_id = int(await field.read(64))
             elif field.name == "taskId":
-                task_id = (await field.read()).decode("utf-8")
+                task_id = (await field.read(128)).decode("utf-8")
             elif field.name == "file":
-                file_bytes = await field.read()
+                file_bytes = await field.read(_PROOF_MAX_BYTES)
+                if len(file_bytes) >= _PROOF_MAX_BYTES:
+                    return web.json_response({"error": "File too large (max 5 MB)"}, status=413, headers=_CORS)
     except Exception:
         return web.json_response({"error": "Invalid request"}, status=400, headers=_CORS)
 
@@ -2917,6 +2951,10 @@ async def _verify_task_completion(task_id: str, telegram_id: int) -> bool | None
 
 
 async def api_user_task_pause(request: web.Request) -> web.Response:
+    ip = _client_ip(request)
+    if _is_rate_limited(ip):
+        return web.json_response({"error": "Rate limit exceeded"}, status=429, headers=_CORS)
+
     task_id = request.match_info.get("id")
     try:
         data = await request.json()
@@ -2929,6 +2967,10 @@ async def api_user_task_pause(request: web.Request) -> web.Response:
         return web.json_response({"error": "Invalid telegramId"}, status=400, headers=_CORS)
     if not telegram_id:
         return web.json_response({"error": "Missing telegramId"}, status=400, headers=_CORS)
+
+    init_data = str(data.get("initData", ""))
+    if not _verify_user_request(init_data, telegram_id):
+        return web.json_response({"error": "Unauthorized"}, status=401, headers=_CORS)
 
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(
@@ -2952,6 +2994,10 @@ async def api_user_task_pause(request: web.Request) -> web.Response:
 
 
 async def api_user_task_delete(request: web.Request) -> web.Response:
+    ip = _client_ip(request)
+    if _is_rate_limited(ip):
+        return web.json_response({"error": "Rate limit exceeded"}, status=429, headers=_CORS)
+
     task_id = request.match_info.get("id")
     try:
         data = await request.json()
@@ -2964,6 +3010,10 @@ async def api_user_task_delete(request: web.Request) -> web.Response:
         return web.json_response({"error": "Invalid telegramId"}, status=400, headers=_CORS)
     if not telegram_id:
         return web.json_response({"error": "Missing telegramId"}, status=400, headers=_CORS)
+
+    init_data = str(data.get("initData", ""))
+    if not _verify_user_request(init_data, telegram_id):
+        return web.json_response({"error": "Unauthorized"}, status=401, headers=_CORS)
 
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(
@@ -2989,6 +3039,10 @@ async def api_user_task_delete(request: web.Request) -> web.Response:
 
 
 async def api_user_task_fund(request: web.Request) -> web.Response:
+    ip = _client_ip(request)
+    if _is_rate_limited(ip):
+        return web.json_response({"error": "Rate limit exceeded"}, status=429, headers=_CORS)
+
     task_id = request.match_info.get("id")
     try:
         data = await request.json()
@@ -3001,6 +3055,11 @@ async def api_user_task_fund(request: web.Request) -> web.Response:
         return web.json_response({"error": "Invalid telegramId"}, status=400, headers=_CORS)
     if not telegram_id:
         return web.json_response({"error": "Missing telegramId"}, status=400, headers=_CORS)
+
+    init_data = str(data.get("initData", ""))
+    if not _verify_user_request(init_data, telegram_id):
+        return web.json_response({"error": "Unauthorized"}, status=401, headers=_CORS)
+
     try:
         extra_executions = int(data.get("extraExecutions", 0))
     except (TypeError, ValueError):
@@ -3479,6 +3538,10 @@ async def api_ton_price(request: web.Request) -> web.Response:
 async def api_usdt_deposit_register(request: web.Request) -> web.Response:
     """Frontend calls this when a user declares they sent USDT — store the hint
     so the on-chain monitor knows what to look for."""
+    ip = _client_ip(request)
+    if _is_rate_limited(ip):
+        return web.json_response({"error": "Rate limit exceeded"}, status=429, headers=_CORS)
+
     try:
         data = await request.json()
     except Exception:
@@ -3833,6 +3896,10 @@ async def api_platform_tasks_completed(request: web.Request) -> web.Response:
     """Return list of completed platform task IDs for a user.
     Fetched on app init so server-side completions override a cleared localStorage.
     """
+    ip = _client_ip(request)
+    if _is_rate_limited(ip):
+        return web.json_response([], headers=_CORS)
+
     try:
         telegram_id = _parse_telegram_id(request.rel_url.query.get("telegram_id", 0))
     except Exception:

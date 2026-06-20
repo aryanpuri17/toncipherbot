@@ -98,6 +98,7 @@ export const MiniAppCreateTask: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           telegramId:     currentUser.telegramId,
+          initData:       (window as unknown as { Telegram?: { WebApp?: { initData?: string } } })?.Telegram?.WebApp?.initData ?? '',
           type,
           title:          title.trim(),
           description:    description.trim() || `Complétez cette tâche pour gagner ${workerReward.toFixed(4)} TON`,
