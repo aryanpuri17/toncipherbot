@@ -56,6 +56,16 @@ async function buildJettonTransfer(opts: {
   return body.toBoc().toString('base64');
 }
 
+/** Build a plain TON comment cell (opcode 0 + UTF-8 text) as base64 BOC */
+async function buildTonComment(comment: string): Promise<string> {
+  if (typeof globalThis.Buffer === 'undefined') {
+    const { Buffer: Buf } = await import('buffer');
+    (globalThis as Record<string, unknown>).Buffer = Buf;
+  }
+  const { beginCell } = await import('@ton/ton');
+  return beginCell().storeUint(0, 32).storeStringTail(comment).endCell().toBoc().toString('base64');
+}
+
 const displaySymbol = (s: string) => s === 'TON' ? 'GRAM' : s;
 
 // Convert TonConnect raw address (0:hex) → user-friendly UQ... format
@@ -350,9 +360,10 @@ export const MiniAppDeposit: React.FC = () => {
     setTxError('');
     setTxStatus('pending');
     try {
+      const commentPayload = await buildTonComment(depositCode);
       await tonConnectUI.sendTransaction({
         validUntil: Math.floor(Date.now() / 1000) + 600,
-        messages: [{ address, amount: Math.floor(amount * 1e9).toString() }],
+        messages: [{ address, amount: Math.floor(amount * 1e9).toString(), payload: commentPayload }],
       });
       addTransaction({
         userId: currentUser.id,
@@ -542,10 +553,9 @@ export const MiniAppDeposit: React.FC = () => {
               )}
               {/* Deposit code info */}
               <div className="p-3 rounded-xl bg-purple-500/5 border border-purple-500/20 flex items-start gap-2">
-                <span className="text-purple-400 text-xs">📋</span>
+                <span className="text-purple-400 text-xs">🔒</span>
                 <p className="text-[10px] text-slate-400">
-                  Code de dépôt : <span className="font-mono font-bold text-purple-300">{depositCode}</span>
-                  {' '}— ajoutez-le en commentaire pour sécuriser votre dépôt.
+                  Code de dépôt <span className="font-mono font-bold text-purple-300">{depositCode}</span> inclus automatiquement dans la transaction.
                 </p>
               </div>
               <button onClick={handleTonDeposit}
