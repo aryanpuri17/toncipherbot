@@ -218,7 +218,13 @@ def _validate_init_data(init_data: str, bot_token: str) -> bool:
 
 def _check_admin_auth(request: web.Request) -> bool:
     if not ADMIN_SECRET:
-        log.warning("ADMIN_SECRET is not set — admin API is publicly accessible!")
+        # In production (BOT_TOKEN set) deny access entirely — an empty secret is
+        # indistinguishable from "no secret configured", which is a misconfiguration.
+        # In local dev (no BOT_TOKEN), allow access for convenience.
+        if BOT_TOKEN:
+            log.error("ADMIN_SECRET is not set — admin API is LOCKED until it is configured.")
+            return False
+        log.warning("ADMIN_SECRET is not set — admin API is open (dev mode only).")
         return True
     return request.headers.get("X-Admin-Key", "") == ADMIN_SECRET
 
@@ -626,6 +632,13 @@ async def init_db() -> None:
                 reward       REAL    NOT NULL,
                 claimed_at   TEXT    NOT NULL DEFAULT (datetime('now')),
                 UNIQUE(telegram_id, milestone_id)
+            )
+        """)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS welcome_bonus_claims (
+                telegram_id  INTEGER PRIMARY KEY,
+                reward       REAL    NOT NULL,
+                claimed_at   TEXT    NOT NULL DEFAULT (datetime('now'))
             )
         """)
         # A given on-chain tx hash may only be credited once — blocks deposit replay
@@ -1545,13 +1558,21 @@ async def api_task_verify_timer(request: web.Request) -> web.Response:
     Returns {ok: True} if verified, {ok: False, remaining: <seconds>} if too early.
     Also deletes the departure record on success so it cannot be reused.
     """
+    ip = _client_ip(request)
+    if _is_rate_limited(ip):
+        return web.json_response({"ok": False, "remaining": 30}, headers=_CORS)
+
     try:
-        telegram_id = int(request.rel_url.query.get("telegramId", 0))
-        task_id     = request.rel_url.query.get("taskId", "").strip()
-        required_s  = int(request.rel_url.query.get("requiredSeconds", 30))
+        telegram_id = _parse_telegram_id(request.rel_url.query.get("telegramId", 0))
+        task_id     = request.rel_url.query.get("taskId", "").strip()[:64]
+        required_s  = max(1, min(300, int(request.rel_url.query.get("requiredSeconds", 30))))
+        init_data   = request.rel_url.query.get("initData", "").strip()
     except Exception:
         return web.json_response({"ok": False, "remaining": 30}, headers=_CORS)
     if not telegram_id or not task_id:
+        return web.json_response({"ok": False, "remaining": 30}, headers=_CORS)
+
+    if not _verify_user_request(init_data, telegram_id):
         return web.json_response({"ok": False, "remaining": 30}, headers=_CORS)
 
     async with aiosqlite.connect(DB_PATH) as db:
@@ -1583,11 +1604,10 @@ async def api_task_verify_timer(request: web.Request) -> web.Response:
 
 
 async def api_check_membership(request: web.Request) -> web.Response:
-    """Return {member: bool} — whether user is in a given Telegram channel/group.
-    Query params:
-      telegram_id : user's Telegram ID
-      chat_id     : channel/group @username or numeric ID (defaults to OFFICIAL_CHANNEL)
-    """
+    """Return {member: bool} — whether user is in a given Telegram channel/group."""
+    ip = _client_ip(request)
+    if _is_rate_limited(ip):
+        return web.json_response({"member": True}, headers=_CORS)
     try:
         telegram_id = int(request.rel_url.query.get("telegram_id", 0))
     except (ValueError, TypeError):
@@ -1617,6 +1637,9 @@ async def api_check_membership(request: web.Request) -> web.Response:
 
 async def api_check_bot_start(request: web.Request) -> web.Response:
     """Return {started: bool} — whether the user has sent /start to the bot."""
+    ip = _client_ip(request)
+    if _is_rate_limited(ip):
+        return web.json_response({"started": False}, headers=_CORS)
     try:
         telegram_id = int(request.rel_url.query.get("telegram_id", 0))
     except (ValueError, TypeError):
@@ -2718,6 +2741,9 @@ async def api_user_task_complete(request: web.Request) -> web.Response:
 
 async def api_check_bot_verify(request: web.Request) -> web.Response:
     """Return whether user confirmed via bot deep-link for a start_bot task."""
+    ip = _client_ip(request)
+    if _is_rate_limited(ip):
+        return web.json_response({"verified": False}, headers=_CORS)
     try:
         telegram_id = int(request.rel_url.query.get("telegramId", 0))
         task_id     = request.rel_url.query.get("taskId", "")
@@ -2814,6 +2840,9 @@ async def api_submit_proof_miniapp(request: web.Request) -> web.Response:
 
 async def api_check_social_proof(request: web.Request) -> web.Response:
     """Return approval status for a submitted social proof screenshot."""
+    ip = _client_ip(request)
+    if _is_rate_limited(ip):
+        return web.json_response({"status": "none"}, headers=_CORS)
     try:
         telegram_id = int(request.rel_url.query.get("telegramId", 0))
         task_id     = request.rel_url.query.get("taskId", "")
@@ -3361,8 +3390,14 @@ async def serve_app(request: web.Request) -> web.Response:
             content = f.read()
         return web.Response(
             body=content, content_type="text/html",
-            headers={"Cache-Control": "no-cache, no-store, must-revalidate",
-                     "Pragma": "no-cache", "Expires": "0"},
+            headers={
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache",
+                "Expires": "0",
+                "X-Content-Type-Options": "nosniff",
+                "Referrer-Policy": "no-referrer",
+                "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+            },
         )
     return web.Response(text="Building… please wait.", status=503)
 
@@ -4036,6 +4071,90 @@ async def api_referral_milestone_claim(request: web.Request) -> web.Response:
     return web.json_response({"success": True, "reward": reward, "newBalance": new_balance}, headers=_CORS)
 
 
+# ── API — Welcome bonus (one-time, server-side dedup) ─────────────────────────
+
+async def api_welcome_bonus(request: web.Request) -> web.Response:
+    """Credit the one-time welcome bonus — server prevents re-claiming after localStorage clear.
+
+    Amount is read from platform_config key 'welcomeBonusAmount' (admin-configurable).
+    Enabled flag read from 'welcomeBonusEnabled'. Falls back to env var WELCOME_BONUS
+    (default 1.0) so it works before admin has configured it.
+    """
+    ip = _client_ip(request)
+    if _is_rate_limited(ip):
+        return web.json_response({"error": "Rate limit exceeded"}, status=429, headers=_CORS)
+
+    try:
+        data = await request.json()
+    except Exception:
+        return web.json_response({"error": "Invalid JSON"}, status=400, headers=_CORS)
+
+    telegram_id = _parse_telegram_id(data.get("telegramId"))
+    init_data   = str(data.get("initData", "")).strip()
+
+    if not telegram_id:
+        return web.json_response({"error": "telegramId requis"}, status=400, headers=_CORS)
+
+    if not _verify_user_request(init_data, telegram_id):
+        return web.json_response({"error": "Authentification requise"}, status=401, headers=_CORS)
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        # Check user exists and is not banned
+        async with db.execute(
+            "SELECT banned FROM users WHERE telegram_id = ?", (telegram_id,)
+        ) as cur:
+            urow = await cur.fetchone()
+        if not urow:
+            return web.json_response({"error": "Utilisateur introuvable"}, status=404, headers=_CORS)
+        if urow[0]:
+            return web.json_response({"error": "Compte banni"}, status=403, headers=_CORS)
+
+        # Read bonus config from platform_config
+        bonus_enabled = True
+        bonus_amount  = float(os.getenv("WELCOME_BONUS", "1.0"))
+        async with db.execute(
+            "SELECT key, value FROM platform_config WHERE key IN ('welcomeBonusEnabled','welcomeBonusAmount')"
+        ) as cur:
+            async for key, value in cur:
+                try:
+                    parsed = json.loads(value)
+                    if key == "welcomeBonusEnabled":
+                        bonus_enabled = bool(parsed)
+                    elif key == "welcomeBonusAmount":
+                        v = float(parsed)
+                        if 0 < v <= 100:
+                            bonus_amount = v
+                except (ValueError, TypeError):
+                    pass
+
+        if not bonus_enabled or bonus_amount <= 0:
+            return web.json_response({"error": "Bonus désactivé"}, status=400, headers=_CORS)
+
+        # Atomic insert — PRIMARY KEY blocks re-claim
+        try:
+            await db.execute(
+                "INSERT INTO welcome_bonus_claims (telegram_id, reward) VALUES (?, ?)",
+                (telegram_id, bonus_amount),
+            )
+        except aiosqlite.IntegrityError:
+            return web.json_response({"error": "Bonus déjà réclamé"}, status=409, headers=_CORS)
+
+        await db.execute(
+            "UPDATE users SET app_balance = COALESCE(app_balance, 0) + ? WHERE telegram_id = ?",
+            (bonus_amount, telegram_id),
+        )
+        await db.commit()
+
+        async with db.execute(
+            "SELECT app_balance FROM users WHERE telegram_id = ?", (telegram_id,)
+        ) as cur:
+            brow = await cur.fetchone()
+        new_balance = float(brow[0] or 0) if brow else bonus_amount
+
+    log.info("Welcome bonus: user=%d reward=%.2f", telegram_id, bonus_amount)
+    return web.json_response({"success": True, "reward": bonus_amount, "newBalance": new_balance}, headers=_CORS)
+
+
 # ── Web Application ────────────────────────────────────────────────────────────
 
 async def start_web() -> None:
@@ -4050,6 +4169,7 @@ async def start_web() -> None:
     app.router.add_post("/api/user/init",                  api_user_init)
     app.router.add_post("/api/user/referral",              api_user_referral)
     app.router.add_post("/api/user/balance",               api_user_balance_set)
+    app.router.add_post("/api/user/welcome-bonus",         api_welcome_bonus)
     app.router.add_get( "/api/user/withdrawals",           api_user_withdrawal_status)
     app.router.add_get( "/api/user/transactions",          api_user_transactions)
     app.router.add_post("/api/task/depart",                  api_task_depart)

@@ -740,6 +740,7 @@ export const MiniAppWithdraw: React.FC = () => {
   const [address, setAddress] = useState(() => localStorage.getItem('tc_last_wd_addr') ?? 'UQDCLLOiZ8_KzB_lJXPaTuinjyEemjbnzS3-VAZD6fU-Rp2S');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const connectedAddress = tonWallet?.account.address ?? '';
   // Both TON and USDT/TON use a TON address for withdrawal
@@ -773,16 +774,21 @@ export const MiniAppWithdraw: React.FC = () => {
   const netReceived = parsedAmount - calcFee(parsedAmount);
 
   const handleSubmit = async () => {
+    if (isSubmitting || !selected) return;
     setError('');
-    if (!selected) return;
-    const result = await submitWithdrawal(selected.id, parsedAmount, address);
-    if (result.success) {
-      haptic.success();
-      localStorage.setItem('tc_last_wd_addr', address);
-      setSuccess(true);
-    } else {
-      haptic.error();
-      setError(result.error ?? 'Erreur inconnue');
+    setIsSubmitting(true);
+    try {
+      const result = await submitWithdrawal(selected.id, parsedAmount, address);
+      if (result.success) {
+        haptic.success();
+        localStorage.setItem('tc_last_wd_addr', address);
+        setSuccess(true);
+      } else {
+        haptic.error();
+        setError(result.error ?? 'Erreur inconnue');
+      }
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -969,10 +975,10 @@ export const MiniAppWithdraw: React.FC = () => {
 
       <button
         onClick={handleSubmit}
-        disabled={!parsedAmount || !address.trim()}
+        disabled={!parsedAmount || !address.trim() || isSubmitting}
         className="w-full btn-accent py-3.5 rounded-xl text-sm font-semibold text-white disabled:opacity-40 disabled:cursor-not-allowed"
       >
-        Retirer {parsedAmount > 0 ? parsedAmount.toFixed(2) : '0.00'} {displaySymbol(selected?.symbol ?? 'GRAM')}
+        {isSubmitting ? 'Envoi en cours…' : `Retirer ${parsedAmount > 0 ? parsedAmount.toFixed(2) : '0.00'} ${displaySymbol(selected?.symbol ?? 'GRAM')}`}
       </button>
     </div>
   );
