@@ -513,6 +513,17 @@ async def init_db() -> None:
                 reviewed_at TEXT
             )
         """)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS usdt_pending (
+                id             INTEGER PRIMARY KEY AUTOINCREMENT,
+                telegram_id    INTEGER NOT NULL,
+                amount_usdt    REAL    NOT NULL,
+                sender_address TEXT    NOT NULL DEFAULT '',
+                deposit_code   TEXT    NOT NULL DEFAULT '',
+                created_at     TEXT    NOT NULL DEFAULT (datetime('now')),
+                status         TEXT    NOT NULL DEFAULT 'pending'
+            )
+        """)
         # A given on-chain tx hash may only be credited once — blocks deposit replay
         await db.execute("""
             CREATE UNIQUE INDEX IF NOT EXISTS idx_deposit_txhash
@@ -1321,7 +1332,9 @@ async def api_user_withdrawal_status(request: web.Request) -> web.Response:
 
     # Verify the request comes from the same user via initData
     init_data = request.headers.get("X-Init-Data", "")
-    caller_id = _init_data_user_id(init_data)
+    if BOT_TOKEN and init_data and not _validate_init_data(init_data, BOT_TOKEN):
+        return web.json_response({"error": "Forbidden"}, status=403, headers=_CORS)
+    caller_id = _init_data_user_id(init_data) if init_data else 0
     if caller_id and caller_id != telegram_id:
         return web.json_response({"error": "Forbidden"}, status=403, headers=_CORS)
 
@@ -1363,7 +1376,9 @@ async def api_user_transactions(request: web.Request) -> web.Response:
 
     # Verify the request comes from the same user via initData
     init_data = request.headers.get("X-Init-Data", "")
-    caller_id = _init_data_user_id(init_data)
+    if BOT_TOKEN and init_data and not _validate_init_data(init_data, BOT_TOKEN):
+        return web.json_response({"error": "Forbidden"}, status=403, headers=_CORS)
+    caller_id = _init_data_user_id(init_data) if init_data else 0
     if caller_id and caller_id != telegram_id:
         return web.json_response({"error": "Forbidden"}, status=403, headers=_CORS)
 

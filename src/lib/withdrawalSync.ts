@@ -85,7 +85,7 @@ export function processServerTransactions(list: ServerTx[], suppressEffects = fa
         newDeposits.push(tx);
         depCredited.add(tx.id);
       }
-      continue;
+      continue; // handled separately from withdrawals
     }
 
     if (txType !== 'withdrawal') continue;
@@ -172,8 +172,10 @@ export function processServerTransactions(list: ServerTx[], suppressEffects = fa
     });
   }
 
+  // Write both sets to localStorage BEFORE setState so a crash between here
+  // and the state update cannot cause double-crediting on the next open.
   writeProcessed(processed);
-  if (depCredited.size > 0) writeDepCredited(depCredited);
+  if (newDeposits.length > 0) writeDepCredited(depCredited);
 
   for (const tx of newDeposits) {
     const { addNotification } = useAppStore.getState();

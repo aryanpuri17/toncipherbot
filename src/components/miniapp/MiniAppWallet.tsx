@@ -329,7 +329,7 @@ export const MiniAppDeposit: React.FC = () => {
     return '💵';
   };
 
-  // TON native — send via TonKeeper
+  // TON native — send via wallet
   const handleTonDeposit = async () => {
     const amount = parseFloat(depositAmount);
     if (!amount || amount < 0.1) {
@@ -371,7 +371,7 @@ export const MiniAppDeposit: React.FC = () => {
     const usdtAmount = parseFloat(depositAmount);
     if (!usdtAmount || usdtAmount < 0.1) { setTxError('Minimum: 0.1 USDT'); return; }
     if (!hasAddress) { setTxError("Adresse non configurée — contactez l'admin."); return; }
-    if (!connectedAddr) { setTxError('Connectez votre wallet TonKeeper d\'abord.'); return; }
+    if (!connectedAddr) { setTxError('Connectez votre wallet d\'abord.'); return; }
     if (!tonPrice) { setTxError('Prix TON/USDT non disponible, réessayez.'); return; }
 
     setTxError('');
@@ -396,7 +396,7 @@ export const MiniAppDeposit: React.FC = () => {
 
       // 4. Credit GRAM balance immediately (we know the rate, we control the balance)
       const gram = gramFromUsdt(usdtAmount)!;
-      creditDeposit(currentUser.id, gram, 'TON', '', 'TON');
+      creditDeposit(currentUser.id, gram, 'USDT', '', 'TON');
 
       // 5. Log to backend for admin visibility
       const tg = (window as unknown as { Telegram?: { WebApp?: { initData?: string } } }).Telegram?.WebApp;
@@ -483,12 +483,12 @@ export const MiniAppDeposit: React.FC = () => {
         </div>
       </div>
 
-      {/* ── Native TON via TonKeeper ──────────────────────────────── */}
+      {/* ── Native TON via wallet ──────────────────────────────── */}
       {isNativeTON && (
         <div className="glass-card p-5 space-y-4">
           <div className="flex items-center gap-2">
             <span>💎</span>
-            <h3 className="text-sm font-semibold text-white">Dépôt GRAM via TonKeeper</h3>
+            <h3 className="text-sm font-semibold text-white">Dépôt GRAM via wallet</h3>
             <span className="ml-auto px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/20 text-blue-400 border border-blue-500/30">
               Auto-détecté
             </span>
@@ -508,7 +508,7 @@ export const MiniAppDeposit: React.FC = () => {
           ) : (
             <button onClick={() => tonConnectUI.openModal()}
               className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-blue-500/15 border border-blue-500/30 text-blue-400 text-sm font-semibold hover:bg-blue-500/25 transition-all">
-              <Wallet className="w-4 h-4" /> Connecter TonKeeper
+              <Wallet className="w-4 h-4" /> Connecter wallet
             </button>
           )}
 
@@ -562,15 +562,15 @@ export const MiniAppDeposit: React.FC = () => {
             </span>
           </div>
 
-          {/* When wallet NOT connected: require TonKeeper */}
+          {/* When wallet NOT connected: require wallet */}
           {!isWalletConnected && (
             <div className="space-y-3">
               <p className="text-xs text-slate-400 text-center">
-                Connectez TonKeeper pour envoyer vos USDT directement depuis l'app — instantané, comme un dépôt TON.
+                Connectez wallet pour envoyer vos USDT directement depuis l'app — instantané, comme un dépôt TON.
               </p>
               <button onClick={() => tonConnectUI.openModal()}
                 className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 text-sm font-semibold hover:bg-blue-500/20 transition-colors">
-                <Wallet className="w-4 h-4" /> Connecter TonKeeper
+                <Wallet className="w-4 h-4" /> Connecter wallet
               </button>
             </div>
           )}
@@ -656,7 +656,7 @@ export const MiniAppDeposit: React.FC = () => {
                 {txStatus === 'pending'
                   ? '⏳ En attente de signature…'
                   : tonPrice
-                  ? `Envoyer ${depositAmount || '0'} USDT via TonKeeper`
+                  ? `Envoyer ${depositAmount || '0'} USDT via wallet`
                   : tonPriceError ? 'Prix indisponible' : 'Chargement du prix marché…'}
               </button>
             </>
@@ -835,10 +835,10 @@ export const MiniAppWithdraw: React.FC = () => {
         </div>
       </div>
 
-      {/* TonKeeper wallet auto-fill — for all TON-network withdrawals (TON + USDT/TON) */}
+      {/* TON wallet auto-fill — for all TON-network withdrawals */}
       {isOnTONNetwork && (
         <div className="glass-card-light p-4 space-y-3">
-          <p className="text-xs font-semibold text-slate-400">Wallet TonKeeper</p>
+          <p className="text-xs font-semibold text-slate-400">Wallet connecté</p>
           {tonWallet ? (
             <div className="flex items-center justify-between p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
               <div className="flex items-center gap-2">
@@ -852,7 +852,7 @@ export const MiniAppWithdraw: React.FC = () => {
           ) : (
             <button onClick={() => tonConnectUI.openModal()}
               className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-medium hover:bg-blue-500/20 transition-colors">
-              <Wallet className="w-3.5 h-3.5" /> Connecter TonKeeper pour auto-remplir
+              <Wallet className="w-3.5 h-3.5" /> Connecter wallet pour auto-remplir
             </button>
           )}
         </div>
