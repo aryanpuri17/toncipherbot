@@ -224,6 +224,21 @@ def _is_user_rate_limited(telegram_id: int, max_per_window: int = USER_FINANCIAL
     return False
 
 
+async def _cleanup_rate_buckets() -> None:
+    """Periodically prune stale entries from the rate-limit dicts.
+    Without cleanup these grow unbounded for IPs/users that only make one request."""
+    while True:
+        await asyncio.sleep(600)  # every 10 minutes
+        now = time.time()
+        cutoff = now - RATE_LIMIT_WINDOW
+        dead_ips   = [k for k, v in list(_rate_buckets.items())      if not [t for t in v if t > cutoff]]
+        dead_users = [k for k, v in list(_user_rate_buckets.items())  if not [t for t in v if t > cutoff]]
+        for k in dead_ips:   _rate_buckets.pop(k, None)
+        for k in dead_users: _user_rate_buckets.pop(k, None)
+        if dead_ips or dead_users:
+            log.info("Rate bucket GC: removed %d IP + %d user entries", len(dead_ips), len(dead_users))
+
+
 _INIT_DATA_MAX_AGE = 86400  # 24 hours — Telegram recommends rejecting older tokens
 
 def _validate_init_data(init_data: str, bot_token: str) -> bool:
@@ -1067,9 +1082,14 @@ async def api_user_init(request: web.Request) -> web.Response:
     violations: list[str] = []
     ip_count = 0
 
-    if BOT_TOKEN and init_data:
-        if not _validate_init_data(init_data, BOT_TOKEN):
+    if BOT_TOKEN:
+        if not init_data:
+            violations.append("missing_init_data")
+        elif not _validate_init_data(init_data, BOT_TOKEN):
             violations.append("invalid_init_data")
+        elif _init_data_user_id(init_data) != telegram_id:
+            # claimed telegram_id doesn't match the initData's embedded user id
+            violations.append("init_data_id_mismatch")
 
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute("SELECT banned FROM users WHERE telegram_id = ?", (telegram_id,)) as cur:
@@ -4395,7 +4415,7 @@ async def main() -> None:
         asyncio.ensure_future(backup_db_to_github())
     loop.add_signal_handler(signal.SIGTERM, _on_sigterm)
 
-    tasks: list = [start_web(), _monitor_usdt_jetton()]
+    tasks: list = [start_web(), _monitor_usdt_jetton(), _cleanup_rate_buckets()]
     if bot:
         tasks.append(dp.start_polling(bot, allowed_updates=["message", "callback_query"]))
     if GITHUB_TOKEN and DB_BACKUP_KEY:
