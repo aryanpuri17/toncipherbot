@@ -3325,6 +3325,13 @@ async def api_pending_proofs(request: web.Request) -> web.Response:
     if not telegram_id:
         return web.json_response([], headers=_CORS)
 
+    init_data = request.headers.get("X-Init-Data", "")
+    if BOT_TOKEN:
+        if not init_data or not _validate_init_data(init_data, BOT_TOKEN):
+            return web.json_response({"error": "Authentication required"}, status=401, headers=_CORS)
+        if _init_data_user_id(init_data) != telegram_id:
+            return web.json_response({"error": "Forbidden"}, status=403, headers=_CORS)
+
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(
             """
@@ -3427,6 +3434,15 @@ async def api_proof_image(request: web.Request) -> web.Response:
         telegram_id = int(request.rel_url.query.get("telegramId", 0))
     except (ValueError, TypeError):
         return web.Response(status=400)
+
+    # Accept initData from header (fetch calls) or query param (<img src> tags)
+    init_data = (request.headers.get("X-Init-Data", "")
+                 or request.rel_url.query.get("initData", ""))
+    if BOT_TOKEN:
+        if not init_data or not _validate_init_data(init_data, BOT_TOKEN):
+            return web.Response(status=401, headers=_CORS)
+        if _init_data_user_id(init_data) != telegram_id:
+            return web.Response(status=403, headers=_CORS)
 
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(

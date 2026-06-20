@@ -114,10 +114,16 @@ export const MiniAppMyTasks: React.FC = () => {
     }
   }, [currentUser.telegramId]);
 
+  const _getInitData = () =>
+    (window as unknown as { Telegram?: { WebApp?: { initData?: string } } })?.Telegram?.WebApp?.initData ?? '';
+
   const fetchPendingProofs = useCallback(async () => {
     if (!currentUser.telegramId) return;
     try {
-      const res  = await fetch(`/api/user-tasks/pending-proofs?telegramId=${currentUser.telegramId}`);
+      const initData = _getInitData();
+      const res = await fetch(`/api/user-tasks/pending-proofs?telegramId=${currentUser.telegramId}`, {
+        headers: initData ? { 'X-Init-Data': initData } : {},
+      });
       const data = await res.json() as PendingProof[];
       setPendingProofs(data);
     } catch { /* no server in local dev */ }
@@ -127,9 +133,6 @@ export const MiniAppMyTasks: React.FC = () => {
     void fetchTasks();
     void fetchPendingProofs();
   }, [fetchTasks, fetchPendingProofs]);
-
-  const _getInitData = () =>
-    (window as unknown as { Telegram?: { WebApp?: { initData?: string } } })?.Telegram?.WebApp?.initData ?? '';
 
   const callApi = async (url: string, body: object): Promise<{ success: boolean; refund?: number; status?: string }> => {
     const res  = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -291,7 +294,7 @@ export const MiniAppMyTasks: React.FC = () => {
               }}>
                 {/* Screenshot */}
                 <img
-                  src={`/api/proof-image/${proof.id}?telegramId=${currentUser.telegramId}`}
+                  src={`/api/proof-image/${proof.id}?telegramId=${currentUser.telegramId}&initData=${encodeURIComponent(_getInitData())}`}
                   alt="Preuve"
                   style={{ width: '100%', maxHeight: 200, objectFit: 'cover', display: 'block' }}
                   onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
