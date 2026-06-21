@@ -81,9 +81,11 @@ USDT_MIN_AMOUNT     = 0.1    # minimum USDT deposit (in USDT, not nano)
 
 # ── Auto-withdrawal config ─────────────────────────────────────────────────────
 # HOT_WALLET_MNEMONIC : 24-word mnemonic of the hot wallet (set on server only, never in code)
-HOT_WALLET_MNEMONIC = os.getenv("HOT_WALLET_MNEMONIC", "").strip()
-AUTO_WD_THRESHOLD   = float(os.getenv("AUTO_WD_THRESHOLD", "0.5"))   # GRAM — auto-process below this
-AUTO_WD_MIN_AGE     = int(os.getenv("AUTO_WD_MIN_AGE_DAYS", "7"))     # days — minimum account age
+HOT_WALLET_MNEMONIC  = os.getenv("HOT_WALLET_MNEMONIC", "").strip()
+AUTO_WD_THRESHOLD    = float(os.getenv("AUTO_WD_THRESHOLD", "0.5"))   # GRAM — auto-process below this
+AUTO_WD_MIN_AGE      = int(os.getenv("AUTO_WD_MIN_AGE_DAYS", "7"))    # days — minimum account age
+# Optional TonCenter API key (https://toncenter.com/api/v2/) for higher rate limits (1→10 req/s)
+TONCENTER_API_KEY    = os.getenv("TONCENTER_API_KEY", "")
 
 _ton_price_cache: dict = {"price": None, "ts": 0}
 
@@ -1753,14 +1755,18 @@ async def api_deposit_record(request: web.Request) -> web.Response:
 # ── Auto-withdrawal: sign & broadcast a TON transfer via pytoniq ──────────────
 
 async def _send_ton_transfer(to_address: str, amount_gram: float) -> str | None:
-    """Sign and broadcast a TON transfer using the hot wallet mnemonic.
-    Returns tx hash string on success, None on failure.
-    Requires: pip install pytoniq
+    """Sign and broadcast a TON transfer via TonCenter HTTP API (HTTPS/443 only).
+
+    Uses tonsdk for local signing (no P2P needed) + TonCenter to get seqno and
+    broadcast the signed BOC. Works on Render free tier — no blocked ports.
     """
+    import aiohttp
+
     try:
-        from pytoniq import LiteBalancer, WalletV4R2 as _TonWallet  # type: ignore[import]
+        from tonsdk.contract.wallet import WalletVersionEnum, Wallets  # type: ignore[import]
+        from tonsdk.utils import bytes_to_b64str, to_nano              # type: ignore[import]
     except ImportError:
-        log.error("Auto-WD: pytoniq not installed — run: pip install pytoniq")
+        log.error("Auto-WD: tonsdk not installed — add 'tonsdk' to requirements.txt")
         return None
 
     words = HOT_WALLET_MNEMONIC.split()
@@ -1768,42 +1774,67 @@ async def _send_ton_transfer(to_address: str, amount_gram: float) -> str | None:
         log.error("Auto-WD: HOT_WALLET_MNEMONIC invalid (< 12 words)")
         return None
 
-    amount_nano = int(round(amount_gram * 1_000_000_000))
-    log.info("Auto-WD: connecting to TON mainnet, amount=%d nanoTON → %s", amount_nano, to_address[:16])
+    amount_nano = to_nano(amount_gram, "ton")
+    api_base    = "https://toncenter.com/api/v2"
+    hdrs: dict  = {"X-API-Key": TONCENTER_API_KEY} if TONCENTER_API_KEY else {}
 
-    provider = None
     try:
-        provider = LiteBalancer.from_mainnet_config(trust_level=1)
-        await provider.start_up()
-        log.info("Auto-WD: provider started, loading wallet…")
-
-        # from_mnemonic returns just the wallet in recent pytoniq versions
-        raw = await _TonWallet.from_mnemonic(provider, words)
-        wallet = raw[0] if isinstance(raw, (tuple, list)) else raw
-        log.info("Auto-WD: wallet loaded, sending transfer…")
-
-        result = await wallet.transfer(
-            destination=to_address,
-            amount=amount_nano,
-            body="TonCipher withdrawal",
+        # Build wallet from mnemonic — pure local crypto, no network
+        _m, _pub, _priv, wallet = Wallets.from_mnemonics(
+            words, WalletVersionEnum.v4r2, workchain=0
         )
-        log.info("Auto-WD: transfer result = %r", result)
+        wallet_addr = wallet.address.to_string(True, True, False)  # non-bounceable
+        log.info("Auto-WD: wallet=%s amount=%d nanoTON → %s",
+                 wallet_addr[:20], amount_nano, to_address[:20])
 
-        if isinstance(result, bytes):
-            return result.hex()
-        if result:
-            return str(result)
-        return "auto_ok"
+        timeout = aiohttp.ClientTimeout(total=20)
+        async with aiohttp.ClientSession(headers=hdrs, timeout=timeout) as sess:
+
+            # 1. Get current seqno via TonCenter
+            async with sess.get(
+                f"{api_base}/runGetMethod",
+                params={"address": wallet_addr, "method": "seqno", "stack": "[]"},
+            ) as r:
+                rdata = await r.json()
+
+            if not rdata.get("ok"):
+                log.error("Auto-WD: seqno fetch failed — %s", rdata)
+                return None
+
+            stack = rdata.get("result", {}).get("stack", [])
+            if not stack:
+                log.error("Auto-WD: empty seqno stack — wallet not deployed?")
+                return None
+
+            seqno_raw = stack[0][1]  # e.g. "5" or "0x5"
+            seqno = int(seqno_raw, 0) if str(seqno_raw).startswith("0x") else int(seqno_raw)
+            log.info("Auto-WD: seqno=%d", seqno)
+
+            # 2. Sign transfer locally (no network)
+            query = wallet.create_transfer_message(
+                to_addr=to_address,
+                amount=amount_nano,
+                seqno=seqno,
+                payload="TonCipher withdrawal",
+            )
+            boc = bytes_to_b64str(query["message"].to_boc(False))
+
+            # 3. Broadcast signed BOC
+            async with sess.post(f"{api_base}/sendBoc", json={"boc": boc}) as r:
+                bdata = await r.json()
+
+            log.info("Auto-WD: sendBoc result = %r", bdata)
+
+            if not bdata.get("ok"):
+                log.error("Auto-WD: sendBoc failed — %s", bdata)
+                return None
+
+            tx_hash = bdata.get("result", {}).get("hash") or "http_ok"
+            return str(tx_hash)
 
     except Exception as e:
-        log.error("Auto-WD: TON transfer failed: %s", e, exc_info=True)
+        log.error("Auto-WD: transfer failed: %s", e, exc_info=True)
         return None
-    finally:
-        if provider:
-            try:
-                await provider.close_all()
-            except Exception:
-                pass
 
 
 async def _try_auto_withdraw(

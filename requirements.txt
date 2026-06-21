@@ -2,4 +2,4 @@ aiogram
 aiohttp
 aiosqlite
 cryptography
-pytoniq
+tonsdk
