@@ -714,13 +714,6 @@ async def init_db() -> None:
                 UNIQUE(telegram_id, milestone_id)
             )
         """)
-        await db.execute("""
-            CREATE TABLE IF NOT EXISTS welcome_bonus_claims (
-                telegram_id  INTEGER PRIMARY KEY,
-                reward       REAL    NOT NULL,
-                claimed_at   TEXT    NOT NULL DEFAULT (datetime('now'))
-            )
-        """)
         # A given on-chain tx hash may only be credited once — blocks deposit replay
         await db.execute("""
             CREATE UNIQUE INDEX IF NOT EXISTS idx_deposit_txhash
@@ -4099,35 +4092,6 @@ async def api_admin_reject_user_task(request: web.Request) -> web.Response:
     return web.json_response({"success": True, "refund": float(task[2]) if task else 0}, headers=_CORS)
 
 
-async def api_admin_revoke_welcome_bonus(request: web.Request) -> web.Response:
-    """Admin: deduct the welcome bonus from every user who claimed it, then clear all claims."""
-    if not _is_admin(request):
-        return web.json_response({"error": "Forbidden"}, status=403, headers=_CORS)
-
-    async with aiosqlite.connect(DB_PATH) as db:
-        async with db.execute("SELECT telegram_id, reward FROM welcome_bonus_claims") as cur:
-            claims = await cur.fetchall()
-
-        affected = 0
-        total_deducted = 0.0
-        for row in claims:
-            uid, reward = int(row[0]), float(row[1] or 0)
-            if reward <= 0:
-                continue
-            await db.execute(
-                "UPDATE users SET app_balance = MAX(0, COALESCE(app_balance, 0) - ?) WHERE telegram_id = ?",
-                (reward, uid)
-            )
-            affected += 1
-            total_deducted += reward
-
-        await db.execute("DELETE FROM welcome_bonus_claims")
-        await db.commit()
-
-    log.info("Admin revoked welcome bonus: %d users affected, %.4f GRAM deducted", affected, total_deducted)
-    return web.json_response({"success": True, "affected": affected, "total_deducted": round(total_deducted, 4)}, headers=_CORS)
-
-
 async def api_pending_proofs(request: web.Request) -> web.Response:
     """Pending social proofs for tasks created by a given user."""
     ip = _client_ip(request)
@@ -5152,93 +5116,6 @@ async def api_referral_milestone_claim(request: web.Request) -> web.Response:
     return web.json_response({"success": True, "reward": reward, "newBalance": new_balance}, headers=_CORS)
 
 
-# ── API — Welcome bonus (one-time, server-side dedup) ─────────────────────────
-
-async def api_welcome_bonus(request: web.Request) -> web.Response:
-    """Credit the one-time welcome bonus — server prevents re-claiming after localStorage clear.
-
-    Amount is read from platform_config key 'welcomeBonusAmount' (admin-configurable).
-    Enabled flag read from 'welcomeBonusEnabled'. Falls back to env var WELCOME_BONUS
-    (default 1.0) so it works before admin has configured it.
-    """
-    ip = _client_ip(request)
-    if _is_rate_limited(ip):
-        return web.json_response({"error": "Rate limit exceeded"}, status=429, headers=_CORS)
-
-    try:
-        data = await request.json()
-    except Exception:
-        return web.json_response({"error": "Invalid JSON"}, status=400, headers=_CORS)
-
-    telegram_id = _parse_telegram_id(data.get("telegramId"))
-    init_data   = str(data.get("initData", "")).strip()
-
-    if not telegram_id:
-        return web.json_response({"error": "telegramId required"}, status=400, headers=_CORS)
-
-    if not _verify_user_request(init_data, telegram_id):
-        return web.json_response({"error": "Authentication required"}, status=401, headers=_CORS)
-
-    if _is_user_rate_limited(telegram_id, max_per_window=3):
-        return web.json_response({"error": "Rate limit exceeded"}, status=429, headers=_CORS)
-
-    async with aiosqlite.connect(DB_PATH) as db:
-        # Check user exists and is not banned
-        async with db.execute(
-            "SELECT banned FROM users WHERE telegram_id = ?", (telegram_id,)
-        ) as cur:
-            urow = await cur.fetchone()
-        if not urow:
-            return web.json_response({"error": "User not found"}, status=404, headers=_CORS)
-        if urow[0]:
-            return web.json_response({"error": "Account suspended"}, status=403, headers=_CORS)
-
-        # Read bonus config from platform_config
-        bonus_enabled = True
-        bonus_amount  = float(os.getenv("WELCOME_BONUS", "1.0"))
-        async with db.execute(
-            "SELECT key, value FROM platform_config WHERE key IN ('welcomeBonusEnabled','welcomeBonusAmount')"
-        ) as cur:
-            async for key, value in cur:
-                try:
-                    parsed = json.loads(value)
-                    if key == "welcomeBonusEnabled":
-                        bonus_enabled = bool(parsed)
-                    elif key == "welcomeBonusAmount":
-                        v = float(parsed)
-                        if 0 < v <= 100:
-                            bonus_amount = v
-                except (ValueError, TypeError):
-                    pass
-
-        if not bonus_enabled or bonus_amount <= 0:
-            return web.json_response({"error": "Bonus disabled"}, status=400, headers=_CORS)
-
-        # Atomic insert — PRIMARY KEY blocks re-claim
-        try:
-            await db.execute(
-                "INSERT INTO welcome_bonus_claims (telegram_id, reward) VALUES (?, ?)",
-                (telegram_id, bonus_amount),
-            )
-        except aiosqlite.IntegrityError:
-            return web.json_response({"error": "Bonus already claimed"}, status=409, headers=_CORS)
-
-        await db.execute(
-            "UPDATE users SET app_balance = COALESCE(app_balance, 0) + ? WHERE telegram_id = ?",
-            (bonus_amount, telegram_id),
-        )
-        await db.commit()
-
-        async with db.execute(
-            "SELECT app_balance FROM users WHERE telegram_id = ?", (telegram_id,)
-        ) as cur:
-            brow = await cur.fetchone()
-        new_balance = float(brow[0] or 0) if brow else bonus_amount
-
-    log.info("Welcome bonus: user=%d reward=%.2f", telegram_id, bonus_amount)
-    return web.json_response({"success": True, "reward": bonus_amount, "newBalance": new_balance}, headers=_CORS)
-
-
 async def api_admin_broadcast(request: web.Request) -> web.Response:
     """Send a Telegram message to all non-banned users.
 
@@ -5308,7 +5185,6 @@ async def start_web() -> None:
     app.router.add_post("/api/user/init",                  api_user_init)
     app.router.add_post("/api/user/referral",              api_user_referral)
     app.router.add_post("/api/user/balance",               api_user_balance_set)
-    app.router.add_post("/api/user/welcome-bonus",         api_welcome_bonus)
     app.router.add_get( "/api/user/withdrawals",           api_user_withdrawal_status)
     app.router.add_get( "/api/user/transactions",          api_user_transactions)
     app.router.add_post("/api/task/depart",                  api_task_depart)
@@ -5379,7 +5255,6 @@ async def start_web() -> None:
     app.router.add_get( "/api/admin/user-tasks",                      api_admin_user_tasks)
     app.router.add_post("/api/admin/user-tasks/{id}/approve",         api_admin_approve_user_task)
     app.router.add_post("/api/admin/user-tasks/{id}/reject",          api_admin_reject_user_task)
-    app.router.add_post("/api/admin/revoke-welcome-bonus",            api_admin_revoke_welcome_bonus)
 
     # CORS preflight — must be before SPA fallback
     async def handle_options(request: web.Request) -> web.Response:

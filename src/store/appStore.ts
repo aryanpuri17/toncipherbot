@@ -376,9 +376,6 @@ export interface PlatformConfig {
   maintenanceMode: boolean;
   maintenanceMessage: string;
   registrationEnabled: boolean;
-  welcomeBonusEnabled: boolean;
-  welcomeBonusAmount: number;
-  
   // Notifications
   adminNotifyDeposit: boolean;
   adminNotifyWithdrawal: boolean;
@@ -786,8 +783,6 @@ const mockPlatformConfig: PlatformConfig = {
   maintenanceMode: false,
   maintenanceMessage: 'The bot is under maintenance. Please try again later.',
   registrationEnabled: true,
-  welcomeBonusEnabled: false,
-  welcomeBonusAmount: 0,
   adminNotifyDeposit: true,
   adminNotifyWithdrawal: true,
   adminNotifyFraud: true,
