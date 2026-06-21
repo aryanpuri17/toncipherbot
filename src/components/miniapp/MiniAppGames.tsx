@@ -369,9 +369,9 @@ function diceWinChance(target: number, dir: DiceDir): number {
   return dir === 'under' ? target : 100 - target;
 }
 function diceMultiplier(target: number, dir: DiceDir): number {
-  // 60% RTP: adjusted multiplier so at 50% chance it shows ×1.20
+  // 75% RTP: at 50% chance shows ×1.50
   const wc = Math.max(2, Math.min(98, diceWinChance(target, dir)));
-  return +(60 / wc).toFixed(4);
+  return +(75 / wc).toFixed(4);
 }
 
 function rollDice(target: number, dir: DiceDir): { roll: number; win: boolean } {
