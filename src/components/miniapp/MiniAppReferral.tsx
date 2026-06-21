@@ -7,7 +7,7 @@ import {
 
 // ── Leaderboard sub-component ──────────────────────────────────────────────────
 
-type LbUser = { telegramId: number; username: string; firstName: string; referralCount: number };
+type LbUser = { telegramId: number; username: string; firstName: string; referralCount: number; photoUrl: string };
 
 const Leaderboard: React.FC = () => {
   const { currentUser } = useAppStore();
@@ -58,8 +58,17 @@ const Leaderboard: React.FC = () => {
           const isMe = user.telegramId === currentUser.telegramId;
           return (
             <div key={user.telegramId} className="flex flex-col items-center">
-              <div className={`w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-sm font-bold text-white mb-2 relative ${isMe ? 'ring-2 ring-blue-400' : ''}`}>
-                {user.firstName?.charAt(0) ?? '?'}
+              <div className={`relative mb-2 ${isMe ? 'ring-2 ring-blue-400 rounded-full' : ''}`}>
+                {user.photoUrl ? (
+                  <img src={user.photoUrl} alt={user.firstName}
+                    className="w-12 h-12 rounded-full object-cover"
+                    onError={e => { (e.target as HTMLImageElement).style.display = 'none'; (e.target as HTMLImageElement).nextElementSibling?.removeAttribute('style'); }}
+                  />
+                ) : null}
+                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-sm font-bold text-white"
+                  style={user.photoUrl ? { display: 'none' } : {}}>
+                  {user.firstName?.charAt(0) ?? '?'}
+                </div>
                 <span className="absolute -bottom-1 -right-1 text-sm">{medals[rank - 1]}</span>
               </div>
               <p className="text-xs font-semibold text-white mb-0.5 max-w-[72px] truncate text-center">
@@ -81,8 +90,14 @@ const Leaderboard: React.FC = () => {
               <span className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${i === 0 ? 'bg-amber-500/20 text-amber-400' : i === 1 ? 'bg-slate-300/20 text-slate-300' : i === 2 ? 'bg-orange-700/20 text-orange-400' : 'bg-white/5 text-slate-400'}`}>
                 {i < 3 ? medals[i] : i + 1}
               </span>
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-xs font-bold text-white flex-shrink-0">
-                {user.firstName?.charAt(0) ?? '?'}
+              <div className="w-8 h-8 rounded-full flex-shrink-0 relative overflow-hidden bg-gradient-to-br from-blue-500 to-purple-600">
+                {user.photoUrl ? (
+                  <img src={user.photoUrl} alt={user.firstName} className="w-full h-full object-cover absolute inset-0" />
+                ) : (
+                  <span className="w-full h-full flex items-center justify-center text-xs font-bold text-white">
+                    {user.firstName?.charAt(0) ?? '?'}
+                  </span>
+                )}
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-white truncate">
@@ -104,8 +119,14 @@ const Leaderboard: React.FC = () => {
       {!currentInList && currentUser.telegramId !== 0 && (
         <div className="glass-card border border-blue-500/30 bg-blue-500/5 p-3.5 flex items-center gap-3">
           <span className="w-8 h-8 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center text-xs font-bold flex-shrink-0">—</span>
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-xs font-bold text-white flex-shrink-0">
-            {currentUser.firstName?.charAt(0) ?? '?'}
+          <div className="w-8 h-8 rounded-full flex-shrink-0 relative overflow-hidden bg-gradient-to-br from-blue-500 to-purple-600">
+            {currentUser.avatarUrl ? (
+              <img src={currentUser.avatarUrl} alt={currentUser.firstName} className="w-full h-full object-cover absolute inset-0" />
+            ) : (
+              <span className="w-full h-full flex items-center justify-center text-xs font-bold text-white">
+                {currentUser.firstName?.charAt(0) ?? '?'}
+              </span>
+            )}
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-white">{currentUser.firstName} <span className="text-blue-400 text-[10px]">(you)</span></p>

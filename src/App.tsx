@@ -456,6 +456,7 @@ export default function App() {
             username:   tgUser.username ?? '',
             firstName:  tgUser.first_name,
             lastName:   tgUser.last_name ?? '',
+            photoUrl:   tgUser.photo_url ?? '',
             initData,
           }),
         }),
