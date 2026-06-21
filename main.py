@@ -885,13 +885,13 @@ async def cmd_start(msg: types.Message):
         InlineKeyboardButton(text="🚀 Open App", web_app=WebAppInfo(url=WEBAPP_URL))
     ]])
     await msg.answer(
-        f"👋 <b>Welcome to TonCipher, {first_name}!</b>\n\n"
-        f"Earn real <b>GRAM</b> every day — completely free.\n\n"
-        f"✅ <b>Tasks</b> — join channels, follow accounts & more\n"
-        f"🎮 <b>Games</b> — Mines, Wheel, Jackpot, Crash\n"
-        f"👥 <b>Referrals</b> — earn for every friend you invite\n"
-        f"💸 <b>Withdraw</b> — send GRAM straight to your TON wallet\n\n"
-        f"👇 <b>Tap below to start earning now!</b>",
+        f"💎 <b>{first_name}, people are earning GRAM on Telegram right now — and you're missing out.</b>\n\n"
+        f"<b>TonCipher</b> pays real <b>GRAM</b> on the TON Blockchain for doing simple things. No investment. No tricks. Just earn.\n\n"
+        f"✅ <b>Tasks</b> — complete missions, join channels, follow accounts\n"
+        f"🎮 <b>Games</b> — Crash, Mines, Dice, Plinko\n"
+        f"👥 <b>Referrals</b> — get paid for every friend you bring\n"
+        f"💸 <b>Withdraw</b> — real GRAM, straight to your TON wallet\n\n"
+        f"⚡ <b>Open the app. Start earning in 30 seconds.</b>",
         parse_mode="HTML",
         reply_markup=kb,
     )
