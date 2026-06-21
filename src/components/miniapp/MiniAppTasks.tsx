@@ -137,7 +137,7 @@ type TaskPhase = 'idle' | 'pending' | 'verifying' | 'not_subscribed' | 'completi
   | 'needs_proof'        // manual-verification tasks (Partage Communauté): awaiting screenshot upload
   | 'proof_pending';     // social: screenshot sent, awaiting admin approval
 
-const TIMER_REQUIRED_MS = 30_000; // bots / social / video: must stay 30s outside
+const TIMER_REQUIRED_MS = 15_000; // must stay 15s outside the app
 
 function openUrl(url: string) {
   const tg = (window as unknown as { Telegram?: { WebApp?: { openTelegramLink?: (u: string) => void; openLink?: (u: string) => void } } }).Telegram?.WebApp;
