@@ -501,7 +501,7 @@ export const MiniAppTasks: React.FC = () => {
 
     const isChannelTask = card.type === 'join_channel' || card.type === 'join_group';
 
-    // ── Bot / social / video: enforce 30s outside ──
+    // ── Bot / social / video: enforce 15s outside ──
     if (card.type === 'start_bot' || card.type === 'social' || card.type === 'watch_video') {
       const depart = departTimes.current[card.id];
       if (!depart || Date.now() - depart < TIMER_REQUIRED_MS) {
@@ -786,8 +786,8 @@ export const MiniAppTasks: React.FC = () => {
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <Loader2 style={{ width: 14, height: 14, color: '#fbbf24', animation: 'spin 2s linear infinite', flexShrink: 0 }} />
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                  <span style={{ fontSize: 11, color: '#fbbf24', fontWeight: 700 }}>⚠️ You need to stay 30 seconds outside</span>
-                  <span style={{ fontSize: 10, color: '#94a3b8' }}>Tap here to go back → stay 30 s → come back</span>
+                  <span style={{ fontSize: 11, color: '#fbbf24', fontWeight: 700 }}>⚠️ You need to stay 15 seconds outside</span>
+                  <span style={{ fontSize: 10, color: '#94a3b8' }}>Tap here to go back → stay 15 s → come back</span>
                 </div>
               </div>
               <ChevronRight style={{ width: 16, height: 16, color: '#f59e0b', flexShrink: 0 }} />
@@ -802,7 +802,7 @@ export const MiniAppTasks: React.FC = () => {
                 (card.type === 'join_channel' || card.type === 'join_group')
                   ? "Not a member — join the channel first"
                   : (card.type === 'social' || card.type === 'watch_video')
-                    ? 'Too early — stay 30s in the external app'
+                    ? 'Too early — stay 15s in the external app'
                     : 'Not verified — try again'
               )}
             </span>
