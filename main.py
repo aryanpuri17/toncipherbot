@@ -143,7 +143,7 @@ PLATFORM_TASKS: dict[str, dict] = {
     "3":  {"type": "join_channel", "reward": 0.002, "cooldown_hours":  0, "verification": "channel",  "target": "@TonCipher_Pays",     "max_per_user": 1},
     "4":  {"type": "start_bot",    "reward": 0.002, "cooldown_hours":  0, "verification": "bot",      "target": None,                 "max_per_user": 1},
     "5":  {"type": "special",      "reward": 0.01,  "cooldown_hours":  0, "verification": "referral", "target": None,                 "max_per_user": 1, "required_referrals": 3},
-    "6":  {"type": "special",      "reward": 0.80,  "cooldown_hours":  0, "verification": "proof",    "target": None,                 "max_per_user": 1},
+    "6":  {"type": "special",      "reward": 0.005, "cooldown_hours":  0, "verification": "proof",    "target": None,                 "max_per_user": 1},
     "7":  {"type": "watch_video",  "reward": 0.002, "cooldown_hours":  0, "verification": "timer",    "target": None,                 "max_per_user": 1, "min_seconds": 20},
     "8":  {"type": "social",       "reward": 0.002, "cooldown_hours":  0, "verification": "timer",    "target": None,                 "max_per_user": 1, "min_seconds": 30},
     "9":  {"type": "social",       "reward": 0.002, "cooldown_hours":  0, "verification": "timer",    "target": None,                 "max_per_user": 1, "min_seconds": 30},
