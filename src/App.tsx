@@ -30,7 +30,6 @@ import { MiniAppShop } from './components/miniapp/MiniAppShop';
 import { Bell, Menu, ChevronRight, Info, Wallet } from 'lucide-react';
 import { useTonConnectUI, useTonWallet } from '@tonconnect/ui-react';
 import { useDepositMonitor } from './hooks/useDepositMonitor';
-import { hadSavedBalance } from './store/appStore';
 import { processServerTransactions, syncServerTransactions, type ServerTx } from './lib/withdrawalSync';
 import { getAdminKey } from './utils/adminFetch';
 
@@ -478,28 +477,15 @@ export default function App() {
           claimedMilestoneIds?: string[];
         };
         if (typeof apiData.appBalance === 'number') {
-          const localBalance = useAppStore.getState().currentUser.balanceMain;
-          // Server is authoritative: adopt if server balance ≥ local (avoids rare 3s window loss)
-          // OR if localStorage was empty (fresh device)
-          if (!hadSavedBalance || apiData.appBalance >= localBalance) {
-            useAppStore.getState().adoptServerBalance({
-              balance:         apiData.appBalance,
-              totalEarnings:   apiData.appTotalEarnings ?? 0,
-              tasksCompleted:  apiData.appTasksCompleted ?? 0,
-              referralBalance: apiData.referralBalance,
-              completedTaskIds: Array.isArray(apiData.appCompletedTasks) ? apiData.appCompletedTasks : [],
-            });
-            adoptedServerBalance = true;
-          } else {
-            // Local balance is higher (earned in last few seconds before close) — keep it
-            // but still merge completedTaskIds from server to prevent task re-farming
-            const completedFromServer = Array.isArray(apiData.appCompletedTasks) ? apiData.appCompletedTasks : [];
-            if (completedFromServer.length > 0) {
-              useAppStore.setState(s => ({
-                completedTaskIds: Array.from(new Set([...s.completedTaskIds, ...completedFromServer])),
-              }));
-            }
-          }
+          // Server is always authoritative
+          useAppStore.getState().adoptServerBalance({
+            balance:         apiData.appBalance,
+            totalEarnings:   apiData.appTotalEarnings ?? 0,
+            tasksCompleted:  apiData.appTasksCompleted ?? 0,
+            referralBalance: apiData.referralBalance,
+            completedTaskIds: Array.isArray(apiData.appCompletedTasks) ? apiData.appCompletedTasks : [],
+          });
+          adoptedServerBalance = true;
         }
         syncUserFromApi(apiData);
 
