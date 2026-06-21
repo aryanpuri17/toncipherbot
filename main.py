@@ -87,6 +87,11 @@ AUTO_WD_MIN_AGE     = int(os.getenv("AUTO_WD_MIN_AGE_DAYS", "7"))     # days —
 
 _ton_price_cache: dict = {"price": None, "ts": 0}
 
+# ── Membership check cache (avoids repeated Telegram API calls) ────────────────
+# Key: (telegram_id, chat_ref) → (is_member: bool, expires_at: float)
+_membership_cache: dict[tuple[int, str], tuple[bool, float]] = {}
+_MEMBERSHIP_CACHE_TTL = 90  # seconds — cache positive/negative results for 90s
+
 # ── Platform task definitions (server-authoritative) ──────────────────────────
 # Keys must match id values in frontend _defaultTasks.
 # verification: 'none'|'channel'|'bot'|'timer'|'referral'|'proof'
@@ -330,19 +335,26 @@ def _extract_chat_ref(url: str) -> str | None:
 
 async def _is_chat_member(chat_ref: str, telegram_id: int) -> bool | None:
     """True/False if membership could be checked, None if unverifiable
-    (bot missing from chat, timeout, network error…)."""
+    (bot missing from chat, timeout, network error…).
+    Results are cached for _MEMBERSHIP_CACHE_TTL seconds to avoid repeated API calls."""
     if not bot:
         return None
+    cache_key = (telegram_id, chat_ref)
+    cached = _membership_cache.get(cache_key)
+    if cached and time.monotonic() < cached[1]:
+        return cached[0]
     try:
         from aiogram.enums import ChatMemberStatus
         member = await asyncio.wait_for(
             bot.get_chat_member(chat_ref, telegram_id), timeout=8.0
         )
-        return member.status in (
+        result = member.status in (
             ChatMemberStatus.MEMBER,
             ChatMemberStatus.ADMINISTRATOR,
             ChatMemberStatus.CREATOR,
         )
+        _membership_cache[cache_key] = (result, time.monotonic() + _MEMBERSHIP_CACHE_TTL)
+        return result
     except asyncio.TimeoutError:
         log.warning("Membership check timed out for %d in %s", telegram_id, chat_ref)
         return None
@@ -2180,20 +2192,9 @@ async def api_check_membership(request: web.Request) -> web.Response:
     if not bot or not chat_id or not telegram_id:
         return web.json_response({"member": True}, headers=_CORS)
 
-    try:
-        from aiogram.enums import ChatMemberStatus
-        member = await asyncio.wait_for(
-            bot.get_chat_member(chat_id, telegram_id), timeout=8.0
-        )
-        is_member = member.status in (
-            ChatMemberStatus.MEMBER,
-            ChatMemberStatus.ADMINISTRATOR,
-            ChatMemberStatus.CREATOR,
-        )
-    except (asyncio.TimeoutError, Exception) as e:
-        log.warning("Membership check failed for %d in %s: %s", telegram_id, chat_id, e)
-        is_member = True  # On error/timeout, allow through (server re-verifies at completion)
-
+    # Use shared cache — avoids calling Telegram API on every frontend poll
+    result = await _is_chat_member(chat_id, telegram_id)
+    is_member = result if result is not None else True  # allow through on timeout
     return web.json_response({"member": is_member}, headers=_CORS)
 
 
@@ -5246,6 +5247,9 @@ async def start_web() -> None:
         return web.Response(status=204, headers=_CORS)
 
     app.router.add_route("OPTIONS", "/{path:.*}", handle_options)
+
+    # Keep-alive health check (ping this with UptimeRobot every 5 min to prevent Render sleep)
+    app.router.add_get("/health", lambda r: web.json_response({"ok": True, "ts": int(time.time())}, headers=_CORS))
 
     # SPA fallback — must be last
     app.router.add_get("/{path:.*}",                       serve_app)

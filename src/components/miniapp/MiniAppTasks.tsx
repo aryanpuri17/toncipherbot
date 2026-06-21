@@ -497,6 +497,24 @@ export const MiniAppTasks: React.FC = () => {
     recordDepart(card.id);
     setPhase(card.id, 'pending');
 
+    // Pre-warm membership cache: fire a background check 4s after user leaves
+    // so the result is cached when they come back and click Verify
+    if (card.type === 'join_channel' || card.type === 'join_group') {
+      const chatRefMatch = card.targetUrl?.match(/t\.me\/([^/?+]+)/);
+      const chatRef = chatRefMatch?.[1];
+      if (chatRef && !chatRef.startsWith('+')) {
+        timerRefs.current[`pre_${card.id}`] = setTimeout(async () => {
+          const initData = (window as unknown as { Telegram?: { WebApp?: { initData?: string } } })?.Telegram?.WebApp?.initData ?? '';
+          try {
+            await fetch(
+              `/api/check-membership?telegram_id=${currentUser.telegramId}&chat_id=${encodeURIComponent(`@${chatRef}`)}`,
+              { headers: initData ? { 'X-Init-Data': initData } : {} },
+            );
+          } catch { /* silent */ }
+        }, 4000);
+      }
+    }
+
     // Start countdown for timer-based tasks
     if (waitMs > CHANNEL_REQUIRED_MS) {
       const seconds = Math.ceil(waitMs / 1000);
@@ -611,8 +629,8 @@ export const MiniAppTasks: React.FC = () => {
           };
           let isMember = await checkMembership();
           if (isMember === false) {
-            // One automatic retry after 2 seconds (Telegram API sometimes lags)
-            await new Promise(r => setTimeout(r, 2000));
+            // One automatic retry after 800ms (cache makes it near-instant)
+            await new Promise(r => setTimeout(r, 800));
             isMember = await checkMembership();
           }
           if (isMember === false) { setPhase(card.id, 'not_subscribed'); haptic.error(); return; }
@@ -802,7 +820,7 @@ export const MiniAppTasks: React.FC = () => {
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <Loader2 style={{ width: 16, height: 16, color: phase === 'completing' ? '#34d399' : '#60a5fa', animation: 'spin 1s linear infinite' }} />
                 <span style={{ fontSize: 11, color: phase === 'completing' ? '#34d399' : '#60a5fa' }}>
-                  {phase === 'completing' ? 'Crediting…' : 'Verifying…'}
+                  {phase === 'completing' ? 'Crediting reward…' : 'Checking membership…'}
                 </span>
               </div>
             )}
