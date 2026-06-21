@@ -805,6 +805,7 @@ async def _log_fraud_alert(
         (telegram_id, username, alert_type, details, sev, score),
     )
     # Auto-action based on severity: ban outright if critical, block withdrawals if high
+    # medium/low → flag only (admin reviews manually — no automatic withdrawal block)
     if sev == "critical":
         await db.execute(
             "UPDATE users SET banned = 1, flagged = 1 WHERE telegram_id = ?", (telegram_id,)
@@ -816,7 +817,7 @@ async def _log_fraud_alert(
         )
         log.warning("FRAUD AUTO-BLOCK-WD user=%d @%s score=%d", telegram_id, username, score)
     else:
-        await db.execute("UPDATE users SET flagged = 1, withdrawal_blocked = 1 WHERE telegram_id = ?", (telegram_id,))
+        await db.execute("UPDATE users SET flagged = 1 WHERE telegram_id = ?", (telegram_id,))
     log.warning("FRAUD [%s] user=%d @%s score=%d — %s", sev.upper(), telegram_id, username, score, details)
 
 
@@ -2499,7 +2500,11 @@ async def api_admin_unblock_withdrawals(request: web.Request) -> web.Response:
     telegram_id, err = _require_admin_telegram_id(request)
     if err: return err
     async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute("UPDATE users SET withdrawal_blocked = 0 WHERE telegram_id = ?", (telegram_id,))
+        # Clear both withdrawal_blocked and flagged — admin manually reviewing = account verified
+        await db.execute(
+            "UPDATE users SET withdrawal_blocked = 0, flagged = 0 WHERE telegram_id = ?",
+            (telegram_id,)
+        )
         await db.commit()
     return web.json_response({"success": True}, headers=_CORS)
 
