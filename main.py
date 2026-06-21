@@ -796,6 +796,36 @@ async def init_db() -> None:
         except Exception as e:
             log.warning("Welcome bonus migration failed (non-fatal): %s", e)
 
+        # Fix migration: restore task earnings for users incorrectly zeroed by v2
+        # v2 subtracted 1 GRAM from EVERYONE with balance > 0, including users who
+        # only had task earnings (e.g. 0.02 GRAM). Those users now have 0. Restore
+        # their balance from the authoritative platform_task_completions records.
+        try:
+            async with db.execute(
+                "SELECT value FROM platform_config WHERE key = 'welcome_bonus_fix_v1'"
+            ) as cur:
+                fix_done = await cur.fetchone()
+            if not fix_done:
+                await db.execute("""
+                    UPDATE users
+                    SET app_balance = COALESCE((
+                        SELECT SUM(ptc.earned)
+                        FROM platform_task_completions ptc
+                        WHERE ptc.telegram_id = users.telegram_id
+                    ), 0)
+                    WHERE COALESCE(app_balance, 0) = 0
+                      AND EXISTS (
+                        SELECT 1 FROM platform_task_completions ptc
+                        WHERE ptc.telegram_id = users.telegram_id
+                      )
+                """)
+                await db.execute(
+                    "INSERT OR REPLACE INTO platform_config (key, value) VALUES ('welcome_bonus_fix_v1', '1')"
+                )
+                log.info("Welcome bonus fix v1: restored task earnings for incorrectly zeroed users")
+        except Exception as e:
+            log.warning("Welcome bonus fix migration failed (non-fatal): %s", e)
+
         await db.commit()
     log.info("Database ready at %s", DB_PATH)
 
