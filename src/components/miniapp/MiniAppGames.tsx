@@ -2832,7 +2832,7 @@ const CATALOG = [
   },
   {
     id: 'crash' as ActiveGame,
-    title: 'Aviator',
+    title: 'Crash',
     desc: 'Cash out before it flies away · infinite curve',
     stats: 'up to ×1000 · cash out anytime',
     emoji: '📈',
