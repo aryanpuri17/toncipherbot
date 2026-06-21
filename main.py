@@ -117,10 +117,14 @@ GAME_DAILY_WIN_LIMIT = float(os.getenv("GAME_DAILY_WIN_LIMIT", "50.0"))
 # ── Referral milestone defaults (mirror of frontend _defaultReferralMilestones) ─
 # Admin can override via /api/admin/config key "referralMilestones".
 _DEFAULT_REFERRAL_MILESTONES: list[dict] = [
-    {"id": "1", "referralCount": 5,   "reward": 2.00,  "description": "Invite 5 friends",   "isActive": True},
-    {"id": "2", "referralCount": 20,  "reward": 10.00, "description": "Invite 20 friends",  "isActive": True},
-    {"id": "3", "referralCount": 50,  "reward": 30.00, "description": "Invite 50 friends",  "isActive": True},
-    {"id": "4", "referralCount": 100, "reward": 75.00, "description": "Invite 100 friends", "isActive": True},
+    {"id": "ms1", "referralCount": 5,    "reward": 0.05, "description": "Invite 5 friends",    "isActive": True},
+    {"id": "ms2", "referralCount": 10,   "reward": 0.10, "description": "Invite 10 friends",   "isActive": True},
+    {"id": "ms3", "referralCount": 25,   "reward": 0.25, "description": "Invite 25 friends",   "isActive": True},
+    {"id": "ms4", "referralCount": 50,   "reward": 0.50, "description": "Invite 50 friends",   "isActive": True},
+    {"id": "ms5", "referralCount": 100,  "reward": 1.00, "description": "Invite 100 friends",  "isActive": True},
+    {"id": "ms6", "referralCount": 250,  "reward": 2.00, "description": "Invite 250 friends",  "isActive": True},
+    {"id": "ms7", "referralCount": 500,  "reward": 3.00, "description": "Invite 500 friends",  "isActive": True},
+    {"id": "ms8", "referralCount": 1000, "reward": 5.00, "description": "Invite 1000 friends", "isActive": True},
 ]
 MILESTONE_MAX_REWARD = float(os.getenv("MILESTONE_MAX_REWARD", "500.0"))
 
