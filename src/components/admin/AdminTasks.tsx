@@ -4,6 +4,44 @@ import { useAppStore } from '../../store/appStore';
 import { ToggleSwitch } from '../ui/ToggleSwitch';
 import { Hash, Users, Bot, UserPlus, Calendar, Star, ExternalLink, Edit2, Trash2, Plus, Tv, AlertCircle, Flame, CheckCircle, XCircle, Clock, FileText, Sparkles, RefreshCw, Loader2 } from 'lucide-react';
 
+// ── Platform logo SVGs ────────────────────────────────────────────────
+const TgLogo: React.FC<{ s?: number }> = ({ s = 30 }) => (
+  <svg width={s} height={s} viewBox="0 0 100 100"><circle cx="50" cy="50" r="50" fill="#29B6F6"/><path fill="white" d="M14 49l16 6 6 19c.4 1.3 2 1.7 2.9.8l9-7.5 17.5 12.8c1.2.9 2.9.2 3.2-1.2L84 21c.4-1.8-1.3-3.3-3-2.6L14 46.5c-1.7.6-1.7 3 0 2.5z"/></svg>
+);
+const YtLogo: React.FC<{ s?: number }> = ({ s = 30 }) => (
+  <svg width={s} height={s} viewBox="0 0 100 100"><rect width="100" height="100" rx="22" fill="#FF0000"/><path fill="white" d="M71 36.5c-.8-3-3.2-5.4-6.2-6.2C59.5 29 50 29 50 29s-9.5 0-14.8 1.3c-3 .8-5.4 3.2-6.2 6.2C27.7 41.8 27.7 50 27.7 50s0 8.2 1.3 13.5c.8 3 3.2 5.4 6.2 6.2C40.5 71 50 71 50 71s9.5 0 14.8-1.3c3-.8 5.4-3.2 6.2-6.2 1.3-5.3 1.3-13.5 1.3-13.5s0-8.2-1.3-13.5zM44 60V40l18 10-18 10z"/></svg>
+);
+const XLgLogo: React.FC<{ s?: number }> = ({ s = 30 }) => (
+  <svg width={s} height={s} viewBox="0 0 100 100"><rect width="100" height="100" rx="22" fill="#000"/><path fill="white" d="M18 18h23l11.5 16.5L66 18h16L57.5 46 82 82H59L46 64.5 30 82H14l26-30.5L18 18zm8 7l38 48h8L34 25h-8zm35 0L28 75h-8l33-41.5L52 25h9z"/></svg>
+);
+const IgLogo: React.FC<{ s?: number }> = ({ s = 30 }) => (
+  <svg width={s} height={s} viewBox="0 0 100 100">
+    <defs><linearGradient id="atIg" x1="0%" y1="100%" x2="100%" y2="0%"><stop offset="0%" stopColor="#FFDC80"/><stop offset="40%" stopColor="#F77737"/><stop offset="70%" stopColor="#C13584"/><stop offset="100%" stopColor="#405DE6"/></linearGradient></defs>
+    <rect width="100" height="100" rx="22" fill="url(#atIg)"/>
+    <circle cx="50" cy="50" r="19" fill="none" stroke="white" strokeWidth="6"/>
+    <circle cx="72" cy="28" r="5" fill="white"/>
+  </svg>
+);
+const TtLogo: React.FC<{ s?: number }> = ({ s = 30 }) => (
+  <svg width={s} height={s} viewBox="0 0 100 100"><rect width="100" height="100" rx="22" fill="#010101"/><path fill="#69C9D0" d="M63 20c1 8 7 13 16 14v10c-6 0-11-2-16-6v28c0 13-10 24-23 24S17 79 17 66s10-24 23-24c2 0 3 .2 5 .5v11C43 53 42 53 40 53c-7 0-13 6-13 13s6 13 13 13 13-6 13-13V20h10z"/><path fill="white" d="M61 18c2 9 8 15 17 16v9c-5 0-10-2-14-5v28c0 14-11 25-24 25S16 80 16 66s11-25 24-25c2 0 3 .2 5 .4V52c-1-.2-3-.3-5-.3-8 0-14 7-14 15s6 14 14 14 14-6 14-14V18h7z"/></svg>
+);
+const DcLogo: React.FC<{ s?: number }> = ({ s = 30 }) => (
+  <svg width={s} height={s} viewBox="0 0 100 100"><rect width="100" height="100" rx="22" fill="#5865F2"/><path fill="white" d="M74 29c-7-3-14-4-14-4l-1 2c5 1 9 3 14 6-6-3-13-6-23-6s-17 3-23 6c5-3 9-5 14-6l-1-2s-7 1-14 4C19 44 16 61 16 61c8 9 20 9 20 9l4-5c-6-2-11-5-14-9 6 4 15 7 24 7s18-3 24-7c-3 4-8 7-14 9l4 5s12 0 20-9c0 0-3-17-10-32zm-31 27c-3 0-6-3-6-7s3-7 6-7 6 3 6 7-3 7-6 7zm21 0c-3 0-6-3-6-7s3-7 6-7 6 3 6 7-3 7-6 7z"/></svg>
+);
+
+function getTaskLogo(url: string, type: string): React.ReactNode | null {
+  const u = (url ?? '').toLowerCase();
+  if (type === 'join_channel' || type === 'join_group' || type === 'start_bot' ||
+      u.includes('t.me/') || u.includes('telegram'))
+    return <TgLogo s={30} />;
+  if (u.includes('youtube.com') || u.includes('youtu.be')) return <YtLogo s={30} />;
+  if (u.includes('twitter.com') || u.includes('x.com'))    return <XLgLogo s={30} />;
+  if (u.includes('instagram.com'))                          return <IgLogo s={30} />;
+  if (u.includes('tiktok.com'))                             return <TtLogo s={30} />;
+  if (u.includes('discord'))                                return <DcLogo s={30} />;
+  return null;
+}
+
 interface AdminUserTask {
   id: string;
   creatorId: number;
@@ -168,8 +206,8 @@ export const AdminTasks: React.FC = () => {
             return (
               <div key={task.id} className={`glass-card p-5 hover:border-white/10 transition-all ${isPromoActive ? 'border border-amber-500/20' : ''}`}>
                 <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-                  <div className={`w-10 h-10 rounded-xl ${taskTypeColors[task.type] ?? 'bg-white/10 text-slate-400'} flex items-center justify-center flex-shrink-0`}>
-                    {task.icon ? <span className="text-base">{task.icon}</span> : taskTypeIcons[task.type]}
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden ${getTaskLogo(task.targetUrl ?? '', task.type) ? '' : (taskTypeColors[task.type] ?? 'bg-white/10 text-slate-400')}`}>
+                    {getTaskLogo(task.targetUrl ?? '', task.type) ?? (task.icon ? <span className="text-base">{task.icon}</span> : taskTypeIcons[task.type])}
                   </div>
 
                   <div className="flex-1 min-w-0">

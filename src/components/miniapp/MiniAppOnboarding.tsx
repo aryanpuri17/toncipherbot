@@ -155,16 +155,9 @@ const Slide1: React.FC = () => (
           <p className="text-xs text-slate-400">Tasks</p>
           <p className="text-sm font-bold text-white">47</p>
         </div>
-        <div className="flex-1 rounded-2xl bg-amber-500/20 border border-amber-500/30 px-3 py-2 text-center">
-          <p className="text-xs text-amber-400">Streak</p>
-          <p className="text-sm font-bold text-amber-300">🔥 7d</p>
-        </div>
       </div>
     </div>
 
-    <p className="text-xs text-slate-500 text-center max-w-xs">
-      Come back every day to keep your streak alive and boost your earnings
-    </p>
   </div>
 );
 
