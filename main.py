@@ -1520,29 +1520,48 @@ async def _send_ton_transfer(to_address: str, amount_gram: float) -> str | None:
     except ImportError:
         log.error("Auto-WD: pytoniq not installed — run: pip install pytoniq")
         return None
+
+    words = HOT_WALLET_MNEMONIC.split()
+    if len(words) < 12:
+        log.error("Auto-WD: HOT_WALLET_MNEMONIC invalid (< 12 words)")
+        return None
+
+    amount_nano = int(round(amount_gram * 1_000_000_000))
+    log.info("Auto-WD: connecting to TON mainnet, amount=%d nanoTON → %s", amount_nano, to_address[:16])
+
+    provider = None
     try:
-        words = HOT_WALLET_MNEMONIC.split()
-        if len(words) < 12:
-            log.error("Auto-WD: HOT_WALLET_MNEMONIC appears invalid (< 12 words)")
-            return None
-        amount_nano = int(round(amount_gram * 1_000_000_000))
         provider = LiteBalancer.from_mainnet_config(trust_level=1)
         await provider.start_up()
-        try:
-            wallet, _, _, _ = await _TonWallet.from_mnemonic(provider, words)
-            result = await wallet.transfer(
-                destination=to_address,
-                amount=amount_nano,
-                body="TonCipher withdrawal",
-            )
-            if isinstance(result, bytes):
-                return result.hex()
-            return str(result) if result else "auto_ok"
-        finally:
-            await provider.close_all()
+        log.info("Auto-WD: provider started, loading wallet…")
+
+        # from_mnemonic returns just the wallet in recent pytoniq versions
+        raw = await _TonWallet.from_mnemonic(provider, words)
+        wallet = raw[0] if isinstance(raw, (tuple, list)) else raw
+        log.info("Auto-WD: wallet loaded, sending transfer…")
+
+        result = await wallet.transfer(
+            destination=to_address,
+            amount=amount_nano,
+            body="TonCipher withdrawal",
+        )
+        log.info("Auto-WD: transfer result = %r", result)
+
+        if isinstance(result, bytes):
+            return result.hex()
+        if result:
+            return str(result)
+        return "auto_ok"
+
     except Exception as e:
-        log.error("Auto-WD: TON transfer failed: %s", e)
+        log.error("Auto-WD: TON transfer failed: %s", e, exc_info=True)
         return None
+    finally:
+        if provider:
+            try:
+                await provider.close_all()
+            except Exception:
+                pass
 
 
 async def _try_auto_withdraw(
