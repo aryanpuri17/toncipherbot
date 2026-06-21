@@ -2657,7 +2657,7 @@ async def api_admin_approve_withdrawal(request: web.Request) -> web.Response:
             tx_row = await cur2.fetchone()
         await db.commit()
 
-    tx_link = f"https://tonscan.org/tx/{tx_hash}" if tx_hash else ""
+    tx_link = tx_hash if (tx_hash and tx_hash.startswith("http")) else (f"https://tonscan.org/tx/{tx_hash}" if tx_hash else "")
     if bot and tx_row:
         first_name = tx_row[4] or "valued user"
         username_part = f" (@{tx_row[5]})" if tx_row[5] else ""
