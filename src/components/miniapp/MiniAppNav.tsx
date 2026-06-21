@@ -47,6 +47,7 @@ export const MiniAppNav: React.FC = () => {
           className="absolute top-1 bottom-1 rounded-xl pointer-events-none nav-pill"
           style={{
             width: 'calc((100% - 1rem) / 5)',
+            left: '0.5rem',
             transform: `translateX(calc(${activeIdx} * 100%))`,
             transition: 'transform 0.35s cubic-bezier(0.34, 1.45, 0.64, 1)',
           }}

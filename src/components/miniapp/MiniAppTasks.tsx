@@ -138,18 +138,23 @@ type TaskPhase = 'idle' | 'pending' | 'verifying' | 'not_subscribed' | 'completi
   | 'proof_pending';     // social: screenshot sent, awaiting admin approval
 
 const REQUIRED_MS         = 30_000; // bots: 30s
-const CHANNEL_REQUIRED_MS = 5_000;  // channels/groups: 5s
+const CHANNEL_REQUIRED_MS = 30_000; // channels/groups: 30s (anti-spam)
 const VIDEO_REQUIRED_MS   = 30_000; // videos: 30s
 const SOCIAL_REQUIRED_MS  = 30_000; // social/YouTube: 30s minimum
 const departKey = (id: string) => `tc_task_depart_${id}`;
 
-type DepartEntry = { ts: number; ms: number; type?: string; source?: 'platform' | 'api'; leftAt?: number; awayMs?: number };
+// Simplified entry — uses wall-clock elapsed time (Date.now() - ts) to enforce wait
+type DepartEntry = { ts: number; ms: number; type?: string; source?: 'platform' | 'api' };
 
 function openUrl(url: string) {
   const tg = (window as unknown as { Telegram?: { WebApp?: { openTelegramLink?: (u: string) => void; openLink?: (u: string) => void } } }).Telegram?.WebApp;
-  if (tg?.openTelegramLink && url.includes('t.me')) tg.openTelegramLink(url);
-  else if (tg?.openLink) tg.openLink(url);
-  else window.open(url, '_blank');
+  // Normalise URL: add https:// prefix for bare t.me links
+  let href = (url ?? '').trim();
+  if (href.startsWith('@')) href = `https://t.me/${href.slice(1)}`;
+  else if (!href.startsWith('http') && href.includes('t.me')) href = `https://${href}`;
+  if (tg?.openTelegramLink && href.startsWith('https://t.me')) tg.openTelegramLink(href);
+  else if (tg?.openLink) tg.openLink(href);
+  else window.open(href, '_blank');
 }
 
 function taskAvatarColor(name: string): string {
@@ -177,7 +182,6 @@ export const MiniAppTasks: React.FC = () => {
   const [apiTasks,            setApiTasks]            = useState<ApiTask[]>([]);
   const [completedApiTaskIds, setCompletedApiTaskIds] = useState<string[]>([]);
   const [uploadingProofId, setUploadingProofId] = useState<string | null>(null);
-  const [tooEarlyInfo, setTooEarlyInfo] = useState<Record<string, true>>({});
   const [taskErrors, setTaskErrors] = useState<Record<string, string>>({});
   const [countdown, setCountdown] = useState<Record<string, number>>({});
 
@@ -227,10 +231,12 @@ export const MiniAppTasks: React.FC = () => {
     return () => { Object.values(snap).forEach(clearTimeout); };
   }, []);
 
-  // Restore pending phase on mount — critical for Android where the app can be
-  // destroyed while the user is in an external app and rebuilt on return.
+  // Restore pending phase + countdown on mount.
+  // Critical for Android: the WebApp can be destroyed while the user is in another
+  // app, losing all React state. We rebuild from localStorage using wall-clock elapsed time.
   useEffect(() => {
     const completedIds = useAppStore.getState().completedTaskIds;
+    const now = Date.now();
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
       if (!key?.startsWith('tc_task_depart_')) continue;
@@ -238,37 +244,39 @@ export const MiniAppTasks: React.FC = () => {
       if (completedIds.includes(id)) { localStorage.removeItem(key); continue; }
       const raw = localStorage.getItem(key);
       if (!raw) continue;
+      let entry: DepartEntry | null = null;
       try {
         const parsed = JSON.parse(raw) as DepartEntry;
-        if (!parsed.ts || Date.now() - parsed.ts > 3_600_000) { localStorage.removeItem(key); continue; }
-        // App was destroyed while user was away — accumulate that time now
-        if (parsed.leftAt) {
-          const awayMs = (parsed.awayMs ?? 0) + (Date.now() - parsed.leftAt);
-          localStorage.setItem(key, JSON.stringify({ ...parsed, awayMs, leftAt: undefined }));
-        }
+        if (!parsed.ts || now - parsed.ts > 3_600_000) { localStorage.removeItem(key); continue; }
+        entry = parsed;
       } catch { localStorage.removeItem(key); continue; }
       setPhase(id, 'pending');
+      // Restore countdown from elapsed wall-clock time
+      if (entry) {
+        const remainingMs = Math.max(0, entry.ms - (now - entry.ts));
+        if (remainingMs > 0) {
+          let remaining = Math.ceil(remainingMs / 1000);
+          setCountdown(prev => ({ ...prev, [id]: remaining }));
+          const _id = id;
+          const tick = () => {
+            remaining -= 1;
+            if (remaining <= 0) {
+              setCountdown(prev => { const n = { ...prev }; delete n[_id]; return n; });
+            } else {
+              setCountdown(prev => ({ ...prev, [_id]: remaining }));
+              timerRefs.current[`cd_${_id}`] = setTimeout(tick, 1000);
+            }
+          };
+          timerRefs.current[`cd_${_id}`] = setTimeout(tick, 1000);
+        }
+      }
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Track real time spent outside the mini-app using visibility + blur/focus events.
-  // On hide: stamp leftAt. On show: accumulate awayMs, warn immediately if too short.
+  // When the mini-app returns to foreground, restart any countdown timers that were
+  // lost when React unmounted (Android kills the WebApp while user is in another app).
+  // Uses wall-clock elapsed time — no awayMs tracking needed.
   useEffect(() => {
-    const onHide = () => {
-      const now = Date.now();
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (!key?.startsWith('tc_task_depart_')) continue;
-        const raw = localStorage.getItem(key);
-        if (!raw) continue;
-        try {
-          const entry = JSON.parse(raw) as DepartEntry;
-          if (entry.leftAt) continue;
-          localStorage.setItem(key, JSON.stringify({ ...entry, leftAt: now }));
-        } catch { /* ignore */ }
-      }
-    };
-
     const onShow = () => {
       const now = Date.now();
       for (let i = 0; i < localStorage.length; i++) {
@@ -279,26 +287,35 @@ export const MiniAppTasks: React.FC = () => {
         if (!raw) continue;
         try {
           const entry = JSON.parse(raw) as DepartEntry;
-          if (!entry.leftAt) continue;
-          const awayMs = (entry.awayMs ?? 0) + (now - entry.leftAt);
-          localStorage.setItem(key, JSON.stringify({ ...entry, awayMs, leftAt: undefined }));
-          if (awayMs < entry.ms) {
-            setTooEarlyInfo(prev => ({ ...prev, [id]: true }));
-            haptic.error();
-          } else {
-            setTooEarlyInfo(prev => { const n = { ...prev }; delete n[id]; return n; });
+          if (!entry.ts) continue;
+          const remainingMs = Math.max(0, entry.ms - (now - entry.ts));
+          if (remainingMs > 0 && !timerRefs.current[`cd_${id}`]) {
+            // Restart tick from current remaining time
+            let remaining = Math.ceil(remainingMs / 1000);
+            setCountdown(prev => ({ ...prev, [id]: remaining }));
+            const _id = id;
+            const tick = () => {
+              remaining -= 1;
+              if (remaining <= 0) {
+                setCountdown(prev => { const n = { ...prev }; delete n[_id]; return n; });
+              } else {
+                setCountdown(prev => ({ ...prev, [_id]: remaining }));
+                timerRefs.current[`cd_${_id}`] = setTimeout(tick, 1000);
+              }
+            };
+            timerRefs.current[`cd_${_id}`] = setTimeout(tick, 1000);
+          } else if (remainingMs <= 0) {
+            setCountdown(prev => { const n = { ...prev }; delete n[id]; return n; });
           }
         } catch { /* ignore */ }
       }
     };
 
-    const onVisChange = () => { if (document.hidden) onHide(); else onShow(); };
+    const onVisChange = () => { if (!document.hidden) onShow(); };
     document.addEventListener('visibilitychange', onVisChange);
-    window.addEventListener('blur', onHide);
     window.addEventListener('focus', onShow);
     return () => {
       document.removeEventListener('visibilitychange', onVisChange);
-      window.removeEventListener('blur', onHide);
       window.removeEventListener('focus', onShow);
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -493,12 +510,12 @@ export const MiniAppTasks: React.FC = () => {
 
     if (card.targetUrl) openUrl(card.targetUrl);
     const waitMs = card.type === 'start_bot' ? REQUIRED_MS : card.type === 'watch_video' ? VIDEO_REQUIRED_MS : card.type === 'social' ? SOCIAL_REQUIRED_MS : CHANNEL_REQUIRED_MS;
-    localStorage.setItem(departKey(card.id), JSON.stringify({ ts: Date.now(), ms: waitMs, type: card.type, source: card.source }));
+    const startTs = Date.now();
+    localStorage.setItem(departKey(card.id), JSON.stringify({ ts: startTs, ms: waitMs, type: card.type, source: card.source }));
     recordDepart(card.id);
     setPhase(card.id, 'pending');
 
-    // Pre-warm membership cache: fire a background check 4s after user leaves
-    // so the result is cached when they come back and click Verify
+    // Pre-warm membership cache 4s after user leaves
     if (card.type === 'join_channel' || card.type === 'join_group') {
       const chatRefMatch = card.targetUrl?.match(/t\.me\/([^/?+]+)/);
       const chatRef = chatRefMatch?.[1];
@@ -515,22 +532,21 @@ export const MiniAppTasks: React.FC = () => {
       }
     }
 
-    // Start countdown for timer-based tasks
-    if (waitMs > CHANNEL_REQUIRED_MS) {
-      const seconds = Math.ceil(waitMs / 1000);
-      setCountdown(prev => ({ ...prev, [card.id]: seconds }));
-      let remaining = seconds;
-      const tick = () => {
-        remaining -= 1;
-        if (remaining <= 0) {
-          setCountdown(prev => { const n = { ...prev }; delete n[card.id]; return n; });
-        } else {
-          setCountdown(prev => ({ ...prev, [card.id]: remaining }));
-          timerRefs.current[`cd_${card.id}`] = setTimeout(tick, 1000);
-        }
-      };
-      timerRefs.current[`cd_${card.id}`] = setTimeout(tick, 1000);
-    }
+    // Start 30s countdown for all task types
+    const seconds = Math.ceil(waitMs / 1000);
+    setCountdown(prev => ({ ...prev, [card.id]: seconds }));
+    let remaining = seconds;
+    const _cid = card.id;
+    const tick = () => {
+      remaining -= 1;
+      if (remaining <= 0) {
+        setCountdown(prev => { const n = { ...prev }; delete n[_cid]; return n; });
+      } else {
+        setCountdown(prev => ({ ...prev, [_cid]: remaining }));
+        timerRefs.current[`cd_${_cid}`] = setTimeout(tick, 1000);
+      }
+    };
+    timerRefs.current[`cd_${_cid}`] = setTimeout(tick, 1000);
   };
 
   // ── Direct complete — no timer check (used after external verification) ─────
@@ -590,20 +606,34 @@ export const MiniAppTasks: React.FC = () => {
   const handleVerify = async (card: CardTask) => {
     haptic.impact('light');
 
-    const isTimerTask   = card.type === 'social' || card.type === 'watch_video' || card.type === 'start_bot';
     const isChannelTask = card.type === 'join_channel' || card.type === 'join_group';
 
-    // ── Timer tasks: check real time spent outside the mini-app ──────────────
-    if (isTimerTask) {
-      const entry    = parseDeparture(localStorage.getItem(departKey(card.id)));
+    // ── All tasks: enforce 30s elapsed since Start (wall-clock) ─────────────
+    {
+      const entry   = parseDeparture(localStorage.getItem(departKey(card.id)));
       const required = entry?.ms ?? REQUIRED_MS;
-      const awayMs   = entry?.awayMs ?? 0;
-      if (!entry || awayMs < required) {
-        setTooEarlyInfo(prev => ({ ...prev, [card.id]: true }));
+      const elapsed  = entry ? Date.now() - entry.ts : 0;
+      if (entry && elapsed < required) {
+        // Timer still running — restart countdown from remaining and abort
+        const remainingMs = required - elapsed;
+        let remaining = Math.ceil(remainingMs / 1000);
+        setCountdown(prev => ({ ...prev, [card.id]: remaining }));
+        const _cid = card.id;
+        if (!timerRefs.current[`cd_${_cid}`]) {
+          const tick = () => {
+            remaining -= 1;
+            if (remaining <= 0) {
+              setCountdown(prev => { const n = { ...prev }; delete n[_cid]; return n; });
+            } else {
+              setCountdown(prev => ({ ...prev, [_cid]: remaining }));
+              timerRefs.current[`cd_${_cid}`] = setTimeout(tick, 1000);
+            }
+          };
+          timerRefs.current[`cd_${_cid}`] = setTimeout(tick, 1000);
+        }
         haptic.error();
-        return; // instant feedback — no spinner shown
+        return;
       }
-      setTooEarlyInfo(prev => { const n = { ...prev }; delete n[card.id]; return n; });
     }
 
     // ── Channel/group tasks: real membership check (10s timeout, 1 retry) ───────
@@ -826,7 +856,6 @@ export const MiniAppTasks: React.FC = () => {
             )}
             {!isDone && phase === 'pending' && arrowBtn(() => {
               if (card.targetUrl) openUrl(card.targetUrl);
-              setTooEarlyInfo(prev => { const n = { ...prev }; delete n[card.id]; return n; });
             }, false)}
             {!isDone && phase === 'not_subscribed' && arrowBtn(() => {
               if (card.targetUrl) { openUrl(card.targetUrl); setPhase(card.id, 'pending'); }
@@ -835,70 +864,53 @@ export const MiniAppTasks: React.FC = () => {
         </div>
 
         {/* Phase strip at bottom of card */}
-        {phase === 'pending' && (
-          <div style={{
-            borderTop: '1px solid rgba(255,255,255,0.06)',
-            padding: '10px 14px',
-            background: tooEarlyInfo[card.id] ? 'rgba(239,68,68,0.06)' : 'rgba(245,158,11,0.06)',
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
-          }}>
-            {tooEarlyInfo[card.id] ? (
-              <>
-                <span style={{ fontSize: 11, color: '#f87171', fontWeight: 600 }}>
-                  Too early — go back for a bit longer
-                </span>
-                <button
-                  onClick={() => {
-                    if (card.targetUrl) openUrl(card.targetUrl);
-                    setTooEarlyInfo(prev => { const n = { ...prev }; delete n[card.id]; return n; });
-                  }}
-                  style={{
-                    padding: '6px 12px', borderRadius: 8, flexShrink: 0,
-                    background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)',
-                    color: '#f87171', fontSize: 11, fontWeight: 700, cursor: 'pointer',
-                    display: 'flex', alignItems: 'center', gap: 4,
-                  }}
-                >
-                  <ChevronRight style={{ width: 12, height: 12 }} /> Go back
-                </button>
-              </>
-            ) : (
-              <>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
-                  <Loader2 style={{ width: 14, height: 14, color: '#fbbf24', animation: 'spin 2s linear infinite', flexShrink: 0 }} />
-                  <div style={{ minWidth: 0 }}>
-                    {(card.type === 'join_channel' || card.type === 'join_group') ? (
-                      <span style={{ fontSize: 11, color: '#fbbf24', fontWeight: 600 }}>
-                        Join the channel, then click Verify
-                      </span>
-                    ) : countdown[card.id] !== undefined ? (
+        {phase === 'pending' && (() => {
+          const waiting = countdown[card.id] !== undefined;
+          return (
+            <div style={{
+              borderTop: '1px solid rgba(255,255,255,0.06)',
+              padding: '10px 14px',
+              background: waiting ? 'rgba(245,158,11,0.06)' : 'rgba(52,211,153,0.06)',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
+                <Loader2 style={{ width: 14, height: 14, color: waiting ? '#fbbf24' : '#34d399', animation: 'spin 2s linear infinite', flexShrink: 0 }} />
+                <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
+                  {waiting ? (
+                    <>
                       <span style={{ fontSize: 11, color: '#fbbf24', fontWeight: 700 }}>
-                        ⏳ Stay on the page — {countdown[card.id]}s remaining
+                        ⏳ {countdown[card.id]}s remaining — stay on the page
                       </span>
-                    ) : (
-                      <span style={{ fontSize: 11, color: '#34d399', fontWeight: 700 }}>
-                        ✅ Ready! Click Verify now
-                      </span>
-                    )}
-                  </div>
+                      <button
+                        onClick={() => { if (card.targetUrl) openUrl(card.targetUrl); }}
+                        style={{ fontSize: 10, color: '#94a3b8', background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', textDecoration: 'underline' }}
+                      >
+                        Go back to {(card.type === 'start_bot') ? 'the bot' : (card.type === 'join_channel' || card.type === 'join_group') ? 'the channel' : 'the page'} ↗
+                      </button>
+                    </>
+                  ) : (
+                    <span style={{ fontSize: 11, color: '#34d399', fontWeight: 700 }}>
+                      ✅ Ready! Click Verify now
+                    </span>
+                  )}
                 </div>
-                <button
-                  onClick={() => void handleVerify(card)}
-                  disabled={countdown[card.id] !== undefined && (card.type === 'social' || card.type === 'watch_video' || card.type === 'start_bot')}
-                  style={{
-                    padding: '6px 12px', borderRadius: 8, flexShrink: 0,
-                    background: countdown[card.id] !== undefined ? 'rgba(100,116,139,0.15)' : 'rgba(52,211,153,0.15)',
-                    border: `1px solid ${countdown[card.id] !== undefined ? 'rgba(100,116,139,0.3)' : 'rgba(52,211,153,0.3)'}`,
-                    color: countdown[card.id] !== undefined ? '#64748b' : '#34d399',
-                    fontSize: 11, fontWeight: 700, cursor: countdown[card.id] !== undefined ? 'not-allowed' : 'pointer',
-                    display: 'flex', alignItems: 'center', gap: 4,
-                  }}>
-                  <ShieldCheck style={{ width: 12, height: 12 }} /> Verify
-                </button>
-              </>
-            )}
-          </div>
-        )}
+              </div>
+              <button
+                onClick={() => void handleVerify(card)}
+                disabled={waiting}
+                style={{
+                  padding: '6px 12px', borderRadius: 8, flexShrink: 0,
+                  background: waiting ? 'rgba(100,116,139,0.15)' : 'rgba(52,211,153,0.15)',
+                  border: `1px solid ${waiting ? 'rgba(100,116,139,0.3)' : 'rgba(52,211,153,0.3)'}`,
+                  color: waiting ? '#64748b' : '#34d399',
+                  fontSize: 11, fontWeight: 700, cursor: waiting ? 'not-allowed' : 'pointer',
+                  display: 'flex', alignItems: 'center', gap: 4,
+                }}>
+                <ShieldCheck style={{ width: 12, height: 12 }} /> Verify
+              </button>
+            </div>
+          );
+        })()}
 
         {phase === 'not_subscribed' && (
           <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', padding: '8px 14px', background: 'rgba(239,68,68,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
