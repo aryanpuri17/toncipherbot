@@ -801,7 +801,7 @@ async def _log_fraud_alert(
         )
         log.warning("FRAUD AUTO-BLOCK-WD user=%d @%s score=%d", telegram_id, username, score)
     else:
-        await db.execute("UPDATE users SET flagged = 1 WHERE telegram_id = ?", (telegram_id,))
+        await db.execute("UPDATE users SET flagged = 1, withdrawal_blocked = 1 WHERE telegram_id = ?", (telegram_id,))
     log.warning("FRAUD [%s] user=%d @%s score=%d — %s", sev.upper(), telegram_id, username, score, details)
 
 
@@ -2188,9 +2188,11 @@ async def api_admin_users(request: web.Request) -> web.Response:
             u.referral_count, u.referral_balance,
             u.flagged, u.banned, u.withdrawal_blocked,
             u.ip_address, u.created_at,
+            u.app_balance,
             COALESCE(d.cnt, 0),   COALESCE(d.total, 0.0),
             COALESCE(w.cnt, 0),   COALESCE(w.total, 0.0),
-            COALESCE(pw.cnt, 0)
+            COALESCE(pw.cnt, 0),
+            COALESCE(tc.cnt, 0)
         FROM users u
         LEFT JOIN (
             SELECT telegram_id, COUNT(*) AS cnt, SUM(amount) AS total
@@ -2207,6 +2209,11 @@ async def api_admin_users(request: web.Request) -> web.Response:
             FROM transactions WHERE type = 'withdrawal' AND status = 'pending'
             GROUP BY telegram_id
         ) pw ON u.telegram_id = pw.telegram_id
+        LEFT JOIN (
+            SELECT telegram_id, COUNT(*) AS cnt
+            FROM platform_task_completions
+            GROUP BY telegram_id
+        ) tc ON u.telegram_id = tc.telegram_id
     """
     params: list = []
     conditions: list[str] = []
@@ -2245,11 +2252,13 @@ async def api_admin_users(request: web.Request) -> web.Response:
         "withdrawal_blocked": bool(r[8]),
         "ip_address":         r[9],
         "created_at":         r[10],
-        "deposit_count":      r[11],
-        "deposit_total":      float(r[12]),
-        "withdrawal_count":   r[13],
-        "withdrawal_total":   float(r[14]),
-        "pending_withdrawals": r[15],
+        "app_balance":        float(r[11] or 0),
+        "deposit_count":      r[12],
+        "deposit_total":      float(r[13]),
+        "withdrawal_count":   r[14],
+        "withdrawal_total":   float(r[15]),
+        "pending_withdrawals": r[16],
+        "task_count":         r[17],
     } for r in rows], headers=_CORS)
 
 

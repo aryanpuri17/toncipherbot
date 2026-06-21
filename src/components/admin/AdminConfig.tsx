@@ -2,12 +2,46 @@ import React, { useState } from 'react';
 import { useAppStore } from '../../store/appStore';
 import { adminFetch } from '../../utils/adminFetch';
 import { ToggleSwitch } from '../ui/ToggleSwitch';
-import { Key, Hash, Wallet, Bell, Server, Terminal, Shield, Users, Gift, CreditCard, Plus, MessageSquare, Edit2, Trash2, Zap } from 'lucide-react';
+import { Key, Hash, Wallet, Bell, Server, Terminal, Shield, Users, Gift, CreditCard, Plus, MessageSquare, Edit2, Trash2, Zap, Search, RefreshCw, DollarSign } from 'lucide-react';
+
+interface AdminUser {
+  telegram_id: number;
+  username: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  referral_count: number;
+  referral_balance: number;
+  flagged: boolean;
+  banned: boolean;
+  withdrawal_blocked: boolean;
+  ip_address: string | null;
+  created_at: string;
+  app_balance: number;
+  deposit_count: number;
+  deposit_total: number;
+  withdrawal_count: number;
+  withdrawal_total: number;
+  pending_withdrawals: number;
+  task_count: number;
+}
 
 export const AdminConfig: React.FC = () => {
   const { platformConfig, updatePlatformConfig, activatePromoEvent, deactivatePromoEvent } = useAppStore();
-  const [activeTab, setActiveTab] = useState('bot');
+  const [activeTab, setActiveTab] = useState('users');
   const [saved, setSaved] = useState(false);
+
+  // Users tab state
+  const [userSearch, setUserSearch]     = useState('');
+  const [userFilter, setUserFilter]     = useState<'all'|'flagged'|'banned'|'blocked'|'active'>('all');
+  const [users, setUsers]               = useState<AdminUser[]>([]);
+  const [usersLoading, setUsersLoading] = useState(false);
+  const [expandedUser, setExpandedUser] = useState<number|null>(null);
+  const [creditTarget, setCreditTarget] = useState<AdminUser|null>(null);
+  const [creditAmount, setCreditAmount] = useState('');
+  const [creditNote, setCreditNote]     = useState('');
+  const [creditLoading, setCreditLoading] = useState(false);
+  const [creditResult, setCreditResult] = useState('');
+  const [userActionMsg, setUserActionMsg] = useState<Record<number,string>>({});
 
   // Streak milestones local edit state
   const [milestones, setMilestones] = useState(
@@ -50,6 +84,59 @@ export const AdminConfig: React.FC = () => {
     } finally {
       setBroadcastLoading(false);
     }
+  };
+
+  const loadUsers = React.useCallback(async () => {
+    setUsersLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (userSearch.trim()) params.set('search', userSearch.trim());
+      if (userFilter !== 'all') params.set('status', userFilter);
+      const res = await adminFetch(`/api/admin/users?${params}`);
+      const data = await res.json() as AdminUser[];
+      setUsers(Array.isArray(data) ? data : []);
+    } catch { setUsers([]); }
+    finally { setUsersLoading(false); }
+  }, [userSearch, userFilter]);
+
+  React.useEffect(() => {
+    if (activeTab === 'users') void loadUsers();
+  }, [activeTab, loadUsers]);
+
+  const doUserAction = async (userId: number, endpoint: string, label: string) => {
+    try {
+      await adminFetch(`/api/admin/users/${userId}/${endpoint}`, { method: 'POST' });
+      setUserActionMsg(prev => ({ ...prev, [userId]: `✅ ${label}` }));
+      setTimeout(() => setUserActionMsg(prev => { const n={...prev}; delete n[userId]; return n; }), 3000);
+      void loadUsers();
+    } catch {
+      setUserActionMsg(prev => ({ ...prev, [userId]: '❌ Error' }));
+    }
+  };
+
+  const doCredit = async () => {
+    if (!creditTarget) return;
+    const amount = parseFloat(creditAmount);
+    if (isNaN(amount) || amount <= 0) return;
+    setCreditLoading(true);
+    setCreditResult('');
+    try {
+      const res = await adminFetch(`/api/admin/users/${creditTarget.telegram_id}/credit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount, note: creditNote.trim() || 'Admin credit' }),
+      });
+      const d = await res.json() as { ok?: boolean; error?: string };
+      if (d.ok) {
+        setCreditResult(`✅ +${amount.toFixed(4)} GRAM credited`);
+        setCreditAmount('');
+        setCreditNote('');
+        void loadUsers();
+      } else {
+        setCreditResult(`❌ ${d.error ?? 'Error'}`);
+      }
+    } catch { setCreditResult('❌ Network error'); }
+    finally { setCreditLoading(false); }
   };
 
   // Promo event form state
@@ -102,15 +189,18 @@ export const AdminConfig: React.FC = () => {
   };
 
   const tabs = [
+    { id: 'users',         label: 'Users',        icon: <Users className="w-4 h-4" /> },
     { id: 'bot',           label: 'Bot',          icon: <Terminal className="w-4 h-4" /> },
     { id: 'telegram',      label: 'Telegram',     icon: <Hash className="w-4 h-4" /> },
     { id: 'wallet',        label: 'Wallet',       icon: <Wallet className="w-4 h-4" /> },
     { id: 'referral',      label: 'Referral',     icon: <Gift className="w-4 h-4" /> },
     { id: 'antifraud',     label: 'Anti-Fraud',   icon: <Shield className="w-4 h-4" /> },
     { id: 'withdrawals',   label: 'Withdrawals',  icon: <CreditCard className="w-4 h-4" /> },
-    { id: 'tasks',         label: 'Tasks',        icon: <Users className="w-4 h-4" /> },
+    { id: 'tasks',         label: 'Tasks',        icon: <Key className="w-4 h-4" /> },
+    { id: 'deposits',      label: 'Deposits',     icon: <DollarSign className="w-4 h-4" /> },
     { id: 'system',        label: 'System',       icon: <Server className="w-4 h-4" /> },
     { id: 'notifications', label: 'Notifications',icon: <Bell className="w-4 h-4" /> },
+    { id: 'streaks',       label: 'Streaks',      icon: <Zap className="w-4 h-4" /> },
   ];
 
   return (
@@ -133,6 +223,194 @@ export const AdminConfig: React.FC = () => {
           </button>
         ))}
       </div>
+
+      {/* Users Tab */}
+      {activeTab === 'users' && (
+        <div className="space-y-4">
+          {/* Search + filter */}
+          <div className="flex gap-2">
+            <div className="flex-1 flex items-center gap-2 bg-white/5 border border-white/10 rounded-lg px-3 py-2">
+              <Search className="w-4 h-4 text-slate-400 shrink-0" />
+              <input
+                value={userSearch}
+                onChange={e => setUserSearch(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && void loadUsers()}
+                placeholder="Search by name, @username or ID…"
+                className="flex-1 bg-transparent text-sm text-white outline-none placeholder:text-slate-500"
+              />
+            </div>
+            <button onClick={() => void loadUsers()}
+              className="px-3 py-2 bg-blue-500/20 border border-blue-500/30 text-blue-400 rounded-lg text-xs font-semibold hover:bg-blue-500/30 transition-colors flex items-center gap-1">
+              <RefreshCw className="w-3.5 h-3.5" /> Search
+            </button>
+          </div>
+
+          {/* Filter chips */}
+          <div className="flex gap-1.5 flex-wrap">
+            {(['all','active','flagged','banned','blocked'] as const).map(f => (
+              <button key={f} onClick={() => { setUserFilter(f); }}
+                className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors ${userFilter === f ? 'bg-blue-500 text-white' : 'bg-white/5 text-slate-400 hover:bg-white/10'}`}>
+                {f === 'all' ? 'All' : f === 'active' ? '✅ Active' : f === 'flagged' ? '⚠️ Flagged' : f === 'banned' ? '🚫 Banned' : '🔒 Blocked'}
+              </button>
+            ))}
+          </div>
+
+          {/* Loading */}
+          {usersLoading && (
+            <div className="text-center py-8 text-slate-400 text-sm">Loading users…</div>
+          )}
+
+          {/* Empty */}
+          {!usersLoading && users.length === 0 && (
+            <div className="text-center py-8 text-slate-500 text-sm">No users found</div>
+          )}
+
+          {/* User list */}
+          {!usersLoading && users.map(u => {
+            const displayName = [u.first_name, u.last_name].filter(Boolean).join(' ') || `User ${u.telegram_id}`;
+            const isExpanded = expandedUser === u.telegram_id;
+            return (
+              <div key={u.telegram_id} className="bg-white/5 border border-white/10 rounded-xl overflow-hidden">
+                {/* Header row */}
+                <div className="flex items-center gap-3 p-3 cursor-pointer" onClick={() => setExpandedUser(isExpanded ? null : u.telegram_id)}>
+                  {/* Avatar */}
+                  <div className="w-9 h-9 rounded-full bg-blue-500/20 border border-blue-500/30 flex items-center justify-center text-sm font-bold text-blue-400 shrink-0">
+                    {(displayName[0] ?? '?').toUpperCase()}
+                  </div>
+                  {/* Info */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-sm font-semibold text-white truncate">{displayName}</span>
+                      {u.username && <span className="text-xs text-slate-400">@{u.username}</span>}
+                      {u.banned && <span className="text-xs bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded-full font-semibold">BANNED</span>}
+                      {u.flagged && !u.banned && <span className="text-xs bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded-full font-semibold">⚠️ FLAGGED</span>}
+                      {u.withdrawal_blocked && <span className="text-xs bg-orange-500/20 text-orange-400 px-1.5 py-0.5 rounded-full font-semibold">WD BLOCKED</span>}
+                    </div>
+                    <div className="flex gap-3 mt-0.5 flex-wrap">
+                      <span className="text-xs text-slate-500">ID: {u.telegram_id}</span>
+                      <span className="text-xs text-emerald-400 font-semibold">💎 {u.app_balance.toFixed(4)} GRAM</span>
+                      <span className="text-xs text-slate-500">📋 {u.task_count} tasks</span>
+                      <span className="text-xs text-slate-500">👥 {u.referral_count} refs</span>
+                    </div>
+                  </div>
+                  {/* Chevron */}
+                  <span className={`text-slate-500 text-xs transition-transform ${isExpanded ? 'rotate-180' : ''}`}>▼</span>
+                </div>
+
+                {/* Expanded detail */}
+                {isExpanded && (
+                  <div className="border-t border-white/10 p-3 space-y-3">
+                    {/* Stats grid */}
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div className="bg-white/5 rounded-lg p-2">
+                        <div className="text-slate-400 mb-0.5">Balance</div>
+                        <div className="text-white font-bold">{u.app_balance.toFixed(4)} GRAM</div>
+                      </div>
+                      <div className="bg-white/5 rounded-lg p-2">
+                        <div className="text-slate-400 mb-0.5">Tasks done</div>
+                        <div className="text-white font-bold">{u.task_count}</div>
+                      </div>
+                      <div className="bg-white/5 rounded-lg p-2">
+                        <div className="text-slate-400 mb-0.5">Deposits</div>
+                        <div className="text-white font-bold">{u.deposit_count}× · {u.deposit_total.toFixed(2)} GRAM</div>
+                      </div>
+                      <div className="bg-white/5 rounded-lg p-2">
+                        <div className="text-slate-400 mb-0.5">Withdrawals</div>
+                        <div className="text-white font-bold">{u.withdrawal_count}× · {u.withdrawal_total.toFixed(2)} GRAM</div>
+                      </div>
+                      <div className="bg-white/5 rounded-lg p-2">
+                        <div className="text-slate-400 mb-0.5">Referrals</div>
+                        <div className="text-white font-bold">{u.referral_count} · {u.referral_balance.toFixed(4)} GRAM</div>
+                      </div>
+                      <div className="bg-white/5 rounded-lg p-2">
+                        <div className="text-slate-400 mb-0.5">Joined</div>
+                        <div className="text-white font-bold">{u.created_at ? u.created_at.slice(0,10) : '—'}</div>
+                      </div>
+                    </div>
+                    {u.ip_address && (
+                      <div className="text-xs text-slate-500">🌐 IP: {u.ip_address} {u.pending_withdrawals > 0 && <span className="text-amber-400 ml-2">⏳ {u.pending_withdrawals} pending WD</span>}</div>
+                    )}
+
+                    {/* Action feedback */}
+                    {userActionMsg[u.telegram_id] && (
+                      <div className="text-xs font-semibold text-center py-1">{userActionMsg[u.telegram_id]}</div>
+                    )}
+
+                    {/* Action buttons */}
+                    <div className="flex flex-wrap gap-1.5">
+                      <button onClick={() => { setCreditTarget(u); setCreditResult(''); }}
+                        className="flex items-center gap-1 px-2.5 py-1.5 bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 rounded-lg text-xs font-semibold hover:bg-emerald-500/30 transition-colors">
+                        💎 Credit
+                      </button>
+                      {u.banned ? (
+                        <button onClick={() => void doUserAction(u.telegram_id, 'unban', 'Unbanned')}
+                          className="flex items-center gap-1 px-2.5 py-1.5 bg-blue-500/20 border border-blue-500/30 text-blue-400 rounded-lg text-xs font-semibold hover:bg-blue-500/30 transition-colors">
+                          ✅ Unban
+                        </button>
+                      ) : (
+                        <button onClick={() => void doUserAction(u.telegram_id, 'ban', 'Banned')}
+                          className="flex items-center gap-1 px-2.5 py-1.5 bg-red-500/20 border border-red-500/30 text-red-400 rounded-lg text-xs font-semibold hover:bg-red-500/30 transition-colors">
+                          🚫 Ban
+                        </button>
+                      )}
+                      {u.flagged && (
+                        <button onClick={() => void doUserAction(u.telegram_id, 'unflag', 'Unflagged')}
+                          className="flex items-center gap-1 px-2.5 py-1.5 bg-amber-500/20 border border-amber-500/30 text-amber-400 rounded-lg text-xs font-semibold hover:bg-amber-500/30 transition-colors">
+                          🔓 Unflag
+                        </button>
+                      )}
+                      {u.withdrawal_blocked ? (
+                        <button onClick={() => void doUserAction(u.telegram_id, 'unblock-withdrawals', 'WD Unblocked')}
+                          className="flex items-center gap-1 px-2.5 py-1.5 bg-blue-500/20 border border-blue-500/30 text-blue-400 rounded-lg text-xs font-semibold hover:bg-blue-500/30 transition-colors">
+                          🔓 Unblock WD
+                        </button>
+                      ) : (
+                        <button onClick={() => void doUserAction(u.telegram_id, 'block-withdrawals', 'WD Blocked')}
+                          className="flex items-center gap-1 px-2.5 py-1.5 bg-orange-500/20 border border-orange-500/30 text-orange-400 rounded-lg text-xs font-semibold hover:bg-orange-500/30 transition-colors">
+                          🔒 Block WD
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+
+          {/* Credit modal */}
+          {creditTarget && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+              <div className="bg-slate-900 border border-white/15 rounded-2xl p-5 w-full max-w-sm space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-base font-bold text-white">💎 Credit Balance</h3>
+                  <button onClick={() => { setCreditTarget(null); setCreditResult(''); }} className="text-slate-400 hover:text-white text-lg">✕</button>
+                </div>
+                <div className="text-sm text-slate-400">
+                  User: <span className="text-white font-semibold">{[creditTarget.first_name, creditTarget.last_name].filter(Boolean).join(' ') || `#${creditTarget.telegram_id}`}</span>
+                  <br/>Current balance: <span className="text-emerald-400 font-semibold">{creditTarget.app_balance.toFixed(4)} GRAM</span>
+                </div>
+                <div className="space-y-2">
+                  <label className="block text-xs text-slate-400">Amount (GRAM)</label>
+                  <input type="number" value={creditAmount} onChange={e => setCreditAmount(e.target.value)}
+                    min="0.0001" step="0.01" placeholder="0.00"
+                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-blue-500/50" />
+                </div>
+                <div className="space-y-2">
+                  <label className="block text-xs text-slate-400">Note (optional)</label>
+                  <input type="text" value={creditNote} onChange={e => setCreditNote(e.target.value)}
+                    placeholder="Admin credit"
+                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-blue-500/50" />
+                </div>
+                {creditResult && <div className="text-sm font-semibold text-center">{creditResult}</div>}
+                <button onClick={() => void doCredit()} disabled={creditLoading || !creditAmount}
+                  className="w-full py-2.5 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-white rounded-xl text-sm font-bold transition-colors">
+                  {creditLoading ? 'Processing…' : '✅ Confirm Credit'}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Bot Settings */}
       {activeTab === 'bot' && (
