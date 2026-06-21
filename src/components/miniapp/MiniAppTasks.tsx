@@ -138,9 +138,9 @@ type TaskPhase = 'idle' | 'pending' | 'verifying' | 'not_subscribed' | 'completi
   | 'proof_pending';     // social: screenshot sent, awaiting admin approval
 
 const REQUIRED_MS         = 30_000; // bots: 30s
-const CHANNEL_REQUIRED_MS = 30_000; // channels/groups: 30s (anti-spam)
+const CHANNEL_REQUIRED_MS = 5_000;  // channels/groups: 5s (membership check handles the rest)
 const VIDEO_REQUIRED_MS   = 30_000; // videos: 30s
-const SOCIAL_REQUIRED_MS  = 30_000; // social/YouTube: 30s minimum
+const SOCIAL_REQUIRED_MS  = 30_000; // social/YouTube: 30s
 const departKey = (id: string) => `tc_task_depart_${id}`;
 
 // Simplified entry — uses wall-clock elapsed time (Date.now() - ts) to enforce wait
@@ -532,21 +532,24 @@ export const MiniAppTasks: React.FC = () => {
       }
     }
 
-    // Start 30s countdown for all task types
-    const seconds = Math.ceil(waitMs / 1000);
-    setCountdown(prev => ({ ...prev, [card.id]: seconds }));
-    let remaining = seconds;
-    const _cid = card.id;
-    const tick = () => {
-      remaining -= 1;
-      if (remaining <= 0) {
-        setCountdown(prev => { const n = { ...prev }; delete n[_cid]; return n; });
-      } else {
-        setCountdown(prev => ({ ...prev, [_cid]: remaining }));
-        timerRefs.current[`cd_${_cid}`] = setTimeout(tick, 1000);
-      }
-    };
-    timerRefs.current[`cd_${_cid}`] = setTimeout(tick, 1000);
+    // Start 30s countdown only for bot / social / video tasks
+    const needsCountdown = card.type === 'start_bot' || card.type === 'social' || card.type === 'watch_video';
+    if (needsCountdown) {
+      const seconds = Math.ceil(waitMs / 1000);
+      setCountdown(prev => ({ ...prev, [card.id]: seconds }));
+      let remaining = seconds;
+      const _cid = card.id;
+      const tick = () => {
+        remaining -= 1;
+        if (remaining <= 0) {
+          setCountdown(prev => { const n = { ...prev }; delete n[_cid]; return n; });
+        } else {
+          setCountdown(prev => ({ ...prev, [_cid]: remaining }));
+          timerRefs.current[`cd_${_cid}`] = setTimeout(tick, 1000);
+        }
+      };
+      timerRefs.current[`cd_${_cid}`] = setTimeout(tick, 1000);
+    }
   };
 
   // ── Direct complete — no timer check (used after external verification) ─────
@@ -608,8 +611,9 @@ export const MiniAppTasks: React.FC = () => {
 
     const isChannelTask = card.type === 'join_channel' || card.type === 'join_group';
 
-    // ── All tasks: enforce 30s elapsed since Start (wall-clock) ─────────────
-    {
+    // ── Bot / social / video: enforce 30s elapsed since Start (wall-clock) ──
+    const isTimerTask = card.type === 'start_bot' || card.type === 'social' || card.type === 'watch_video';
+    if (isTimerTask) {
       const entry   = parseDeparture(localStorage.getItem(departKey(card.id)));
       const required = entry?.ms ?? REQUIRED_MS;
       const elapsed  = entry ? Date.now() - entry.ts : 0;
@@ -876,7 +880,11 @@ export const MiniAppTasks: React.FC = () => {
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
                 <Loader2 style={{ width: 14, height: 14, color: waiting ? '#fbbf24' : '#34d399', animation: 'spin 2s linear infinite', flexShrink: 0 }} />
                 <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
-                  {waiting ? (
+                  {(card.type === 'join_channel' || card.type === 'join_group') ? (
+                    <span style={{ fontSize: 11, color: '#fbbf24', fontWeight: 600 }}>
+                      Join the channel, then click Verify
+                    </span>
+                  ) : waiting ? (
                     <>
                       <span style={{ fontSize: 11, color: '#fbbf24', fontWeight: 700 }}>
                         ⏳ {countdown[card.id]}s remaining — stay on the page
@@ -885,7 +893,7 @@ export const MiniAppTasks: React.FC = () => {
                         onClick={() => { if (card.targetUrl) openUrl(card.targetUrl); }}
                         style={{ fontSize: 10, color: '#94a3b8', background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', textDecoration: 'underline' }}
                       >
-                        Go back to {(card.type === 'start_bot') ? 'the bot' : (card.type === 'join_channel' || card.type === 'join_group') ? 'the channel' : 'the page'} ↗
+                        Go back ↗
                       </button>
                     </>
                   ) : (
@@ -895,19 +903,25 @@ export const MiniAppTasks: React.FC = () => {
                   )}
                 </div>
               </div>
-              <button
-                onClick={() => void handleVerify(card)}
-                disabled={waiting}
-                style={{
-                  padding: '6px 12px', borderRadius: 8, flexShrink: 0,
-                  background: waiting ? 'rgba(100,116,139,0.15)' : 'rgba(52,211,153,0.15)',
-                  border: `1px solid ${waiting ? 'rgba(100,116,139,0.3)' : 'rgba(52,211,153,0.3)'}`,
-                  color: waiting ? '#64748b' : '#34d399',
-                  fontSize: 11, fontWeight: 700, cursor: waiting ? 'not-allowed' : 'pointer',
-                  display: 'flex', alignItems: 'center', gap: 4,
-                }}>
-                <ShieldCheck style={{ width: 12, height: 12 }} /> Verify
-              </button>
+              {(() => {
+              const isChannel = card.type === 'join_channel' || card.type === 'join_group';
+              const locked = !isChannel && waiting;
+              return (
+                <button
+                  onClick={() => void handleVerify(card)}
+                  disabled={locked}
+                  style={{
+                    padding: '6px 12px', borderRadius: 8, flexShrink: 0,
+                    background: locked ? 'rgba(100,116,139,0.15)' : 'rgba(52,211,153,0.15)',
+                    border: `1px solid ${locked ? 'rgba(100,116,139,0.3)' : 'rgba(52,211,153,0.3)'}`,
+                    color: locked ? '#64748b' : '#34d399',
+                    fontSize: 11, fontWeight: 700, cursor: locked ? 'not-allowed' : 'pointer',
+                    display: 'flex', alignItems: 'center', gap: 4,
+                  }}>
+                  <ShieldCheck style={{ width: 12, height: 12 }} /> Verify
+                </button>
+              );
+            })()}
             </div>
           );
         })()}
