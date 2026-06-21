@@ -886,13 +886,12 @@ async def cmd_start(msg: types.Message):
     ]])
     await msg.answer(
         f"👋 <b>Welcome to TonCipher, {first_name}!</b>\n\n"
-        f"The #1 TON earning platform — complete tasks, play games, invite friends and earn real <b>GRAM</b> every day. 100% free.\n\n"
-        f"<b>What you can do:</b>\n"
-        f"📋 <b>Tasks</b> — join channels, follow accounts & more\n"
+        f"Earn real <b>GRAM</b> every day — completely free.\n\n"
+        f"✅ <b>Tasks</b> — join channels, follow accounts & more\n"
         f"🎮 <b>Games</b> — Mines, Wheel, Jackpot, Crash\n"
-        f"👥 <b>Referrals</b> — earn a bonus for every friend you invite\n"
-        f"💸 <b>Withdraw</b> — send GRAM directly to your TON wallet\n\n"
-        f"👇 <b>Open the app and start earning now!</b>",
+        f"👥 <b>Referrals</b> — earn for every friend you invite\n"
+        f"💸 <b>Withdraw</b> — send GRAM straight to your TON wallet\n\n"
+        f"👇 <b>Tap below to start earning now!</b>",
         parse_mode="HTML",
         reply_markup=kb,
     )
@@ -1799,21 +1798,16 @@ async def api_withdrawal_create(request: web.Request) -> web.Response:
     from datetime import datetime as _dt
     now_str = _dt.utcnow().strftime("%d/%m/%Y at %H:%M UTC")
     admin_msg = (
-        f"━━━━━━━━━━━━━━━━━━━━━\n"
-        f"💸 <b>WITHDRAWAL REQUEST</b>{flag_warn}\n"
-        f"━━━━━━━━━━━━━━━━━━━━━\n"
-        f"👤 <b>User:</b> {fname} @{uname or 'unknown'}\n"
-        f"🆔 <b>Telegram ID:</b> <code>{telegram_id}</code>\n"
-        f"━━━━━━━━━━━━━━━━━━━━━\n"
-        f"💰 <b>Amount:</b> <b>{amount:.4f} {currency}</b>\n"
+        f"💸 <b>New Withdrawal Request</b>{flag_warn}\n\n"
+        f"👤 <b>{fname}</b>"
+        + (f" @{uname}" if uname else "") + f"\n"
+        f"🆔 <code>{telegram_id}</code>\n\n"
+        f"💰 <b>Amount:</b> {amount:.4f} GRAM\n"
         f"🌐 <b>Network:</b> {network}\n"
-        f"🏷️ <b>Fee:</b> {fee}\n"
-        f"━━━━━━━━━━━━━━━━━━━━━\n"
-        f"📬 <b>Address:</b>\n<code>{address}</code>\n"
-        f"━━━━━━━━━━━━━━━━━━━━━\n"
-        f"🔖 <b>Reference:</b> <code>{tx_id}</code>\n"
-        f"🕐 <b>Date:</b> {now_str}\n"
-        f"━━━━━━━━━━━━━━━━━━━━━"
+        f"🏷 <b>Fee:</b> {fee} GRAM\n\n"
+        f"📬 <b>Address:</b>\n<code>{address}</code>\n\n"
+        f"🔖 <b>Ref:</b> <code>{tx_id[:18]}…</code>\n"
+        f"🕐 <b>Date:</b> {now_str}"
     )
     # Try auto-processing first (small amounts, clean accounts, configured mnemonic)
     auto_ok = await _try_auto_withdraw(tx_id, telegram_id, amount, address, fname)
