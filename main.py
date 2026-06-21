@@ -732,6 +732,7 @@ async def init_db() -> None:
 
         # Backward-compat migrations — safe to run on existing DB
         for tbl, col, defn in [
+            ("referrals", "bonus_paid",     "INTEGER NOT NULL DEFAULT 0"),
             ("users", "referral_balance",   "REAL    NOT NULL DEFAULT 0"),
             ("users", "ip_address",         "TEXT"),
             ("users", "flagged",            "INTEGER NOT NULL DEFAULT 0"),
@@ -1401,12 +1402,12 @@ async def api_user_referral(request: web.Request) -> web.Response:
         if ins.rowcount == 0:
             # Lost a race with a concurrent identical request — don't credit twice
             return web.json_response({"success": False, "error": "Already referred"}, headers=_CORS)
-        await db.execute("""
-            UPDATE users
-            SET referral_count   = referral_count + 1,
-                referral_balance = referral_balance + ?
-            WHERE telegram_id = ?
-        """, (REFERRAL_BONUS_TON, referrer_id))
+        # Only increment referral_count — bonus_paid=0 by default, bonus is
+        # held until the referee completes their 2nd platform task.
+        await db.execute(
+            "UPDATE users SET referral_count = referral_count + 1 WHERE telegram_id = ?",
+            (referrer_id,)
+        )
         await db.commit()
 
         async with db.execute(
@@ -1415,29 +1416,24 @@ async def api_user_referral(request: web.Request) -> web.Response:
             row = await cur.fetchone()
 
     new_count   = row[0] if row else 1
-    new_balance = row[1] if row else REFERRAL_BONUS_TON
 
     if bot:
         try:
             await bot.send_message(
                 referrer_id,
-                f"🎉 <b>New Referral Bonus!</b>\n\n"
+                f"👋 <b>New Friend Joined!</b>\n\n"
                 f"<b>@{referee_username}</b> just joined TonCipher using your invite link.\n\n"
-                f"━━━━━━━━━━━━━━━━━━━━\n"
-                f"💎 Bonus credited: <b>+{REFERRAL_BONUS_TON:.2f} GRAM</b>\n"
-                f"👥 Total referrals: <b>{new_count}</b>\n"
-                f"💰 Referral balance: <b>{new_balance:.2f} GRAM</b>\n"
-                f"━━━━━━━━━━━━━━━━━━━━\n\n"
-                f"Keep sharing your link to earn more! 🚀",
+                f"👥 Total referrals: <b>{new_count}</b>\n\n"
+                f"⏳ Your <b>+{REFERRAL_BONUS_TON:.4f} GRAM</b> bonus will be credited once they complete <b>2 tasks</b>.\n"
+                f"Keep it up — invite more friends to earn more! 🚀",
                 parse_mode="HTML",
             )
         except Exception as e:
             log.warning("Bot notify failed for %d: %s", referrer_id, e)
 
     return web.json_response({
-        "success":         True,
-        "referrerCount":   new_count,
-        "referrerBalance": new_balance,
+        "success":       True,
+        "referrerCount": new_count,
     }, headers=_CORS)
 
 
@@ -4320,7 +4316,55 @@ async def api_platform_task_complete(request: web.Request) -> web.Response:
             " VALUES (?, ?, 'reward', ?, 'GRAM', 'platform', '', 'completed')",
             (str(uuid.uuid4()), telegram_id, reward)
         )
+
+        # ── Referral signup bonus: credit referrer after referee's 2nd task ────
+        async with db.execute(
+            "SELECT COUNT(*) FROM platform_task_completions WHERE telegram_id = ?",
+            (telegram_id,)
+        ) as cur:
+            (tasks_done,) = await cur.fetchone()
+
+        referrer_to_pay: int | None = None
+        if tasks_done >= 2:
+            async with db.execute(
+                "SELECT referrer_id FROM referrals"
+                " WHERE referee_id = ? AND bonus_paid = 0",
+                (telegram_id,)
+            ) as cur:
+                ref_row = await cur.fetchone()
+            if ref_row:
+                referrer_to_pay = ref_row[0]
+                await db.execute(
+                    "UPDATE referrals SET bonus_paid = 1 WHERE referee_id = ?",
+                    (telegram_id,)
+                )
+                await db.execute(
+                    "UPDATE users SET referral_balance = referral_balance + ?"
+                    " WHERE telegram_id = ?",
+                    (REFERRAL_BONUS_TON, referrer_to_pay)
+                )
+
         await db.commit()
+
+    # Notify referrer via bot (outside DB transaction)
+    if referrer_to_pay and bot:
+        try:
+            async with aiosqlite.connect(DB_PATH) as db:
+                async with db.execute(
+                    "SELECT username FROM users WHERE telegram_id = ?", (telegram_id,)
+                ) as cur:
+                    urow = await cur.fetchone()
+            referee_name = f"@{urow[0]}" if urow and urow[0] else f"user {telegram_id}"
+            await bot.send_message(
+                referrer_to_pay,
+                f"💎 <b>Referral Bonus Unlocked!</b>\n\n"
+                f"{referee_name} just completed their 2nd task on TonCipher.\n\n"
+                f"✅ <b>+{REFERRAL_BONUS_TON:.4f} GRAM</b> has been credited to your referral balance!\n"
+                f"Keep inviting friends to earn more. 🚀",
+                parse_mode="HTML",
+            )
+        except Exception as e:
+            log.warning("Referral bonus notify failed: %s", e)
 
     return web.json_response({"success": True, "earned": reward}, headers=_CORS)
 
