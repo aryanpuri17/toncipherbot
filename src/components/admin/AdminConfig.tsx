@@ -658,18 +658,6 @@ export const AdminConfig: React.FC = () => {
             <h3 className="text-sm font-semibold text-white mb-4">Deposit Settings</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs text-slate-400 mb-1.5">Deposit bonus (%)</label>
-                <input type="number" min="0" max="100" value={platformConfig.depositBonusPercent} onChange={e => updatePlatformConfig({ depositBonusPercent: parseInt(e.target.value) || 0 })} className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white" />
-              </div>
-              <div>
-                <label className="block text-xs text-slate-400 mb-1.5">First deposit bonus ($)</label>
-                <input type="number" min="0" value={platformConfig.firstDepositBonus} onChange={e => updatePlatformConfig({ firstDepositBonus: parseFloat(e.target.value) || 0 })} className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white" />
-              </div>
-              <div>
-                <label className="block text-xs text-slate-400 mb-1.5">Min deposit for bonus ($)</label>
-                <input type="number" min="0" value={platformConfig.minDepositForBonus} onChange={e => updatePlatformConfig({ minDepositForBonus: parseFloat(e.target.value) || 0 })} className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white" />
-              </div>
-              <div>
                 <label className="block text-xs text-slate-400 mb-1.5">Global daily limit ($)</label>
                 <input type="number" min="0" value={platformConfig.globalDailyDepositLimit} onChange={e => updatePlatformConfig({ globalDailyDepositLimit: parseFloat(e.target.value) || 0 })} className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white" />
               </div>
