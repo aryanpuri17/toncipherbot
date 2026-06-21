@@ -2267,8 +2267,9 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
   // Side-effect handlers — reassigned every render so the long-lived rAF
   // loop always calls into fresh closures (current rows/risk/balance/etc.).
   apiRef.current.contact = (pt) => {
-    snd.tick();
-    flashes.current.push({ x: pt.x, y: pt.y, t: 0 });
+    // In heavy mode (many balls), throttle sounds and cap flash array to reduce overhead
+    if (physBalls.current.length <= 12) snd.tick();
+    if (flashes.current.length < 10) flashes.current.push({ x: pt.x, y: pt.y, t: 0 });
   };
 
   apiRef.current.finish = (b) => {
@@ -2380,51 +2381,81 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
           ctx.clearRect(0, 0, canvas.width, canvas.height);
           ctx.save();
           ctx.scale(PLINKO_DPR, PLINKO_DPR);
-          // peg-impact rings
-          for (const f of flashes.current) {
-            const p = f.t / 0.4;
-            ctx.beginPath();
-            ctx.arc(f.x, f.y, PLINKO_BALL_R + p * 8, 0, Math.PI * 2);
-            ctx.strokeStyle = `rgba(251,191,36,${0.5 * (1 - p)})`;
-            ctx.lineWidth = 1.6 * (1 - p);
-            ctx.stroke();
-          }
-          // balls
-          for (const b of physBalls.current) {
-            // traînée
-            for (let i = b.trail.length - 1; i >= 0; i--) {
-              const tp = b.trail[i];
-              const f  = 1 - i / b.trail.length;
+
+          // Heavy mode: > 8 concurrent balls → simplified render
+          // Eliminates: shadowBlur (biggest cost), createRadialGradient, save/restore per ball
+          const heavy = physBalls.current.length > 8;
+          const maxTrail = heavy ? 2 : 7;
+
+          // peg-impact rings — skip in heavy mode
+          if (!heavy) {
+            for (const f of flashes.current) {
+              const p = f.t / 0.4;
               ctx.beginPath();
-              ctx.arc(tp.x, tp.y, PLINKO_BALL_R * (0.35 + f * 0.4), 0, Math.PI * 2);
-              ctx.fillStyle = `rgba(251,191,36,${f * 0.22})`;
+              ctx.arc(f.x, f.y, PLINKO_BALL_R + p * 8, 0, Math.PI * 2);
+              ctx.strokeStyle = `rgba(251,191,36,${0.5 * (1 - p)})`;
+              ctx.lineWidth = 1.6 * (1 - p);
+              ctx.stroke();
+            }
+          }
+
+          if (heavy) {
+            // ── Fast path: no shadow, no gradient, no per-ball save/restore ──
+            // Draw all trails first (one fillStyle switch), then all balls
+            ctx.fillStyle = '#fbbf24';
+            for (const b of physBalls.current) {
+              for (let i = Math.min(b.trail.length - 1, maxTrail - 1); i >= 0; i--) {
+                const tp = b.trail[i];
+                const f  = 1 - i / maxTrail;
+                ctx.globalAlpha = f * 0.22;
+                ctx.beginPath();
+                ctx.arc(tp.x, tp.y, PLINKO_BALL_R * (0.35 + f * 0.4), 0, Math.PI * 2);
+                ctx.fill();
+              }
+            }
+            ctx.globalAlpha = 1;
+            for (const b of physBalls.current) {
+              ctx.beginPath();
+              ctx.arc(b.x, b.y, PLINKO_BALL_R, 0, Math.PI * 2);
               ctx.fill();
             }
-            // corps bille avec squish + rotation
-            ctx.save();
-            ctx.translate(b.x, b.y);
-            ctx.rotate(b.angle);
-            ctx.scale(b.squishX, b.squishY);
-            const g = ctx.createRadialGradient(
-              -PLINKO_BALL_R * 0.3, -PLINKO_BALL_R * 0.3, PLINKO_BALL_R * 0.2,
-              0, 0, PLINKO_BALL_R,
-            );
-            g.addColorStop(0,   '#fef9c3');
-            g.addColorStop(0.5, '#fbbf24');
-            g.addColorStop(1,   '#d97706');
-            ctx.shadowColor = 'rgba(251,191,36,0.85)';
-            ctx.shadowBlur  = 10;
-            ctx.beginPath();
-            ctx.arc(0, 0, PLINKO_BALL_R, 0, Math.PI * 2);
-            ctx.fillStyle = g;
-            ctx.fill();
-            ctx.shadowBlur = 0;
-            ctx.beginPath();
-            ctx.arc(-PLINKO_BALL_R * 0.35, -PLINKO_BALL_R * 0.35, PLINKO_BALL_R * 0.4, 0, Math.PI * 2);
-            ctx.fillStyle = 'rgba(255,255,255,0.60)';
-            ctx.fill();
-            ctx.restore();
+          } else {
+            // ── Quality path: full gradient + shadow + squish ──
+            for (const b of physBalls.current) {
+              for (let i = b.trail.length - 1; i >= 0; i--) {
+                const tp = b.trail[i];
+                const f  = 1 - i / b.trail.length;
+                ctx.beginPath();
+                ctx.arc(tp.x, tp.y, PLINKO_BALL_R * (0.35 + f * 0.4), 0, Math.PI * 2);
+                ctx.fillStyle = `rgba(251,191,36,${f * 0.22})`;
+                ctx.fill();
+              }
+              ctx.save();
+              ctx.translate(b.x, b.y);
+              ctx.rotate(b.angle);
+              ctx.scale(b.squishX, b.squishY);
+              const g = ctx.createRadialGradient(
+                -PLINKO_BALL_R * 0.3, -PLINKO_BALL_R * 0.3, PLINKO_BALL_R * 0.2,
+                0, 0, PLINKO_BALL_R,
+              );
+              g.addColorStop(0,   '#fef9c3');
+              g.addColorStop(0.5, '#fbbf24');
+              g.addColorStop(1,   '#d97706');
+              ctx.shadowColor = 'rgba(251,191,36,0.85)';
+              ctx.shadowBlur  = 10;
+              ctx.beginPath();
+              ctx.arc(0, 0, PLINKO_BALL_R, 0, Math.PI * 2);
+              ctx.fillStyle = g;
+              ctx.fill();
+              ctx.shadowBlur = 0;
+              ctx.beginPath();
+              ctx.arc(-PLINKO_BALL_R * 0.35, -PLINKO_BALL_R * 0.35, PLINKO_BALL_R * 0.4, 0, Math.PI * 2);
+              ctx.fillStyle = 'rgba(255,255,255,0.60)';
+              ctx.fill();
+              ctx.restore();
+            }
           }
+
           ctx.restore();
         }
       }
@@ -2448,7 +2479,7 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
     setSessionGain(0);
     setLastWin(null);
     setFinalSlot(null);
-    const delay = count <= 10 ? 280 : count <= 25 ? 180 : 100;
+    const delay = count <= 10 ? 280 : count <= 25 ? 180 : count <= 50 ? 100 : 60;
     for (let i = 0; i < count; i++) {
       setTimeout(() => {
         if (!mountedRef.current) return;
