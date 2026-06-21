@@ -67,9 +67,8 @@ const DiscordLogo: React.FC<{ size?: number }> = ({ size = 32 }) => (
 
 function getPlatformLogo(url: string, type: string, size = 30): React.ReactNode {
   const u = (url ?? '').toLowerCase();
-  if (type === 'join_channel' || type === 'join_group' || type === 'start_bot' ||
-      u.includes('t.me/') || u.includes('telegram.me') || u.includes('telegram.org'))
-    return <TelegramLogo size={size} />;
+  // URL-based detection takes priority — a YouTube URL always shows YouTube
+  // even if the task type is join_channel
   if (u.includes('youtube.com') || u.includes('youtu.be'))
     return <YouTubeLogo size={size} />;
   if (u.includes('twitter.com') || u.includes('x.com'))
@@ -80,6 +79,12 @@ function getPlatformLogo(url: string, type: string, size = 30): React.ReactNode 
     return <TikTokLogo size={size} />;
   if (u.includes('discord.gg') || u.includes('discord.com'))
     return <DiscordLogo size={size} />;
+  // Telegram: by type or by t.me URL
+  if (type === 'join_channel' || type === 'join_group' || type === 'start_bot' ||
+      u.includes('t.me/') || u.includes('telegram.me') || u.includes('telegram.org'))
+    return <TelegramLogo size={size} />;
+  // Type-based fallback for tasks without a URL
+  if (type === 'watch_video') return <YouTubeLogo size={size} />;
   return null;
 }
 
@@ -122,7 +127,7 @@ const typeConfig: Record<string, { icon: React.ReactNode; color: string; label: 
   start_bot:      { icon: <Bot className="w-4 h-4" />,      color: 'bg-cyan-500/20 text-cyan-400',     label: 'Bot' },
   daily:          { icon: <Calendar className="w-4 h-4" />, color: 'bg-amber-500/20 text-amber-400',   label: 'Daily' },
   special:        { icon: <Star className="w-4 h-4" />,     color: 'bg-pink-500/20 text-pink-400',     label: 'Special' },
-  watch_video:    { icon: <Play className="w-4 h-4" />,     color: 'bg-red-500/20 text-red-400',       label: 'Video' },
+  watch_video:    { icon: <Play className="w-4 h-4" />,     color: 'bg-red-500/20 text-red-400',       label: 'YouTube' },
   social:         { icon: <Globe className="w-4 h-4" />,    color: 'bg-orange-500/20 text-orange-400', label: 'Social' },
   invite_friends: { icon: <Users className="w-4 h-4" />,    color: 'bg-violet-500/20 text-violet-400', label: 'Referral' },
 };
