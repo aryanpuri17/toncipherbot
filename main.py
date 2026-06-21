@@ -834,8 +834,8 @@ async def cmd_start(msg: types.Message):
                     )
                     await db.commit()
                 await msg.answer(
-                    "✅ <b>Visit confirmed!</b>\n\n"
-                    "Great job! Head back to the <b>TonCipher</b> app and tap <b>Verify</b> to claim your reward. 🎯",
+                    "✅ <b>Bot visit confirmed!</b>\n\n"
+                    "You're all set! Head back to <b>TonCipher</b> and tap <b>Verify</b> to claim your reward. 🎁",
                     parse_mode="HTML",
                 )
             else:
@@ -857,15 +857,14 @@ async def cmd_start(msg: types.Message):
                     )
                     await db.commit()
                 await msg.answer(
-                    "📸 <b>Almost there!</b>\n\n"
-                    "Please send a <b>clear screenshot</b> as proof that you completed the task.\n\n"
-                    "━━━━━━━━━━━━━━━━━━━━\n"
-                    "<b>Screenshot guidelines:</b>\n"
-                    "• <b>Instagram / TikTok:</b> show the profile page with the <i>Following</i> button visible\n"
-                    "• <b>X (Twitter):</b> show the profile with the <i>Following</i> button\n"
-                    "• <b>YouTube:</b> show the channel with the <i>Subscribed</i> button\n"
-                    "• <b>Discord:</b> show the server member list or the joined server screen\n\n"
-                    "⚠️ <i>Blurry or cropped screenshots will be rejected. Make sure the profile name and status are clearly visible.</i>",
+                    "📸 <b>Send your proof screenshot</b>\n\n"
+                    "To validate your task, send a clear screenshot showing you've completed it.\n\n"
+                    "<b>What to show:</b>\n"
+                    "📷 <b>Instagram / TikTok</b> — profile page with <i>Following</i> button visible\n"
+                    "📷 <b>X (Twitter)</b> — profile with <i>Following</i> button\n"
+                    "📷 <b>YouTube</b> — channel with <i>Subscribed</i> button\n"
+                    "📷 <b>Discord</b> — the server you joined\n\n"
+                    "⚠️ <i>Make sure the account name and action are clearly visible. Blurry or cropped images will be rejected.</i>",
                     parse_mode="HTML",
                 )
             else:
@@ -880,16 +879,14 @@ async def cmd_start(msg: types.Message):
         InlineKeyboardButton(text="🚀 Open App", web_app=WebAppInfo(url=WEBAPP_URL))
     ]])
     await msg.answer(
-        f"👋 Welcome to <b>TonCipher</b>, {first_name}!\n\n"
-        f"━━━━━━━━━━━━━━━━━━━━\n"
-        f"💎 Earn real <b>GRAM</b> by completing tasks, playing games, and inviting friends — 100% free, zero investment required.\n"
-        f"━━━━━━━━━━━━━━━━━━━━\n\n"
-        f"<b>Here's what you can do:</b>\n"
-        f"✅ <b>Tasks</b> — join channels, follow accounts, and more\n"
-        f"🎰 <b>Games</b> — Mines, Wheel, Jackpot, Aviator\n"
-        f"👥 <b>Referrals</b> — earn a bonus for every friend who joins\n"
-        f"💸 <b>Withdrawals</b> — transfer your GRAM to any TON wallet\n\n"
-        f"⬇️ <b>Tap the button below to open the app and start earning!</b>",
+        f"👋 <b>Welcome to TonCipher, {first_name}!</b>\n\n"
+        f"The #1 TON earning platform — complete tasks, play games, invite friends and earn real <b>GRAM</b> every day. 100% free.\n\n"
+        f"<b>What you can do:</b>\n"
+        f"📋 <b>Tasks</b> — join channels, follow accounts & more\n"
+        f"🎮 <b>Games</b> — Mines, Wheel, Jackpot, Crash\n"
+        f"👥 <b>Referrals</b> — earn a bonus for every friend you invite\n"
+        f"💸 <b>Withdraw</b> — send GRAM directly to your TON wallet\n\n"
+        f"👇 <b>Open the app and start earning now!</b>",
         parse_mode="HTML",
         reply_markup=kb,
     )
@@ -972,12 +969,12 @@ async def cmd_credit(msg: types.Message):
         note_line = f"\n📝 <i>{note}</i>" if note != "Admin credit" else ""
         await bot.send_message(
             target_id,
-            f"💎 <b>Credit received!</b>\n\n"
-            f"Hello <b>{first_name}</b> 👋\n\n"
-            f"The TonCipher team has credited your account:\n"
-            f"<b>+{amount:.4f} GRAM</b>{note_line}\n\n"
-            f"Your balance has been updated instantly.\n"
-            f"Thank you for trusting TonCipher! 🙏",
+            f"💎 <b>Balance Credited!</b>\n\n"
+            f"Hello <b>{first_name}</b>! 👋\n\n"
+            f"The TonCipher team has added funds to your account.\n\n"
+            f"💰 <b>Amount:</b> +{amount:.4f} GRAM{note_line}\n\n"
+            f"📲 Your balance has been updated — open the app to see it!\n"
+            f"🙏 Thank you for being part of TonCipher!",
             parse_mode="HTML",
         )
     except Exception:
@@ -1058,12 +1055,10 @@ async def handle_proof_photo(msg: types.Message) -> None:
             pass
 
     await msg.answer(
-        "⏳ <b>Proof received — under review!</b>\n\n"
-        "Our team will verify your screenshot shortly. This usually takes a few minutes.\n\n"
-        "━━━━━━━━━━━━━━━━━━━━\n"
-        "✅ You will receive a notification as soon as your proof is approved.\n"
-        "📲 In the meantime, feel free to continue completing other tasks in the app.\n\n"
-        "If you have any questions, reach out to <b>@puriaryan</b>.",
+        "⏳ <b>Screenshot received!</b>\n\n"
+        "Your proof is now under review. We'll notify you as soon as it's verified — usually within a few minutes.\n\n"
+        "📲 Continue completing other tasks while you wait!\n"
+        "💬 Questions? Contact <b>@puriaryan</b>",
         parse_mode="HTML",
     )
 
@@ -1101,12 +1096,11 @@ async def handle_proof_callback(cb: types.CallbackQuery) -> None:
         try:
             await bot.send_message(
                 user_tg,
-                "🎉 <b>Proof approved!</b>\n\n"
-                "Congratulations! Your submission has been verified by our team.\n\n"
-                "━━━━━━━━━━━━━━━━━━━━\n"
-                "💎 Your reward has been credited to your account.\n"
-                "📲 Open the TonCipher app to see your updated balance.\n\n"
-                "Keep completing tasks to earn more GRAM! 🚀",
+                "🎉 <b>Proof Approved!</b>\n\n"
+                "Your submission has been verified by our team. Well done! 🏆\n\n"
+                "💎 <b>Reward credited</b> to your account\n"
+                "📲 Open <b>TonCipher</b> to see your updated balance\n\n"
+                "Keep going — more tasks are waiting for you! 🚀",
                 parse_mode="HTML",
             )
         except Exception:
@@ -1116,15 +1110,14 @@ async def handle_proof_callback(cb: types.CallbackQuery) -> None:
         try:
             await bot.send_message(
                 user_tg,
-                "❌ <b>Proof not accepted</b>\n\n"
-                "Unfortunately, your screenshot did not meet our verification requirements.\n\n"
-                "━━━━━━━━━━━━━━━━━━━━\n"
-                "<b>Common reasons for rejection:</b>\n"
+                "❌ <b>Proof Not Accepted</b>\n\n"
+                "Unfortunately, your screenshot didn't pass our verification.\n\n"
+                "<b>Common reasons:</b>\n"
                 "• Screenshot is blurry or cropped\n"
-                "• The required action (follow/join) is not clearly visible\n"
+                "• The follow/join action isn't clearly visible\n"
                 "• Wrong profile or channel shown\n\n"
                 "🔄 Please redo the task and resubmit a clearer screenshot.\n"
-                "💬 If you believe this is an error, contact <b>@puriaryan</b>.",
+                "💬 Think this is a mistake? Contact <b>@puriaryan</b>",
                 parse_mode="HTML",
             )
         except Exception:
@@ -1421,11 +1414,11 @@ async def api_user_referral(request: web.Request) -> web.Response:
         try:
             await bot.send_message(
                 referrer_id,
-                f"👋 <b>New Friend Joined!</b>\n\n"
-                f"<b>@{referee_username}</b> just joined TonCipher using your invite link.\n\n"
-                f"👥 Total referrals: <b>{new_count}</b>\n\n"
-                f"⏳ Your <b>+{REFERRAL_BONUS_TON:.4f} GRAM</b> bonus will be credited once they complete <b>2 tasks</b>.\n"
-                f"Keep it up — invite more friends to earn more! 🚀",
+                f"🎊 <b>New Referral!</b>\n\n"
+                f"<b>@{referee_username}</b> just joined TonCipher using your invite link! 🎉\n\n"
+                f"👥 Your total referrals: <b>{new_count}</b>\n\n"
+                f"⏳ Your <b>+{REFERRAL_BONUS_TON:.4f} GRAM</b> bonus will be unlocked once they complete <b>2 tasks</b>.\n\n"
+                f"Keep sharing your link — every new friend brings you closer to more rewards! 🚀",
                 parse_mode="HTML",
             )
         except Exception as e:
@@ -2385,12 +2378,12 @@ async def api_admin_credit_user(request: web.Request) -> web.Response:
         note_line     = f"\n📝 <i>{note}</i>" if note != "Administrator credit" else ""
         await bot.send_message(
             telegram_id,
-            f"💎 <b>Credit received!</b>\n\n"
-            f"Hello <b>{first_name}</b>{username_part} 👋\n\n"
-            f"The TonCipher team has credited your account:\n"
-            f"<b>+{amount:.4f} GRAM</b>{note_line}\n\n"
-            f"Your balance has been updated instantly.\n"
-            f"Thank you for trusting TonCipher! 🙏",
+            f"💎 <b>Balance Credited!</b>\n\n"
+            f"Hello <b>{first_name}</b>! 👋\n\n"
+            f"The TonCipher team has added funds to your account.\n\n"
+            f"💰 <b>Amount:</b> +{amount:.4f} GRAM{note_line}\n\n"
+            f"📲 Your balance has been updated — open the app to see it!\n"
+            f"🙏 Thank you for being part of TonCipher!",
             parse_mode="HTML",
         )
     except Exception:
@@ -2666,19 +2659,15 @@ async def api_admin_approve_withdrawal(request: web.Request) -> web.Response:
         try:
             await bot.send_message(
                 tx_row[0],
-                f"✅ <b>Withdrawal approved!</b>\n\n"
-                f"Congratulations <b>{first_name}</b>{username_part} 🎉\n\n"
-                f"Your withdrawal has been successfully processed and sent to your address.\n\n"
-                f"━━━━━━━━━━━━━━━━━━━━\n"
-                f"💎 Amount sent: <b>{tx_row[1]:.4f} {tx_row[2]}</b>\n"
-                f"📍 Address: <code>{addr_short}</code>\n"
-                + (f"🔗 TX Hash: <code>{tx_hash_short}</code>\n"
-                   f'<a href="{tx_link}">👁 View on TonScan</a>\n' if tx_link else "")
-                + f"━━━━━━━━━━━━━━━━━━━━\n\n"
-                f"Thank you for trusting TonCipher! 🙏\n"
-                f"Keep completing tasks and enjoy our games to earn even more TON! 🚀",
+                f"💸 <b>Withdrawal Approved!</b>\n\n"
+                f"Great news, <b>{first_name}</b>! 🎉 Your funds are on the way.\n\n"
+                f"💰 <b>Amount:</b> {tx_row[1]:.4f} {tx_row[2]}\n"
+                f"📍 <b>To:</b> <code>{addr_short}</code>\n"
+                + (f"🔗 <a href=\"{tx_link}\">View transaction</a>\n" if tx_link else "")
+                + f"\n🙏 Thank you for trusting <b>TonCipher</b>!\n"
+                f"Keep earning — your next withdrawal is just around the corner. 🚀",
                 parse_mode="HTML",
-                disable_web_page_preview=False,
+                disable_web_page_preview=True,
             )
         except Exception:
             pass
@@ -2695,15 +2684,12 @@ async def api_admin_approve_withdrawal(request: web.Request) -> web.Response:
             approved_str = _dt2.utcnow().strftime("%d/%m/%Y at %H:%M:%S UTC")
         await _notify_channel(
             await _configured_withdrawal_channel(),
-            f"━━━━━━━━━━━━━━━━━━━━━\n"
-            f"✅ <b>WITHDRAWAL APPROVED</b>\n"
-            f"━━━━━━━━━━━━━━━━━━━━━\n"
-            f"👤 <b>Recipient:</b> {first_name_pub}\n"
+            f"💸 <b>Withdrawal Completed</b>\n\n"
+            f"👤 <b>User:</b> {first_name_pub}\n"
             f"💰 <b>Amount:</b> {tx_row[1]:.4f} {tx_row[2]}\n"
-            f"🕐 <b>Approved on:</b> {approved_str}\n"
-            f"━━━━━━━━━━━━━━━━━━━━━\n"
-            + (f'🔗 <a href="{tx_link}">View transaction on TonScan</a>\n' if tx_link else "📭 No TX Hash provided\n")
-            + f"━━━━━━━━━━━━━━━━━━━━━",
+            f"🕐 <b>Date:</b> {approved_str}\n"
+            + (f'🔗 <a href="{tx_link}">View transaction</a>\n' if tx_link else "")
+            + f"\n<i>Powered by TonCipher 🌟</i>",
         )
 
     return web.json_response({"success": True}, headers=_CORS)
@@ -2752,16 +2738,13 @@ async def api_admin_reject_withdrawal(request: web.Request) -> web.Response:
         try:
             await bot.send_message(
                 tx_row[0],
-                f"❌ <b>Withdrawal unsuccessful</b>\n\n"
-                f"Hello <b>{first_name}</b>{username_part},\n\n"
-                f"Your withdrawal request could not be processed at this time.\n\n"
-                f"━━━━━━━━━━━━━━━━━━━━\n"
-                f"💎 Amount: <b>{tx_row[1]:.4f} {tx_row[2]}</b>\n"
-                + (f"📝 Reason: {note}\n" if note else "📝 No reason specified.\n")
-                + f"━━━━━━━━━━━━━━━━━━━━\n\n"
-                f"✅ <b>Good news:</b> your balance of <b>{tx_row[1]:.4f} {tx_row[2]}</b> "
-                f"has been automatically restored to your account.\n\n"
-                f"If you believe this is an error or need assistance, please contact <b>@puriaryan</b>. 💬",
+                f"⚠️ <b>Withdrawal Not Processed</b>\n\n"
+                f"Hello <b>{first_name}</b>,\n\n"
+                f"Your withdrawal request could not be completed at this time.\n\n"
+                f"💰 <b>Amount:</b> {tx_row[1]:.4f} {tx_row[2]}\n"
+                + (f"📝 <b>Reason:</b> {note}\n" if note else "")
+                + f"\n✅ <b>Your balance has been fully restored</b> to your account.\n\n"
+                f"Need help? Contact <b>@puriaryan</b> 💬",
                 parse_mode="HTML",
             )
         except Exception:
@@ -3542,13 +3525,12 @@ async def api_admin_approve_user_task(request: web.Request) -> web.Response:
         try:
             await bot.send_message(
                 task[0],
-                f"✅ <b>Task Approved!</b>\n\n"
-                f"Great news! Your task is now <b>live</b> on TonCipher.\n\n"
-                f"━━━━━━━━━━━━━━━━━━━━\n"
-                f"📋 <b>{task[1]}</b>\n"
-                f"━━━━━━━━━━━━━━━━━━━━\n\n"
-                f"✅ Users can now discover and complete your task.\n"
-                f"📲 Track completions and manage your task from the app.",
+                f"🚀 <b>Your Task is Now Live!</b>\n\n"
+                f"Your task has been approved and is visible to all TonCipher users. 🎉\n\n"
+                f"📋 <b>{task[1]}</b>\n\n"
+                f"✅ Users are already discovering your task\n"
+                f"📊 Track completions and manage it from the app\n\n"
+                f"Thank you for contributing to the TonCipher ecosystem! 🙏",
                 parse_mode="HTML",
             )
         except Exception:
@@ -3587,15 +3569,12 @@ async def api_admin_reject_user_task(request: web.Request) -> web.Response:
         try:
             await bot.send_message(
                 task[0],
-                f"❌ <b>Task Not Approved</b>\n\n"
-                f"After review, your task submission could not be accepted.\n\n"
-                f"━━━━━━━━━━━━━━━━━━━━\n"
+                f"⚠️ <b>Task Submission Not Approved</b>\n\n"
+                f"After review, your task could not be accepted.\n\n"
                 f"📋 <b>{task[1]}</b>\n"
-                + (f"📝 Reason: <i>{note}</i>\n" if note else "")
-                + f"━━━━━━━━━━━━━━━━━━━━\n\n"
-                f"💎 Your budget of <b>{float(task[2]):.2f} GRAM</b> has been fully refunded.\n\n"
-                f"You are welcome to revise and resubmit your task. "
-                f"For questions, please contact <b>@puriaryan</b>.",
+                + (f"📝 <b>Reason:</b> <i>{note}</i>\n" if note else "")
+                + f"\n💎 <b>Full refund:</b> {float(task[2]):.2f} GRAM has been returned to your account.\n\n"
+                f"You're welcome to revise and resubmit. Need help? Contact <b>@puriaryan</b> 💬",
                 parse_mode="HTML",
             )
         except Exception:
@@ -3707,18 +3686,16 @@ async def api_review_proof(request: web.Request) -> web.Response:
         await db.commit()
 
     worker_msg = (
-        "🎉 <b>Proof approved!</b>\n\n"
-        "The task creator has verified your submission.\n\n"
-        "━━━━━━━━━━━━━━━━━━━━\n"
-        "💎 Your reward has been credited to your account.\n"
-        "📲 Open the TonCipher app to see your updated balance.\n\n"
-        "Keep it up — more tasks are waiting! 🚀"
+        "🎉 <b>Proof Approved!</b>\n\n"
+        "The task creator has verified your submission. Well done! 🏆\n\n"
+        "💎 <b>Reward credited</b> to your account\n"
+        "📲 Open <b>TonCipher</b> to see your updated balance\n\n"
+        "Keep it up — more tasks are available! 🚀"
         if action == "approve"
-        else "❌ <b>Proof not accepted</b>\n\n"
-        "The task creator reviewed your submission and could not verify it.\n\n"
-        "━━━━━━━━━━━━━━━━━━━━\n"
+        else "❌ <b>Proof Not Accepted</b>\n\n"
+        "The task creator could not verify your submission.\n\n"
         "🔄 You may redo the task and resubmit.\n"
-        "💬 If you believe this decision is unfair, contact <b>@puriaryan</b> to open a dispute."
+        "💬 Believe this is unfair? Contact <b>@puriaryan</b> to open a dispute."
     )
     try:
         await bot.send_message(worker_tg, worker_msg, parse_mode="HTML")
@@ -4115,13 +4092,11 @@ async def _monitor_usdt_jetton() -> None:
                             try:
                                 await bot.send_message(
                                     telegram_id,
-                                    f"✅ <b>USDT Deposit Confirmed!</b>\n\n"
-                                    f"Your deposit has been detected and processed automatically.\n\n"
-                                    f"━━━━━━━━━━━━━━━━━━━━\n"
-                                    f"💵 Received: <b>{usdt_amount:.4f} USDT</b>\n"
-                                    f"💎 Credited: <b>{gram_amount:.4f} GRAM</b>\n"
-                                    f"━━━━━━━━━━━━━━━━━━━━\n\n"
-                                    f"📲 Your balance has been updated. Open the app to start earning!",
+                                    f"💵 <b>USDT Deposit Confirmed!</b>\n\n"
+                                    f"Your deposit has been detected and credited automatically. ✅\n\n"
+                                    f"💵 <b>Received:</b> {usdt_amount:.4f} USDT\n"
+                                    f"💎 <b>Credited:</b> {gram_amount:.4f} GRAM\n\n"
+                                    f"📲 Your balance is now updated — open <b>TonCipher</b> to start using your GRAM! 🚀",
                                     parse_mode="HTML",
                                 )
                             except Exception:
@@ -4357,10 +4332,10 @@ async def api_platform_task_complete(request: web.Request) -> web.Response:
             referee_name = f"@{urow[0]}" if urow and urow[0] else f"user {telegram_id}"
             await bot.send_message(
                 referrer_to_pay,
-                f"💎 <b>Referral Bonus Unlocked!</b>\n\n"
-                f"{referee_name} just completed their 2nd task on TonCipher.\n\n"
-                f"✅ <b>+{REFERRAL_BONUS_TON:.4f} GRAM</b> has been credited to your referral balance!\n"
-                f"Keep inviting friends to earn more. 🚀",
+                f"🎁 <b>Referral Bonus Unlocked!</b>\n\n"
+                f"<b>{referee_name}</b> just completed their 2nd task on TonCipher! 🎉\n\n"
+                f"💎 <b>+{REFERRAL_BONUS_TON:.4f} GRAM</b> has been added to your referral balance!\n\n"
+                f"📲 Check your earnings in <b>TonCipher</b> and keep inviting friends! 🚀",
                 parse_mode="HTML",
             )
         except Exception as e:
