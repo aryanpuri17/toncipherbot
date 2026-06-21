@@ -494,22 +494,10 @@ export const MiniAppDeposit: React.FC = () => {
 
       // 4. Credit GRAM balance immediately (rate is known, we control the balance)
       const gram = gramFromUsdt(usdtAmount)!;
-      // Store USDT amount with GRAM currency so history shows "+0.06 GRAM" not "+0.06 USDT"
+      // Store GRAM amount with GRAM currency so history shows "+0.06 GRAM" not "+0.06 USDT"
       creditDeposit(currentUser.id, gram, 'GRAM', '', 'TON');
-
-      // 5. Log to backend for admin visibility (store USDT amount for correct display)
-      const tg = (window as unknown as { Telegram?: { WebApp?: { initData?: string } } }).Telegram?.WebApp;
-      void fetch('/api/deposit/record', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          telegramId: currentUser.telegramId,
-          amount:     usdtAmount,
-          currency:   'USDT',
-          network:    'TON',
-          initData:   tg?.initData ?? '',
-        }),
-      }).catch(() => {});
+      // Note: no /api/deposit/record call for USDT — the backend monitor auto-detects
+      // the on-chain Jetton transfer and creates the server-side transaction record.
 
       setSuccessMsg(`✅ ${usdtAmount} USDT sent → +${gram} GRAM credited to your account!`);
       setTxStatus('success');
