@@ -464,8 +464,9 @@ body {
 }
 
 .nav-pill {
-  background: rgba(139, 92, 246, 0.10);
-  border: 1px solid rgba(139, 92, 246, 0.22);
+  background: rgba(139, 92, 246, 0.22);
+  border: 1px solid rgba(139, 92, 246, 0.50);
+  box-shadow: 0 0 14px rgba(139, 92, 246, 0.18);
 }
 
 .nav-item-active {

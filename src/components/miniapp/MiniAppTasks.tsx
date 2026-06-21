@@ -142,10 +142,6 @@ const REQUIRED_MS         = 30_000; // bots: 30s
 const CHANNEL_REQUIRED_MS = 5_000;  // channels/groups: 5s (membership check handles the rest)
 const VIDEO_REQUIRED_MS   = 30_000; // videos: 30s
 const SOCIAL_REQUIRED_MS  = 30_000; // social/YouTube: 30s
-const departKey = (id: string) => `tc_task_depart_${id}`;
-
-// Simplified entry — uses wall-clock elapsed time (Date.now() - ts) to enforce wait
-type DepartEntry = { ts: number; ms: number; type?: string; source?: 'platform' | 'api' };
 
 function openUrl(url: string) {
   const tg = (window as unknown as { Telegram?: { WebApp?: { openTelegramLink?: (u: string) => void; openLink?: (u: string) => void } } }).Telegram?.WebApp;
@@ -214,17 +210,6 @@ export const MiniAppTasks: React.FC = () => {
     return Math.max(0, lastTime + cooldownMs - Date.now());
   };
 
-  // Parse departure entry (supports legacy plain-timestamp format)
-  const parseDeparture = (raw: string | null): DepartEntry | null => {
-    if (!raw) return null;
-    try {
-      const parsed = JSON.parse(raw) as DepartEntry;
-      if (parsed.ts && parsed.ms) return parsed;
-    } catch { /* legacy */ }
-    const ts = parseInt(raw, 10);
-    return isNaN(ts) ? null : { ts, ms: REQUIRED_MS };
-  };
-
   // ── Effects ──────────────────────────────────────────────────────────────────
 
   useEffect(() => {
@@ -232,94 +217,6 @@ export const MiniAppTasks: React.FC = () => {
     return () => { Object.values(snap).forEach(clearTimeout); };
   }, []);
 
-  // Restore pending phase + countdown on mount.
-  // Critical for Android: the WebApp can be destroyed while the user is in another
-  // app, losing all React state. We rebuild from localStorage using wall-clock elapsed time.
-  useEffect(() => {
-    const completedIds = useAppStore.getState().completedTaskIds;
-    const now = Date.now();
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (!key?.startsWith('tc_task_depart_')) continue;
-      const id = key.slice('tc_task_depart_'.length);
-      if (completedIds.includes(id)) { localStorage.removeItem(key); continue; }
-      const raw = localStorage.getItem(key);
-      if (!raw) continue;
-      let entry: DepartEntry | null = null;
-      try {
-        const parsed = JSON.parse(raw) as DepartEntry;
-        if (!parsed.ts || now - parsed.ts > 3_600_000) { localStorage.removeItem(key); continue; }
-        entry = parsed;
-      } catch { localStorage.removeItem(key); continue; }
-      setPhase(id, 'pending');
-      // Restore countdown from elapsed wall-clock time
-      if (entry) {
-        const remainingMs = Math.max(0, entry.ms - (now - entry.ts));
-        if (remainingMs > 0) {
-          let remaining = Math.ceil(remainingMs / 1000);
-          setCountdown(prev => ({ ...prev, [id]: remaining }));
-          const _id = id;
-          const tick = () => {
-            remaining -= 1;
-            if (remaining <= 0) {
-              setCountdown(prev => { const n = { ...prev }; delete n[_id]; return n; });
-            } else {
-              setCountdown(prev => ({ ...prev, [_id]: remaining }));
-              timerRefs.current[`cd_${_id}`] = setTimeout(tick, 1000);
-            }
-          };
-          timerRefs.current[`cd_${_id}`] = setTimeout(tick, 1000);
-        }
-      }
-    }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // When the mini-app returns to foreground, restart any countdown timers that were
-  // lost when React unmounted (Android kills the WebApp while user is in another app).
-  // Uses wall-clock elapsed time — no awayMs tracking needed.
-  useEffect(() => {
-    const onShow = () => {
-      const now = Date.now();
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (!key?.startsWith('tc_task_depart_')) continue;
-        const id = key.slice('tc_task_depart_'.length);
-        const raw = localStorage.getItem(key);
-        if (!raw) continue;
-        try {
-          const entry = JSON.parse(raw) as DepartEntry;
-          if (!entry.ts) continue;
-          const remainingMs = Math.max(0, entry.ms - (now - entry.ts));
-          if (remainingMs > 0 && !timerRefs.current[`cd_${id}`]) {
-            // Restart tick from current remaining time
-            let remaining = Math.ceil(remainingMs / 1000);
-            setCountdown(prev => ({ ...prev, [id]: remaining }));
-            const _id = id;
-            const tick = () => {
-              remaining -= 1;
-              if (remaining <= 0) {
-                setCountdown(prev => { const n = { ...prev }; delete n[_id]; return n; });
-              } else {
-                setCountdown(prev => ({ ...prev, [_id]: remaining }));
-                timerRefs.current[`cd_${_id}`] = setTimeout(tick, 1000);
-              }
-            };
-            timerRefs.current[`cd_${_id}`] = setTimeout(tick, 1000);
-          } else if (remainingMs <= 0) {
-            setCountdown(prev => { const n = { ...prev }; delete n[id]; return n; });
-          }
-        } catch { /* ignore */ }
-      }
-    };
-
-    const onVisChange = () => { if (!document.hidden) onShow(); };
-    document.addEventListener('visibilitychange', onVisChange);
-    window.addEventListener('focus', onShow);
-    return () => {
-      document.removeEventListener('visibilitychange', onVisChange);
-      window.removeEventListener('focus', onShow);
-    };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load server tasks on mount (user-created tasks visible to all)
   useEffect(() => {
@@ -511,8 +408,6 @@ export const MiniAppTasks: React.FC = () => {
 
     if (card.targetUrl) openUrl(card.targetUrl);
     const waitMs = card.type === 'start_bot' ? REQUIRED_MS : card.type === 'watch_video' ? VIDEO_REQUIRED_MS : card.type === 'social' ? SOCIAL_REQUIRED_MS : CHANNEL_REQUIRED_MS;
-    const startTs = Date.now();
-    localStorage.setItem(departKey(card.id), JSON.stringify({ ts: startTs, ms: waitMs, type: card.type, source: card.source }));
     recordDepart(card.id);
     setPhase(card.id, 'pending');
 
@@ -555,7 +450,6 @@ export const MiniAppTasks: React.FC = () => {
 
   // ── Direct complete — no timer check (used after external verification) ─────
   const directComplete = async (card: CardTask) => {
-    localStorage.removeItem(departKey(card.id));
     setPhase(card.id, 'completing');
     if (card.source === 'api') {
       const ok = await creditApiTask(card.id, card.reward);
@@ -612,30 +506,9 @@ export const MiniAppTasks: React.FC = () => {
 
     const isChannelTask = card.type === 'join_channel' || card.type === 'join_group';
 
-    // ── Bot / social / video: enforce 30s elapsed since Start (wall-clock) ──
-    const isTimerTask = card.type === 'start_bot' || card.type === 'social' || card.type === 'watch_video';
-    if (isTimerTask) {
-      const entry   = parseDeparture(localStorage.getItem(departKey(card.id)));
-      const required = entry?.ms ?? REQUIRED_MS;
-      const elapsed  = entry ? Date.now() - entry.ts : 0;
-      if (entry && elapsed < required) {
-        // Timer still running — restart countdown from remaining and abort
-        const remainingMs = required - elapsed;
-        let remaining = Math.ceil(remainingMs / 1000);
-        setCountdown(prev => ({ ...prev, [card.id]: remaining }));
-        const _cid = card.id;
-        if (!timerRefs.current[`cd_${_cid}`]) {
-          const tick = () => {
-            remaining -= 1;
-            if (remaining <= 0) {
-              setCountdown(prev => { const n = { ...prev }; delete n[_cid]; return n; });
-            } else {
-              setCountdown(prev => ({ ...prev, [_cid]: remaining }));
-              timerRefs.current[`cd_${_cid}`] = setTimeout(tick, 1000);
-            }
-          };
-          timerRefs.current[`cd_${_cid}`] = setTimeout(tick, 1000);
-        }
+    // ── Bot / social / video: enforce 30s countdown (in-memory only, resets on app close) ──
+    if (card.type === 'start_bot' || card.type === 'social' || card.type === 'watch_video') {
+      if ((countdown[card.id] ?? 0) > 0) {
         haptic.error();
         return;
       }
@@ -675,7 +548,6 @@ export const MiniAppTasks: React.FC = () => {
     }
 
     // ── All checks passed — credit ─────────────────────────────────────────────
-    localStorage.removeItem(departKey(card.id));
     const autoKey = `depart_auto_${card.id}`;
     if (timerRefs.current[autoKey]) { clearTimeout(timerRefs.current[autoKey]); delete timerRefs.current[autoKey]; }
     setPhase(card.id, 'completing');
