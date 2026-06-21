@@ -326,17 +326,22 @@ def _extract_chat_ref(url: str) -> str | None:
 
 async def _is_chat_member(chat_ref: str, telegram_id: int) -> bool | None:
     """True/False if membership could be checked, None if unverifiable
-    (bot missing from chat, network error…)."""
+    (bot missing from chat, timeout, network error…)."""
     if not bot:
         return None
     try:
         from aiogram.enums import ChatMemberStatus
-        member = await bot.get_chat_member(chat_ref, telegram_id)
+        member = await asyncio.wait_for(
+            bot.get_chat_member(chat_ref, telegram_id), timeout=8.0
+        )
         return member.status in (
             ChatMemberStatus.MEMBER,
             ChatMemberStatus.ADMINISTRATOR,
             ChatMemberStatus.CREATOR,
         )
+    except asyncio.TimeoutError:
+        log.warning("Membership check timed out for %d in %s", telegram_id, chat_ref)
+        return None
     except Exception as e:
         log.warning("Membership check failed for %d in %s: %s", telegram_id, chat_ref, e)
         return None
@@ -1935,15 +1940,17 @@ async def api_check_membership(request: web.Request) -> web.Response:
 
     try:
         from aiogram.enums import ChatMemberStatus
-        member = await bot.get_chat_member(chat_id, telegram_id)
+        member = await asyncio.wait_for(
+            bot.get_chat_member(chat_id, telegram_id), timeout=8.0
+        )
         is_member = member.status in (
             ChatMemberStatus.MEMBER,
             ChatMemberStatus.ADMINISTRATOR,
             ChatMemberStatus.CREATOR,
         )
-    except Exception as e:
+    except (asyncio.TimeoutError, Exception) as e:
         log.warning("Membership check failed for %d in %s: %s", telegram_id, chat_id, e)
-        is_member = True  # On error, allow through (don't block users)
+        is_member = True  # On error/timeout, allow through (server re-verifies at completion)
 
     return web.json_response({"member": is_member}, headers=_CORS)
 

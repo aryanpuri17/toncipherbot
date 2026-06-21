@@ -570,25 +570,35 @@ export const MiniAppTasks: React.FC = () => {
       setTooEarlyInfo(prev => { const n = { ...prev }; delete n[card.id]; return n; });
     }
 
-    // ── Channel/group tasks: real membership check (5s timeout) ───────────────
+    // ── Channel/group tasks: real membership check (10s timeout, 1 retry) ───────
     if (isChannelTask) {
       setPhase(card.id, 'verifying');
       if (card.targetUrl) {
         const chatRefMatch = card.targetUrl.match(/t\.me\/([^/?+]+)/);
         const chatRef = chatRefMatch?.[1];
         if (chatRef && !chatRef.startsWith('+')) {
-          try {
-            const ctrl = new AbortController();
-            const tId  = setTimeout(() => ctrl.abort(), 5000);
-            const memberInitData = (window as unknown as { Telegram?: { WebApp?: { initData?: string } } })?.Telegram?.WebApp?.initData ?? '';
-            const res  = await fetch(
-              `/api/check-membership?telegram_id=${currentUser.telegramId}&chat_id=${encodeURIComponent(`@${chatRef}`)}`,
-              { signal: ctrl.signal, headers: memberInitData ? { 'X-Init-Data': memberInitData } : {} },
-            );
-            clearTimeout(tId);
-            const { member } = await res.json() as { member: boolean };
-            if (!member) { setPhase(card.id, 'not_subscribed'); haptic.error(); return; }
-          } catch { /* timeout / network error — allow through */ }
+          const memberInitData = (window as unknown as { Telegram?: { WebApp?: { initData?: string } } })?.Telegram?.WebApp?.initData ?? '';
+          const checkMembership = async (): Promise<boolean | null> => {
+            try {
+              const ctrl = new AbortController();
+              const tId  = setTimeout(() => ctrl.abort(), 10000);
+              const res  = await fetch(
+                `/api/check-membership?telegram_id=${currentUser.telegramId}&chat_id=${encodeURIComponent(`@${chatRef}`)}`,
+                { signal: ctrl.signal, headers: memberInitData ? { 'X-Init-Data': memberInitData } : {} },
+              );
+              clearTimeout(tId);
+              const { member } = await res.json() as { member: boolean };
+              return member;
+            } catch { return null; /* timeout / network error */ }
+          };
+          let isMember = await checkMembership();
+          if (isMember === false) {
+            // One automatic retry after 2 seconds (Telegram API sometimes lags)
+            await new Promise(r => setTimeout(r, 2000));
+            isMember = await checkMembership();
+          }
+          if (isMember === false) { setPhase(card.id, 'not_subscribed'); haptic.error(); return; }
+          // null = timeout/error → allow through (server will re-verify)
         }
       }
     }
