@@ -498,6 +498,10 @@ const _savedCompleted: string[] = (() => {
   }
   catch { return _savedBalance.completedTaskIds ?? []; }
 })();
+const _savedTaskTimes: Record<string, number> = (() => {
+  try { return JSON.parse(localStorage.getItem('tc_task_times') || '{}') as Record<string, number>; }
+  catch { return {}; }
+})();
 const _savedBoosters: { multiplier: number; expiresAt: string }[] = (() => {
   try {
     const raw = JSON.parse(localStorage.getItem('tc_boosters') || '[]') as { multiplier: number; expiresAt: string }[];
@@ -844,6 +848,7 @@ interface AppState {
 
   // Mini App State
   completedTaskIds: string[];
+  taskCompletionTimes: Record<string, number>; // taskId → timestamp ms when last completed
   claimedReferralMilestoneIds: string[];
   usedPromoCodeIds: string[];
   lastSyncedReferralBalance: number;
@@ -996,6 +1001,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   modalOpen: null,
   modalData: null,
   completedTaskIds: _savedCompleted,
+  taskCompletionTimes: _savedTaskTimes,
 
   currentUser: mockUsers[0],
   users: mockUsers,
@@ -1134,7 +1140,13 @@ export const useAppStore = create<AppState>((set, get) => ({
   completeTask: (taskId) => {
     const state = get();
     const task = state.tasks.find(t => t.id === taskId);
-    if (!task || state.completedTaskIds.includes(taskId)) return;
+    if (!task) return;
+    if (state.completedTaskIds.includes(taskId)) {
+      // If the task has a cooldown and it has expired, allow re-completion
+      const lastTime = state.taskCompletionTimes[taskId];
+      const cooldownMs = (task.cooldownHours ?? 0) * 3600_000;
+      if (!cooldownMs || !lastTime || Date.now() - lastTime < cooldownMs) return;
+    }
     if (state.currentUser.dailyTasksCompleted >= state.platformConfig.maxDailyTasks) {
       get().addNotification({ userId: state.currentUser.id, type: 'system', title: 'Limit reached', message: `Maximum ${state.platformConfig.maxDailyTasks} tasks per day. Come back tomorrow!`, isRead: false });
       return;
@@ -1161,8 +1173,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     const referrer = state.currentUser.referredBy
       ? state.users.find(u => u.referralCode === state.currentUser.referredBy && u.id !== state.currentUser.id)
       : null;
+    const completedAt = Date.now();
     set(s => ({
-      completedTaskIds: [...s.completedTaskIds, taskId],
+      completedTaskIds: [...s.completedTaskIds.filter(id => id !== taskId), taskId],
+      taskCompletionTimes: { ...s.taskCompletionTimes, [taskId]: completedAt },
       tasks: s.tasks.map(t => t.id === taskId ? { ...t, totalCompletions: t.totalCompletions + 1 } : t),
       currentUser: { ...s.currentUser, ...updatedUser },
       users: s.users.map(u => {
@@ -1181,7 +1195,13 @@ export const useAppStore = create<AppState>((set, get) => ({
     const state = get();
     const task  = state.tasks.find(t => t.id === taskId);
     if (!task) return { success: false, error: 'Task not found' };
-    if (state.completedTaskIds.includes(taskId)) return { success: false, error: 'Already completed' };
+    if (state.completedTaskIds.includes(taskId)) {
+      const lastTime = state.taskCompletionTimes[taskId];
+      const cooldownMs = (task.cooldownHours ?? 0) * 3600_000;
+      if (!cooldownMs || !lastTime || Date.now() - lastTime < cooldownMs) {
+        return { success: false, error: 'Already completed' };
+      }
+    }
 
     const telegramId = state.currentUser.telegramId;
     // No Telegram context (local dev / mock) — fall back to client-only completion
@@ -1208,9 +1228,11 @@ export const useAppStore = create<AppState>((set, get) => ({
         return { success: false, error: body.error ?? `Error ${res.status}` };
       }
       const earned = typeof body.earned === 'number' ? body.earned : task.reward;
+      const completedAt = Date.now();
       // Apply local state — server already persisted the credit to app_balance
       set(s => ({
-        completedTaskIds: [...s.completedTaskIds, taskId],
+        completedTaskIds: [...s.completedTaskIds.filter(id => id !== taskId), taskId],
+        taskCompletionTimes: { ...s.taskCompletionTimes, [taskId]: completedAt },
         tasks: s.tasks.map(t => t.id === taskId ? { ...t, totalCompletions: t.totalCompletions + 1 } : t),
         currentUser: {
           ...s.currentUser,
@@ -1818,6 +1840,7 @@ useAppStore.subscribe((state) => {
     }));
     localStorage.setItem('tc_platform_config', JSON.stringify(state.platformConfig));
     localStorage.setItem('tc_completed_tasks', JSON.stringify(state.completedTaskIds));
+    localStorage.setItem('tc_task_times', JSON.stringify(state.taskCompletionTimes));
     localStorage.setItem('tc_tasks', JSON.stringify(state.tasks.slice(-500)));
     localStorage.setItem('tc_transactions', JSON.stringify(state.transactions.slice(-300)));
     localStorage.setItem('tc_notifications', JSON.stringify(state.notifications.slice(0, 50)));

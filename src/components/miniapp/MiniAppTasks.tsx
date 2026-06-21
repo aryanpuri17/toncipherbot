@@ -110,6 +110,8 @@ interface CardTask {
   icon?: string;
   isInstant: boolean;
   verificationMethod?: string;
+  cooldownHours?: number;
+  requiredCount?: number;
 }
 
 // ── Static config ──────────────────────────────────────────────────────────────
@@ -154,7 +156,7 @@ function taskAvatarColor(name: string): string {
 
 export const MiniAppTasks: React.FC = () => {
   const {
-    tasks, completedTaskIds, completeTaskSecure, creditReferralBonus,
+    tasks, completedTaskIds, taskCompletionTimes, completeTaskSecure, creditReferralBonus,
     setMiniAppPage, currentUser, platformConfig,
   } = useAppStore();
 
@@ -180,6 +182,26 @@ export const MiniAppTasks: React.FC = () => {
     setTaskStates(prev => ({ ...prev, [id]: { phase } }));
   const getPhase = (id: string): TaskPhase =>
     taskStates[id]?.phase ?? 'idle';
+
+  type CooldownTask = { id: string; cooldownHours?: number };
+
+  // Returns true when a cooldown task is in completedTaskIds but its cooldown has expired
+  const isCooldownExpired = (card: CooldownTask): boolean => {
+    if (!completedTaskIds.includes(card.id)) return false;
+    const cooldownMs = (card.cooldownHours ?? 0) * 3600_000;
+    if (!cooldownMs) return false;
+    const lastTime = taskCompletionTimes[card.id];
+    return !lastTime || Date.now() - lastTime >= cooldownMs;
+  };
+
+  // Returns ms remaining until cooldown expires, or 0 if already expired / no cooldown
+  const cooldownRemainingMs = (card: CooldownTask): number => {
+    const cooldownMs = (card.cooldownHours ?? 0) * 3600_000;
+    if (!cooldownMs) return 0;
+    const lastTime = taskCompletionTimes[card.id];
+    if (!lastTime) return 0;
+    return Math.max(0, lastTime + cooldownMs - Date.now());
+  };
 
   // Parse departure entry (supports legacy plain-timestamp format)
   const parseDeparture = (raw: string | null): DepartEntry | null => {
@@ -277,6 +299,7 @@ export const MiniAppTasks: React.FC = () => {
       maxCompletions:   t.maxCompletions,
       icon:             t.icon,
       isInstant:        t.type === 'daily' || t.type === 'special' || t.type === 'invite_friends',
+      cooldownHours:    t.cooldownHours,
     };
   });
 
@@ -302,6 +325,7 @@ export const MiniAppTasks: React.FC = () => {
     description: t.description, targetUrl: t.targetUrl, reward: t.reward,
     totalCompletions: t.totalCompletions, maxCompletions: t.maxCompletions,
     icon: t.icon, isInstant: false, verificationMethod: t.verificationMethod,
+    cooldownHours: t.cooldownHours, requiredCount: t.requiredCount,
   }));
 
   // ── Completion helpers ───────────────────────────────────────────────────────
@@ -369,7 +393,7 @@ export const MiniAppTasks: React.FC = () => {
   const handleStart = async (card: CardTask) => {
     const phase = getPhase(card.id);
     if (phase === 'completing' || phase === 'done') return;
-    if (card.source === 'platform' && completedTaskIds.includes(card.id)) return;
+    if (card.source === 'platform' && completedTaskIds.includes(card.id) && !isCooldownExpired(card)) return;
     if (card.source === 'api'      && completedApiTaskIds.includes(card.id)) return;
 
     haptic.impact('light');
@@ -552,24 +576,29 @@ export const MiniAppTasks: React.FC = () => {
   const renderCard = (card: CardTask) => {
     const config      = typeConfig[card.type] ?? typeConfig.special;
     const phase       = getPhase(card.id);
-    const isCompleted = (card.source === 'platform' && completedTaskIds.includes(card.id)) ||
+    const isCompleted = (card.source === 'platform' && completedTaskIds.includes(card.id) && !isCooldownExpired(card)) ||
                         (card.source === 'api'      && completedApiTaskIds.includes(card.id));
 
-    if (isCompleted && phase !== 'completing' && phase !== 'done') return null;
+    // Cooldown state: task is completed but has a cooldown that hasn't expired yet
+    const inCooldown = card.source === 'platform' && card.cooldownHours
+      && completedTaskIds.includes(card.id) && !isCooldownExpired(card)
+      && phase !== 'completing' && phase !== 'done';
 
-    const isDone        = isCompleted || phase === 'done';
+    if (isCompleted && !inCooldown && phase !== 'completing' && phase !== 'done') return null;
+
+    const isDone        = (isCompleted && !inCooldown) || phase === 'done';
     const displayReward = card.reward * (card.promoMultiplier ?? 1);
     const avatarBg      = card.source === 'api' ? taskAvatarColor(card.title) : null;
 
-    const cardBg     = isDone ? 'rgba(52,211,153,0.07)' : SIG_BG;
-    const cardBorder = isDone ? '1px solid rgba(52,211,153,0.22)' : `1px solid ${SIG_BORDER}`;
-    const iconBg     = isDone ? 'rgba(52,211,153,0.18)' : (avatarBg ? `${avatarBg}22` : SIG_ICON);
-    const iconBorder = isDone ? '1px solid rgba(52,211,153,0.3)' : `1px solid ${SIG_BORDER}`;
-    const iconGlow   = isDone ? '0 4px 14px rgba(52,211,153,0.25)' : `0 4px 14px ${SIG_GLOW}`;
-    const badgeLabel = isDone ? '✓ DONE' : (config.label ?? 'TASK');
-    const badgeBg    = isDone ? 'rgba(52,211,153,0.18)' : SIG_ICON;
-    const badgeColor = isDone ? '#34d399' : SIG_LIGHT;
-    const accentLine = isDone ? '#34d399' : SIG;
+    const cardBg     = inCooldown ? 'rgba(245,158,11,0.05)' : isDone ? 'rgba(52,211,153,0.07)' : SIG_BG;
+    const cardBorder = inCooldown ? '1px solid rgba(245,158,11,0.2)' : isDone ? '1px solid rgba(52,211,153,0.22)' : `1px solid ${SIG_BORDER}`;
+    const iconBg     = inCooldown ? 'rgba(245,158,11,0.12)' : isDone ? 'rgba(52,211,153,0.18)' : (avatarBg ? `${avatarBg}22` : SIG_ICON);
+    const iconBorder = inCooldown ? '1px solid rgba(245,158,11,0.25)' : isDone ? '1px solid rgba(52,211,153,0.3)' : `1px solid ${SIG_BORDER}`;
+    const iconGlow   = inCooldown ? '0 4px 14px rgba(245,158,11,0.15)' : isDone ? '0 4px 14px rgba(52,211,153,0.25)' : `0 4px 14px ${SIG_GLOW}`;
+    const badgeLabel = inCooldown ? '⏳ COOLDOWN' : isDone ? '✓ DONE' : (config.label ?? 'TASK');
+    const badgeBg    = inCooldown ? 'rgba(245,158,11,0.15)' : isDone ? 'rgba(52,211,153,0.18)' : SIG_ICON;
+    const badgeColor = inCooldown ? '#f59e0b' : isDone ? '#34d399' : SIG_LIGHT;
+    const accentLine = inCooldown ? '#f59e0b' : isDone ? '#34d399' : SIG;
 
     const icon = (() => {
       if (isDone) return <CheckCircle style={{ width: 26, height: 26, color: '#34d399' }} />;
@@ -661,12 +690,24 @@ export const MiniAppTasks: React.FC = () => {
             </div>
 
             {/* Action button based on phase */}
+            {inCooldown && (() => {
+              const remaining = cooldownRemainingMs(card);
+              const h = Math.floor(remaining / 3600_000);
+              const m = Math.floor((remaining % 3600_000) / 60_000);
+              const label = h > 0 ? `${h}h ${m}m` : `${m}m`;
+              return (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 10px', borderRadius: 8, background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.2)' }}>
+                  <Clock style={{ width: 12, height: 12, color: '#f59e0b' }} />
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#f59e0b' }}>{label}</span>
+                </div>
+              );
+            })()}
             {isDone && (
               <div style={{ padding: '6px 10px', borderRadius: 8, background: 'rgba(52,211,153,0.1)', border: '1px solid rgba(52,211,153,0.2)' }}>
                 <span style={{ fontSize: 11, fontWeight: 700, color: '#34d399' }}>✓ Done</span>
               </div>
             )}
-            {!isDone && phase === 'idle' && arrowBtn(() => handleStart(card))}
+            {!isDone && !inCooldown && phase === 'idle' && arrowBtn(() => handleStart(card))}
             {!isDone && (phase === 'verifying' || phase === 'completing') && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <Loader2 style={{ width: 16, height: 16, color: phase === 'completing' ? '#34d399' : '#60a5fa', animation: 'spin 1s linear infinite' }} />
@@ -824,8 +865,8 @@ export const MiniAppTasks: React.FC = () => {
 
   const telegramCards = allCards.filter(c => c.type === 'join_channel' || c.type === 'join_group' || c.type === 'start_bot');
   const socialCards   = allCards.filter(c => c.type === 'social' || c.type === 'watch_video');
-  const totalAvailable = allCards.filter(c => !completedTaskIds.includes(c.id) && !completedApiTaskIds.includes(c.id)).length
-    + promoTasks.filter(c => !completedTaskIds.includes(c.id)).length;
+  const totalAvailable = allCards.filter(c => (!completedTaskIds.includes(c.id) || isCooldownExpired(c)) && !completedApiTaskIds.includes(c.id)).length
+    + promoTasks.filter(c => !completedTaskIds.includes(c.id) || isCooldownExpired(c)).length;
 
   const SectionHead = ({ title, hint, infoOnly }: { title: string; hint?: string; infoOnly?: boolean }) => (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, marginTop: 4 }}>
@@ -916,7 +957,7 @@ export const MiniAppTasks: React.FC = () => {
                 if (isAutoReferral) {
                   const required   = task.requiredCount ?? 3;
                   const count      = currentUser.referralDailyCount;
-                  const isComplete = completedTaskIds.includes(task.id);
+                  const isComplete = completedTaskIds.includes(task.id) && !isCooldownExpired(task);
                   const isEligible = count >= required;
                   const pct        = Math.min((count / required) * 100, 100);
                   return (
