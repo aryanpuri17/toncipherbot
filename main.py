@@ -1781,14 +1781,14 @@ async def _try_auto_withdraw(
 
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(
-            "SELECT banned, created_at FROM users WHERE telegram_id = ?",
+            "SELECT banned, withdrawal_blocked, created_at FROM users WHERE telegram_id = ?",
             (telegram_id,)
         ) as cur:
             row = await cur.fetchone()
     if not row:
         return False
-    banned, created_at_str = row
-    if banned:
+    banned, wd_blocked, created_at_str = row
+    if banned or wd_blocked:
         return False
 
     # Account age check (skipped entirely when AUTO_WD_MIN_AGE == 0)
