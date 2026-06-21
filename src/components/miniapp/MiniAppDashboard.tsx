@@ -1,12 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { useAppStore } from '../../store/appStore';
-import { ArrowUpRight, ArrowDownLeft, ListTodo, ChevronRight, TrendingUp, Flame, Gift, Loader2 } from 'lucide-react';
+import { ArrowUpRight, ArrowDownLeft, ListTodo, ChevronRight, TrendingUp, Flame, Gift, Loader2, Users } from 'lucide-react';
 import { CountUp } from '../ui/CountUp';
 import { haptic } from '../../lib/haptics';
 
+function readTgPhoto(): string | null {
+  try {
+    const tg = (window as unknown as { Telegram?: { WebApp?: { initDataUnsafe?: { user?: { photo_url?: string } } } } }).Telegram?.WebApp;
+    return tg?.initDataUnsafe?.user?.photo_url ?? null;
+  } catch { return null; }
+}
+
 export const MiniAppDashboard: React.FC = () => {
   const { currentUser: u, setMiniAppPage, tasks, completedTaskIds, redeemPromoCode, platformConfig } = useAppStore();
-  const activeTasks = tasks.filter(t => t.isActive && !completedTaskIds.includes(t.id) && !t.isPromoTask);
+  const activeTasks = tasks.filter(t => t.isActive && !completedTaskIds.includes(t.id) && !t.isPromoTask && t.type !== 'daily');
+
+  const [avatarError, setAvatarError] = useState(false);
+  const tgPhoto = readTgPhoto();
 
   const [promoCode, setPromoCode] = useState('');
   const [promoLoading, setPromoLoading] = useState(false);
@@ -80,9 +90,16 @@ export const MiniAppDashboard: React.FC = () => {
           <h1 className="text-xl font-bold text-white">{u.firstName}</h1>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-sm font-bold text-white">
-            {u.firstName?.charAt(0) ?? '?'}
-          </div>
+          {tgPhoto && !avatarError ? (
+            <img src={tgPhoto} alt={u.firstName} onError={() => setAvatarError(true)}
+              className="w-9 h-9 rounded-full object-cover"
+              style={{ boxShadow: '0 0 0 2px rgba(139,92,246,0.35)' }} />
+          ) : (
+            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-violet-500 to-purple-700 flex items-center justify-center text-sm font-bold text-white"
+              style={{ boxShadow: '0 0 0 2px rgba(139,92,246,0.35)' }}>
+              {u.firstName?.charAt(0)?.toUpperCase() ?? '?'}
+            </div>
+          )}
         </div>
       </div>
 
@@ -129,6 +146,30 @@ export const MiniAppDashboard: React.FC = () => {
         </div>
       </div>
 
+
+      {/* Referral invite banner */}
+      <button
+        onClick={() => { haptic.impact('light'); setMiniAppPage('referral'); }}
+        className="tap-scale w-full flex items-center gap-3 p-3.5 rounded-2xl bg-gradient-to-r from-purple-600/20 via-blue-600/15 to-purple-600/20 border border-purple-500/25 hover:border-purple-500/40 transition-all"
+      >
+        <div className="w-10 h-10 rounded-xl bg-purple-500/25 flex items-center justify-center shrink-0">
+          <Users className="w-5 h-5 text-purple-300" />
+        </div>
+        <div className="flex-1 text-left">
+          <p className="text-sm font-semibold text-white">Invite your friends</p>
+          <p className="text-xs text-purple-300">
+            {u.referralCount > 0
+              ? `${u.referralCount} friend${u.referralCount !== 1 ? 's' : ''} invited`
+              : `Earn ${platformConfig.referralBonusSignup < 0.01 ? platformConfig.referralBonusSignup.toFixed(4) : platformConfig.referralBonusSignup.toFixed(2)} GRAM per friend`}
+          </p>
+        </div>
+        <div className="shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-lg bg-purple-500/20 border border-purple-500/30">
+          <span className="text-xs font-bold text-purple-300">
+            +{platformConfig.referralBonusSignup < 0.01 ? platformConfig.referralBonusSignup.toFixed(4) : platformConfig.referralBonusSignup.toFixed(2)} GRAM
+          </span>
+          <ChevronRight className="w-3.5 h-3.5 text-purple-400" />
+        </div>
+      </button>
 
       {/* Quick Stats */}
       <div className="grid grid-cols-2 gap-3">

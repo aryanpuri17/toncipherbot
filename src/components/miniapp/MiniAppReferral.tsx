@@ -63,9 +63,9 @@ const Leaderboard: React.FC = () => {
                 <span className="absolute -bottom-1 -right-1 text-sm">{medals[rank - 1]}</span>
               </div>
               <p className="text-xs font-semibold text-white mb-0.5 max-w-[72px] truncate text-center">
-                @{user.username || user.firstName}
+                {user.firstName}
               </p>
-              <p className="text-[10px] text-slate-400 mb-2">{user.referralCount} referral{user.referralCount !== 1 ? 's' : ''}</p>
+              <p className="text-[10px] text-slate-400 mb-2">{user.referralCount} invite{user.referralCount !== 1 ? 's' : ''}</p>
               <div className={`w-20 ${heights[i]} rounded-t-xl bg-gradient-to-t ${rank === 1 ? 'from-amber-500/20 to-amber-500/40' : rank === 2 ? 'from-slate-400/20 to-slate-400/30' : 'from-orange-800/20 to-orange-800/30'}`} />
             </div>
           );
@@ -86,10 +86,10 @@ const Leaderboard: React.FC = () => {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-white truncate">
-                  @{user.username || user.firstName}
+                  {user.firstName}
                   {isMe && <span className="text-blue-400 text-[10px] ml-1">(you)</span>}
                 </p>
-                <p className="text-xs text-slate-500">{user.referralCount} referral{user.referralCount !== 1 ? 's' : ''}</p>
+                <p className="text-xs text-slate-500">{user.referralCount} invite{user.referralCount !== 1 ? 's' : ''}</p>
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
                 <Users className="w-3.5 h-3.5 text-purple-400" />
@@ -108,8 +108,8 @@ const Leaderboard: React.FC = () => {
             {currentUser.firstName?.charAt(0) ?? '?'}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-white">@{currentUser.username} <span className="text-blue-400 text-[10px]">(you)</span></p>
-            <p className="text-xs text-slate-500">{currentUser.referralCount} referral{currentUser.referralCount !== 1 ? 's' : ''}</p>
+            <p className="text-sm font-medium text-white">{currentUser.firstName} <span className="text-blue-400 text-[10px]">(you)</span></p>
+            <p className="text-xs text-slate-500">{currentUser.referralCount} invite{currentUser.referralCount !== 1 ? 's' : ''}</p>
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
             <Users className="w-3.5 h-3.5 text-purple-400" />
