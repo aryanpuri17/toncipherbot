@@ -1,12 +1,11 @@
 import React, { useRef } from 'react';
 import { useAppStore } from '../../store/appStore';
-import { LayoutDashboard, Wallet, ListTodo, Users, User, Dices } from 'lucide-react';
+import { LayoutDashboard, Wallet, ListTodo, Users, User } from 'lucide-react';
 import { haptic } from '../../lib/haptics';
 
 const navItems = [
   { id: 'dashboard', label: 'Home',     icon: LayoutDashboard },
   { id: 'tasks',     label: 'Tasks',    icon: ListTodo },
-  { id: 'games',     label: 'Games',    icon: Dices },
   { id: 'referral',  label: 'Friends',  icon: Users },
   { id: 'wallet',    label: 'Wallet',   icon: Wallet },
   { id: 'profile',   label: 'Profile',  icon: User },
@@ -41,7 +40,7 @@ export const MiniAppNav: React.FC = () => {
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 nav-bar">
-      <div className="relative grid grid-cols-6 max-w-lg mx-auto px-2 py-1">
+      <div className="relative grid grid-cols-5 max-w-lg mx-auto px-2 py-1">
 
         {/* Sliding pill — TON color */}
         <span
@@ -56,7 +55,6 @@ export const MiniAppNav: React.FC = () => {
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = activeNav === item.id;
-          const isGames = item.id === 'games';
 
           return (
             <button
@@ -67,11 +65,7 @@ export const MiniAppNav: React.FC = () => {
               }`}
             >
               <div className={`p-1.5 rounded-lg transition-transform duration-200 ${
-                isActive
-                  ? isGames
-                    ? 'scale-125 -translate-y-0.5'
-                    : 'scale-110 -translate-y-px'
-                  : ''
+                isActive ? 'scale-110 -translate-y-px' : ''
               }`}>
                 <Icon className="w-5 h-5" />
               </div>
