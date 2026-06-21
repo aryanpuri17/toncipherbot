@@ -775,6 +775,29 @@ async def init_db() -> None:
                 await db.execute(f"ALTER TABLE {tbl} ADD COLUMN {col} {defn}")
             except Exception:
                 pass
+        # One-time migration: revoke welcome bonuses and drop the table
+        try:
+            async with db.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='welcome_bonus_claims'"
+            ) as cur:
+                tbl_exists = await cur.fetchone()
+            if tbl_exists:
+                async with db.execute("SELECT telegram_id, reward FROM welcome_bonus_claims") as cur:
+                    claims = await cur.fetchall()
+                affected = 0
+                for row in claims:
+                    uid, reward = int(row[0]), float(row[1] or 0)
+                    if reward > 0:
+                        await db.execute(
+                            "UPDATE users SET app_balance = MAX(0, COALESCE(app_balance, 0) - ?) WHERE telegram_id = ?",
+                            (reward, uid),
+                        )
+                        affected += 1
+                await db.execute("DROP TABLE IF EXISTS welcome_bonus_claims")
+                log.info("Welcome bonus migration: revoked from %d users, table dropped", affected)
+        except Exception as e:
+            log.warning("Welcome bonus migration failed (non-fatal): %s", e)
+
         await db.commit()
     log.info("Database ready at %s", DB_PATH)
 
