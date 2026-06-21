@@ -1272,7 +1272,7 @@ async def handle_wd_callback(cb: types.CallbackQuery) -> None:
         # ok or ko — find transaction by short id prefix
         short_id = parts[2]
         async with db.execute(
-            "SELECT id, telegram_id, amount, address FROM transactions"
+            "SELECT id, telegram_id, amount, address, fee FROM transactions"
             " WHERE id LIKE ? AND type='withdrawal' AND status='pending'",
             (short_id + "%",)
         ) as cur:
@@ -1286,7 +1286,7 @@ async def handle_wd_callback(cb: types.CallbackQuery) -> None:
             await cb.answer("Already processed or not found")
             return
 
-        tx_id, uid, amount, address = tx_row[0], int(tx_row[1]), float(tx_row[2]), tx_row[3] or ""
+        tx_id, uid, amount, address, fee = tx_row[0], int(tx_row[1]), float(tx_row[2]), tx_row[3] or "", float(tx_row[4] or 0)
 
         if action == "ok":
             await db.execute(
@@ -1327,7 +1327,7 @@ async def handle_wd_callback(cb: types.CallbackQuery) -> None:
             # Post professional notification to withdrawal channel
             try:
                 from datetime import datetime as _dtcb
-                addr_display = (address[:6] + "…" + address[-4:]) if len(address) > 12 else address
+                _uq_cb = _ton_friendly_addr(address) or address
                 display_name = f"@{username}" if username else (fname or f"#{uid}")
                 date_str = _dtcb.utcnow().strftime("%a, %d %b %Y · %H:%M UTC")
                 await _notify_channel(
@@ -1336,11 +1336,12 @@ async def handle_wd_callback(cb: types.CallbackQuery) -> None:
                     f"🗣 <b>User:</b> {display_name}\n"
                     f"🆔 <b>User ID:</b> {uid}\n"
                     f"🌐 <b>Network:</b> TON\n"
-                    f"📍 <b>Address:</b> <code>{addr_display}</code>\n"
+                    f"📍 <b>Address:</b> <code>{_uq_cb}</code>\n"
                     f"💸 <b>Amount:</b> {amount:.4f} GRAM\n"
+                    f"🏷 <b>Fee:</b> {fee:.4f} GRAM\n"
                     f"🔗 <b>Hash:</b> Manual\n"
                     f"📅 <b>Date:</b> {date_str}\n"
-                    f"🤖 <b>Bot:</b> TonCipher",
+                    f"🤖 <b>Bot:</b> @TonCipher_bot",
                 )
             except Exception:
                 pass
@@ -1924,17 +1925,20 @@ async def _try_auto_withdraw(
     try:
         from datetime import datetime as _dtpub
         date_str_pub = _dtpub.utcnow().strftime("%a, %d %b %Y · %H:%M UTC")
-        addr_short = (address[:6] + "…" + address[-4:]) if len(address) > 12 else address
+        _uq_auto = _ton_friendly_addr(address) or address
         tx_link = tx_hash if tx_hash.startswith("http") else (
             f"https://tonviewer.com/transaction/{tx_hash}" if tx_hash not in ("", "auto_ok") else ""
         )
         hash_display = (f'<a href="{tx_link}">{tx_hash[:12]}…</a>' if tx_link else "Auto") if tx_hash else "Auto"
         async with aiosqlite.connect(DB_PATH) as _dbch:
             async with _dbch.execute(
-                "SELECT username FROM users WHERE telegram_id=?", (telegram_id,)
+                "SELECT u.username, t.fee FROM users u "
+                "LEFT JOIN transactions t ON t.id=? "
+                "WHERE u.telegram_id=?", (tx_id, telegram_id)
             ) as _cu:
                 _urow = await _cu.fetchone()
         uname_pub = (_urow[0] if _urow else "") or ""
+        fee_pub = float(_urow[1] or 0) if _urow else 0.0
         display_name_pub = f"@{uname_pub}" if uname_pub else (fname or f"#{telegram_id}")
         await _notify_channel(
             await _configured_withdrawal_channel(),
@@ -1942,11 +1946,12 @@ async def _try_auto_withdraw(
             f"🗣 <b>User:</b> {display_name_pub}\n"
             f"🆔 <b>User ID:</b> {telegram_id}\n"
             f"🌐 <b>Network:</b> TON\n"
-            f"📍 <b>Address:</b> <code>{addr_short}</code>\n"
+            f"📍 <b>Address:</b> <code>{_uq_auto}</code>\n"
             f"💸 <b>Amount:</b> {amount:.4f} GRAM\n"
+            f"🏷 <b>Fee:</b> {fee_pub:.4f} GRAM\n"
             f"🔗 <b>Hash:</b> {hash_display}\n"
             f"📅 <b>Date:</b> {date_str_pub}\n"
-            f"🤖 <b>Bot:</b> TonCipher",
+            f"🤖 <b>Bot:</b> @TonCipher_bot",
         )
     except Exception:
         pass
@@ -3138,7 +3143,7 @@ async def api_admin_approve_withdrawal(request: web.Request) -> web.Response:
         # Fetch transaction + user details for the notification
         async with db.execute("""
             SELECT t.telegram_id, t.amount, t.currency, t.address,
-                   u.first_name, t.processed_at, u.username
+                   u.first_name, t.processed_at, u.username, t.fee
             FROM transactions t
             LEFT JOIN users u ON t.telegram_id = u.telegram_id
             WHERE t.id = ?
@@ -3169,11 +3174,13 @@ async def api_admin_approve_withdrawal(request: web.Request) -> web.Response:
             pass
 
     if tx_row:
-        # tx_row: [0]=telegram_id [1]=amount [2]=currency [3]=address [4]=first_name [5]=processed_at [6]=username
+        # tx_row: [0]=telegram_id [1]=amount [2]=currency [3]=address [4]=first_name [5]=processed_at [6]=username [7]=fee
         wp_uid   = tx_row[0]
         wp_addr  = tx_row[3] or ""
         wp_fname = tx_row[4] or ""
         wp_uname = (tx_row[6] or "") if len(tx_row) > 6 else ""
+        wp_fee   = float(tx_row[7] or 0) if len(tx_row) > 7 else 0.0
+        _uq_wp   = _ton_friendly_addr(wp_addr) or wp_addr
         try:
             from datetime import datetime as _dt2
             processed_dt = _dt2.strptime(tx_row[5], "%Y-%m-%d %H:%M:%S")
@@ -3181,7 +3188,6 @@ async def api_admin_approve_withdrawal(request: web.Request) -> web.Response:
         except Exception:
             from datetime import datetime as _dt2
             date_str_wp = _dt2.utcnow().strftime("%a, %d %b %Y · %H:%M UTC")
-        addr_short_wp = (wp_addr[:6] + "…" + wp_addr[-4:]) if len(wp_addr) > 12 else wp_addr
         display_name_wp = f"@{wp_uname}" if wp_uname else (wp_fname or f"#{wp_uid}")
         if tx_link and tx_hash:
             short_hash = (tx_hash[:12] + "…") if len(tx_hash) > 12 else tx_hash
@@ -3194,11 +3200,12 @@ async def api_admin_approve_withdrawal(request: web.Request) -> web.Response:
             f"🗣 <b>User:</b> {display_name_wp}\n"
             f"🆔 <b>User ID:</b> {wp_uid}\n"
             f"🌐 <b>Network:</b> TON\n"
-            f"📍 <b>Address:</b> <code>{addr_short_wp}</code>\n"
+            f"📍 <b>Address:</b> <code>{_uq_wp}</code>\n"
             f"💸 <b>Amount:</b> {tx_row[1]:.4f} GRAM\n"
+            f"🏷 <b>Fee:</b> {wp_fee:.4f} GRAM\n"
             f"🔗 <b>Hash:</b> {hash_display_wp}\n"
             f"📅 <b>Date:</b> {date_str_wp}\n"
-            f"🤖 <b>Bot:</b> TonCipher",
+            f"🤖 <b>Bot:</b> @TonCipher_bot",
         )
 
     return web.json_response({"success": True}, headers=_CORS)
