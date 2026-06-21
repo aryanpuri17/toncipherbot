@@ -87,7 +87,7 @@ export const MiniAppCreateTask: React.FC = () => {
     if (execCount > maxExec) { setError(`Maximum ${maxExec.toLocaleString()} executions`); return; }
     const totalAvailable = currentUser.balanceMain + currentUser.taskCredits;
     if (totalAvailable < totalCost) {
-      setError(`Insufficient balance. Total cost: ${totalCost.toFixed(4)} TON`);
+      setError(`Insufficient balance. Total cost: ${totalCost.toFixed(4)} GRAM`);
       return;
     }
 
@@ -101,7 +101,7 @@ export const MiniAppCreateTask: React.FC = () => {
           initData:       (window as unknown as { Telegram?: { WebApp?: { initData?: string } } })?.Telegram?.WebApp?.initData ?? '',
           type,
           title:          title.trim(),
-          description:    description.trim() || `Complete this task to earn ${workerReward.toFixed(4)} TON`,
+          description:    description.trim() || `Complete this task to earn ${workerReward.toFixed(4)} GRAM`,
           targetUrl:      targetUrl.trim(), // NEVER modified
           reward:         workerReward,
           totalBudget:    parseFloat((workerReward * execCount).toFixed(8)),
@@ -333,7 +333,7 @@ export const MiniAppCreateTask: React.FC = () => {
         <div className="flex justify-between text-xs">
           <span className="text-slate-500">Reward per participant</span>
           <span className="font-semibold" style={{ color: '#0098EA' }}>
-            {workerReward.toFixed(4)} TON
+            {workerReward.toFixed(4)} GRAM
           </span>
         </div>
         <div className="flex justify-between text-xs">
@@ -349,7 +349,7 @@ export const MiniAppCreateTask: React.FC = () => {
             className="text-base font-bold"
             style={{ color: execCount > 0 ? '#f59e0b' : '#64748b' }}
           >
-            {execCount > 0 ? `${totalCost.toFixed(4)} TON` : '—'}
+            {execCount > 0 ? `${totalCost.toFixed(4)} GRAM` : '—'}
           </span>
         </div>
 
@@ -357,7 +357,7 @@ export const MiniAppCreateTask: React.FC = () => {
           <div className="flex justify-between text-xs">
             <span style={{ color: '#0098EA' }}>Campaign credits</span>
             <span className="font-semibold" style={{ color: '#0098EA' }}>
-              -{Math.min(currentUser.taskCredits, totalCost).toFixed(4)} TON
+              -{Math.min(currentUser.taskCredits, totalCost).toFixed(4)} GRAM
             </span>
           </div>
         )}
@@ -369,7 +369,7 @@ export const MiniAppCreateTask: React.FC = () => {
               ? 'text-emerald-400'
               : 'text-slate-400'
           }`}>
-            {currentUser.balanceMain.toFixed(4)} TON
+            {currentUser.balanceMain.toFixed(4)} GRAM
             {currentUser.taskCredits > 0 && (
               <span style={{ color: '#0098EA' }}> +{currentUser.taskCredits.toFixed(4)} credits</span>
             )}
@@ -391,7 +391,7 @@ export const MiniAppCreateTask: React.FC = () => {
       >
         {submitting
           ? <><Loader2 className="w-4 h-4 animate-spin" /> Submitting...</>
-          : `Submit — ${totalCost > 0 ? totalCost.toFixed(4) : '0.0000'} TON`
+          : `Submit — ${totalCost > 0 ? totalCost.toFixed(4) : '0.0000'} GRAM`
         }
       </button>
     </div>

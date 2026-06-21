@@ -217,7 +217,7 @@ export const MiniAppMyTasks: React.FC = () => {
     setBudgetError('');
     if (additionalExecs < 1) { setBudgetError('Please enter a valid number.'); return; }
     if (currentUser.balanceMain < additionalCost) {
-      setBudgetError(`Insufficient balance. Available: ${currentUser.balanceMain.toFixed(4)} GRAM, required: ${additionalCost.toFixed(4)} TON.`);
+      setBudgetError(`Insufficient balance. Available: ${currentUser.balanceMain.toFixed(4)} GRAM, required: ${additionalCost.toFixed(4)} GRAM.`);
       return;
     }
     setActionLoading(task.id);
@@ -477,7 +477,7 @@ export const MiniAppMyTasks: React.FC = () => {
 
                 <div className="flex justify-between items-center text-xs px-0.5">
                   <span className="text-slate-500">Total budget</span>
-                  <span className="text-amber-400 font-semibold">{task.totalBudget.toFixed(3)} TON</span>
+                  <span className="text-amber-400 font-semibold">{task.totalBudget.toFixed(3)} GRAM</span>
                 </div>
 
                 {/* Actions */}
@@ -521,7 +521,7 @@ export const MiniAppMyTasks: React.FC = () => {
                     <p className="text-xs text-slate-300 font-medium">Delete this campaign?</p>
                     {remaining > 0 && (task.status === 'active' || task.status === 'paused') && (
                       <p className="text-xs text-emerald-400">
-                        Refund: <span className="font-bold">+{(remaining * priceFixed).toFixed(4)} TON</span> ({remaining} unused executions)
+                        Refund: <span className="font-bold">+{(remaining * priceFixed).toFixed(4)} GRAM</span> ({remaining} unused executions)
                       </p>
                     )}
                     <div className="flex gap-2">
