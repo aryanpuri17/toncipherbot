@@ -869,60 +869,53 @@ export const MiniAppTasks: React.FC = () => {
 
         {/* Phase strip at bottom of card */}
         {phase === 'pending' && (() => {
-          const waiting = countdown[card.id] !== undefined;
-          return (
-            <div style={{
-              borderTop: '1px solid rgba(255,255,255,0.06)',
-              padding: '10px 14px',
-              background: waiting ? 'rgba(245,158,11,0.06)' : 'rgba(52,211,153,0.06)',
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
-                <Loader2 style={{ width: 14, height: 14, color: waiting ? '#fbbf24' : '#34d399', animation: 'spin 2s linear infinite', flexShrink: 0 }} />
-                <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
-                  {(card.type === 'join_channel' || card.type === 'join_group') ? (
-                    <span style={{ fontSize: 11, color: '#fbbf24', fontWeight: 600 }}>
-                      Join the channel, then click Verify
-                    </span>
-                  ) : waiting ? (
-                    <>
-                      <span style={{ fontSize: 11, color: '#fbbf24', fontWeight: 700 }}>
-                        ⏳ {countdown[card.id]}s remaining — stay on the page
-                      </span>
-                      <button
-                        onClick={() => { if (card.targetUrl) openUrl(card.targetUrl); }}
-                        style={{ fontSize: 10, color: '#94a3b8', background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', textDecoration: 'underline' }}
-                      >
-                        Go back ↗
-                      </button>
-                    </>
-                  ) : (
-                    <span style={{ fontSize: 11, color: '#34d399', fontWeight: 700 }}>
-                      ✅ Ready! Click Verify now
-                    </span>
-                  )}
+          const isChannel = card.type === 'join_channel' || card.type === 'join_group';
+          const waiting   = countdown[card.id] !== undefined;
+
+          // ── Channel / group: simple "join then verify" strip ──────────────
+          if (isChannel) {
+            return (
+              <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', padding: '10px 14px', background: 'rgba(245,158,11,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Loader2 style={{ width: 14, height: 14, color: '#fbbf24', animation: 'spin 2s linear infinite', flexShrink: 0 }} />
+                  <span style={{ fontSize: 11, color: '#fbbf24', fontWeight: 600 }}>Join the channel, then click Verify</span>
                 </div>
-              </div>
-              {(() => {
-              const isChannel = card.type === 'join_channel' || card.type === 'join_group';
-              const locked = !isChannel && waiting;
-              return (
-                <button
-                  onClick={() => void handleVerify(card)}
-                  disabled={locked}
-                  style={{
-                    padding: '6px 12px', borderRadius: 8, flexShrink: 0,
-                    background: locked ? 'rgba(100,116,139,0.15)' : 'rgba(52,211,153,0.15)',
-                    border: `1px solid ${locked ? 'rgba(100,116,139,0.3)' : 'rgba(52,211,153,0.3)'}`,
-                    color: locked ? '#64748b' : '#34d399',
-                    fontSize: 11, fontWeight: 700, cursor: locked ? 'not-allowed' : 'pointer',
-                    display: 'flex', alignItems: 'center', gap: 4,
-                  }}>
+                <button onClick={() => void handleVerify(card)} style={{ padding: '6px 12px', borderRadius: 8, flexShrink: 0, background: 'rgba(52,211,153,0.15)', border: '1px solid rgba(52,211,153,0.3)', color: '#34d399', fontSize: 11, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
                   <ShieldCheck style={{ width: 12, height: 12 }} /> Verify
                 </button>
-              );
-            })()}
-            </div>
+              </div>
+            );
+          }
+
+          // ── Bot / social / video: timer strip ─────────────────────────────
+          if (waiting) {
+            // Still counting down — show "Go back" CTA, no Verify
+            return (
+              <button
+                onClick={() => { if (card.targetUrl) openUrl(card.targetUrl); }}
+                style={{ width: '100%', borderTop: '1px solid rgba(245,158,11,0.2)', padding: '12px 14px', background: 'rgba(245,158,11,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, cursor: 'pointer', border: 'none', textAlign: 'left' }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Loader2 style={{ width: 14, height: 14, color: '#fbbf24', animation: 'spin 2s linear infinite', flexShrink: 0 }} />
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                    <span style={{ fontSize: 11, color: '#fbbf24', fontWeight: 700 }}>⏳ {countdown[card.id]}s — you must stay 30 seconds</span>
+                    <span style={{ fontSize: 10, color: '#94a3b8' }}>Tap to go back → come back after 30 s</span>
+                  </div>
+                </div>
+                <ChevronRight style={{ width: 16, height: 16, color: '#f59e0b', flexShrink: 0 }} />
+              </button>
+            );
+          }
+
+          // Timer done — single "Claim Reward" button
+          return (
+            <button
+              onClick={() => void handleVerify(card)}
+              style={{ width: '100%', borderTop: '1px solid rgba(52,211,153,0.2)', padding: '12px 14px', background: 'rgba(52,211,153,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, cursor: 'pointer', border: 'none' }}
+            >
+              <CheckCircle style={{ width: 15, height: 15, color: '#34d399' }} />
+              <span style={{ fontSize: 12, fontWeight: 800, color: '#34d399' }}>Claim Reward</span>
+            </button>
           );
         })()}
 
