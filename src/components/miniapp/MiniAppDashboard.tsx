@@ -16,7 +16,8 @@ export const MiniAppDashboard: React.FC = () => {
   const activeTasks = tasks.filter(t => t.isActive && !completedTaskIds.includes(t.id) && !t.isPromoTask && t.type !== 'daily');
 
   const [avatarError, setAvatarError] = useState(false);
-  const tgPhoto = readTgPhoto();
+  // Use store avatar (set by initFromTelegram) with direct window read as fallback
+  const avatarSrc = u.avatarUrl ?? readTgPhoto();
 
   const [promoCode, setPromoCode] = useState('');
   const [promoLoading, setPromoLoading] = useState(false);
@@ -90,8 +91,8 @@ export const MiniAppDashboard: React.FC = () => {
           <h1 className="text-xl font-bold text-white">{u.firstName}</h1>
         </div>
         <div className="flex items-center gap-2">
-          {tgPhoto && !avatarError ? (
-            <img src={tgPhoto} alt={u.firstName} onError={() => setAvatarError(true)}
+          {avatarSrc && !avatarError ? (
+            <img src={avatarSrc} alt={u.firstName} onError={() => setAvatarError(true)}
               className="w-9 h-9 rounded-full object-cover"
               style={{ boxShadow: '0 0 0 2px rgba(139,92,246,0.35)' }} />
           ) : (

@@ -80,11 +80,7 @@ export const MiniAppProfile: React.FC = () => {
               {profile.firstName?.charAt(0) ?? '?'}
             </div>
           )}
-          {u.loginStreak >= 3 && (
-            <div className="absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full bg-orange-500 flex items-center justify-center text-[10px] font-bold text-white border-2 border-[#0B1140]">
-              {u.loginStreak}
-            </div>
-          )}
+          {/* streak badge hidden */}
         </div>
 
         <div className="flex-1 min-w-0">
@@ -95,12 +91,7 @@ export const MiniAppProfile: React.FC = () => {
           <p className="text-[10px] text-slate-600 font-mono mt-0.5">ID: {uId}</p>
         </div>
 
-        {u.loginStreak >= 1 && (
-          <div className="flex flex-col items-center flex-shrink-0">
-            <span className="text-2xl">🔥</span>
-            <span className="text-[10px] text-orange-400 font-bold">{u.loginStreak}j</span>
-          </div>
-        )}
+          {/* streak display hidden */}
       </div>
 
       {/* Stats */}

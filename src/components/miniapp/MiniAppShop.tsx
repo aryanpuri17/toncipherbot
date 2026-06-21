@@ -83,7 +83,7 @@ export const MiniAppShop: React.FC = () => {
           <div className="flex items-center justify-between px-1">
             <div>
               <p className="text-xs text-slate-500">Price</p>
-              <p className="text-lg font-bold text-amber-400">{confirmItem.price.toFixed(2)} TON</p>
+              <p className="text-lg font-bold text-amber-400">{confirmItem.price.toFixed(2)} GRAM</p>
             </div>
             <div className="text-right">
               <p className="text-xs text-slate-500">Balance after purchase</p>
@@ -195,7 +195,7 @@ export const MiniAppShop: React.FC = () => {
 
               <div className="flex items-center justify-between border-t border-white/5 pt-3">
                 <div>
-                  <span className="text-lg font-bold text-amber-400">{item.price.toFixed(2)} TON</span>
+                  <span className="text-lg font-bold text-amber-400">{item.price.toFixed(2)} GRAM</span>
                   {!canAfford && !isSoldOut && (
                     <p className="flex items-center gap-1 text-[10px] text-red-400 mt-0.5">
                       <AlertCircle className="w-2.5 h-2.5" /> Insufficient balance

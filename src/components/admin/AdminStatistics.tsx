@@ -17,8 +17,8 @@ const TYPE_COLORS: Record<string, string> = {
 };
 const TYPE_LABELS: Record<string, string> = {
   join_channel: 'Canal', join_group: 'Groupe', start_bot: 'Bot',
-  invite_friends: 'Invitation', daily: 'Quotidien', special: 'Spécial',
-  social: 'Social', watch_video: 'Vidéo',
+  invite_friends: 'Referral', daily: 'Daily', special: 'Special',
+  social: 'Social', watch_video: 'Video',
 };
 
 interface ServerStats {

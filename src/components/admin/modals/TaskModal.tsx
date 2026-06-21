@@ -101,8 +101,8 @@ export const TaskModal: React.FC = () => {
         <FormSection title="Reward">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <FormGroup>
-              <FormLabel required>Amount (TON)</FormLabel>
-              <FormInput type="number" step="0.01" min="0" value={form.reward} onChange={e => setForm({ ...form, reward: parseFloat(e.target.value) || 0 })} />
+              <FormLabel required>Amount (GRAM)</FormLabel>
+              <FormInput type="number" step="0.001" min="0" value={form.reward} onChange={e => setForm({ ...form, reward: parseFloat(e.target.value) || 0 })} />
             </FormGroup>
             <FormGroup>
               <FormLabel>Display priority</FormLabel>

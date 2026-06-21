@@ -265,7 +265,7 @@ const GameBalanceChip: React.FC<{ bal: number; demo: boolean }> = ({ bal, demo }
     borderRadius: 12, padding: '6px 12px', textAlign: 'right', flexShrink: 0,
   }}>
     <p style={{ fontSize: 10, textTransform: 'uppercase', color: demo ? '#f59e0b' : '#64748b', letterSpacing: '0.05em' }}>
-      {demo ? '🎮 Démo' : 'Solde'}
+      {demo ? '🎮 Demo' : 'Balance'}
     </p>
     <p style={{ fontSize: 14, fontWeight: 700, color: demo ? '#fbbf24' : '#f8fafc', marginTop: 1, display: 'flex', alignItems: 'center', gap: 3 }}>
       <TonLogo size={13} /><CountUp value={bal} decimals={3} />
@@ -280,14 +280,14 @@ const DemoModeBanner: React.FC = () => (
     background: 'rgba(245,158,11,0.12)', borderBottom: '1px solid rgba(245,158,11,0.25)',
   }}>
     <p style={{ fontSize: 9, fontWeight: 700, color: '#f59e0b', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-      🎮 Mode démo — gains non crédités
+      🎮 Demo mode — winnings not credited
     </p>
   </div>
 );
 
 const StreakChip: React.FC<{ streak: number }> = ({ streak }) =>
   streak >= 2 ? (
-    <span title={`${streak} victoires consécutives`} style={{
+    <span title={`${streak} wins in a row`} style={{
       display: 'inline-flex', alignItems: 'center', gap: 3, padding: '2px 8px',
       borderRadius: 99, fontSize: 11, fontWeight: 700, flexShrink: 0,
       background: 'rgba(249,115,22,0.18)', color: '#fb923c',
@@ -324,9 +324,9 @@ const SessionStatsBar: React.FC<{ totalWon: number; best: number; wagered: numbe
   return (
     <div className="grid grid-cols-3 px-1" style={{ gap: 8 }}>
       {[
-        { label: 'Total gagné', value: totalWon > 0 ? `+${totalWon.toFixed(2)}` : '—', color: totalWon > 0 ? '#4ade80' : '#475569' },
-        { label: 'Meilleur gain', value: best > 0 ? `+${best.toFixed(2)}` : '—', color: best > 0 ? '#fbbf24' : '#475569' },
-        { label: 'Misé', value: wagered.toFixed(2), color: '#94a3b8' },
+        { label: 'Total won', value: totalWon > 0 ? `+${totalWon.toFixed(2)}` : '—', color: totalWon > 0 ? '#4ade80' : '#475569' },
+        { label: 'Best win', value: best > 0 ? `+${best.toFixed(2)}` : '—', color: best > 0 ? '#fbbf24' : '#475569' },
+        { label: 'Wagered', value: wagered.toFixed(2), color: '#94a3b8' },
       ].map(s => (
         <div key={s.label} className="text-center">
           <p style={{ fontSize: 9, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{s.label}</p>
@@ -873,13 +873,13 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
       btnLabel = `💰 CASH OUT ×${mult.toFixed(2)}`; btnBg = 'linear-gradient(135deg,#059669,#34d399)'; btnColor = '#fff';
       btnFn = () => doCashout(mult);
     } else if (cashedOut !== null) {
-      btnLabel = `✓ Encaissé ×${cashedOut.toFixed(2)}`; btnBg = '#064e3b'; btnColor = '#4ade80'; btnDis = true;
+      btnLabel = `✓ Cashed out ×${cashedOut.toFixed(2)}`; btnBg = '#064e3b'; btnColor = '#4ade80'; btnDis = true;
     } else {
-      btnLabel = `Miser au prochain tour`; btnBg = '#1e293b'; btnColor = '#64748b';
+      btnLabel = `Bet on next round`; btnBg = '#1e293b'; btnColor = '#64748b';
       btnFn = () => { setQueuedBet(bet); queuedBetR.current = bet; };
     }
   } else {
-    btnLabel = 'Prochain tour…'; btnDis = true;
+    btnLabel = 'Next round…'; btnDis = true;
   }
 
   let btnLabel2 = 'BET'; let btnBg2 = 'linear-gradient(135deg,#4f6ff0,#3b5de8)'; let btnColor2 = '#fff'; let btnDis2 = false;
@@ -891,7 +891,7 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
     else if (cashedOut2 !== null) { btnLabel2 = `✓ Cashed out ×${cashedOut2.toFixed(2)}`; btnBg2 = '#064e3b'; btnColor2 = '#4ade80'; btnDis2 = true; }
     else { btnLabel2 = `BET ${bet2.toFixed(2)}`; }
   } else if (phase === 'crashed') {
-    btnLabel2 = myBet2 !== null && cashedOut2 === null ? '💥 CRASHÉ' : myBet2 !== null ? `✓ ×${cashedOut2?.toFixed(2)}` : `BET ${bet2.toFixed(2)}`;
+    btnLabel2 = myBet2 !== null && cashedOut2 === null ? 'FLEW AWAY!' : myBet2 !== null ? `✓ ×${cashedOut2?.toFixed(2)}` : `BET ${bet2.toFixed(2)}`;
     btnBg2 = myBet2 !== null && cashedOut2 === null ? '#450a0a' : myBet2 !== null ? '#064e3b' : 'linear-gradient(135deg,#4f6ff0,#3b5de8)';
     btnColor2 = myBet2 !== null && cashedOut2 === null ? '#f87171' : myBet2 !== null ? '#4ade80' : '#fff';
     btnDis2 = myBet2 !== null;
@@ -1054,7 +1054,7 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
           )}
           {phase === 'crashed' && (
             <>
-              <div style={{ fontSize: 14, fontWeight: 900, color: '#ef4444', letterSpacing: '0.2em', textTransform: 'uppercase', marginBottom: 4, textShadow: '0 0 20px rgba(239,68,68,.6)' }}>💥 CRASHÉ !</div>
+              <div style={{ fontSize: 14, fontWeight: 900, color: '#ef4444', letterSpacing: '0.2em', textTransform: 'uppercase', marginBottom: 4, textShadow: '0 0 20px rgba(239,68,68,.6)' }}>FLEW AWAY! ✈️</div>
               <div style={{ fontSize: 52, fontWeight: 900, color: '#ef4444', lineHeight: 1, textShadow: '0 0 30px rgba(239,68,68,.55), 0 0 60px rgba(239,68,68,.3)' }}>
                 {crashedAt.toFixed(2)}<span style={{ fontSize: 28 }}>×</span>
               </div>
@@ -1062,7 +1062,7 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
           )}
           {cashedOut !== null && activeBet !== null && phase !== 'waiting' && (
             <div style={{ marginTop: 10, fontSize: 14, fontWeight: 800, color: '#4ade80', background: 'rgba(74,222,128,.1)', padding: '4px 16px', borderRadius: 99, display: 'inline-block', animation: 'fadeSlideIn 0.3s ease-out', boxShadow: '0 0 12px rgba(74,222,128,.25)' }}>
-              ✓ Encaissé à ×{cashedOut.toFixed(2)} → +{(activeBet * cashedOut).toFixed(2)} GRAM
+              ✓ Cashed out @×{cashedOut.toFixed(2)} → +{(activeBet * cashedOut).toFixed(2)} GRAM
             </div>
           )}
         </div>
@@ -1167,7 +1167,7 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
                     <span style={{ fontSize: 11, color: '#64748b' }}>#{roundId}</span>
                     <span style={{ fontSize: 11, color: '#cbd5e1' }}>{activeBet.toFixed(2)} GRAM</span>
                     <span style={{ fontSize: 11, fontWeight: 700, color: cashedOut !== null ? '#4ade80' : phase === 'crashed' ? '#f87171' : '#94a3b8' }}>
-                      {cashedOut !== null ? `×${cashedOut.toFixed(2)} 🏆` : phase === 'crashed' ? '💥 CRASHÉ !' : 'En vol…'}
+                      {cashedOut !== null ? `×${cashedOut.toFixed(2)} 🏆` : phase === 'crashed' ? 'FLEW AWAY!' : 'In flight…'}
                     </span>
                   </div>
                 )}
@@ -1223,8 +1223,8 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
 
         {/* HISTORIQUE */}
         <div style={{ padding: '12px 14px 28px' }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>📊 Historique des crashs</div>
-          {history.length === 0 && <span style={{ fontSize: 11, color: '#1e2847', fontStyle: 'italic' }}>Aucun tour joué…</span>}
+          <div style={{ fontSize: 10, fontWeight: 700, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>📊 Crash history</div>
+          {history.length === 0 && <span style={{ fontSize: 11, color: '#1e2847', fontStyle: 'italic' }}>No rounds played yet…</span>}
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
             {history.map((h, i) => (
               <span key={i} style={{ padding: '3px 10px', borderRadius: 99, fontSize: 13, fontWeight: 800,
@@ -1472,7 +1472,7 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
               </div>
               <StreakChip streak={streak} />
             </div>
-            <p className="text-[11px]" style={{ color: '#64748b' }}>Évitez les mines · Encaissez au bon moment</p>
+            <p className="text-[11px]" style={{ color: '#64748b' }}>Avoid mines · Cash out at the right time</p>
           </div>
           <MuteButton />
           <GameBalanceChip bal={bal} demo={demoMode} />
@@ -1486,15 +1486,15 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
         {phase === 'playing' && (
           <div style={{ background: '#0d1021', border: '1px solid #1e2847', borderRadius: 14 }} className="p-3 flex items-center justify-between">
             <div>
-              <p style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', fontWeight: 600 }}>Gain actuel</p>
+              <p style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', fontWeight: 600 }}>Current win</p>
               <p style={{ fontSize: 18, fontWeight: 900, color: '#22c55e' }}>{fmtAmt(curWin)} GRAM</p>
             </div>
             <div className="text-center">
-              <p style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', fontWeight: 600 }}>Multiplicateur</p>
+              <p style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', fontWeight: 600 }}>Multiplier</p>
               <p style={{ fontSize: 18, fontWeight: 900, color: '#f8fafc' }}>{curMult.toFixed(2)}×</p>
             </div>
             <div className="text-right">
-              <p style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', fontWeight: 600 }}>Prochain</p>
+              <p style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', fontWeight: 600 }}>Next</p>
               <p style={{ fontSize: 18, fontWeight: 900, color: '#fbbf24' }}>{nextMult.toFixed(2)}×</p>
             </div>
           </div>
@@ -1625,7 +1625,7 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
           <div style={{ background: '#0d1021', border: '1px solid #1e2847', borderRadius: 16 }} className="p-4 space-y-4">
             {/* Bet amount */}
             <div>
-              <p style={{ fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>Montant de la mise</p>
+              <p style={{ fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>Bet amount</p>
               <div style={{ background: '#080c1e', border: '1px solid #1e2847', borderRadius: 12 }} className="flex items-center px-3 py-2.5">
                 <input type="number" value={bet} min={0.005} max={50} step={0.005}
                   onChange={e => { const v = +e.target.value; if (!isNaN(v)) setBet(Math.max(0.005, Math.min(50, v))); }}
@@ -1700,7 +1700,7 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
                 : `−${activeBetRef.current.toFixed(4)} GRAM`}
             </p>
             <p className="text-sm" style={{ color: '#64748b' }}>
-              {phase === 'won' ? `${safeCount} cases sûres · ×${curMult.toFixed(2)}` : 'Mine ! Dommage…'}
+              {phase === 'won' ? `${safeCount} safe cells · ×${curMult.toFixed(2)}` : 'Mine! Oh no…'}
             </p>
             <button
               onClick={() => { reset(); }}
@@ -1905,7 +1905,7 @@ const TowerGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
             </div>
             <StreakChip streak={streak} />
           </div>
-          <p className="text-[11px] text-slate-500">Grimpez les étages · évitez le piège · encaissez</p>
+          <p className="text-[11px] text-slate-500">Climb the floors · avoid the trap · cash out</p>
         </div>
         <MuteButton />
         <GameBalanceChip bal={bal} demo={demoMode} />
@@ -1918,15 +1918,15 @@ const TowerGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
       {phase === 'playing' && (
         <div className="glass-card p-3 flex items-center justify-between">
           <div>
-            <p className="text-[10px] text-slate-500 uppercase font-semibold">Gain actuel</p>
+            <p className="text-[10px] text-slate-500 uppercase font-semibold">Current win</p>
             <p className="text-lg font-black text-emerald-400">{floor > 0 ? `${curWin.toFixed(4)} GRAM` : '—'}</p>
           </div>
           <div className="text-center">
-            <p className="text-[10px] text-slate-500 uppercase font-semibold">Étage</p>
+            <p className="text-[10px] text-slate-500 uppercase font-semibold">Floor</p>
             <p className="text-lg font-black text-white">{floor}/{TOWER_FLOORS}</p>
           </div>
           <div className="text-right">
-            <p className="text-[10px] text-slate-500 uppercase font-semibold">Prochain</p>
+            <p className="text-[10px] text-slate-500 uppercase font-semibold">Next</p>
             <p className="text-lg font-black text-amber-400">{nextMult.toFixed(2)}×</p>
           </div>
         </div>
@@ -1996,7 +1996,7 @@ const TowerGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
       <div className="glass-card p-4 space-y-3">
         {phase === 'waiting' ? (
           <>
-            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Difficulté</p>
+            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Difficulty</p>
             <div className="grid grid-cols-3 gap-2">
               {(['easy', 'medium', 'hard'] as const).map(d => (
                 <button key={d} onClick={() => setDiff(d)}
@@ -2010,8 +2010,8 @@ const TowerGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
                 </button>
               ))}
             </div>
-            <p className="text-[10px] text-slate-500">{TOWER_CELLS[diff]} cases/étage · ×{maxMult.toFixed(2)} au sommet</p>
-            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest pt-1">Montant de la mise</p>
+            <p className="text-[10px] text-slate-500">{TOWER_CELLS[diff]} cells/floor · ×{maxMult.toFixed(2)} at top</p>
+            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest pt-1">Bet amount</p>
             <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-xl px-4 py-3">
               <input type="number" value={bet} min={0.005} max={50} step={0.005}
                 onChange={e => { const v = +e.target.value; if (!isNaN(v)) setBet(Math.max(0.005, Math.min(50, v))); }}
@@ -2035,10 +2035,10 @@ const TowerGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
                 ? 'bg-gradient-to-r from-amber-500 to-yellow-500 text-amber-950 active:scale-[0.98] shadow-lg shadow-amber-500/25'
                 : 'bg-white/5 text-slate-600 cursor-not-allowed'
             }`}>
-            {floor > 0 ? `💰 Encaisser ${curWin.toFixed(4)} GRAM` : 'Choisissez une case pour grimper'}
+            {floor > 0 ? `💰 Cash out ${curWin.toFixed(4)} GRAM` : 'Choose a cell to climb'}
           </button>
         ) : (
-          <p className="text-center text-[11px] text-slate-500">Nouvelle partie dans un instant…</p>
+          <p className="text-center text-[11px] text-slate-500">New game in a moment…</p>
         )}
       </div>
     </div>
@@ -2267,8 +2267,9 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
   // Side-effect handlers — reassigned every render so the long-lived rAF
   // loop always calls into fresh closures (current rows/risk/balance/etc.).
   apiRef.current.contact = (pt) => {
-    snd.tick();
-    flashes.current.push({ x: pt.x, y: pt.y, t: 0 });
+    // In heavy mode (many balls), throttle sounds and cap flash array to reduce overhead
+    if (physBalls.current.length <= 12) snd.tick();
+    if (flashes.current.length < 10) flashes.current.push({ x: pt.x, y: pt.y, t: 0 });
   };
 
   apiRef.current.finish = (b) => {
@@ -2380,51 +2381,81 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
           ctx.clearRect(0, 0, canvas.width, canvas.height);
           ctx.save();
           ctx.scale(PLINKO_DPR, PLINKO_DPR);
-          // peg-impact rings
-          for (const f of flashes.current) {
-            const p = f.t / 0.4;
-            ctx.beginPath();
-            ctx.arc(f.x, f.y, PLINKO_BALL_R + p * 8, 0, Math.PI * 2);
-            ctx.strokeStyle = `rgba(251,191,36,${0.5 * (1 - p)})`;
-            ctx.lineWidth = 1.6 * (1 - p);
-            ctx.stroke();
-          }
-          // balls
-          for (const b of physBalls.current) {
-            // traînée
-            for (let i = b.trail.length - 1; i >= 0; i--) {
-              const tp = b.trail[i];
-              const f  = 1 - i / b.trail.length;
+
+          // Heavy mode: > 8 concurrent balls → simplified render
+          // Eliminates: shadowBlur (biggest cost), createRadialGradient, save/restore per ball
+          const heavy = physBalls.current.length > 8;
+          const maxTrail = heavy ? 2 : 7;
+
+          // peg-impact rings — skip in heavy mode
+          if (!heavy) {
+            for (const f of flashes.current) {
+              const p = f.t / 0.4;
               ctx.beginPath();
-              ctx.arc(tp.x, tp.y, PLINKO_BALL_R * (0.35 + f * 0.4), 0, Math.PI * 2);
-              ctx.fillStyle = `rgba(251,191,36,${f * 0.22})`;
+              ctx.arc(f.x, f.y, PLINKO_BALL_R + p * 8, 0, Math.PI * 2);
+              ctx.strokeStyle = `rgba(251,191,36,${0.5 * (1 - p)})`;
+              ctx.lineWidth = 1.6 * (1 - p);
+              ctx.stroke();
+            }
+          }
+
+          if (heavy) {
+            // ── Fast path: no shadow, no gradient, no per-ball save/restore ──
+            // Draw all trails first (one fillStyle switch), then all balls
+            ctx.fillStyle = '#fbbf24';
+            for (const b of physBalls.current) {
+              for (let i = Math.min(b.trail.length - 1, maxTrail - 1); i >= 0; i--) {
+                const tp = b.trail[i];
+                const f  = 1 - i / maxTrail;
+                ctx.globalAlpha = f * 0.22;
+                ctx.beginPath();
+                ctx.arc(tp.x, tp.y, PLINKO_BALL_R * (0.35 + f * 0.4), 0, Math.PI * 2);
+                ctx.fill();
+              }
+            }
+            ctx.globalAlpha = 1;
+            for (const b of physBalls.current) {
+              ctx.beginPath();
+              ctx.arc(b.x, b.y, PLINKO_BALL_R, 0, Math.PI * 2);
               ctx.fill();
             }
-            // corps bille avec squish + rotation
-            ctx.save();
-            ctx.translate(b.x, b.y);
-            ctx.rotate(b.angle);
-            ctx.scale(b.squishX, b.squishY);
-            const g = ctx.createRadialGradient(
-              -PLINKO_BALL_R * 0.3, -PLINKO_BALL_R * 0.3, PLINKO_BALL_R * 0.2,
-              0, 0, PLINKO_BALL_R,
-            );
-            g.addColorStop(0,   '#fef9c3');
-            g.addColorStop(0.5, '#fbbf24');
-            g.addColorStop(1,   '#d97706');
-            ctx.shadowColor = 'rgba(251,191,36,0.85)';
-            ctx.shadowBlur  = 10;
-            ctx.beginPath();
-            ctx.arc(0, 0, PLINKO_BALL_R, 0, Math.PI * 2);
-            ctx.fillStyle = g;
-            ctx.fill();
-            ctx.shadowBlur = 0;
-            ctx.beginPath();
-            ctx.arc(-PLINKO_BALL_R * 0.35, -PLINKO_BALL_R * 0.35, PLINKO_BALL_R * 0.4, 0, Math.PI * 2);
-            ctx.fillStyle = 'rgba(255,255,255,0.60)';
-            ctx.fill();
-            ctx.restore();
+          } else {
+            // ── Quality path: full gradient + shadow + squish ──
+            for (const b of physBalls.current) {
+              for (let i = b.trail.length - 1; i >= 0; i--) {
+                const tp = b.trail[i];
+                const f  = 1 - i / b.trail.length;
+                ctx.beginPath();
+                ctx.arc(tp.x, tp.y, PLINKO_BALL_R * (0.35 + f * 0.4), 0, Math.PI * 2);
+                ctx.fillStyle = `rgba(251,191,36,${f * 0.22})`;
+                ctx.fill();
+              }
+              ctx.save();
+              ctx.translate(b.x, b.y);
+              ctx.rotate(b.angle);
+              ctx.scale(b.squishX, b.squishY);
+              const g = ctx.createRadialGradient(
+                -PLINKO_BALL_R * 0.3, -PLINKO_BALL_R * 0.3, PLINKO_BALL_R * 0.2,
+                0, 0, PLINKO_BALL_R,
+              );
+              g.addColorStop(0,   '#fef9c3');
+              g.addColorStop(0.5, '#fbbf24');
+              g.addColorStop(1,   '#d97706');
+              ctx.shadowColor = 'rgba(251,191,36,0.85)';
+              ctx.shadowBlur  = 10;
+              ctx.beginPath();
+              ctx.arc(0, 0, PLINKO_BALL_R, 0, Math.PI * 2);
+              ctx.fillStyle = g;
+              ctx.fill();
+              ctx.shadowBlur = 0;
+              ctx.beginPath();
+              ctx.arc(-PLINKO_BALL_R * 0.35, -PLINKO_BALL_R * 0.35, PLINKO_BALL_R * 0.4, 0, Math.PI * 2);
+              ctx.fillStyle = 'rgba(255,255,255,0.60)';
+              ctx.fill();
+              ctx.restore();
+            }
           }
+
           ctx.restore();
         }
       }
@@ -2448,7 +2479,7 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
     setSessionGain(0);
     setLastWin(null);
     setFinalSlot(null);
-    const delay = count <= 10 ? 280 : count <= 25 ? 180 : 100;
+    const delay = count <= 10 ? 280 : count <= 25 ? 180 : count <= 50 ? 100 : 60;
     for (let i = 0; i < count; i++) {
       setTimeout(() => {
         if (!mountedRef.current) return;
@@ -2488,7 +2519,7 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
               </div>
               <StreakChip streak={streak} />
             </div>
-            <p className="text-[11px]" style={{ color: '#64748b' }}>Lâchez la balle · Visez les multiplicateurs élevés</p>
+            <p className="text-[11px]" style={{ color: '#64748b' }}>Drop the ball · Aim for high multipliers</p>
           </div>
           <MuteButton />
           <GameBalanceChip bal={bal} demo={demoMode} />
@@ -2632,18 +2663,18 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
                       background: risk === r ? `${col}18` : '#080c1e',
                       border: risk === r ? `1px solid ${col}60` : '1px solid #1e2847',
                       color: risk === r ? col : '#64748b',
-                    }}>{r === 'low' ? 'Bas' : r === 'medium' ? 'Moyen' : 'Élevé'}</button>
+                    }}>{r === 'low' ? 'Low' : r === 'medium' ? 'Medium' : 'High'}</button>
                 );
               })}
             </div>
             <p style={{ fontSize: 10, color: '#475569', marginTop: 6 }}>
-              Avantage maison : {((demoMode ? 0.04 : 0.10) * 100).toFixed(0)}% (biais de trajectoire par rebond)
+              House edge: {((demoMode ? 0.04 : 0.10) * 100).toFixed(0)}% (trajectory bias per bounce)
             </p>
           </div>
 
           {/* Ball count */}
           <div>
-            <p style={{ fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>Boules par lancer</p>
+            <p style={{ fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>Balls per drop</p>
             <div className="flex gap-1.5">
               {([1, 5, 10, 25, 50, 100] as const).map(n => (
                 <button key={n} onClick={() => { if (!dropping && !autoPlay) setBallCount(n); }}
@@ -2658,7 +2689,7 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
 
           {/* Bet */}
           <div>
-            <p style={{ fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>Montant de la mise</p>
+            <p style={{ fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>Bet amount</p>
             <div style={{ background: '#080c1e', border: '1px solid #1e2847', borderRadius: 12 }} className="flex items-center px-3 py-2.5">
               <input type="number" value={bet} min={0.005} max={50} step={0.005} disabled={dropping || autoPlay}
                 onChange={e => { const v = +e.target.value; if (!isNaN(v)) setBet(Math.max(0.005, Math.min(50, v))); }}
@@ -2682,8 +2713,8 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
                 flex: 1, background: 'rgba(255,255,255,0.05)',
                 padding: '14px 8px', borderRadius: 12, color: '#475569', fontWeight: 700, fontSize: 14, cursor: 'not-allowed',
               }}>
-              {dropping ? '🎯 En chute…'
-                : bal < 0.005 ? (demoMode ? 'Démo épuisé' : 'Solde insuffisant')
+              {dropping ? '🎯 Dropping…'
+                : bal < 0.005 ? (demoMode ? 'Demo balance empty' : 'Insufficient balance')
                 : ballCount > 1 ? `🎯 ×${ballCount} — ${fmtAmt(effBet * ballCount)} GRAM`
                 : `🎯 DROP · ${fmtAmt(effBet)} GRAM`}
             </button>
@@ -2783,10 +2814,10 @@ const CATALOG = [
   {
     id: 'dice' as ActiveGame,
     title: 'Dice',
-    desc: 'Choisis ta chance, multiplie ta mise',
-    stats: 'jusqu\'à ×49 · équilibré',
+    desc: 'Pick your odds, multiply your bet',
+    stats: 'up to ×49 · balanced',
     emoji: '🎲',
-    badge: 'POPULAIRE',
+    badge: 'POPULAR',
     accentFrom: '#f59e0b', accentTo: '#fbbf24',
     glow: 'rgba(245,158,11,0.4)',
     badgeColor: '#f59e0b',
@@ -2795,8 +2826,8 @@ const CATALOG = [
   {
     id: 'crash' as ActiveGame,
     title: 'Crash',
-    desc: 'Encaissez avant le crash · courbe infinie',
-    stats: 'jusqu\'à ×1000 · encaissez à tout moment',
+    desc: 'Cash out before it flies away · infinite curve',
+    stats: 'up to ×1000 · cash out anytime',
     emoji: '📈',
     badge: 'HOT',
     accentFrom: '#818cf8', accentTo: '#6366f1',
@@ -2807,10 +2838,10 @@ const CATALOG = [
   {
     id: 'mines' as ActiveGame,
     title: 'Mines',
-    desc: 'Évite les mines, multiplie tes gains',
+    desc: 'Avoid mines, multiply your winnings',
     stats: 'high multipliers · strategy',
     emoji: '💎',
-    badge: 'STRATÉGIE',
+    badge: 'STRATEGY',
     accentFrom: '#8b5cf6', accentTo: '#a78bfa',
     glow: 'rgba(139,92,246,0.4)',
     badgeColor: '#8b5cf6',
@@ -2819,10 +2850,10 @@ const CATALOG = [
   {
     id: 'tower' as ActiveGame,
     title: 'Tower',
-    desc: 'Grimpez les étages, évitez le piège',
-    stats: 'jusqu\'à ×16 · encaissez à tout moment',
+    desc: 'Climb the floors, avoid the trap',
+    stats: 'up to ×16 · cash out anytime',
     emoji: '🗼',
-    badge: 'NOUVEAU',
+    badge: 'NEW',
     accentFrom: '#10b981', accentTo: '#34d399',
     glow: 'rgba(16,185,129,0.4)',
     badgeColor: '#10b981',
@@ -2831,10 +2862,10 @@ const CATALOG = [
   {
     id: 'plinko' as ActiveGame,
     title: 'Plinko',
-    desc: 'Lâchez la balle · Visez les gros multiplicateurs',
-    stats: '3 niveaux de risque · ×999 max',
+    desc: 'Drop the ball · Aim for big multipliers',
+    stats: '3 risk levels · ×999 max',
     emoji: '🎯',
-    badge: 'NOUVEAU',
+    badge: 'NEW',
     accentFrom: '#fbbf24', accentTo: '#fde68a',
     glow: 'rgba(251,191,36,0.4)',
     badgeColor: '#fbbf24',
@@ -2885,7 +2916,7 @@ export const MiniAppGames: React.FC = () => {
       <div className="flex items-center justify-between">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-lg font-bold text-white">Jeux</h1>
+            <h1 className="text-lg font-bold text-white">Games</h1>
             {streak >= 2 && (
               <span style={{
                 display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 10px',
@@ -2893,15 +2924,15 @@ export const MiniAppGames: React.FC = () => {
                 background: 'rgba(249,115,22,0.18)', color: '#fb923c',
                 border: '1px solid rgba(249,115,22,0.3)',
               }}>
-                🔥 {streak} en série
+                🔥 {streak} streak
               </span>
             )}
           </div>
-          <p className="text-xs text-slate-400 mt-0.5">Misez des GRAM · Tentez votre chance</p>
+          <p className="text-xs text-slate-400 mt-0.5">Wager GRAM · Try your luck</p>
         </div>
         <div style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid #1e2847' }} className="px-3 py-2 rounded-xl text-right">
           <p className="text-[10px] uppercase" style={{ color: '#64748b' }}>
-            {demoMode ? '🎮 Démo' : 'Solde'}
+            {demoMode ? '🎮 Demo' : 'Balance'}
           </p>
           <p className="text-sm font-bold" style={{ color: demoMode ? '#f59e0b' : '#f8fafc', display: 'flex', alignItems: 'center', gap: 3 }}>
             <TonLogo size={13} /><CountUp value={bal} decimals={3} />
@@ -2919,7 +2950,7 @@ export const MiniAppGames: React.FC = () => {
           display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
         }}>
           <span>🎮</span>
-          <span>{demoMode ? `Mode Démo · ${demoBalance.toFixed(2)} GRAM` : 'Mode Démo'}</span>
+          <span>{demoMode ? `Demo Mode · ${demoBalance.toFixed(2)} GRAM` : 'Demo Mode'}</span>
         </button>
         <button onClick={toggleMute} style={{
           width: 46, borderRadius: 12, fontWeight: 700, fontSize: 18, cursor: 'pointer',
@@ -3010,22 +3041,22 @@ export const MiniAppGames: React.FC = () => {
         return (
           <div style={{ background: '#0d1021', border: '1px solid #1e2847', borderRadius: 16 }} className="p-4 space-y-3">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold" style={{ color: '#f8fafc' }}>Mes gains</h3>
-              <span style={{ fontSize: 11, color: '#64748b' }}>{total} partie{total !== 1 ? 's' : ''}</span>
+              <h3 className="text-sm font-semibold" style={{ color: '#f8fafc' }}>My winnings</h3>
+              <span style={{ fontSize: 11, color: '#64748b' }}>{total} game{total !== 1 ? 's' : ''}</span>
             </div>
             {/* Stats row — only positive metrics */}
             <div className="grid grid-cols-3 gap-2 text-center">
               <div style={{ background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.15)', borderRadius: 10 }} className="py-2.5">
                 <p style={{ fontSize: 15, fontWeight: 700, color: '#22c55e' }}>+{totalWon.toFixed(2)}</p>
-                <p style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>GRAM gagnés</p>
+                <p style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>GRAM won</p>
               </div>
               <div style={{ background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.15)', borderRadius: 10 }} className="py-2.5">
                 <p style={{ fontSize: 15, fontWeight: 700, color: '#fbbf24' }}>+{bestWin.toFixed(2)}</p>
-                <p style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>Meilleur gain</p>
+                <p style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>Best win</p>
               </div>
               <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 10 }} className="py-2.5">
                 <p style={{ fontSize: 15, fontWeight: 700, color: '#94a3b8' }}>{wonSess.length}</p>
-                <p style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>Victoires</p>
+                <p style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>Wins</p>
               </div>
             </div>
             {/* Wins only */}
@@ -3055,7 +3086,7 @@ export const MiniAppGames: React.FC = () => {
               </div>
             ) : (
               <div className="text-center py-3">
-                <p style={{ fontSize: 12, color: '#64748b' }}>🎯 Jouez pour décrocher votre première victoire !</p>
+                <p style={{ fontSize: 12, color: '#64748b' }}>🎯 Play to win your first game!</p>
               </div>
             )}
           </div>
@@ -3064,15 +3095,15 @@ export const MiniAppGames: React.FC = () => {
 
       {/* Info bar */}
       <div style={{ background: '#0d1021', border: '1px solid #1e2847', borderRadius: 16 }} className="p-4">
-        <h3 style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>Infos</h3>
+        <h3 style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>Info</h3>
         <div className="grid grid-cols-3 gap-3 text-center">
           <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 12 }} className="py-3">
             <p style={{ fontSize: 15, fontWeight: 700, color: '#f59e0b' }}>0.005</p>
             <p style={{ fontSize: 10, color: '#64748b', marginTop: 3 }}>Mise min (GRAM)</p>
           </div>
           <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 12 }} className="py-3">
-            <p style={{ fontSize: 15, fontWeight: 700, color: '#5eead4' }}>5 jeux</p>
-            <p style={{ fontSize: 10, color: '#64748b', marginTop: 3 }}>Disponibles</p>
+            <p style={{ fontSize: 15, fontWeight: 700, color: '#5eead4' }}>5 games</p>
+            <p style={{ fontSize: 10, color: '#64748b', marginTop: 3 }}>Available</p>
           </div>
           <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 12 }} className="py-3">
             <p style={{ fontSize: 15, fontWeight: 700, color: '#cbd5e1' }}>50</p>

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useAppStore } from '../../store/appStore';
 import { adminFetch } from '../../utils/adminFetch';
 import { ToggleSwitch } from '../ui/ToggleSwitch';
-import { Key, Hash, Wallet, Bell, Server, Terminal, Shield, Users, Gift, CreditCard, Plus, MessageSquare, Edit2, Trash2, Zap, Flame } from 'lucide-react';
+import { Key, Hash, Wallet, Bell, Server, Terminal, Shield, Users, Gift, CreditCard, Plus, MessageSquare, Edit2, Trash2, Zap } from 'lucide-react';
 
 export const AdminConfig: React.FC = () => {
   const { platformConfig, updatePlatformConfig, activatePromoEvent, deactivatePromoEvent } = useAppStore();
@@ -109,10 +109,8 @@ export const AdminConfig: React.FC = () => {
     { id: 'antifraud',     label: 'Anti-Fraud',   icon: <Shield className="w-4 h-4" /> },
     { id: 'withdrawals',   label: 'Withdrawals',  icon: <CreditCard className="w-4 h-4" /> },
     { id: 'tasks',         label: 'Tasks',        icon: <Users className="w-4 h-4" /> },
-    { id: 'deposits',      label: 'Deposits',     icon: <Wallet className="w-4 h-4" /> },
     { id: 'system',        label: 'System',       icon: <Server className="w-4 h-4" /> },
     { id: 'notifications', label: 'Notifications',icon: <Bell className="w-4 h-4" /> },
-    { id: 'streaks',       label: 'Streaks & Events', icon: <Flame className="w-4 h-4" /> },
   ];
 
   return (

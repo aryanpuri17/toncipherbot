@@ -107,7 +107,7 @@ const Slide0: React.FC = () => (
 
     <div className="flex flex-col gap-2 w-full max-w-xs">
       {[
-        { icon: '✅', label: 'Real-time TON withdrawals',  color: 'text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/20' },
+        { icon: '✅', label: 'Real-time GRAM withdrawals',  color: 'text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/20' },
         { icon: '🔒', label: 'Secure · TON Blockchain',    color: 'text-blue-400',    bg: 'bg-blue-500/10 border-blue-500/20'       },
         { icon: '⚡', label: 'Earn from your first minute', color: 'text-amber-400',   bg: 'bg-amber-500/10 border-amber-500/20'     },
       ].map((p, i) => (
@@ -143,43 +143,36 @@ const Slide1: React.FC = () => (
         style={{ background: 'radial-gradient(circle, rgba(0,152,234,0.25), transparent)' }} />
       <p className="text-xs text-[#7DD4FC] font-semibold uppercase tracking-widest mb-1">Available balance</p>
       <p className="text-4xl font-black text-white">
-        2.45 <span className="text-[#0098EA] text-2xl">TON</span>
+        2.45 <span className="text-[#0098EA] text-2xl">GRAM</span>
       </p>
       <p className="text-xs text-blue-200/50 mt-0.5">≈ $12.30</p>
       <div className="mt-4 flex gap-2">
         <div className="flex-1 rounded-2xl bg-white/10 px-3 py-2 text-center">
           <p className="text-xs text-slate-400">Total earned</p>
-          <p className="text-sm font-bold text-white">5.20 TON</p>
+          <p className="text-sm font-bold text-white">5.20 GRAM</p>
         </div>
         <div className="flex-1 rounded-2xl bg-white/10 px-3 py-2 text-center">
           <p className="text-xs text-slate-400">Tasks</p>
           <p className="text-sm font-bold text-white">47</p>
         </div>
-        <div className="flex-1 rounded-2xl bg-amber-500/20 border border-amber-500/30 px-3 py-2 text-center">
-          <p className="text-xs text-amber-400">Streak</p>
-          <p className="text-sm font-bold text-amber-300">🔥 7d</p>
-        </div>
       </div>
     </div>
 
-    <p className="text-xs text-slate-500 text-center max-w-xs">
-      Come back every day to keep your streak alive and boost your earnings
-    </p>
   </div>
 );
 
 // ── Slide 2 : Tasks ─────────────────────────────────────────────────
 const MOCK_TASKS = [
-  { icon: '📢', title: 'Join @TonCipherOfficial', sub: 'Telegram channel', reward: '+0.05 TON', color: 'text-blue-400',   bg: 'bg-blue-500/10 border-blue-500/20' },
-  { icon: '🐦', title: 'Follow on Twitter / X',   sub: 'Social network',   reward: '+0.03 TON', color: 'text-sky-400',    bg: 'bg-sky-500/10 border-sky-500/20'   },
-  { icon: '🤖', title: 'Start @TonCipherBot',      sub: 'Telegram bot',    reward: '+0.02 TON', color: 'text-violet-400', bg: 'bg-violet-500/10 border-violet-500/20' },
+  { icon: '📢', title: 'Join @TonCipherOfficial', sub: 'Telegram channel', reward: '+0.05 GRAM', color: 'text-blue-400',   bg: 'bg-blue-500/10 border-blue-500/20' },
+  { icon: '🐦', title: 'Follow on Twitter / X',   sub: 'Social network',   reward: '+0.03 GRAM', color: 'text-sky-400',    bg: 'bg-sky-500/10 border-sky-500/20'   },
+  { icon: '🤖', title: 'Start @TonCipherBot',      sub: 'Telegram bot',    reward: '+0.02 GRAM', color: 'text-violet-400', bg: 'bg-violet-500/10 border-violet-500/20' },
 ];
 
 const Slide2: React.FC<{ platformConfig: PlatformConfig }> = ({ platformConfig }) => (
   <div className="w-full flex flex-col gap-4">
     <div className="text-center">
       <h2 className="text-2xl font-black text-white">Earn with tasks</h2>
-      <p className="text-slate-400 text-sm mt-1">Every mission = TON credited instantly</p>
+      <p className="text-slate-400 text-sm mt-1">Every mission = GRAM credited instantly</p>
     </div>
 
     <div className="space-y-2.5">
@@ -208,7 +201,7 @@ const Slide2: React.FC<{ platformConfig: PlatformConfig }> = ({ platformConfig }
 
     <div className="text-center px-4 py-2 rounded-2xl bg-white/5 border border-white/10">
       <p className="text-xs text-slate-400">
-        Up to <span className="text-white font-semibold">+{platformConfig.referralBonusSignup.toFixed(2)} TON</span> per task
+        Up to <span className="text-white font-semibold">+{platformConfig.referralBonusSignup.toFixed(2)} GRAM</span> per task
         · New missions every day
       </p>
     </div>
@@ -247,7 +240,7 @@ const Slide3: React.FC = () => (
     </div>
 
     <p className="text-xs text-slate-500 text-center">
-      Play with your earned TON — withdraw at any time
+      Play with your earned GRAM — withdraw at any time
     </p>
   </div>
 );
@@ -269,7 +262,7 @@ const Slide4: React.FC<{ platformConfig: PlatformConfig; currentUser: CurrentUse
       <div className="w-full grid grid-cols-2 gap-3">
         <div className="flex flex-col items-center gap-1 p-4 rounded-2xl bg-gradient-to-br from-amber-600/30 to-amber-900/20 border border-amber-500/30">
           <p className="text-3xl font-black text-amber-300">+{signupBonus.toFixed(2)}</p>
-          <p className="text-xs font-semibold text-white">TON / friend joined</p>
+          <p className="text-xs font-semibold text-white">GRAM / friend joined</p>
           <p className="text-[10px] text-slate-400 text-center">upon sign-up</p>
         </div>
         <div className="flex flex-col items-center gap-1 p-4 rounded-2xl bg-gradient-to-br from-emerald-600/30 to-emerald-900/20 border border-emerald-500/30">
@@ -283,7 +276,7 @@ const Slide4: React.FC<{ platformConfig: PlatformConfig; currentUser: CurrentUse
       <div className="w-full flex flex-col gap-2">
         <div className="flex items-center gap-3 p-3 rounded-2xl bg-white/5 border border-white/10">
           <span className="text-lg shrink-0">1️⃣</span>
-          <p className="text-xs text-slate-300 text-left">Your friend signs up → you receive <span className="text-amber-400 font-bold">+{signupBonus.toFixed(2)} TON</span></p>
+          <p className="text-xs text-slate-300 text-left">Your friend signs up → you receive <span className="text-amber-400 font-bold">+{signupBonus.toFixed(2)} GRAM</span></p>
         </div>
         <div className="flex items-center gap-3 p-3 rounded-2xl bg-white/5 border border-white/10">
           <span className="text-lg shrink-0">2️⃣</span>
