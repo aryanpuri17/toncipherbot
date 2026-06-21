@@ -504,9 +504,9 @@ async def backup_db_to_github() -> bool:
         return False
 
 async def _periodic_backup() -> None:
-    """Back up DB every 10 minutes."""
+    """Back up DB every 3 minutes to minimize data loss on restart."""
     while True:
-        await asyncio.sleep(600)
+        await asyncio.sleep(180)
         await backup_db_to_github()
 
 
@@ -1419,6 +1419,9 @@ async def api_user_referral(request: web.Request) -> web.Response:
             row = await cur.fetchone()
 
     new_count   = row[0] if row else 1
+
+    # Force an immediate backup so this referral survives a server restart
+    asyncio.create_task(backup_db_to_github())
 
     if bot:
         try:
