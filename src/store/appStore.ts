@@ -698,12 +698,25 @@ const mockAdminUsers: AdminUser[] = [
 ];
 
 const _defaultReferralMilestones: ReferralMilestone[] = [
-  { id: '1', referralCount: 5, reward: 2.00, description: 'Invite 5 friends', isActive: true },
-  { id: '2', referralCount: 20, reward: 10.00, description: 'Invite 20 friends', isActive: true },
-  { id: '3', referralCount: 50, reward: 30.00, description: 'Invite 50 friends', isActive: true },
-  { id: '4', referralCount: 100, reward: 75.00, description: 'Invite 100 friends', isActive: true },
+  { id: 'ms1',  referralCount: 5,    reward: 0.05, description: 'Invite 5 friends',    isActive: true },
+  { id: 'ms2',  referralCount: 10,   reward: 0.10, description: 'Invite 10 friends',   isActive: true },
+  { id: 'ms3',  referralCount: 25,   reward: 0.25, description: 'Invite 25 friends',   isActive: true },
+  { id: 'ms4',  referralCount: 50,   reward: 0.50, description: 'Invite 50 friends',   isActive: true },
+  { id: 'ms5',  referralCount: 100,  reward: 1.00, description: 'Invite 100 friends',  isActive: true },
+  { id: 'ms6',  referralCount: 250,  reward: 2.00, description: 'Invite 250 friends',  isActive: true },
+  { id: 'ms7',  referralCount: 500,  reward: 3.00, description: 'Invite 500 friends',  isActive: true },
+  { id: 'ms8',  referralCount: 1000, reward: 5.00, description: 'Invite 1000 friends', isActive: true },
 ];
-const mockReferralMilestones: ReferralMilestone[] = _savedReferralMilestones.length > 0 ? _savedReferralMilestones : _defaultReferralMilestones;
+
+// Migrate legacy milestones (old 4-entry set with ids '1'-'4') to the new 8-entry structure
+const _isLegacyMilestones = (ms: ReferralMilestone[]) =>
+  ms.length <= 5 && ms.every(m => ['1','2','3','4','5'].includes(m.id));
+const _rawSaved = _savedReferralMilestones;
+const _migratedMilestones: ReferralMilestone[] = _isLegacyMilestones(_rawSaved) ? _defaultReferralMilestones : _rawSaved;
+if (_isLegacyMilestones(_rawSaved)) {
+  try { localStorage.setItem('tc_referral_milestones', JSON.stringify(_defaultReferralMilestones)); } catch { /* noop */ }
+}
+const mockReferralMilestones: ReferralMilestone[] = _migratedMilestones.length > 0 ? _migratedMilestones : _defaultReferralMilestones;
 
 const _savedPlatformConfig: Partial<PlatformConfig> = (() => {
   try { return JSON.parse(localStorage.getItem('tc_platform_config') ?? '{}') as Partial<PlatformConfig>; }
