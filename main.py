@@ -1566,15 +1566,19 @@ async def _try_auto_withdraw(
     if flagged or banned or wd_blocked:
         return False
 
-    # Account age check
-    try:
-        from datetime import datetime as _dtc, timedelta as _td
-        created = _dtc.strptime(str(created_at_str)[:19], "%Y-%m-%d %H:%M:%S")
-        if (_dtc.utcnow() - created).days < AUTO_WD_MIN_AGE:
-            log.info("Auto-WD skipped: account too new (telegram_id=%d)", telegram_id)
-            return False
-    except Exception:
-        return False
+    # Account age check (skipped entirely when AUTO_WD_MIN_AGE == 0)
+    if AUTO_WD_MIN_AGE > 0:
+        try:
+            from datetime import datetime as _dtc
+            raw = str(created_at_str).replace('T', ' ')[:19]
+            created = _dtc.strptime(raw, "%Y-%m-%d %H:%M:%S")
+            age_days = (_dtc.utcnow() - created).days
+            if age_days < AUTO_WD_MIN_AGE:
+                log.info("Auto-WD skipped: account too new (%d days < %d, telegram_id=%d)",
+                         age_days, AUTO_WD_MIN_AGE, telegram_id)
+                return False
+        except Exception as e:
+            log.warning("Auto-WD: could not parse created_at=%r (%s) — skipping age check", created_at_str, e)
 
     # Send the transfer
     tx_hash = await _send_ton_transfer(address, amount)
