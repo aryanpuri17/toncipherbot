@@ -15,7 +15,7 @@ import { StatusBadge } from '../ui/StatusBadge';
 import { ToggleSwitch } from '../ui/ToggleSwitch';
 import {
   Wallet, CheckCircle, XCircle, Shield, AlertTriangle, Plus, Edit2, Trash2,
-  RefreshCw, Copy, ExternalLink,
+  RefreshCw, Copy, ExternalLink, Trash,
 } from 'lucide-react';
 
 type ApiDeposit = { id: string; userId?: string; telegramId?: number; amount: number; currency: string; network?: string; status: string; createdAt: string; txHash?: string; confirmations?: number; requiredConfirmations?: number };
@@ -427,7 +427,59 @@ export const AdminWithdrawals: React.FC = () => {
           );
         })}
       </div>
+
+      {/* Danger Zone */}
+      <div className="mt-8 border border-red-500/20 rounded-xl p-5 bg-red-500/5">
+        <h3 className="text-sm font-bold text-red-400 mb-1 flex items-center gap-2">
+          <AlertTriangle className="w-4 h-4" /> Danger Zone
+        </h3>
+        <p className="text-xs text-slate-400 mb-4">Irreversible bulk operations — use with caution.</p>
+        <RevokeWelcomeBonusButton />
+      </div>
     </div>
+  );
+};
+
+const RevokeWelcomeBonusButton: React.FC = () => {
+  const [status, setStatus] = React.useState<'idle' | 'confirm' | 'loading' | 'done'>('idle');
+  const [result, setResult] = React.useState<{ affected: number; total_deducted: number } | null>(null);
+
+  const execute = async () => {
+    setStatus('loading');
+    try {
+      const res = await adminFetch('/api/admin/revoke-welcome-bonus', { method: 'POST' });
+      const data = await res.json() as { affected: number; total_deducted: number };
+      setResult(data);
+      setStatus('done');
+    } catch {
+      setStatus('idle');
+    }
+  };
+
+  if (status === 'done' && result) return (
+    <div className="flex items-center gap-2 text-sm text-emerald-400">
+      <CheckCircle className="w-4 h-4" />
+      Done — {result.affected} users affected, {result.total_deducted.toFixed(4)} GRAM deducted.
+    </div>
+  );
+
+  if (status === 'confirm') return (
+    <div className="flex items-center gap-3 flex-wrap">
+      <span className="text-xs text-red-300">Are you sure? This will deduct the welcome bonus from ALL users who claimed it.</span>
+      <button onClick={execute} className="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-bold">Yes, revoke all</button>
+      <button onClick={() => setStatus('idle')} className="px-3 py-1.5 rounded-lg bg-white/10 text-slate-300 text-xs">Cancel</button>
+    </div>
+  );
+
+  return (
+    <button
+      onClick={() => setStatus('confirm')}
+      disabled={status === 'loading'}
+      className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-500/20 border border-red-500/30 text-red-400 text-sm font-semibold hover:bg-red-500/30 transition-colors disabled:opacity-50"
+    >
+      <Trash className="w-4 h-4" />
+      {status === 'loading' ? 'Revoking…' : 'Revoke Welcome Bonus from all users'}
+    </button>
   );
 };
 

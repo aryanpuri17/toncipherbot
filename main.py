@@ -4099,6 +4099,35 @@ async def api_admin_reject_user_task(request: web.Request) -> web.Response:
     return web.json_response({"success": True, "refund": float(task[2]) if task else 0}, headers=_CORS)
 
 
+async def api_admin_revoke_welcome_bonus(request: web.Request) -> web.Response:
+    """Admin: deduct the welcome bonus from every user who claimed it, then clear all claims."""
+    if not _is_admin(request):
+        return web.json_response({"error": "Forbidden"}, status=403, headers=_CORS)
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute("SELECT telegram_id, reward FROM welcome_bonus_claims") as cur:
+            claims = await cur.fetchall()
+
+        affected = 0
+        total_deducted = 0.0
+        for row in claims:
+            uid, reward = int(row[0]), float(row[1] or 0)
+            if reward <= 0:
+                continue
+            await db.execute(
+                "UPDATE users SET app_balance = MAX(0, COALESCE(app_balance, 0) - ?) WHERE telegram_id = ?",
+                (reward, uid)
+            )
+            affected += 1
+            total_deducted += reward
+
+        await db.execute("DELETE FROM welcome_bonus_claims")
+        await db.commit()
+
+    log.info("Admin revoked welcome bonus: %d users affected, %.4f GRAM deducted", affected, total_deducted)
+    return web.json_response({"success": True, "affected": affected, "total_deducted": round(total_deducted, 4)}, headers=_CORS)
+
+
 async def api_pending_proofs(request: web.Request) -> web.Response:
     """Pending social proofs for tasks created by a given user."""
     ip = _client_ip(request)
@@ -5350,6 +5379,7 @@ async def start_web() -> None:
     app.router.add_get( "/api/admin/user-tasks",                      api_admin_user_tasks)
     app.router.add_post("/api/admin/user-tasks/{id}/approve",         api_admin_approve_user_task)
     app.router.add_post("/api/admin/user-tasks/{id}/reject",          api_admin_reject_user_task)
+    app.router.add_post("/api/admin/revoke-welcome-bonus",            api_admin_revoke_welcome_bonus)
 
     # CORS preflight — must be before SPA fallback
     async def handle_options(request: web.Request) -> web.Response:
