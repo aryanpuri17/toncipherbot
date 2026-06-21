@@ -79,6 +79,12 @@ USDT_JETTON_MASTER  = "EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs"
 USDT_DISCOUNT       = 0.98   # 2 % below market rate credited to user
 USDT_MIN_AMOUNT     = 0.1    # minimum USDT deposit (in USDT, not nano)
 
+# ── Auto-withdrawal config ─────────────────────────────────────────────────────
+# HOT_WALLET_MNEMONIC : 24-word mnemonic of the hot wallet (set on server only, never in code)
+HOT_WALLET_MNEMONIC = os.getenv("HOT_WALLET_MNEMONIC", "").strip()
+AUTO_WD_THRESHOLD   = float(os.getenv("AUTO_WD_THRESHOLD", "0.5"))   # GRAM — auto-process below this
+AUTO_WD_MIN_AGE     = int(os.getenv("AUTO_WD_MIN_AGE_DAYS", "7"))     # days — minimum account age
+
 _ton_price_cache: dict = {"price": None, "ts": 0}
 
 # ── Platform task definitions (server-authoritative) ──────────────────────────
@@ -1495,6 +1501,138 @@ async def api_deposit_record(request: web.Request) -> web.Response:
     return web.json_response({"success": True}, headers=_CORS)
 
 
+# ── Auto-withdrawal: sign & broadcast a TON transfer via pytoniq ──────────────
+
+async def _send_ton_transfer(to_address: str, amount_gram: float) -> str | None:
+    """Sign and broadcast a TON transfer using the hot wallet mnemonic.
+    Returns tx hash string on success, None on failure.
+    Requires: pip install pytoniq
+    """
+    try:
+        from pytoniq import LiteBalancer, WalletV4R2 as _TonWallet  # type: ignore[import]
+    except ImportError:
+        log.error("Auto-WD: pytoniq not installed — run: pip install pytoniq")
+        return None
+    try:
+        words = HOT_WALLET_MNEMONIC.split()
+        if len(words) < 12:
+            log.error("Auto-WD: HOT_WALLET_MNEMONIC appears invalid (< 12 words)")
+            return None
+        amount_nano = int(round(amount_gram * 1_000_000_000))
+        provider = LiteBalancer.from_mainnet_config(trust_level=1)
+        await provider.start_up()
+        try:
+            wallet, _, _, _ = await _TonWallet.from_mnemonic(provider, words)
+            result = await wallet.transfer(
+                destination=to_address,
+                amount=amount_nano,
+                body="TonCipher withdrawal",
+            )
+            if isinstance(result, bytes):
+                return result.hex()
+            return str(result) if result else "auto_ok"
+        finally:
+            await provider.close_all()
+    except Exception as e:
+        log.error("Auto-WD: TON transfer failed: %s", e)
+        return None
+
+
+async def _try_auto_withdraw(
+    tx_id: str, telegram_id: int, amount: float, address: str, fname: str
+) -> bool:
+    """Try to auto-process a withdrawal. Returns True if sent successfully.
+
+    Conditions (all must pass):
+    - HOT_WALLET_MNEMONIC is configured
+    - amount <= AUTO_WD_THRESHOLD
+    - user is not flagged, banned, or withdrawal-blocked
+    - account age >= AUTO_WD_MIN_AGE days
+    """
+    if not HOT_WALLET_MNEMONIC:
+        return False
+    if amount > AUTO_WD_THRESHOLD:
+        return False
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT flagged, banned, withdrawal_blocked, created_at FROM users WHERE telegram_id = ?",
+            (telegram_id,)
+        ) as cur:
+            row = await cur.fetchone()
+    if not row:
+        return False
+    flagged, banned, wd_blocked, created_at_str = row
+    if flagged or banned or wd_blocked:
+        return False
+
+    # Account age check
+    try:
+        from datetime import datetime as _dtc, timedelta as _td
+        created = _dtc.strptime(str(created_at_str)[:19], "%Y-%m-%d %H:%M:%S")
+        if (_dtc.utcnow() - created).days < AUTO_WD_MIN_AGE:
+            log.info("Auto-WD skipped: account too new (telegram_id=%d)", telegram_id)
+            return False
+    except Exception:
+        return False
+
+    # Send the transfer
+    tx_hash = await _send_ton_transfer(address, amount)
+    if not tx_hash:
+        return False
+
+    # Mark as completed in DB
+    from datetime import datetime as _dtnow
+    now_iso = _dtnow.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "UPDATE transactions SET status='completed', tx_hash=?, processed_at=? WHERE id=?",
+            (tx_hash, now_iso, tx_id)
+        )
+        await db.commit()
+
+    # Notify user
+    if bot:
+        try:
+            addr_short = f"{address[:8]}…{address[-6:]}" if len(address) > 14 else address
+            await bot.send_message(
+                telegram_id,
+                f"💸 <b>Withdrawal Approved!</b>\n\n"
+                f"Great news, <b>{fname or 'there'}</b>! 🎉 Your funds are on the way.\n\n"
+                f"💰 <b>Amount:</b> {amount:.4f} GRAM\n"
+                f"📍 <b>To:</b> <code>{addr_short}</code>\n"
+                f"⚡ <b>Processed automatically</b>\n\n"
+                f"🙏 Thank you for trusting <b>TonCipher</b>! 🚀",
+                parse_mode="HTML",
+                disable_web_page_preview=True,
+            )
+        except Exception:
+            pass
+
+    # Post to withdrawal channel
+    try:
+        from datetime import datetime as _dtpub
+        approved_str = _dtpub.utcnow().strftime("%d/%m/%Y at %H:%M:%S UTC")
+        tx_link = tx_hash if tx_hash.startswith("http") else (
+            f"https://tonviewer.com/transaction/{tx_hash}" if tx_hash != "auto_ok" else ""
+        )
+        await _notify_channel(
+            await _configured_withdrawal_channel(),
+            f"💸 <b>Withdrawal Completed</b>\n\n"
+            f"👤 <b>User:</b> {fname or f'#{telegram_id}'}\n"
+            f"💰 <b>Amount:</b> {amount:.4f} GRAM\n"
+            f"🕐 <b>Date:</b> {approved_str}\n"
+            + (f'🔗 <a href="{tx_link}">View transaction</a>\n' if tx_link else "")
+            + f"\n<i>Powered by TonCipher 🌟</i>",
+        )
+    except Exception:
+        pass
+
+    log.info("Auto-WD OK: id=%s telegram_id=%d amount=%.4f → %s hash=%s",
+             tx_id, telegram_id, amount, address[:12], tx_hash[:16])
+    return True
+
+
 # ── API — Create withdrawal request (called by frontend on submit) ─────────────
 
 async def api_withdrawal_create(request: web.Request) -> web.Response:
@@ -1673,6 +1811,14 @@ async def api_withdrawal_create(request: web.Request) -> web.Response:
         f"🕐 <b>Date:</b> {now_str}\n"
         f"━━━━━━━━━━━━━━━━━━━━━"
     )
+    # Try auto-processing first (small amounts, clean accounts, configured mnemonic)
+    auto_ok = await _try_auto_withdraw(tx_id, telegram_id, amount, address, fname)
+    if auto_ok:
+        log.info("Auto-WD processed: id=%s telegram_id=%d amount=%.4f → %s",
+                 tx_id, telegram_id, amount, address[:12])
+        return web.json_response({"success": True, "id": tx_id, "auto": True}, headers=_CORS)
+
+    # Manual review needed — notify admin
     await _notify_admin(admin_msg + "\n\n👉 <b>Open the admin panel to approve or reject.</b>")
 
     log.info("Withdrawal request: id=%s telegram_id=%d amount=%.2f %s → %s",
