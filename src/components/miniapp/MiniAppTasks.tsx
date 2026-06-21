@@ -137,10 +137,7 @@ type TaskPhase = 'idle' | 'pending' | 'verifying' | 'not_subscribed' | 'completi
   | 'needs_proof'        // manual-verification tasks (Partage Communauté): awaiting screenshot upload
   | 'proof_pending';     // social: screenshot sent, awaiting admin approval
 
-const REQUIRED_MS         = 30_000; // bots: 30s
-const CHANNEL_REQUIRED_MS = 5_000;  // channels/groups: 5s (membership check handles the rest)
-const VIDEO_REQUIRED_MS   = 30_000; // videos: 30s
-const SOCIAL_REQUIRED_MS  = 30_000; // social/YouTube: 30s
+const TIMER_REQUIRED_MS = 30_000; // bots / social / video: must stay 30s outside
 
 function openUrl(url: string) {
   const tg = (window as unknown as { Telegram?: { WebApp?: { openTelegramLink?: (u: string) => void; openLink?: (u: string) => void } } }).Telegram?.WebApp;
@@ -179,7 +176,10 @@ export const MiniAppTasks: React.FC = () => {
   const [completedApiTaskIds, setCompletedApiTaskIds] = useState<string[]>([]);
   const [uploadingProofId, setUploadingProofId] = useState<string | null>(null);
   const [taskErrors, setTaskErrors] = useState<Record<string, string>>({});
-  const [countdown, setCountdown] = useState<Record<string, number>>({});
+  // Tracks when the user last left for an external task (resets each time they go back)
+  const departTimes = useRef<Record<string, number>>({});
+  // Bumped on visibilitychange/focus so the pending strip re-evaluates elapsed time
+  const [lastFocus, setLastFocus] = useState(0);
 
 
   // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -216,6 +216,17 @@ export const MiniAppTasks: React.FC = () => {
     return () => { Object.values(snap).forEach(clearTimeout); };
   }, []);
 
+  // When mini-app regains focus, re-render pending strips so elapsed time is recomputed
+  useEffect(() => {
+    const onReturn = () => setLastFocus(Date.now());
+    const onVisChange = () => { if (!document.hidden) onReturn(); };
+    document.addEventListener('visibilitychange', onVisChange);
+    window.addEventListener('focus', onReturn);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisChange);
+      window.removeEventListener('focus', onReturn);
+    };
+  }, []);
 
   // Load server tasks on mount (user-created tasks visible to all)
   useEffect(() => {
@@ -406,7 +417,6 @@ export const MiniAppTasks: React.FC = () => {
     }
 
     if (card.targetUrl) openUrl(card.targetUrl);
-    const waitMs = card.type === 'start_bot' ? REQUIRED_MS : card.type === 'watch_video' ? VIDEO_REQUIRED_MS : card.type === 'social' ? SOCIAL_REQUIRED_MS : CHANNEL_REQUIRED_MS;
     recordDepart(card.id);
     setPhase(card.id, 'pending');
 
@@ -427,23 +437,9 @@ export const MiniAppTasks: React.FC = () => {
       }
     }
 
-    // Start 30s countdown only for bot / social / video tasks
-    const needsCountdown = card.type === 'start_bot' || card.type === 'social' || card.type === 'watch_video';
-    if (needsCountdown) {
-      const seconds = Math.ceil(waitMs / 1000);
-      setCountdown(prev => ({ ...prev, [card.id]: seconds }));
-      let remaining = seconds;
-      const _cid = card.id;
-      const tick = () => {
-        remaining -= 1;
-        if (remaining <= 0) {
-          setCountdown(prev => { const n = { ...prev }; delete n[_cid]; return n; });
-        } else {
-          setCountdown(prev => ({ ...prev, [_cid]: remaining }));
-          timerRefs.current[`cd_${_cid}`] = setTimeout(tick, 1000);
-        }
-      };
-      timerRefs.current[`cd_${_cid}`] = setTimeout(tick, 1000);
+    // Record departure time — resets each time user taps "Go back"
+    if (card.type === 'start_bot' || card.type === 'social' || card.type === 'watch_video') {
+      departTimes.current[card.id] = Date.now();
     }
   };
 
@@ -505,9 +501,10 @@ export const MiniAppTasks: React.FC = () => {
 
     const isChannelTask = card.type === 'join_channel' || card.type === 'join_group';
 
-    // ── Bot / social / video: enforce 30s countdown (in-memory only, resets on app close) ──
+    // ── Bot / social / video: enforce 30s outside ──
     if (card.type === 'start_bot' || card.type === 'social' || card.type === 'watch_video') {
-      if ((countdown[card.id] ?? 0) > 0) {
+      const depart = departTimes.current[card.id];
+      if (!depart || Date.now() - depart < TIMER_REQUIRED_MS) {
         haptic.error();
         return;
       }
@@ -742,7 +739,6 @@ export const MiniAppTasks: React.FC = () => {
         {/* Phase strip at bottom of card */}
         {phase === 'pending' && (() => {
           const isChannel = card.type === 'join_channel' || card.type === 'join_group';
-          const waiting   = countdown[card.id] !== undefined;
 
           // ── Channel / group: simple "join then verify" strip ──────────────
           if (isChannel) {
@@ -759,34 +755,42 @@ export const MiniAppTasks: React.FC = () => {
             );
           }
 
-          // ── Bot / social / video: timer strip ─────────────────────────────
-          if (waiting) {
-            // Still counting down — show "Go back" CTA, no Verify
+          // ── Bot / social / video: check elapsed time outside ──────────────
+          // lastFocus triggers re-render when user returns so elapsed is fresh
+          const depart = departTimes.current[card.id];
+          const elapsed = (lastFocus >= 0 && depart) ? Date.now() - depart : 0;
+          const canClaim = depart !== undefined && elapsed >= TIMER_REQUIRED_MS;
+
+          if (canClaim) {
+            // 30s passed — show Claim Reward
             return (
               <button
-                onClick={() => { if (card.targetUrl) openUrl(card.targetUrl); }}
-                style={{ width: '100%', borderTop: '1px solid rgba(245,158,11,0.2)', padding: '12px 14px', background: 'rgba(245,158,11,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, cursor: 'pointer', border: 'none', textAlign: 'left' }}
+                onClick={() => void handleVerify(card)}
+                style={{ width: '100%', borderTop: '1px solid rgba(52,211,153,0.2)', padding: '12px 14px', background: 'rgba(52,211,153,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, cursor: 'pointer', border: 'none' }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <Loader2 style={{ width: 14, height: 14, color: '#fbbf24', animation: 'spin 2s linear infinite', flexShrink: 0 }} />
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                    <span style={{ fontSize: 11, color: '#fbbf24', fontWeight: 700 }}>⏳ {countdown[card.id]}s — you must stay 30 seconds</span>
-                    <span style={{ fontSize: 10, color: '#94a3b8' }}>Tap to go back → come back after 30 s</span>
-                  </div>
-                </div>
-                <ChevronRight style={{ width: 16, height: 16, color: '#f59e0b', flexShrink: 0 }} />
+                <CheckCircle style={{ width: 15, height: 15, color: '#34d399' }} />
+                <span style={{ fontSize: 12, fontWeight: 800, color: '#34d399' }}>Claim Reward</span>
               </button>
             );
           }
 
-          // Timer done — single "Claim Reward" button
+          // Came back too early (or just pressed Go) — tap to go back, resets the 30s clock
           return (
             <button
-              onClick={() => void handleVerify(card)}
-              style={{ width: '100%', borderTop: '1px solid rgba(52,211,153,0.2)', padding: '12px 14px', background: 'rgba(52,211,153,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, cursor: 'pointer', border: 'none' }}
+              onClick={() => {
+                departTimes.current[card.id] = Date.now(); // reset clock
+                if (card.targetUrl) openUrl(card.targetUrl);
+              }}
+              style={{ width: '100%', borderTop: '1px solid rgba(245,158,11,0.2)', padding: '12px 14px', background: 'rgba(245,158,11,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, cursor: 'pointer', border: 'none', textAlign: 'left' }}
             >
-              <CheckCircle style={{ width: 15, height: 15, color: '#34d399' }} />
-              <span style={{ fontSize: 12, fontWeight: 800, color: '#34d399' }}>Claim Reward</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Loader2 style={{ width: 14, height: 14, color: '#fbbf24', animation: 'spin 2s linear infinite', flexShrink: 0 }} />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                  <span style={{ fontSize: 11, color: '#fbbf24', fontWeight: 700 }}>⚠️ You need to stay 30 seconds outside</span>
+                  <span style={{ fontSize: 10, color: '#94a3b8' }}>Tap here to go back → stay 30 s → come back</span>
+                </div>
+              </div>
+              <ChevronRight style={{ width: 16, height: 16, color: '#f59e0b', flexShrink: 0 }} />
             </button>
           );
         })()}
