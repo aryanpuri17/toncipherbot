@@ -1270,7 +1270,7 @@ async def handle_wd_callback(cb: types.CallbackQuery) -> None:
         # ok or ko — find transaction by short id prefix
         short_id = parts[2]
         async with db.execute(
-            "SELECT id, telegram_id, amount FROM transactions"
+            "SELECT id, telegram_id, amount, address FROM transactions"
             " WHERE id LIKE ? AND type='withdrawal' AND status='pending'",
             (short_id + "%",)
         ) as cur:
@@ -1284,7 +1284,7 @@ async def handle_wd_callback(cb: types.CallbackQuery) -> None:
             await cb.answer("Already processed or not found")
             return
 
-        tx_id, uid, amount = tx_row[0], int(tx_row[1]), float(tx_row[2])
+        tx_id, uid, amount, address = tx_row[0], int(tx_row[1]), float(tx_row[2]), tx_row[3] or ""
 
         if action == "ok":
             await db.execute(
@@ -1297,10 +1297,21 @@ async def handle_wd_callback(cb: types.CallbackQuery) -> None:
             except Exception:
                 pass
             await cb.answer("✅ Approved — send the funds manually")
+            # Fetch user info for notifications
+            fname = ""
+            username = ""
             try:
-                async with db.execute("SELECT first_name FROM users WHERE telegram_id=?", (uid,)) as cur:
+                async with db.execute(
+                    "SELECT first_name, username FROM users WHERE telegram_id=?", (uid,)
+                ) as cur:
                     urow = await cur.fetchone()
-                fname = (urow[0] if urow else "") or ""
+                if urow:
+                    fname = urow[0] or ""
+                    username = urow[1] or ""
+            except Exception:
+                pass
+            # Notify user
+            try:
                 await bot.send_message(
                     uid,
                     f"✅ <b>Withdrawal Approved!</b>\n\n"
@@ -1308,6 +1319,26 @@ async def handle_wd_callback(cb: types.CallbackQuery) -> None:
                     f"Funds will be sent to your wallet within 24 hours.\n\n"
                     f"Thank you for using TonCipher! 🚀",
                     parse_mode="HTML",
+                )
+            except Exception:
+                pass
+            # Post professional notification to withdrawal channel
+            try:
+                from datetime import datetime as _dtcb
+                addr_display = (address[:6] + "…" + address[-4:]) if len(address) > 12 else address
+                display_name = f"@{username}" if username else (fname or f"#{uid}")
+                date_str = _dtcb.utcnow().strftime("%a, %d %b %Y · %H:%M UTC")
+                await _notify_channel(
+                    await _configured_withdrawal_channel(),
+                    f"✅ <b>Withdrawal Successful</b>\n\n"
+                    f"🗣 <b>User:</b> {display_name}\n"
+                    f"🆔 <b>User ID:</b> {uid}\n"
+                    f"🌐 <b>Network:</b> TON\n"
+                    f"📍 <b>Address:</b> <code>{addr_display}</code>\n"
+                    f"💸 <b>Amount:</b> {amount:.4f} GRAM\n"
+                    f"🔗 <b>Hash:</b> Manual\n"
+                    f"📅 <b>Date:</b> {date_str}\n"
+                    f"🤖 <b>Bot:</b> TonCipher",
                 )
             except Exception:
                 pass
@@ -1853,18 +1884,30 @@ async def _try_auto_withdraw(
     # Post to withdrawal channel
     try:
         from datetime import datetime as _dtpub
-        approved_str = _dtpub.utcnow().strftime("%d/%m/%Y at %H:%M:%S UTC")
+        date_str_pub = _dtpub.utcnow().strftime("%a, %d %b %Y · %H:%M UTC")
+        addr_short = (address[:6] + "…" + address[-4:]) if len(address) > 12 else address
         tx_link = tx_hash if tx_hash.startswith("http") else (
-            f"https://tonviewer.com/transaction/{tx_hash}" if tx_hash != "auto_ok" else ""
+            f"https://tonviewer.com/transaction/{tx_hash}" if tx_hash not in ("", "auto_ok") else ""
         )
+        hash_display = (f'<a href="{tx_link}">{tx_hash[:12]}…</a>' if tx_link else "Auto") if tx_hash else "Auto"
+        async with aiosqlite.connect(DB_PATH) as _dbch:
+            async with _dbch.execute(
+                "SELECT username FROM users WHERE telegram_id=?", (telegram_id,)
+            ) as _cu:
+                _urow = await _cu.fetchone()
+        uname_pub = (_urow[0] if _urow else "") or ""
+        display_name_pub = f"@{uname_pub}" if uname_pub else (fname or f"#{telegram_id}")
         await _notify_channel(
             await _configured_withdrawal_channel(),
-            f"💸 <b>Withdrawal Completed</b>\n\n"
-            f"👤 <b>User:</b> {fname or f'#{telegram_id}'}\n"
-            f"💰 <b>Amount:</b> {amount:.4f} GRAM\n"
-            f"🕐 <b>Date:</b> {approved_str}\n"
-            + (f'🔗 <a href="{tx_link}">View transaction</a>\n' if tx_link else "")
-            + f"\n<i>Powered by TonCipher 🌟</i>",
+            f"✅ <b>Withdrawal Successful</b>\n\n"
+            f"🗣 <b>User:</b> {display_name_pub}\n"
+            f"🆔 <b>User ID:</b> {telegram_id}\n"
+            f"🌐 <b>Network:</b> TON\n"
+            f"📍 <b>Address:</b> <code>{addr_short}</code>\n"
+            f"💸 <b>Amount:</b> {amount:.4f} GRAM\n"
+            f"🔗 <b>Hash:</b> {hash_display}\n"
+            f"📅 <b>Date:</b> {date_str_pub}\n"
+            f"🤖 <b>Bot:</b> TonCipher",
         )
     except Exception:
         pass
@@ -3049,7 +3092,7 @@ async def api_admin_approve_withdrawal(request: web.Request) -> web.Response:
         # Fetch transaction + user details for the notification
         async with db.execute("""
             SELECT t.telegram_id, t.amount, t.currency, t.address,
-                   u.first_name, t.processed_at
+                   u.first_name, t.processed_at, u.username
             FROM transactions t
             LEFT JOIN users u ON t.telegram_id = u.telegram_id
             WHERE t.id = ?
@@ -3080,23 +3123,36 @@ async def api_admin_approve_withdrawal(request: web.Request) -> web.Response:
             pass
 
     if tx_row:
-        first_name_pub = tx_row[4] or "User"
-        # processed_at from DB (SQLite returns "YYYY-MM-DD HH:MM:SS")
+        # tx_row: [0]=telegram_id [1]=amount [2]=currency [3]=address [4]=first_name [5]=processed_at [6]=username
+        wp_uid   = tx_row[0]
+        wp_addr  = tx_row[3] or ""
+        wp_fname = tx_row[4] or ""
+        wp_uname = (tx_row[6] or "") if len(tx_row) > 6 else ""
         try:
             from datetime import datetime as _dt2
             processed_dt = _dt2.strptime(tx_row[5], "%Y-%m-%d %H:%M:%S")
-            approved_str = processed_dt.strftime("%d/%m/%Y at %H:%M:%S UTC")
+            date_str_wp = processed_dt.strftime("%a, %d %b %Y · %H:%M UTC")
         except Exception:
             from datetime import datetime as _dt2
-            approved_str = _dt2.utcnow().strftime("%d/%m/%Y at %H:%M:%S UTC")
+            date_str_wp = _dt2.utcnow().strftime("%a, %d %b %Y · %H:%M UTC")
+        addr_short_wp = (wp_addr[:6] + "…" + wp_addr[-4:]) if len(wp_addr) > 12 else wp_addr
+        display_name_wp = f"@{wp_uname}" if wp_uname else (wp_fname or f"#{wp_uid}")
+        if tx_link and tx_hash:
+            short_hash = (tx_hash[:12] + "…") if len(tx_hash) > 12 else tx_hash
+            hash_display_wp = f'<a href="{tx_link}">{short_hash}</a>'
+        else:
+            hash_display_wp = "Manual"
         await _notify_channel(
             await _configured_withdrawal_channel(),
-            f"💸 <b>Withdrawal Completed</b>\n\n"
-            f"👤 <b>User:</b> {first_name_pub}\n"
-            f"💰 <b>Amount:</b> {tx_row[1]:.4f} {tx_row[2]}\n"
-            f"🕐 <b>Date:</b> {approved_str}\n"
-            + (f'🔗 <a href="{tx_link}">View transaction</a>\n' if tx_link else "")
-            + f"\n<i>Powered by TonCipher 🌟</i>",
+            f"✅ <b>Withdrawal Successful</b>\n\n"
+            f"🗣 <b>User:</b> {display_name_wp}\n"
+            f"🆔 <b>User ID:</b> {wp_uid}\n"
+            f"🌐 <b>Network:</b> TON\n"
+            f"📍 <b>Address:</b> <code>{addr_short_wp}</code>\n"
+            f"💸 <b>Amount:</b> {tx_row[1]:.4f} GRAM\n"
+            f"🔗 <b>Hash:</b> {hash_display_wp}\n"
+            f"📅 <b>Date:</b> {date_str_wp}\n"
+            f"🤖 <b>Bot:</b> TonCipher",
         )
 
     return web.json_response({"success": True}, headers=_CORS)
