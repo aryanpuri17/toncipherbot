@@ -3933,11 +3933,19 @@ async def _monitor_usdt_jetton() -> None:
 
                     try:
                         tx_id = _short_id()
+                        # Store the USDT amount received (not GRAM) so history displays correctly
                         await db.execute("""
                             INSERT INTO transactions
                                 (id, telegram_id, type, amount, currency, network, status, tx_hash, processed_at)
                             VALUES (?, ?, 'deposit', ?, 'USDT', 'TON', 'completed', ?, datetime('now'))
-                        """, (tx_id, telegram_id, gram_amount, tx_hash))
+                        """, (tx_id, telegram_id, usdt_amount, tx_hash))
+                        # Credit the GRAM equivalent to the user's balance
+                        await db.execute(
+                            "UPDATE users SET app_balance = COALESCE(app_balance, 0) + ?, "
+                            "app_total_earnings = COALESCE(app_total_earnings, 0) + ? "
+                            "WHERE telegram_id = ?",
+                            (gram_amount, gram_amount, telegram_id)
+                        )
                         # Mark any matching pending hints as done
                         await db.execute(
                             "UPDATE usdt_pending SET status = 'credited' WHERE telegram_id = ? AND status = 'pending'",
