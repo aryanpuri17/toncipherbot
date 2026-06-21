@@ -193,6 +193,9 @@ const snd = {
 
 type OnResult = (won: boolean) => void;
 
+// Smart amount formatter: avoids .toFixed(2) rounding 0.005 → "0.01"
+const fmtAmt = (v: number) => v < 0.01 ? v.toFixed(3) : v.toFixed(2);
+
 // ── Official TON logo (blue circle #0098EA + white downward diamond) ──
 const TonLogo = ({ size = 12 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 56 56" fill="none"
@@ -497,7 +500,7 @@ const DiceGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResul
           </p>
           {lastRoll != null && !rolling && (
             <p className="text-xs mt-1" style={{ color: lastWin ? '#4ade80' : '#f87171' }}>
-              {lastWin ? `🎉 Won +${payout.toFixed(2)} GRAM` : '😔 Lost — try again'}
+              {lastWin ? `🎉 Won +${fmtAmt(payout)} GRAM` : '😔 Lost — try again'}
             </p>
           )}
         </div>
@@ -560,7 +563,7 @@ const DiceGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResul
           </div>
           <div style={{ background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.2)', borderRadius: 10 }} className="px-2 py-2 text-center">
             <p style={{ fontSize: 9, color: '#64748b', textTransform: 'uppercase', fontWeight: 600 }}>Potential win</p>
-            <p style={{ fontSize: 14, fontWeight: 800, color: '#4ade80' }}>{potentialWin.toFixed(2)}</p>
+            <p style={{ fontSize: 14, fontWeight: 800, color: '#4ade80' }}>{fmtAmt(potentialWin)}</p>
           </div>
         </div>
       </div>
@@ -583,7 +586,7 @@ const DiceGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResul
           }`}>
           {rolling ? <><RotateCcw className="w-4 h-4 animate-spin" /> Rolling…</>
             : bal < 0.005 ? (demoMode ? '🎮 Demo exhausted' : '💸 Insufficient balance')
-            : <><Zap className="w-4 h-4" /> Roll ({effBet.toFixed(2)} GRAM)</>}
+            : <><Zap className="w-4 h-4" /> Roll ({fmtAmt(effBet)} GRAM)</>}
         </button>
       </div>
     </div>
@@ -858,10 +861,10 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
 
   if (phase === 'waiting') {
     if (queuedBet !== null) {
-      btnLabel = `Annuler (${queuedBet.toFixed(2)} GRAM)`; btnBg = '#334155'; btnColor = '#94a3b8';
+      btnLabel = `Annuler (${fmtAmt(queuedBet)} GRAM)`; btnBg = '#334155'; btnColor = '#94a3b8';
       btnFn = () => { setQueuedBet(null); queuedBetR.current = null; };
     } else {
-      btnLabel = `Miser ${bet.toFixed(2)} GRAM`; btnBg = 'linear-gradient(135deg,#3b82f6,#6366f1)'; btnColor = '#fff';
+      btnLabel = `Miser ${fmtAmt(bet)} GRAM`; btnBg = 'linear-gradient(135deg,#3b82f6,#6366f1)'; btnColor = '#fff';
       if (bet > bal || bet < 0.005) btnDis = true;
       btnFn = () => { setQueuedBet(bet); queuedBetR.current = bet; };
     }
@@ -1484,7 +1487,7 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
           <div style={{ background: '#0d1021', border: '1px solid #1e2847', borderRadius: 14 }} className="p-3 flex items-center justify-between">
             <div>
               <p style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', fontWeight: 600 }}>Gain actuel</p>
-              <p style={{ fontSize: 18, fontWeight: 900, color: '#22c55e' }}>{curWin.toFixed(2)} GRAM</p>
+              <p style={{ fontSize: 18, fontWeight: 900, color: '#22c55e' }}>{fmtAmt(curWin)} GRAM</p>
             </div>
             <div className="text-center">
               <p style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', fontWeight: 600 }}>Multiplicateur</p>
@@ -1658,7 +1661,7 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
               </div>
               <div style={{ background: '#080c1e', border: '1px solid #1e2847', borderRadius: 10 }} className="px-3 py-2.5">
                 <p style={{ fontSize: 10, color: '#64748b', fontWeight: 600, textTransform: 'uppercase', marginBottom: 3 }}>Profit max</p>
-                <p style={{ fontSize: 16, fontWeight: 900, color: '#22c55e' }}>+{(effBet * maxPossibleMult - effBet).toFixed(2)} GRAM</p>
+                <p style={{ fontSize: 16, fontWeight: 900, color: '#22c55e' }}>+{fmtAmt(effBet * maxPossibleMult - effBet)} GRAM</p>
               </div>
             </div>
 
@@ -1669,7 +1672,7 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
                 boxShadow: '0 4px 16px rgba(239,68,68,0.3)',
               } : { background: 'rgba(255,255,255,0.05)', cursor: 'not-allowed' }}
               className="w-full py-3.5 rounded-xl font-black text-sm text-white active:scale-[0.98] transition-all tracking-widest uppercase">
-              {bal < 0.005 ? (demoMode ? '🎮 Démo épuisé' : '💸 Solde insuffisant') : `💣 Commencer · ${effBet.toFixed(2)} GRAM`}
+              {bal < 0.005 ? (demoMode ? '🎮 Demo exhausted' : '💸 Insufficient balance') : `💣 Start · ${fmtAmt(effBet)} GRAM`}
             </button>
           </div>
         )}
@@ -1704,7 +1707,7 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
               style={{ marginTop: 8, width: '100%', padding: '10px 0', borderRadius: 12,
                 border: '1px solid #1e2847', background: 'transparent',
                 color: '#64748b', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
-              ↺ Rejouer ({activeBetRef.current?.toFixed(2)} GRAM)
+              ↺ Replay ({fmtAmt(activeBetRef.current ?? 0)} GRAM)
             </button>
           </div>
         )}
@@ -1748,7 +1751,7 @@ const MinesGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
               <span style={{ fontSize: 12, color: entry.payout > 0 ? '#22c55e' : '#ef4444', fontWeight: 600 }}>
                 {entry.payout > 0 ? `×${(entry.payout / entry.bet).toFixed(2)}` : '—'}
               </span>
-              <span style={{ fontSize: 12, color: '#f8fafc' }}>{entry.bet.toFixed(2)}</span>
+              <span style={{ fontSize: 12, color: '#f8fafc' }}>{fmtAmt(entry.bet)}</span>
               <span style={{ fontSize: 12, fontWeight: 700, color: entry.profit > 0 ? '#22c55e' : '#ef4444' }}>
                 {entry.profit > 0 ? `+${entry.profit.toFixed(2)}` : entry.profit.toFixed(2)}
               </span>
@@ -1933,10 +1936,10 @@ const TowerGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
         <div className="glass-card p-4 text-center">
           {phase === 'won' ? (
             <p className="text-emerald-400 font-bold text-sm">
-              {floor >= TOWER_FLOORS ? '🏆 Sommet atteint !' : '🎉 Encaissé'} +{curWin.toFixed(2)} GRAM
+              {floor >= TOWER_FLOORS ? '🏆 Top reached!' : '🎉 Cashed out'} +{fmtAmt(curWin)} GRAM
             </p>
           ) : (
-            <p className="text-red-400 font-bold text-sm">💥 Piège ! Perdu −{activeBetRef.current.toFixed(2)} GRAM</p>
+            <p className="text-red-400 font-bold text-sm">💥 Trap! Lost −{fmtAmt(activeBetRef.current)} GRAM</p>
           )}
         </div>
       )}
@@ -2022,7 +2025,7 @@ const TowerGame: React.FC<{ onBack: () => void; streak: number; onResult: OnResu
                   ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-emerald-950 hover:from-emerald-400 hover:to-teal-400 active:scale-[0.98] shadow-lg shadow-emerald-500/25'
                   : 'bg-white/5 text-slate-600 cursor-not-allowed'
               }`}>
-              {bal < 0.005 ? (demoMode ? '🎮 Démo épuisé' : '💸 Solde insuffisant') : <><Zap className="w-4 h-4" /> Grimper ({effBet.toFixed(2)} GRAM)</>}
+              {bal < 0.005 ? (demoMode ? '🎮 Demo exhausted' : '💸 Insufficient balance') : <><Zap className="w-4 h-4" /> Climb ({fmtAmt(effBet)} GRAM)</>}
             </button>
           </>
         ) : phase === 'playing' ? (
@@ -2681,8 +2684,8 @@ const PlinkoGame: React.FC<{ onBack: () => void; streak: number; onResult: OnRes
               }}>
               {dropping ? '🎯 En chute…'
                 : bal < 0.005 ? (demoMode ? 'Démo épuisé' : 'Solde insuffisant')
-                : ballCount > 1 ? `🎯 ×${ballCount} — ${(effBet * ballCount).toFixed(2)} GRAM`
-                : `🎯 LÂCHER · ${effBet.toFixed(2)} GRAM`}
+                : ballCount > 1 ? `🎯 ×${ballCount} — ${fmtAmt(effBet * ballCount)} GRAM`
+                : `🎯 DROP · ${fmtAmt(effBet)} GRAM`}
             </button>
 
             <button
@@ -3040,7 +3043,7 @@ export const MiniAppGames: React.FC = () => {
                         }}>↑</span>
                         <div>
                           <p style={{ fontSize: 12, color: '#f8fafc', lineHeight: 1 }}>{r.game}</p>
-                          <p style={{ fontSize: 10, color: '#64748b' }}>Mise {r.bet.toFixed(2)} GRAM</p>
+                          <p style={{ fontSize: 10, color: '#64748b' }}>Bet {fmtAmt(r.bet)} GRAM</p>
                         </div>
                       </div>
                       <span style={{ fontSize: 13, fontWeight: 600, color: '#22c55e' }}>
