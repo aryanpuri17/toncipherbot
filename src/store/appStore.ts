@@ -555,8 +555,8 @@ const _defaultTasks: Task[] = [
   { id: '2', type: 'join_channel', title: 'Join TonCipher Official', description: 'Subscribe to our official channel to stay informed', reward: 0.002, rewardType: 'main', targetUrl: 'https://t.me/TonCipher_Official', isActive: true, totalCompletions: 0, maxCompletions: 1000, createdAt: new Date(Date.now() - 5 * 86400000).toISOString(), verificationMethod: 'auto', priority: 8, icon: '📢', createdByUserId: 'platform' },
   { id: '3', type: 'join_channel', title: 'Join TonCipher Payments', description: 'Join our payment tracking channel', reward: 0.002, rewardType: 'main', targetUrl: 'https://t.me/TonCipher_Pays', isActive: true, totalCompletions: 0, maxCompletions: 500, createdAt: new Date(Date.now() - 3 * 86400000).toISOString(), verificationMethod: 'auto', priority: 7, icon: '💸', createdByUserId: 'platform' },
   { id: '4', type: 'start_bot', title: 'Start @TonCipher_bot', description: 'Open the TonCipher bot and press the Start button', reward: 0.002, rewardType: 'main', targetUrl: 'https://t.me/TonCipher_bot', isActive: true, totalCompletions: 0, maxCompletions: 200, createdAt: new Date(Date.now() - 1 * 86400000).toISOString(), verificationMethod: 'auto', priority: 5, icon: '🤖', createdByUserId: 'platform' },
-  { id: '5', type: 'special', title: '🏆 Referral Challenge', description: 'Invite 3 friends to join TonCipher. Verification is automatic once you have 3 referrals.', reward: 1.50, rewardType: 'main', isActive: true, totalCompletions: 0, createdAt: new Date(Date.now() - 2 * 86400000).toISOString(), verificationMethod: 'auto_referral', requiredCount: 3, priority: 10, isPromoTask: true, icon: '🏆', createdByUserId: 'platform' },
-  { id: '6', type: 'special', title: '📢 Community Share', description: 'Share TonCipher in a Telegram group with 100+ members. Submit a link or description as proof — the team will validate within 24h.', reward: 0.80, rewardType: 'main', isActive: true, totalCompletions: 0, createdAt: new Date(Date.now() - 1 * 86400000).toISOString(), verificationMethod: 'manual', priority: 9, isPromoTask: true, icon: '📢', createdByUserId: 'platform' },
+  { id: '5', type: 'special', title: '🏆 Referral Challenge', description: 'Invite 3 friends to join TonCipher. Verification is automatic once you have 3 referrals.', reward: 0.01, rewardType: 'main', isActive: true, totalCompletions: 0, createdAt: new Date(Date.now() - 2 * 86400000).toISOString(), verificationMethod: 'auto_referral', requiredCount: 3, priority: 10, isPromoTask: true, icon: '🏆', createdByUserId: 'platform', cooldownHours: 24 },
+  { id: '6', type: 'special', title: '📢 Community Share', description: 'Share TonCipher in a Telegram group with 100+ members. Submit a screenshot or link as proof — the team will validate within 24h.', reward: 0.005, rewardType: 'main', isActive: true, totalCompletions: 0, createdAt: new Date(Date.now() - 1 * 86400000).toISOString(), verificationMethod: 'manual', priority: 9, isPromoTask: true, icon: '📢', createdByUserId: 'platform', cooldownHours: 24 },
   { id: '7', type: 'watch_video', title: 'Watch our YouTube video', description: 'Watch the video for at least 20 seconds to validate', reward: 0.002, rewardType: 'main', targetUrl: '', isActive: false, totalCompletions: 0, maxCompletions: 500, createdAt: new Date(Date.now() - 4 * 86400000).toISOString(), verificationMethod: 'auto', priority: 6, icon: '▶️', createdByUserId: 'platform' },
   { id: '8', type: 'social', title: 'Follow us on X (Twitter)', description: 'Follow our official X account and stay up to date with the latest news', reward: 0.002, rewardType: 'main', targetUrl: '', isActive: false, totalCompletions: 0, maxCompletions: 800, createdAt: new Date(Date.now() - 3 * 86400000).toISOString(), verificationMethod: 'auto', priority: 4, icon: '🐦', createdByUserId: 'platform' },
   { id: '9', type: 'social', title: 'Follow us on Instagram', description: 'Follow our Instagram account to see our latest posts', reward: 0.002, rewardType: 'main', targetUrl: '', isActive: false, totalCompletions: 0, maxCompletions: 800, createdAt: new Date(Date.now() - 3 * 86400000).toISOString(), verificationMethod: 'auto', priority: 3, icon: '📸', createdByUserId: 'platform' },
@@ -572,7 +572,7 @@ const mockTasks: Task[] = (() => {
     const missingDefaults = _defaultTasks.filter(t => !savedIds.has(t.id));
     const merged = saved.map((t: Task) => {
       const def = defaultMap.get(t.id);
-      if (def && t.createdByUserId === 'platform') return { ...t, reward: def.reward };
+      if (def && t.createdByUserId === 'platform') return { ...t, title: def.title, description: def.description, reward: def.reward, cooldownHours: def.cooldownHours };
       return t;
     });
     return [...merged, ...missingDefaults];
@@ -1226,7 +1226,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       get().creditReferralBonus(earned);
       return { success: true, earned };
     } catch {
-      return { success: false, error: 'Serveur indisponible. Réessayez dans un instant.' };
+      return { success: false, error: 'Server unavailable. Please try again in a moment.' };
     }
   },
 
@@ -1429,7 +1429,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       }));
       return { success: true };
     } catch {
-      return { success: false, error: 'Serveur indisponible. Réessayez.' };
+      return { success: false, error: 'Server unavailable. Try again.' };
     }
   },
 
@@ -1517,7 +1517,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       active: true,
       multiplier,
       endsAt: new Date(Date.now() + hours * 3600000).toISOString(),
-      label: label || `×${multiplier} sur toutes les tâches`,
+      label: label || `×${multiplier} on all tasks`,
     };
     set(s => ({ platformConfig: { ...s.platformConfig, promoEvent } }));
     void pushConfigToBackend('promoEvent', promoEvent);
@@ -1679,11 +1679,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   redeemPromoCode: (code) => {
     const state = get();
     const promo = state.promoCodes.find(p => p.code.toUpperCase() === code.toUpperCase().trim());
-    if (!promo) return { success: false, error: 'Code invalide.' };
-    if (!promo.isActive) return { success: false, error: 'Ce code n\'est plus actif.' };
-    if (promo.expiresAt && new Date(promo.expiresAt) < new Date()) return { success: false, error: 'Code expiré.' };
-    if (promo.currentUses >= promo.maxUses) return { success: false, error: 'Ce code a atteint sa limite d\'utilisation.' };
-    if (state.usedPromoCodeIds.includes(promo.id)) return { success: false, error: 'Vous avez déjà utilisé ce code.' };
+    if (!promo) return { success: false, error: 'Invalid code.' };
+    if (!promo.isActive) return { success: false, error: 'This code is no longer active.' };
+    if (promo.expiresAt && new Date(promo.expiresAt) < new Date()) return { success: false, error: 'Code expired.' };
+    if (promo.currentUses >= promo.maxUses) return { success: false, error: 'This code has reached its usage limit.' };
+    if (state.usedPromoCodeIds.includes(promo.id)) return { success: false, error: 'You have already used this code.' };
     const earned = promo.reward;
     const balanceUpdate = { balanceMain: state.currentUser.balanceMain + earned, totalEarnings: state.currentUser.totalEarnings + earned };
     const newPromoIds = [...state.usedPromoCodeIds, promo.id];
@@ -1695,7 +1695,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       users: s.users.map(u => u.id === state.currentUser.id ? { ...u, ...balanceUpdate } : u),
     }));
     get().addTransaction({ userId: state.currentUser.id, type: 'bonus', amount: earned, currency: 'TON', status: 'completed', completedAt: new Date().toISOString() });
-    get().addNotification({ userId: state.currentUser.id, type: 'reward', title: 'Code promo activé! 🎉', message: `+${earned.toFixed(2)} GRAM crédité via le code "${promo.code}".`, isRead: false });
+    get().addNotification({ userId: state.currentUser.id, type: 'reward', title: 'Promo code activated! 🎉', message: `+${earned.toFixed(2)} GRAM credited via code "${promo.code}".`, isRead: false });
     return { success: true, reward: earned };
   },
 
@@ -1785,8 +1785,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       referralBoostExpiresAt: newRefBoost,
     }));
     get().addTransaction({ userId: state.currentUser.id, type: 'purchase', amount: item.price, currency: 'TON', status: 'completed', completedAt: new Date().toISOString() });
-    const durationLabel = item.duration ? ` pour ${item.duration >= 24 ? `${item.duration / 24}j` : `${item.duration}h`}` : '';
-    get().addNotification({ userId: state.currentUser.id, type: 'system', title: 'Achat effectué! ✅', message: `${item.icon} ${item.name} activé${durationLabel}.`, isRead: false });
+    const durationLabel = item.duration ? ` for ${item.duration >= 24 ? `${item.duration / 24}d` : `${item.duration}h`}` : '';
+    get().addNotification({ userId: state.currentUser.id, type: 'system', title: 'Purchase complete! ✅', message: `${item.icon} ${item.name} activated${durationLabel}.`, isRead: false });
     return { success: true };
   },
 }));

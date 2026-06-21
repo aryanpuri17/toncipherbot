@@ -105,12 +105,12 @@ export const AdminUsers: React.FC = () => {
       });
       const data = await res.json() as { ok?: boolean; error?: string };
       if (res.ok && data.ok) {
-        setCreditResult({ ok: true, msg: `+${amount.toFixed(4)} GRAM crédités avec succès` });
+        setCreditResult({ ok: true, msg: `+${amount.toFixed(4)} GRAM credited successfully` });
         setCreditAmount('');
         setCreditNote('');
         setTimeout(() => { setCreditOpen(false); setCreditResult(null); }, 2500);
       } else {
-        setCreditResult({ ok: false, msg: data.error ?? `Erreur ${res.status}` });
+        setCreditResult({ ok: false, msg: data.error ?? `Error ${res.status}` });
       }
     } catch {
       setCreditResult({ ok: false, msg: 'Backend unreachable' });
@@ -242,7 +242,7 @@ export const AdminUsers: React.FC = () => {
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-1">
                           <button className="p-1.5 rounded-lg hover:bg-white/5 text-slate-400 hover:text-white"
-                            onClick={e => { e.stopPropagation(); setSelected(user); }} title="Détails">
+                            onClick={e => { e.stopPropagation(); setSelected(user); }} title="Details">
                             <Eye className="w-3.5 h-3.5" />
                           </button>
                           {!user.banned
@@ -253,7 +253,7 @@ export const AdminUsers: React.FC = () => {
                               </button>
                             : <button className="p-1.5 rounded-lg hover:bg-emerald-500/10 text-slate-400 hover:text-emerald-400 disabled:opacity-40"
                                 onClick={e => { e.stopPropagation(); void doAction(user.telegram_id, 'unban'); }}
-                                disabled={isActioning} title="Débannir">
+                                disabled={isActioning} title="Unban">
                                 <UserCheck className="w-3.5 h-3.5" />
                               </button>}
                           {/* Inline ban confirmation */}
