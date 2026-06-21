@@ -993,6 +993,20 @@ async function pushConfigToBackend(key: string, value: unknown): Promise<void> {
   } catch { /* offline — config stays local-only */ }
 }
 
+let _promoSyncTimer: ReturnType<typeof setTimeout> | null = null;
+function _schedulePromoSync(codes: PromoCode[]) {
+  if (_promoSyncTimer) clearTimeout(_promoSyncTimer);
+  _promoSyncTimer = setTimeout(() => {
+    const adminKey = getAdminKey();
+    if (!adminKey) return;
+    fetch('/api/admin/promos/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Admin-Key': adminKey },
+      body: JSON.stringify({ codes }),
+    }).catch(() => {});
+  }, 1000);
+}
+
 export const useAppStore = create<AppState>((set, get) => ({
   currentView: 'miniapp',
   miniAppPage: 'dashboard',
@@ -1716,6 +1730,19 @@ export const useAppStore = create<AppState>((set, get) => ({
       currentUser: { ...s.currentUser, ...balanceUpdate },
       users: s.users.map(u => u.id === state.currentUser.id ? { ...u, ...balanceUpdate } : u),
     }));
+    // If running in Telegram, also credit server-side asynchronously
+    const telegramId = state.currentUser.telegramId;
+    if (telegramId) {
+      const initData = (() => {
+        try { return (window as unknown as { Telegram?: { WebApp?: { initData?: string } } }).Telegram?.WebApp?.initData ?? ''; }
+        catch { return ''; }
+      })();
+      fetch('/api/promo/redeem', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ telegramId, code: code.trim().toUpperCase(), initData }),
+      }).catch(() => {});
+    }
     get().addTransaction({ userId: state.currentUser.id, type: 'bonus', amount: earned, currency: 'TON', status: 'completed', completedAt: new Date().toISOString() });
     get().addNotification({ userId: state.currentUser.id, type: 'reward', title: 'Promo code activated! 🎉', message: `+${earned.toFixed(2)} GRAM credited via code "${promo.code}".`, isRead: false });
     return { success: true, reward: earned };
@@ -1773,9 +1800,24 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
 
-  addPromoCode: (code) => set((s) => ({ promoCodes: [...s.promoCodes, { ...code, id: generateId(), createdAt: new Date().toISOString(), currentUses: 0 }] })),
-  updatePromoCode: (id, data) => set((s) => ({ promoCodes: s.promoCodes.map(p => p.id === id ? { ...p, ...data } : p) })),
-  deletePromoCode: (id) => set((s) => ({ promoCodes: s.promoCodes.filter(p => p.id !== id) })),
+  addPromoCode: (code) => {
+    const newCode = { ...code, id: generateId(), createdAt: new Date().toISOString(), currentUses: 0 };
+    set((s) => {
+      const updated = [...s.promoCodes, newCode];
+      _schedulePromoSync(updated);
+      return { promoCodes: updated };
+    });
+  },
+  updatePromoCode: (id, data) => set((s) => {
+    const updated = s.promoCodes.map(p => p.id === id ? { ...p, ...data } : p);
+    _schedulePromoSync(updated);
+    return { promoCodes: updated };
+  }),
+  deletePromoCode: (id) => set((s) => {
+    const updated = s.promoCodes.filter(p => p.id !== id);
+    _schedulePromoSync(updated);
+    return { promoCodes: updated };
+  }),
 
   buyShopItem: (itemId) => {
     const state = get();

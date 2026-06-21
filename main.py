@@ -707,6 +707,29 @@ async def init_db() -> None:
         await db.execute("CREATE INDEX IF NOT EXISTS idx_utc_task       ON user_task_completions(task_id)")
         await db.execute("CREATE INDEX IF NOT EXISTS idx_fa_telegram    ON fraud_alerts(telegram_id)")
 
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS promo_codes (
+                id          TEXT PRIMARY KEY,
+                code        TEXT NOT NULL COLLATE NOCASE,
+                reward      REAL NOT NULL,
+                max_uses    INTEGER NOT NULL DEFAULT 1,
+                current_uses INTEGER NOT NULL DEFAULT 0,
+                is_active   INTEGER NOT NULL DEFAULT 1,
+                description TEXT    NOT NULL DEFAULT '',
+                expires_at  TEXT,
+                created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+            )
+        """)
+        await db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_promo_code ON promo_codes(code)")
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS promo_redemptions (
+                telegram_id INTEGER NOT NULL,
+                promo_id    TEXT    NOT NULL,
+                redeemed_at TEXT    NOT NULL DEFAULT (datetime('now')),
+                PRIMARY KEY (telegram_id, promo_id)
+            )
+        """)
+
         # Backward-compat migrations — safe to run on existing DB
         for tbl, col, defn in [
             ("users", "referral_balance",   "REAL    NOT NULL DEFAULT 0"),
@@ -1961,6 +1984,141 @@ async def api_user_balance_set(request: web.Request) -> web.Response:
         await db.commit()
 
     return web.json_response({"success": True}, headers=_CORS)
+
+
+# ── API — Promo codes ──────────────────────────────────────────────────────────
+
+async def api_admin_promos_sync(request: web.Request) -> web.Response:
+    """Admin: replace the full promo-code list on the server."""
+    if not _check_admin_auth(request):
+        return web.json_response({"error": "Unauthorized"}, status=401, headers=_CORS)
+    try:
+        data = await request.json()
+    except Exception:
+        return web.json_response({"error": "Invalid JSON"}, status=400, headers=_CORS)
+    codes = data.get("codes", [])
+    if not isinstance(codes, list):
+        return web.json_response({"error": "codes must be a list"}, status=400, headers=_CORS)
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        for c in codes:
+            cid      = str(c.get("id", ""))[:64]
+            ccode    = str(c.get("code", ""))[:32].upper()
+            reward   = float(c.get("reward", 0))
+            max_uses = max(1, int(c.get("maxUses", 1)))
+            cur_uses = max(0, int(c.get("currentUses", 0)))
+            active   = 1 if c.get("isActive", True) else 0
+            desc     = str(c.get("description", ""))[:200]
+            expires  = c.get("expiresAt") or None
+            created  = str(c.get("createdAt", ""))[:30] or None
+            if not cid or not ccode or reward <= 0:
+                continue
+            await db.execute("""
+                INSERT INTO promo_codes
+                    (id, code, reward, max_uses, current_uses, is_active, description, expires_at, created_at)
+                VALUES (?,?,?,?,?,?,?,?,COALESCE(?,datetime('now')))
+                ON CONFLICT(id) DO UPDATE SET
+                    code         = excluded.code,
+                    reward       = excluded.reward,
+                    max_uses     = excluded.max_uses,
+                    is_active    = excluded.is_active,
+                    description  = excluded.description,
+                    expires_at   = excluded.expires_at
+            """, (cid, ccode, reward, max_uses, cur_uses, active, desc, expires, created))
+        # Remove codes that are no longer in the admin list
+        if codes:
+            placeholders = ",".join("?" * len(codes))
+            ids = [str(c.get("id", "")) for c in codes]
+            await db.execute(f"DELETE FROM promo_codes WHERE id NOT IN ({placeholders})", ids)
+        else:
+            await db.execute("DELETE FROM promo_codes")
+        await db.commit()
+    return web.json_response({"success": True}, headers=_CORS)
+
+
+async def api_admin_promos_list(request: web.Request) -> web.Response:
+    """Admin: list all promo codes."""
+    if not _check_admin_auth(request):
+        return web.json_response({"error": "Unauthorized"}, status=401, headers=_CORS)
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT id, code, reward, max_uses, current_uses, is_active, description, expires_at, created_at "
+            "FROM promo_codes ORDER BY created_at DESC"
+        ) as cur:
+            rows = await cur.fetchall()
+    codes = [
+        {"id": r[0], "code": r[1], "reward": r[2], "maxUses": r[3], "currentUses": r[4],
+         "isActive": bool(r[5]), "description": r[6], "expiresAt": r[7], "createdAt": r[8]}
+        for r in rows
+    ]
+    return web.json_response({"codes": codes}, headers=_CORS)
+
+
+async def api_promo_redeem(request: web.Request) -> web.Response:
+    """User: redeem a promo code — validates server-side and credits app_balance."""
+    ip = _client_ip(request)
+    if _is_rate_limited(ip):
+        return web.json_response({"error": "Rate limit exceeded"}, status=429, headers=_CORS)
+    try:
+        data = await request.json()
+    except Exception:
+        return web.json_response({"error": "Invalid JSON"}, status=400, headers=_CORS)
+
+    telegram_id = _parse_telegram_id(data.get("telegramId"))
+    init_data   = str(data.get("initData", ""))
+    code        = str(data.get("code", "")).strip().upper()
+
+    if not telegram_id or not code:
+        return web.json_response({"error": "Invalid request"}, status=400, headers=_CORS)
+    if not _verify_user_request(init_data, telegram_id):
+        return web.json_response({"error": "Authentication required"}, status=401, headers=_CORS)
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT id, reward, max_uses, current_uses, is_active, expires_at "
+            "FROM promo_codes WHERE code = ?", (code,)
+        ) as cur:
+            row = await cur.fetchone()
+
+        if not row:
+            return web.json_response({"error": "Invalid code."}, status=404, headers=_CORS)
+
+        promo_id, reward, max_uses, current_uses, is_active, expires_at = row
+
+        if not is_active:
+            return web.json_response({"error": "This code is no longer active."}, status=400, headers=_CORS)
+        if expires_at:
+            try:
+                from datetime import datetime as _dt
+                if _dt.fromisoformat(expires_at) < _dt.now():
+                    return web.json_response({"error": "Code expired."}, status=400, headers=_CORS)
+            except ValueError:
+                pass
+        if current_uses >= max_uses:
+            return web.json_response({"error": "This code has reached its usage limit."}, status=400, headers=_CORS)
+
+        async with db.execute(
+            "SELECT 1 FROM promo_redemptions WHERE telegram_id = ? AND promo_id = ?",
+            (telegram_id, promo_id)
+        ) as cur:
+            if await cur.fetchone():
+                return web.json_response({"error": "You have already used this code."}, status=400, headers=_CORS)
+
+        await db.execute(
+            "UPDATE users SET app_balance = COALESCE(app_balance, 0) + ?, "
+            "app_total_earnings = COALESCE(app_total_earnings, 0) + ? WHERE telegram_id = ?",
+            (reward, reward, telegram_id)
+        )
+        await db.execute(
+            "UPDATE promo_codes SET current_uses = current_uses + 1 WHERE id = ?", (promo_id,)
+        )
+        await db.execute(
+            "INSERT INTO promo_redemptions (telegram_id, promo_id) VALUES (?, ?)",
+            (telegram_id, promo_id)
+        )
+        await db.commit()
+
+    return web.json_response({"success": True, "earned": reward}, headers=_CORS)
 
 
 # ── API — Admin: stats ─────────────────────────────────────────────────────────
@@ -4633,6 +4791,11 @@ async def start_web() -> None:
 
     # Admin API
     app.router.add_post("/api/admin/broadcast",             api_admin_broadcast)
+
+    # Promo codes
+    app.router.add_get( "/api/admin/promos",       api_admin_promos_list)
+    app.router.add_post("/api/admin/promos/sync",  api_admin_promos_sync)
+    app.router.add_post("/api/promo/redeem",       api_promo_redeem)
 
     # User tasks marketplace
     app.router.add_get( "/api/tasks/stream",                    api_tasks_stream)
