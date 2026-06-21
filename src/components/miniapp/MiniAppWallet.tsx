@@ -7,27 +7,83 @@ import { haptic } from '../../lib/haptics';
 
 const USDT_JETTON_MASTER = 'EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs';
 const USDT_DECIMALS      = 1_000_000; // USDT has 6 decimals on TON
-const USDT_GAS           = '60000000'; // 0.06 TON for gas fees
-const USDT_DISCOUNT      = 0.98;       // 2% below market rate
+const USDT_GAS           = '150000000'; // 0.15 TON — covers gas + forward reliably
+const USDT_FORWARD       = 20_000_000n; // 0.02 TON forwarded to notify recipient
+const USDT_DISCOUNT      = 0.98;        // 2% below market rate
 
-/** Fetch the user's USDT Jetton wallet address from TonCenter */
+/** Fetch with abort timeout (ms) */
+function fetchT(url: string, ms = 7000): Promise<Response> {
+  const ctrl = new AbortController();
+  const tid  = setTimeout(() => ctrl.abort(), ms);
+  return fetch(url, { signal: ctrl.signal }).finally(() => clearTimeout(tid));
+}
+
+/**
+ * Fetch the user's USDT Jetton wallet contract address.
+ * Primary: TonAPI (reliable, no rate-limit key needed).
+ * Fallback: TonCenter v3.
+ * Returns address in bounceable (EQ…) format for wallet compatibility.
+ */
 async function fetchJettonWallet(ownerRawAddr: string): Promise<string> {
-  const res = await fetch(
-    `https://toncenter.com/api/v3/jetton/wallets?owner_address=${encodeURIComponent(ownerRawAddr)}&jetton_address=${USDT_JETTON_MASTER}&limit=1`
-  );
-  if (!res.ok) throw new Error('TonCenter error');
-  const d = await res.json() as { jetton_wallets?: { address: string }[] };
-  const w = d.jetton_wallets?.[0]?.address;
-  if (!w) throw new Error('No USDT wallet found for this address');
-  return w;
+  const ownerFriendly = ownerRawAddr.includes(':') ? rawToFriendly(ownerRawAddr) : ownerRawAddr;
+
+  // 1 — TonAPI v2
+  try {
+    const r = await fetchT(
+      `https://tonapi.io/v2/accounts/${encodeURIComponent(ownerFriendly)}/jettons/${encodeURIComponent(USDT_JETTON_MASTER)}`,
+      6000,
+    );
+    if (r.ok) {
+      const d = await r.json() as { wallet_address?: { address: string } };
+      if (d.wallet_address?.address) return d.wallet_address.address;
+    }
+  } catch { /* fall through */ }
+
+  // 2 — TonCenter v3 fallback
+  try {
+    const r2 = await fetchT(
+      `https://toncenter.com/api/v3/jetton/wallets?owner_address=${encodeURIComponent(ownerRawAddr)}&jetton_address=${encodeURIComponent(USDT_JETTON_MASTER)}&limit=1`,
+      8000,
+    );
+    if (r2.ok) {
+      const d2 = await r2.json() as { jetton_wallets?: { address: string }[] };
+      const w = d2.jetton_wallets?.[0]?.address;
+      if (w) return w;
+    }
+  } catch { /* fall through */ }
+
+  throw new Error('no_usdt_wallet');
+}
+
+/** Convert raw 0:hex address to bounceable EQ… format (for smart contract interactions) */
+function rawToBounceable(raw: string): string {
+  try {
+    const [wStr, hex] = raw.split(':');
+    if (!hex || hex.length !== 64) return raw;
+    const workchain = parseInt(wStr, 10);
+    const addrBytes = hex.match(/.{2}/g)!.map(b => parseInt(b, 16));
+    const flags     = 0x11; // bounceable mainnet (EQ…)
+    const payload   = [flags, workchain & 0xFF, ...addrBytes];
+    let crc = 0;
+    for (const b of payload) {
+      crc ^= b << 8;
+      for (let i = 0; i < 8; i++) crc = (crc & 0x8000) ? ((crc << 1) ^ 0x1021) : (crc << 1);
+    }
+    crc &= 0xFFFF;
+    const full = new Uint8Array([...payload, (crc >> 8) & 0xFF, crc & 0xFF]);
+    let bin = '';
+    for (const b of full) bin += String.fromCharCode(b);
+    return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_');
+  } catch { return raw; }
 }
 
 /** Build the Jetton transfer payload cell — loads @ton/ton lazily to avoid Buffer crash at startup */
 async function buildJettonTransfer(opts: {
-  amount: bigint;         // in nano USDT
-  destination: string;   // platform wallet (friendly or raw)
+  amount: bigint;          // in nano USDT
+  destination: string;    // platform wallet (friendly or raw)
   responseAddress: string; // user wallet (raw 0:hex)
   comment: string;
+  forwardNano: bigint;    // TON to forward so comment notification reaches recipient
 }): Promise<string> {
   // Polyfill Buffer before @ton/core initialises (it uses Buffer.alloc at module scope)
   if (typeof globalThis.Buffer === 'undefined') {
@@ -41,15 +97,19 @@ async function buildJettonTransfer(opts: {
     .storeStringTail(opts.comment)
     .endCell();
 
+  const respAddr = opts.responseAddress.includes(':')
+    ? rawToFriendly(opts.responseAddress)
+    : opts.responseAddress;
+
   const body = beginCell()
     .storeUint(0xf8a7ea5, 32)
     .storeUint(0n, 64)
     .storeCoins(opts.amount)
     .storeAddress(Address.parse(opts.destination))
-    .storeAddress(Address.parse(opts.responseAddress.includes(':') ? rawToFriendly(opts.responseAddress) : opts.responseAddress))
-    .storeBit(false)
-    .storeCoins(1n)
-    .storeBit(true)
+    .storeAddress(Address.parse(respAddr))
+    .storeBit(false)              // no custom_payload
+    .storeCoins(opts.forwardNano) // forward_ton_amount — enough for notification
+    .storeBit(true)               // forward_payload as ^Cell reference
     .storeRef(forwardPayload)
     .endCell();
 
@@ -410,8 +470,12 @@ export const MiniAppDeposit: React.FC = () => {
     setTxError('');
     setTxStatus('pending');
     try {
-      // 1. Get user's USDT Jetton wallet address
-      const jettonWallet = await fetchJettonWallet(connectedAddr);
+      // 1. Resolve user's USDT Jetton wallet address (TonAPI → TonCenter fallback)
+      const jettonWalletRaw = await fetchJettonWallet(connectedAddr);
+      // Use bounceable (EQ…) format so all wallet apps accept it
+      const jettonWallet = jettonWalletRaw.includes(':')
+        ? rawToBounceable(jettonWalletRaw)
+        : jettonWalletRaw;
 
       // 2. Build Jetton transfer payload
       const payload = await buildJettonTransfer({
@@ -419,15 +483,16 @@ export const MiniAppDeposit: React.FC = () => {
         destination:     address,
         responseAddress: connectedAddr,
         comment:         depositCode,
+        forwardNano:     USDT_FORWARD,
       });
 
-      // 3. Send via TonConnect (same UX as native TON)
+      // 3. Send via TonConnect (same UX as native GRAM)
       await tonConnectUI.sendTransaction({
         validUntil: Math.floor(Date.now() / 1000) + 600,
         messages: [{ address: jettonWallet, amount: USDT_GAS, payload }],
       });
 
-      // 4. Credit GRAM balance immediately (we know the rate, we control the balance)
+      // 4. Credit GRAM balance immediately (rate is known, we control the balance)
       const gram = gramFromUsdt(usdtAmount)!;
       creditDeposit(currentUser.id, gram, 'USDT', '', 'TON');
 
@@ -451,13 +516,16 @@ export const MiniAppDeposit: React.FC = () => {
       const msg = (e instanceof Error ? e.message : String(e)).toLowerCase();
       const isCancel = msg.includes('user reject') || msg.includes('cancel') || msg.includes('deny') || msg.includes('declined');
       if (isCancel) {
-        setTxStatus('idle'); // user cancelled — silent reset
-      } else if (msg.includes('no usdt wallet') || msg.includes('no jetton')) {
+        setTxStatus('idle');
+      } else if (msg.includes('no_usdt_wallet') || msg.includes('no usdt') || msg.includes('no jetton')) {
         setTxStatus('error');
-        setTxError('No USDT found in this wallet. Top up your wallet first.');
+        setTxError('No USDT Jetton wallet found for this address. Make sure your wallet holds USDT on TON.');
+      } else if (msg.includes('abort') || msg.includes('api_error') || msg.includes('toncenter') || msg.includes('tonapi')) {
+        setTxStatus('error');
+        setTxError('Could not reach the blockchain API. Check your connection and try again.');
       } else {
         setTxStatus('error');
-        setTxError('Transaction failed. Make sure you have enough USDT and at least 0.06 TON for gas.');
+        setTxError('Transaction failed. Make sure you have enough USDT and at least 0.15 TON for gas fees.');
       }
     }
   };
@@ -678,6 +746,13 @@ export const MiniAppDeposit: React.FC = () => {
                 <span className="text-purple-400 text-xs">🔒</span>
                 <p className="text-[10px] text-slate-400">
                   Deposit code <span className="font-mono font-bold text-purple-300">{depositCode}</span> automatically included in the transaction.
+                </p>
+              </div>
+              {/* Gas requirement notice */}
+              <div className="flex items-start gap-2 p-3 rounded-xl bg-amber-500/5 border border-amber-500/20">
+                <span className="text-amber-400 text-xs">⛽</span>
+                <p className="text-[10px] text-slate-400">
+                  Sending USDT requires <span className="text-amber-300 font-semibold">≈ 0.15 TON</span> in your wallet for gas fees (returned if unused).
                 </p>
               </div>
               <button onClick={() => void handleSendUSDT()}
