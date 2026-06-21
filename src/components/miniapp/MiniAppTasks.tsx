@@ -143,7 +143,7 @@ const VIDEO_REQUIRED_MS   = 30_000; // videos: 30s
 const SOCIAL_REQUIRED_MS  = 30_000; // social/YouTube: 30s minimum
 const departKey = (id: string) => `tc_task_depart_${id}`;
 
-type DepartEntry = { ts: number; ms: number; type?: string; source?: 'platform' | 'api' };
+type DepartEntry = { ts: number; ms: number; type?: string; source?: 'platform' | 'api'; leftAt?: number; awayMs?: number };
 
 function openUrl(url: string) {
   const tg = (window as unknown as { Telegram?: { WebApp?: { openTelegramLink?: (u: string) => void; openLink?: (u: string) => void } } }).Telegram?.WebApp;
@@ -238,11 +238,68 @@ export const MiniAppTasks: React.FC = () => {
       const raw = localStorage.getItem(key);
       if (!raw) continue;
       try {
-        const parsed = JSON.parse(raw) as { ts: number };
+        const parsed = JSON.parse(raw) as DepartEntry;
         if (!parsed.ts || Date.now() - parsed.ts > 3_600_000) { localStorage.removeItem(key); continue; }
+        // App was destroyed while user was away — accumulate that time now
+        if (parsed.leftAt) {
+          const awayMs = (parsed.awayMs ?? 0) + (Date.now() - parsed.leftAt);
+          localStorage.setItem(key, JSON.stringify({ ...parsed, awayMs, leftAt: undefined }));
+        }
       } catch { localStorage.removeItem(key); continue; }
       setPhase(id, 'pending');
     }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Track real time spent outside the mini-app using visibility + blur/focus events.
+  // On hide: stamp leftAt. On show: accumulate awayMs, warn immediately if too short.
+  useEffect(() => {
+    const onHide = () => {
+      const now = Date.now();
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (!key?.startsWith('tc_task_depart_')) continue;
+        const raw = localStorage.getItem(key);
+        if (!raw) continue;
+        try {
+          const entry = JSON.parse(raw) as DepartEntry;
+          if (entry.leftAt) continue;
+          localStorage.setItem(key, JSON.stringify({ ...entry, leftAt: now }));
+        } catch { /* ignore */ }
+      }
+    };
+
+    const onShow = () => {
+      const now = Date.now();
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (!key?.startsWith('tc_task_depart_')) continue;
+        const id = key.slice('tc_task_depart_'.length);
+        const raw = localStorage.getItem(key);
+        if (!raw) continue;
+        try {
+          const entry = JSON.parse(raw) as DepartEntry;
+          if (!entry.leftAt) continue;
+          const awayMs = (entry.awayMs ?? 0) + (now - entry.leftAt);
+          localStorage.setItem(key, JSON.stringify({ ...entry, awayMs, leftAt: undefined }));
+          if (awayMs < entry.ms) {
+            setTooEarlyInfo(prev => ({ ...prev, [id]: true }));
+            haptic.error();
+          } else {
+            setTooEarlyInfo(prev => { const n = { ...prev }; delete n[id]; return n; });
+          }
+        } catch { /* ignore */ }
+      }
+    };
+
+    const onVisChange = () => { if (document.hidden) onHide(); else onShow(); };
+    document.addEventListener('visibilitychange', onVisChange);
+    window.addEventListener('blur', onHide);
+    window.addEventListener('focus', onShow);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisChange);
+      window.removeEventListener('blur', onHide);
+      window.removeEventListener('focus', onShow);
+    };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load server tasks on mount (user-created tasks visible to all)
@@ -500,12 +557,12 @@ export const MiniAppTasks: React.FC = () => {
     const isTimerTask   = card.type === 'social' || card.type === 'watch_video' || card.type === 'start_bot';
     const isChannelTask = card.type === 'join_channel' || card.type === 'join_group';
 
-    // ── Timer tasks: instant check, no server, no loading ─────────────────────
+    // ── Timer tasks: check real time spent outside the mini-app ──────────────
     if (isTimerTask) {
       const entry    = parseDeparture(localStorage.getItem(departKey(card.id)));
-      const elapsed  = entry ? Date.now() - entry.ts : 0;
       const required = entry?.ms ?? REQUIRED_MS;
-      if (!entry || elapsed < required) {
+      const awayMs   = entry?.awayMs ?? 0;
+      if (!entry || awayMs < required) {
         setTooEarlyInfo(prev => ({ ...prev, [card.id]: true }));
         haptic.error();
         return; // instant feedback — no spinner shown
