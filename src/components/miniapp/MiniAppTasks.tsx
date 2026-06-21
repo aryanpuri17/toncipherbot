@@ -179,6 +179,7 @@ export const MiniAppTasks: React.FC = () => {
   const [uploadingProofId, setUploadingProofId] = useState<string | null>(null);
   const [tooEarlyInfo, setTooEarlyInfo] = useState<Record<string, true>>({});
   const [taskErrors, setTaskErrors] = useState<Record<string, string>>({});
+  const [countdown, setCountdown] = useState<Record<string, number>>({});
 
 
   // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -495,6 +496,23 @@ export const MiniAppTasks: React.FC = () => {
     localStorage.setItem(departKey(card.id), JSON.stringify({ ts: Date.now(), ms: waitMs, type: card.type, source: card.source }));
     recordDepart(card.id);
     setPhase(card.id, 'pending');
+
+    // Start countdown for timer-based tasks
+    if (waitMs > CHANNEL_REQUIRED_MS) {
+      const seconds = Math.ceil(waitMs / 1000);
+      setCountdown(prev => ({ ...prev, [card.id]: seconds }));
+      let remaining = seconds;
+      const tick = () => {
+        remaining -= 1;
+        if (remaining <= 0) {
+          setCountdown(prev => { const n = { ...prev }; delete n[card.id]; return n; });
+        } else {
+          setCountdown(prev => ({ ...prev, [card.id]: remaining }));
+          timerRefs.current[`cd_${card.id}`] = setTimeout(tick, 1000);
+        }
+      };
+      timerRefs.current[`cd_${card.id}`] = setTimeout(tick, 1000);
+    }
   };
 
   // ── Direct complete — no timer check (used after external verification) ─────
@@ -828,22 +846,35 @@ export const MiniAppTasks: React.FC = () => {
               </>
             ) : (
               <>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  {(card.type === 'social' || card.type === 'watch_video' || card.type === 'start_bot') && (
-                    <Loader2 style={{ width: 16, height: 16, color: '#fbbf24', animation: 'spin 2s linear infinite', flexShrink: 0 }} />
-                  )}
-                  <span style={{ fontSize: 11, color: '#fbbf24', fontWeight: 600 }}>
-                    {(card.type === 'join_channel' || card.type === 'join_group')
-                      ? 'Subscribe, then click Verify'
-                      : 'Join, then come back and click Verify'}
-                  </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
+                  <Loader2 style={{ width: 14, height: 14, color: '#fbbf24', animation: 'spin 2s linear infinite', flexShrink: 0 }} />
+                  <div style={{ minWidth: 0 }}>
+                    {(card.type === 'join_channel' || card.type === 'join_group') ? (
+                      <span style={{ fontSize: 11, color: '#fbbf24', fontWeight: 600 }}>
+                        Join the channel, then click Verify
+                      </span>
+                    ) : countdown[card.id] !== undefined ? (
+                      <span style={{ fontSize: 11, color: '#fbbf24', fontWeight: 700 }}>
+                        ⏳ Stay on the page — {countdown[card.id]}s remaining
+                      </span>
+                    ) : (
+                      <span style={{ fontSize: 11, color: '#34d399', fontWeight: 700 }}>
+                        ✅ Ready! Click Verify now
+                      </span>
+                    )}
+                  </div>
                 </div>
-                <button onClick={() => void handleVerify(card)} style={{
-                  padding: '6px 12px', borderRadius: 8, flexShrink: 0,
-                  background: 'rgba(52,211,153,0.15)', border: '1px solid rgba(52,211,153,0.3)',
-                  color: '#34d399', fontSize: 11, fontWeight: 700, cursor: 'pointer',
-                  display: 'flex', alignItems: 'center', gap: 4,
-                }}>
+                <button
+                  onClick={() => void handleVerify(card)}
+                  disabled={countdown[card.id] !== undefined && (card.type === 'social' || card.type === 'watch_video' || card.type === 'start_bot')}
+                  style={{
+                    padding: '6px 12px', borderRadius: 8, flexShrink: 0,
+                    background: countdown[card.id] !== undefined ? 'rgba(100,116,139,0.15)' : 'rgba(52,211,153,0.15)',
+                    border: `1px solid ${countdown[card.id] !== undefined ? 'rgba(100,116,139,0.3)' : 'rgba(52,211,153,0.3)'}`,
+                    color: countdown[card.id] !== undefined ? '#64748b' : '#34d399',
+                    fontSize: 11, fontWeight: 700, cursor: countdown[card.id] !== undefined ? 'not-allowed' : 'pointer',
+                    display: 'flex', alignItems: 'center', gap: 4,
+                  }}>
                   <ShieldCheck style={{ width: 12, height: 12 }} /> Verify
                 </button>
               </>
