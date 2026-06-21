@@ -708,12 +708,13 @@ const _defaultReferralMilestones: ReferralMilestone[] = [
   { id: 'ms8',  referralCount: 1000, reward: 5.00, description: 'Invite 1000 friends', isActive: true },
 ];
 
-// Migrate legacy milestones (old 4-entry set with ids '1'-'4') to the new 8-entry structure
-const _isLegacyMilestones = (ms: ReferralMilestone[]) =>
-  ms.length <= 5 && ms.every(m => ['1','2','3','4','5'].includes(m.id));
+// Replace any milestone set that doesn't match the current 8-tier ms1-ms8 structure
+const _expectedIds = ['ms1','ms2','ms3','ms4','ms5','ms6','ms7','ms8'];
+const _isOutdatedMilestones = (ms: ReferralMilestone[]) =>
+  ms.length !== 8 || !_expectedIds.every((id, i) => ms[i]?.id === id);
 const _rawSaved = _savedReferralMilestones;
-const _migratedMilestones: ReferralMilestone[] = _isLegacyMilestones(_rawSaved) ? _defaultReferralMilestones : _rawSaved;
-if (_isLegacyMilestones(_rawSaved)) {
+const _migratedMilestones: ReferralMilestone[] = _isOutdatedMilestones(_rawSaved) ? _defaultReferralMilestones : _rawSaved;
+if (_isOutdatedMilestones(_rawSaved)) {
   try { localStorage.setItem('tc_referral_milestones', JSON.stringify(_defaultReferralMilestones)); } catch { /* noop */ }
 }
 const mockReferralMilestones: ReferralMilestone[] = _migratedMilestones.length > 0 ? _migratedMilestones : _defaultReferralMilestones;
