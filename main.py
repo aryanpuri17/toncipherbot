@@ -520,6 +520,12 @@ async def init_db() -> None:
                 created_at        TEXT    NOT NULL DEFAULT (datetime('now'))
             )
         """)
+        # Migration: add photo_url if column doesn't exist yet
+        try:
+            await db.execute("ALTER TABLE users ADD COLUMN photo_url TEXT NOT NULL DEFAULT ''")
+            await db.commit()
+        except Exception:
+            pass  # column already exists
         await db.execute("""
             CREATE TABLE IF NOT EXISTS referrals (
                 referrer_id INTEGER NOT NULL,
@@ -1142,6 +1148,7 @@ async def api_user_init(request: web.Request) -> web.Response:
     username    = (data.get("username")   or "")[:64]
     first_name  = (data.get("firstName")  or "")[:128]
     last_name   = (data.get("lastName")   or "")[:128]
+    photo_url   = (data.get("photoUrl")   or "")[:512]
     init_data   = str(data.get("initData",  ""))
 
     if not telegram_id or not isinstance(telegram_id, int):
@@ -1167,14 +1174,15 @@ async def api_user_init(request: web.Request) -> web.Response:
             return web.json_response({"error": "Account banned"}, status=403, headers=_CORS)
 
         await db.execute("""
-            INSERT INTO users (telegram_id, username, first_name, last_name, ip_address)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO users (telegram_id, username, first_name, last_name, photo_url, ip_address)
+            VALUES (?, ?, ?, ?, ?, ?)
             ON CONFLICT(telegram_id) DO UPDATE SET
                 username   = excluded.username,
                 first_name = excluded.first_name,
                 last_name  = excluded.last_name,
+                photo_url  = excluded.photo_url,
                 ip_address = excluded.ip_address
-        """, (telegram_id, username, first_name, last_name, ip))
+        """, (telegram_id, username, first_name, last_name, photo_url, ip))
 
         if ip:
             async with db.execute(
@@ -1419,7 +1427,7 @@ async def api_leaderboard(request: web.Request) -> web.Response:
 
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute("""
-            SELECT telegram_id, username, first_name, referral_count
+            SELECT telegram_id, username, first_name, referral_count, photo_url
             FROM users
             WHERE flagged = 0 AND banned = 0 AND referral_count > 0
             ORDER BY referral_count DESC
@@ -1427,7 +1435,7 @@ async def api_leaderboard(request: web.Request) -> web.Response:
         """) as cur:
             rows = await cur.fetchall()
     return web.json_response([
-        {"telegramId": r[0], "username": r[1], "firstName": r[2], "referralCount": r[3]}
+        {"telegramId": r[0], "username": r[1], "firstName": r[2], "referralCount": r[3], "photoUrl": r[4] or ""}
         for r in rows
     ], headers=_CORS)
 
