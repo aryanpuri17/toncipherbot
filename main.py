@@ -804,21 +804,94 @@ async def _log_fraud_alert(
         " VALUES (?, ?, ?, ?, ?, ?)",
         (telegram_id, username, alert_type, details, sev, score),
     )
-    # Auto-action based on severity: ban outright if critical, block withdrawals if high
-    # medium/low → flag only (admin reviews manually — no automatic withdrawal block)
+    # Only auto-ban on critical (self-referral / initData forgery) — no auto-blocking of withdrawals.
+    # Admin sees the risk score on every withdrawal request and decides manually.
     if sev == "critical":
         await db.execute(
             "UPDATE users SET banned = 1, flagged = 1 WHERE telegram_id = ?", (telegram_id,)
         )
         log.warning("FRAUD AUTO-BAN user=%d @%s score=%d", telegram_id, username, score)
-    elif sev == "high":
-        await db.execute(
-            "UPDATE users SET withdrawal_blocked = 1, flagged = 1 WHERE telegram_id = ?", (telegram_id,)
-        )
-        log.warning("FRAUD AUTO-BLOCK-WD user=%d @%s score=%d", telegram_id, username, score)
     else:
         await db.execute("UPDATE users SET flagged = 1 WHERE telegram_id = ?", (telegram_id,))
     log.warning("FRAUD [%s] user=%d @%s score=%d — %s", sev.upper(), telegram_id, username, score, details)
+
+
+async def _wd_risk_score(db: aiosqlite.Connection, telegram_id: int) -> tuple[int, list[str]]:
+    """Compute a 0-100 risk score for a withdrawal request.
+    Returns (score, reasons) so the admin message can display them.
+    """
+    reasons: list[str] = []
+
+    async with db.execute(
+        "SELECT flagged, banned, ip_address, created_at, app_tasks_completed, referral_count"
+        " FROM users WHERE telegram_id = ?", (telegram_id,)
+    ) as cur:
+        row = await cur.fetchone()
+    if not row:
+        return 0, reasons
+    flagged, banned, ip_addr, created_at_str, tasks_done, ref_count = row
+
+    if banned:
+        reasons.append("banned_account")
+    if flagged:
+        reasons.append("previously_flagged")
+
+    # Account age
+    try:
+        from datetime import datetime as _dtc
+        raw = str(created_at_str).replace('T', ' ')[:19]
+        created = _dtc.strptime(raw, "%Y-%m-%d %H:%M:%S")
+        age_days = (_dtc.utcnow() - created).days
+        if age_days < 1:
+            reasons.append("account_under_1_day")
+        elif age_days < 3:
+            reasons.append("account_under_3_days")
+    except Exception:
+        pass
+
+    # Suspiciously high balance with few tasks
+    async with db.execute(
+        "SELECT COALESCE(SUM(amount),0) FROM transactions"
+        " WHERE telegram_id=? AND type='withdrawal' AND status='completed'",
+        (telegram_id,)
+    ) as cur:
+        (total_withdrawn,) = await cur.fetchone()
+    if int(tasks_done or 0) < 3 and float(total_withdrawn or 0) > 0:
+        reasons.append("low_tasks_high_withdrawal")
+
+    # Same-IP multi-account check
+    if ip_addr:
+        async with db.execute(
+            "SELECT COUNT(*) FROM users WHERE ip_address=? AND telegram_id!=?",
+            (ip_addr, telegram_id)
+        ) as cur:
+            (same_ip_count,) = await cur.fetchone()
+        if int(same_ip_count or 0) >= 2:
+            reasons.append(f"multi_account_ip({same_ip_count}_others)")
+
+    # Referral velocity: >10 referrals in last 24h
+    async with db.execute(
+        "SELECT COUNT(*) FROM referrals WHERE referrer_id=? AND created_at >= datetime('now','-1 day')",
+        (telegram_id,)
+    ) as cur:
+        (refs_24h,) = await cur.fetchone()
+    if int(refs_24h or 0) > 10:
+        reasons.append(f"referral_burst({refs_24h}_in_24h)")
+
+    weights = {
+        "banned_account":           90,
+        "previously_flagged":       40,
+        "account_under_1_day":      30,
+        "account_under_3_days":     15,
+        "low_tasks_high_withdrawal": 20,
+        "multi_account_ip":         25,
+        "referral_burst":           20,
+    }
+    score = min(sum(
+        next((v for k, v in weights.items() if r.startswith(k)), 10)
+        for r in reasons
+    ), 100)
+    return score, reasons
 
 
 # ── Bot Handlers ───────────────────────────────────────────────────────────────
@@ -1137,6 +1210,128 @@ async def handle_proof_callback(cb: types.CallbackQuery) -> None:
             )
         except Exception:
             pass
+
+
+# ── Callback — admin approves / rejects / bans from withdrawal message ────────
+
+@dp.callback_query(F.data.startswith("wd_"))
+async def handle_wd_callback(cb: types.CallbackQuery) -> None:
+    if cb.from_user.id != ADMIN_TELEGRAM_ID:
+        await cb.answer("Unauthorized")
+        return
+
+    parts = cb.data.split("_")  # wd_ok_<short_id>  |  wd_ko_<short_id>  |  wd_ban_<uid>_<short_id>
+    action = parts[1]           # ok | ko | ban
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        if action == "ban":
+            uid_str  = parts[2]
+            short_id = parts[3]
+            # Ban user
+            try:
+                uid = int(uid_str)
+                await db.execute("UPDATE users SET banned=1, flagged=1 WHERE telegram_id=?", (uid,))
+            except ValueError:
+                pass
+            # Reject the pending withdrawal by short id prefix
+            async with db.execute(
+                "SELECT id FROM transactions WHERE id LIKE ? AND type='withdrawal' AND status='pending'",
+                (short_id + "%",)
+            ) as cur:
+                tx_row = await cur.fetchone()
+            if tx_row:
+                tx_id = tx_row[0]
+                async with db.execute(
+                    "SELECT telegram_id, amount FROM transactions WHERE id=?", (tx_id,)
+                ) as cur:
+                    tx_info = await cur.fetchone()
+                await db.execute(
+                    "UPDATE transactions SET status='rejected', processed_at=datetime('now') WHERE id=?",
+                    (tx_id,)
+                )
+                if tx_info:
+                    await db.execute(
+                        "UPDATE users SET app_balance=app_balance+? WHERE telegram_id=?",
+                        (float(tx_info[1]), int(tx_info[0]))
+                    )
+            await db.commit()
+            try:
+                await cb.message.edit_reply_markup(reply_markup=None)
+            except Exception:
+                pass
+            await cb.answer("🚫 User banned and withdrawal rejected")
+            return
+
+        # ok or ko — find transaction by short id prefix
+        short_id = parts[2]
+        async with db.execute(
+            "SELECT id, telegram_id, amount FROM transactions"
+            " WHERE id LIKE ? AND type='withdrawal' AND status='pending'",
+            (short_id + "%",)
+        ) as cur:
+            tx_row = await cur.fetchone()
+
+        if not tx_row:
+            try:
+                await cb.message.edit_reply_markup(reply_markup=None)
+            except Exception:
+                pass
+            await cb.answer("Already processed or not found")
+            return
+
+        tx_id, uid, amount = tx_row[0], int(tx_row[1]), float(tx_row[2])
+
+        if action == "ok":
+            await db.execute(
+                "UPDATE transactions SET status='completed', processed_at=datetime('now') WHERE id=?",
+                (tx_id,)
+            )
+            await db.commit()
+            try:
+                await cb.message.edit_reply_markup(reply_markup=None)
+            except Exception:
+                pass
+            await cb.answer("✅ Approved — send the funds manually")
+            try:
+                async with db.execute("SELECT first_name FROM users WHERE telegram_id=?", (uid,)) as cur:
+                    urow = await cur.fetchone()
+                fname = (urow[0] if urow else "") or ""
+                await bot.send_message(
+                    uid,
+                    f"✅ <b>Withdrawal Approved!</b>\n\n"
+                    f"Your withdrawal of <b>{amount:.4f} GRAM</b> has been approved.\n"
+                    f"The transfer will arrive in your wallet shortly.\n\n"
+                    f"Thank you for using TonCipher! 🚀",
+                    parse_mode="HTML",
+                )
+            except Exception:
+                pass
+        else:  # ko — reject and refund
+            await db.execute(
+                "UPDATE transactions SET status='rejected', processed_at=datetime('now') WHERE id=?",
+                (tx_id,)
+            )
+            await db.execute(
+                "UPDATE users SET app_balance=app_balance+? WHERE telegram_id=?",
+                (amount, uid)
+            )
+            await db.commit()
+            try:
+                await cb.message.edit_reply_markup(reply_markup=None)
+            except Exception:
+                pass
+            await cb.answer("❌ Rejected — balance refunded")
+            try:
+                await bot.send_message(
+                    uid,
+                    f"❌ <b>Withdrawal Rejected</b>\n\n"
+                    f"Your withdrawal request of <b>{amount:.4f} GRAM</b> has been rejected.\n"
+                    f"Your balance has been fully refunded.\n\n"
+                    f"💬 Questions? Contact <b>@puriaryan</b>",
+                    parse_mode="HTML",
+                )
+            except Exception:
+                pass
 
 
 def _compute_level(user_row: tuple) -> dict:
@@ -1587,14 +1782,14 @@ async def _try_auto_withdraw(
 
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(
-            "SELECT flagged, banned, withdrawal_blocked, created_at FROM users WHERE telegram_id = ?",
+            "SELECT banned, created_at FROM users WHERE telegram_id = ?",
             (telegram_id,)
         ) as cur:
             row = await cur.fetchone()
     if not row:
         return False
-    flagged, banned, wd_blocked, created_at_str = row
-    if flagged or banned or wd_blocked:
+    banned, created_at_str = row
+    if banned:
         return False
 
     # Account age check (skipped entirely when AUTO_WD_MIN_AGE == 0)
@@ -1742,8 +1937,6 @@ async def api_withdrawal_create(request: web.Request) -> web.Response:
 
         if banned:
             return web.json_response({"error": "Account suspended"}, status=403, headers=_CORS)
-        if wd_blocked:
-            return web.json_response({"error": "Withdrawals are blocked on this account"}, status=403, headers=_CORS)
 
         # ── Minimum tasks requirement ──────────────────────────────────────────
         if tasks_done < WD_MIN_TASKS:
@@ -1824,23 +2017,7 @@ async def api_withdrawal_create(request: web.Request) -> web.Response:
     # Fetch user info for the notification
     uname  = uname  or ""
     fname  = fname  or ""
-    is_flagged = bool(is_flagged)
 
-    flag_warn = "\n⚠️ <b>Flagged account (anti-fraud)</b> — verification recommended." if is_flagged else ""
-    from datetime import datetime as _dt
-    now_str = _dt.utcnow().strftime("%d/%m/%Y at %H:%M UTC")
-    admin_msg = (
-        f"💸 <b>New Withdrawal Request</b>{flag_warn}\n\n"
-        f"👤 <b>{fname}</b>"
-        + (f" @{uname}" if uname else "") + f"\n"
-        f"🆔 <code>{telegram_id}</code>\n\n"
-        f"💰 <b>Amount:</b> {amount:.4f} GRAM\n"
-        f"🌐 <b>Network:</b> {network}\n"
-        f"🏷 <b>Fee:</b> {fee} GRAM\n\n"
-        f"📬 <b>Address:</b>\n<code>{address}</code>\n\n"
-        f"🔖 <b>Ref:</b> <code>{tx_id[:18]}…</code>\n"
-        f"🕐 <b>Date:</b> {now_str}"
-    )
     # Try auto-processing first (small amounts, clean accounts, configured mnemonic)
     auto_ok = await _try_auto_withdraw(tx_id, telegram_id, amount, address, fname)
     if auto_ok:
@@ -1848,11 +2025,48 @@ async def api_withdrawal_create(request: web.Request) -> web.Response:
                  tx_id, telegram_id, amount, address[:12])
         return web.json_response({"success": True, "id": tx_id, "auto": True}, headers=_CORS)
 
-    # Manual review needed — notify admin
-    await _notify_admin(admin_msg + "\n\n👉 <b>Open the admin panel to approve or reject.</b>")
+    # Compute real-time risk score for admin
+    async with aiosqlite.connect(DB_PATH) as _rdb:
+        risk_score, risk_reasons = await _wd_risk_score(_rdb, telegram_id)
 
-    log.info("Withdrawal request: id=%s telegram_id=%d amount=%.2f %s → %s",
-             tx_id, telegram_id, amount, currency, address[:12])
+    risk_emoji = "🟢" if risk_score < 25 else "🟡" if risk_score < 50 else "🔴"
+    risk_line = f"{risk_emoji} <b>Risk score:</b> {risk_score}/100"
+    if risk_reasons:
+        risk_line += f"\n⚠️ <i>{', '.join(risk_reasons)}</i>"
+
+    from datetime import datetime as _dt
+    now_str = _dt.utcnow().strftime("%d/%m/%Y at %H:%M UTC")
+    admin_msg = (
+        f"💸 <b>New Withdrawal Request</b>\n\n"
+        f"👤 <b>{fname}</b>"
+        + (f" @{uname}" if uname else "") + "\n"
+        f"🆔 <code>{telegram_id}</code>\n\n"
+        f"💰 <b>Amount:</b> {amount:.4f} GRAM\n"
+        f"🌐 <b>Network:</b> {network}\n"
+        f"🏷 <b>Fee:</b> {fee} GRAM\n\n"
+        f"📬 <b>Address:</b>\n<code>{address}</code>\n\n"
+        f"{risk_line}\n\n"
+        f"🔖 <b>Ref:</b> <code>{tx_id[:18]}…</code>\n"
+        f"🕐 <b>Date:</b> {now_str}"
+    )
+
+    # Send admin message with inline action buttons
+    if bot and ADMIN_TELEGRAM_ID:
+        short_id = tx_id[:16]
+        kb = InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(text="✅ Approve", callback_data=f"wd_ok_{short_id}"),
+            InlineKeyboardButton(text="❌ Reject",  callback_data=f"wd_ko_{short_id}"),
+            InlineKeyboardButton(text="🚫 Ban",     callback_data=f"wd_ban_{telegram_id}_{short_id}"),
+        ]])
+        try:
+            await bot.send_message(ADMIN_TELEGRAM_ID, admin_msg, parse_mode="HTML", reply_markup=kb)
+        except Exception as e:
+            log.warning("Admin WD notify failed: %s", e)
+    else:
+        await _notify_admin(admin_msg)
+
+    log.info("Withdrawal request: id=%s telegram_id=%d amount=%.2f %s → %s risk=%d",
+             tx_id, telegram_id, amount, currency, address[:12], risk_score)
     return web.json_response({"success": True, "id": tx_id}, headers=_CORS)
 
 
