@@ -1413,7 +1413,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   submitWithdrawal: async (networkId, amount, address) => {
     const state = get();
     if (state.currentUser.status !== 'active') return { success: false, error: 'Account suspended or banned. Contact support.' };
-    if (state.currentUser.withdrawalBlocked) return { success: false, error: 'Withdrawals blocked on this account. Contact support.' };
     const network = state.cryptoNetworks.find(n => n.id === networkId);
     if (!network) return { success: false, error: 'Invalid network' };
     if (!network.isWithdrawalEnabled) return { success: false, error: 'Withdrawals disabled for this network' };

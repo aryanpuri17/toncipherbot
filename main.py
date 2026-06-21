@@ -137,7 +137,7 @@ PLATFORM_TASKS: dict[str, dict] = {
     "2":  {"type": "join_channel", "reward": 0.002, "cooldown_hours":  0, "verification": "channel",  "target": "@TonCipher_Official", "max_per_user": 1},
     "3":  {"type": "join_channel", "reward": 0.002, "cooldown_hours":  0, "verification": "channel",  "target": "@TonCipher_Pays",     "max_per_user": 1},
     "4":  {"type": "start_bot",    "reward": 0.002, "cooldown_hours":  0, "verification": "bot",      "target": None,                 "max_per_user": 1},
-    "5":  {"type": "special",      "reward": 1.50,  "cooldown_hours":  0, "verification": "referral", "target": None,                 "max_per_user": 1, "required_referrals": 3},
+    "5":  {"type": "special",      "reward": 0.01,  "cooldown_hours":  0, "verification": "referral", "target": None,                 "max_per_user": 1, "required_referrals": 3},
     "6":  {"type": "special",      "reward": 0.80,  "cooldown_hours":  0, "verification": "proof",    "target": None,                 "max_per_user": 1},
     "7":  {"type": "watch_video",  "reward": 0.002, "cooldown_hours":  0, "verification": "timer",    "target": None,                 "max_per_user": 1, "min_seconds": 20},
     "8":  {"type": "social",       "reward": 0.002, "cooldown_hours":  0, "verification": "timer",    "target": None,                 "max_per_user": 1, "min_seconds": 30},
@@ -804,15 +804,9 @@ async def _log_fraud_alert(
         " VALUES (?, ?, ?, ?, ?, ?)",
         (telegram_id, username, alert_type, details, sev, score),
     )
-    # Only auto-ban on critical (self-referral / initData forgery) — no auto-blocking of withdrawals.
-    # Admin sees the risk score on every withdrawal request and decides manually.
-    if sev == "critical":
-        await db.execute(
-            "UPDATE users SET banned = 1, flagged = 1 WHERE telegram_id = ?", (telegram_id,)
-        )
-        log.warning("FRAUD AUTO-BAN user=%d @%s score=%d", telegram_id, username, score)
-    else:
-        await db.execute("UPDATE users SET flagged = 1 WHERE telegram_id = ?", (telegram_id,))
+    # No automatic ban or block — admin decides manually via the withdrawal message buttons
+    # or the admin panel. Flagging is informational only (visible in admin panel).
+    await db.execute("UPDATE users SET flagged = 1 WHERE telegram_id = ?", (telegram_id,))
     log.warning("FRAUD [%s] user=%d @%s score=%d — %s", sev.upper(), telegram_id, username, score, details)
 
 
@@ -1429,14 +1423,14 @@ async def api_user_init(request: web.Request) -> web.Response:
                 score=score,
             )
             sev_label = _severity(score).upper()
-            auto_action = "🔨 Auto-banned." if sev_label == "CRITICAL" else "🔒 Withdrawals auto-blocked." if sev_label == "HIGH" else "⚑ Flagged for review."
+            risk_emoji = "🔴" if sev_label == "CRITICAL" else "🟡" if sev_label == "HIGH" else "🟠"
             await _notify_admin(
-                f"⚠️ <b>Suspicious activity [{sev_label}]</b>\n"
+                f"⚠️ <b>Suspicious activity detected</b>\n"
                 f"👤 @{username or 'unknown'} (ID: <code>{telegram_id}</code>)\n"
                 f"🚨 Reasons: {', '.join(violations)}\n"
-                f"📊 Risk score: {score}/100\n"
-                f"✅ {auto_action}\n"
-                f"👉 Check the admin panel to review or unblock."
+                f"{risk_emoji} Risk score: {score}/100 [{sev_label}]\n"
+                f"ℹ️ Account flagged for review — no automatic action taken.\n"
+                f"👉 Open the admin panel to ban or clear the flag."
             )
 
         await db.commit()
@@ -4948,7 +4942,11 @@ async def api_referral_milestone_claim(request: web.Request) -> web.Response:
             try:
                 parsed = json.loads(cfg_row[0])
                 if isinstance(parsed, list) and parsed:
-                    milestones = parsed
+                    _expected = ['ms1','ms2','ms3','ms4','ms5','ms6','ms7','ms8']
+                    _stored_ids = [str(m.get('id','')) for m in parsed]
+                    # Only use stored config if it matches the current ms1-ms8 structure
+                    if len(parsed) == 8 and _stored_ids == _expected:
+                        milestones = parsed
             except (ValueError, TypeError):
                 pass
 
