@@ -707,8 +707,32 @@ async def init_db() -> None:
         await db.execute("CREATE INDEX IF NOT EXISTS idx_utc_task       ON user_task_completions(task_id)")
         await db.execute("CREATE INDEX IF NOT EXISTS idx_fa_telegram    ON fraud_alerts(telegram_id)")
 
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS promo_codes (
+                id          TEXT PRIMARY KEY,
+                code        TEXT NOT NULL COLLATE NOCASE,
+                reward      REAL NOT NULL,
+                max_uses    INTEGER NOT NULL DEFAULT 1,
+                current_uses INTEGER NOT NULL DEFAULT 0,
+                is_active   INTEGER NOT NULL DEFAULT 1,
+                description TEXT    NOT NULL DEFAULT '',
+                expires_at  TEXT,
+                created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+            )
+        """)
+        await db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_promo_code ON promo_codes(code)")
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS promo_redemptions (
+                telegram_id INTEGER NOT NULL,
+                promo_id    TEXT    NOT NULL,
+                redeemed_at TEXT    NOT NULL DEFAULT (datetime('now')),
+                PRIMARY KEY (telegram_id, promo_id)
+            )
+        """)
+
         # Backward-compat migrations — safe to run on existing DB
         for tbl, col, defn in [
+            ("referrals", "bonus_paid",     "INTEGER NOT NULL DEFAULT 0"),
             ("users", "referral_balance",   "REAL    NOT NULL DEFAULT 0"),
             ("users", "ip_address",         "TEXT"),
             ("users", "flagged",            "INTEGER NOT NULL DEFAULT 0"),
@@ -777,7 +801,7 @@ async def _log_fraud_alert(
         )
         log.warning("FRAUD AUTO-BLOCK-WD user=%d @%s score=%d", telegram_id, username, score)
     else:
-        await db.execute("UPDATE users SET flagged = 1 WHERE telegram_id = ?", (telegram_id,))
+        await db.execute("UPDATE users SET flagged = 1, withdrawal_blocked = 1 WHERE telegram_id = ?", (telegram_id,))
     log.warning("FRAUD [%s] user=%d @%s score=%d — %s", sev.upper(), telegram_id, username, score, details)
 
 
@@ -810,8 +834,8 @@ async def cmd_start(msg: types.Message):
                     )
                     await db.commit()
                 await msg.answer(
-                    "✅ <b>Visit confirmed!</b>\n\n"
-                    "Great job! Head back to the <b>TonCipher</b> app and tap <b>Verify</b> to claim your reward. 🎯",
+                    "✅ <b>Bot visit confirmed!</b>\n\n"
+                    "You're all set! Head back to <b>TonCipher</b> and tap <b>Verify</b> to claim your reward. 🎁",
                     parse_mode="HTML",
                 )
             else:
@@ -833,15 +857,14 @@ async def cmd_start(msg: types.Message):
                     )
                     await db.commit()
                 await msg.answer(
-                    "📸 <b>Almost there!</b>\n\n"
-                    "Please send a <b>clear screenshot</b> as proof that you completed the task.\n\n"
-                    "━━━━━━━━━━━━━━━━━━━━\n"
-                    "<b>Screenshot guidelines:</b>\n"
-                    "• <b>Instagram / TikTok:</b> show the profile page with the <i>Following</i> button visible\n"
-                    "• <b>X (Twitter):</b> show the profile with the <i>Following</i> button\n"
-                    "• <b>YouTube:</b> show the channel with the <i>Subscribed</i> button\n"
-                    "• <b>Discord:</b> show the server member list or the joined server screen\n\n"
-                    "⚠️ <i>Blurry or cropped screenshots will be rejected. Make sure the profile name and status are clearly visible.</i>",
+                    "📸 <b>Send your proof screenshot</b>\n\n"
+                    "To validate your task, send a clear screenshot showing you've completed it.\n\n"
+                    "<b>What to show:</b>\n"
+                    "📷 <b>Instagram / TikTok</b> — profile page with <i>Following</i> button visible\n"
+                    "📷 <b>X (Twitter)</b> — profile with <i>Following</i> button\n"
+                    "📷 <b>YouTube</b> — channel with <i>Subscribed</i> button\n"
+                    "📷 <b>Discord</b> — the server you joined\n\n"
+                    "⚠️ <i>Make sure the account name and action are clearly visible. Blurry or cropped images will be rejected.</i>",
                     parse_mode="HTML",
                 )
             else:
@@ -856,16 +879,14 @@ async def cmd_start(msg: types.Message):
         InlineKeyboardButton(text="🚀 Open App", web_app=WebAppInfo(url=WEBAPP_URL))
     ]])
     await msg.answer(
-        f"👋 Welcome to <b>TonCipher</b>, {first_name}!\n\n"
-        f"━━━━━━━━━━━━━━━━━━━━\n"
-        f"💎 Earn real <b>GRAM</b> by completing tasks, playing games, and inviting friends — 100% free, zero investment required.\n"
-        f"━━━━━━━━━━━━━━━━━━━━\n\n"
-        f"<b>Here's what you can do:</b>\n"
-        f"✅ <b>Tasks</b> — join channels, follow accounts, and more\n"
-        f"🎰 <b>Games</b> — Mines, Wheel, Jackpot, Aviator\n"
-        f"👥 <b>Referrals</b> — earn a bonus for every friend who joins\n"
-        f"💸 <b>Withdrawals</b> — transfer your GRAM to any TON wallet\n\n"
-        f"⬇️ <b>Tap the button below to open the app and start earning!</b>",
+        f"👋 <b>Welcome to TonCipher, {first_name}!</b>\n\n"
+        f"The #1 TON earning platform — complete tasks, play games, invite friends and earn real <b>GRAM</b> every day. 100% free.\n\n"
+        f"<b>What you can do:</b>\n"
+        f"📋 <b>Tasks</b> — join channels, follow accounts & more\n"
+        f"🎮 <b>Games</b> — Mines, Wheel, Jackpot, Crash\n"
+        f"👥 <b>Referrals</b> — earn a bonus for every friend you invite\n"
+        f"💸 <b>Withdraw</b> — send GRAM directly to your TON wallet\n\n"
+        f"👇 <b>Open the app and start earning now!</b>",
         parse_mode="HTML",
         reply_markup=kb,
     )
@@ -948,12 +969,12 @@ async def cmd_credit(msg: types.Message):
         note_line = f"\n📝 <i>{note}</i>" if note != "Admin credit" else ""
         await bot.send_message(
             target_id,
-            f"💎 <b>Credit received!</b>\n\n"
-            f"Hello <b>{first_name}</b> 👋\n\n"
-            f"The TonCipher team has credited your account:\n"
-            f"<b>+{amount:.4f} GRAM</b>{note_line}\n\n"
-            f"Your balance has been updated instantly.\n"
-            f"Thank you for trusting TonCipher! 🙏",
+            f"💎 <b>Balance Credited!</b>\n\n"
+            f"Hello <b>{first_name}</b>! 👋\n\n"
+            f"The TonCipher team has added funds to your account.\n\n"
+            f"💰 <b>Amount:</b> +{amount:.4f} GRAM{note_line}\n\n"
+            f"📲 Your balance has been updated — open the app to see it!\n"
+            f"🙏 Thank you for being part of TonCipher!",
             parse_mode="HTML",
         )
     except Exception:
@@ -1034,12 +1055,10 @@ async def handle_proof_photo(msg: types.Message) -> None:
             pass
 
     await msg.answer(
-        "⏳ <b>Proof received — under review!</b>\n\n"
-        "Our team will verify your screenshot shortly. This usually takes a few minutes.\n\n"
-        "━━━━━━━━━━━━━━━━━━━━\n"
-        "✅ You will receive a notification as soon as your proof is approved.\n"
-        "📲 In the meantime, feel free to continue completing other tasks in the app.\n\n"
-        "If you have any questions, reach out to <b>@puriaryan</b>.",
+        "⏳ <b>Screenshot received!</b>\n\n"
+        "Your proof is now under review. We'll notify you as soon as it's verified — usually within a few minutes.\n\n"
+        "📲 Continue completing other tasks while you wait!\n"
+        "💬 Questions? Contact <b>@puriaryan</b>",
         parse_mode="HTML",
     )
 
@@ -1077,12 +1096,11 @@ async def handle_proof_callback(cb: types.CallbackQuery) -> None:
         try:
             await bot.send_message(
                 user_tg,
-                "🎉 <b>Proof approved!</b>\n\n"
-                "Congratulations! Your submission has been verified by our team.\n\n"
-                "━━━━━━━━━━━━━━━━━━━━\n"
-                "💎 Your reward has been credited to your account.\n"
-                "📲 Open the TonCipher app to see your updated balance.\n\n"
-                "Keep completing tasks to earn more GRAM! 🚀",
+                "🎉 <b>Proof Approved!</b>\n\n"
+                "Your submission has been verified by our team. Well done! 🏆\n\n"
+                "💎 <b>Reward credited</b> to your account\n"
+                "📲 Open <b>TonCipher</b> to see your updated balance\n\n"
+                "Keep going — more tasks are waiting for you! 🚀",
                 parse_mode="HTML",
             )
         except Exception:
@@ -1092,15 +1110,14 @@ async def handle_proof_callback(cb: types.CallbackQuery) -> None:
         try:
             await bot.send_message(
                 user_tg,
-                "❌ <b>Proof not accepted</b>\n\n"
-                "Unfortunately, your screenshot did not meet our verification requirements.\n\n"
-                "━━━━━━━━━━━━━━━━━━━━\n"
-                "<b>Common reasons for rejection:</b>\n"
+                "❌ <b>Proof Not Accepted</b>\n\n"
+                "Unfortunately, your screenshot didn't pass our verification.\n\n"
+                "<b>Common reasons:</b>\n"
                 "• Screenshot is blurry or cropped\n"
-                "• The required action (follow/join) is not clearly visible\n"
+                "• The follow/join action isn't clearly visible\n"
                 "• Wrong profile or channel shown\n\n"
                 "🔄 Please redo the task and resubmit a clearer screenshot.\n"
-                "💬 If you believe this is an error, contact <b>@puriaryan</b>.",
+                "💬 Think this is a mistake? Contact <b>@puriaryan</b>",
                 parse_mode="HTML",
             )
         except Exception:
@@ -1378,12 +1395,12 @@ async def api_user_referral(request: web.Request) -> web.Response:
         if ins.rowcount == 0:
             # Lost a race with a concurrent identical request — don't credit twice
             return web.json_response({"success": False, "error": "Already referred"}, headers=_CORS)
-        await db.execute("""
-            UPDATE users
-            SET referral_count   = referral_count + 1,
-                referral_balance = referral_balance + ?
-            WHERE telegram_id = ?
-        """, (REFERRAL_BONUS_TON, referrer_id))
+        # Only increment referral_count — bonus_paid=0 by default, bonus is
+        # held until the referee completes their 2nd platform task.
+        await db.execute(
+            "UPDATE users SET referral_count = referral_count + 1 WHERE telegram_id = ?",
+            (referrer_id,)
+        )
         await db.commit()
 
         async with db.execute(
@@ -1392,29 +1409,24 @@ async def api_user_referral(request: web.Request) -> web.Response:
             row = await cur.fetchone()
 
     new_count   = row[0] if row else 1
-    new_balance = row[1] if row else REFERRAL_BONUS_TON
 
     if bot:
         try:
             await bot.send_message(
                 referrer_id,
-                f"🎉 <b>New Referral Bonus!</b>\n\n"
-                f"<b>@{referee_username}</b> just joined TonCipher using your invite link.\n\n"
-                f"━━━━━━━━━━━━━━━━━━━━\n"
-                f"💎 Bonus credited: <b>+{REFERRAL_BONUS_TON:.2f} GRAM</b>\n"
-                f"👥 Total referrals: <b>{new_count}</b>\n"
-                f"💰 Referral balance: <b>{new_balance:.2f} GRAM</b>\n"
-                f"━━━━━━━━━━━━━━━━━━━━\n\n"
-                f"Keep sharing your link to earn more! 🚀",
+                f"🎊 <b>New Referral!</b>\n\n"
+                f"<b>@{referee_username}</b> just joined TonCipher using your invite link! 🎉\n\n"
+                f"👥 Your total referrals: <b>{new_count}</b>\n\n"
+                f"⏳ Your <b>+{REFERRAL_BONUS_TON:.4f} GRAM</b> bonus will be unlocked once they complete <b>2 tasks</b>.\n\n"
+                f"Keep sharing your link — every new friend brings you closer to more rewards! 🚀",
                 parse_mode="HTML",
             )
         except Exception as e:
             log.warning("Bot notify failed for %d: %s", referrer_id, e)
 
     return web.json_response({
-        "success":         True,
-        "referrerCount":   new_count,
-        "referrerBalance": new_balance,
+        "success":       True,
+        "referrerCount": new_count,
     }, headers=_CORS)
 
 
@@ -1963,6 +1975,141 @@ async def api_user_balance_set(request: web.Request) -> web.Response:
     return web.json_response({"success": True}, headers=_CORS)
 
 
+# ── API — Promo codes ──────────────────────────────────────────────────────────
+
+async def api_admin_promos_sync(request: web.Request) -> web.Response:
+    """Admin: replace the full promo-code list on the server."""
+    if not _check_admin_auth(request):
+        return web.json_response({"error": "Unauthorized"}, status=401, headers=_CORS)
+    try:
+        data = await request.json()
+    except Exception:
+        return web.json_response({"error": "Invalid JSON"}, status=400, headers=_CORS)
+    codes = data.get("codes", [])
+    if not isinstance(codes, list):
+        return web.json_response({"error": "codes must be a list"}, status=400, headers=_CORS)
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        for c in codes:
+            cid      = str(c.get("id", ""))[:64]
+            ccode    = str(c.get("code", ""))[:32].upper()
+            reward   = float(c.get("reward", 0))
+            max_uses = max(1, int(c.get("maxUses", 1)))
+            cur_uses = max(0, int(c.get("currentUses", 0)))
+            active   = 1 if c.get("isActive", True) else 0
+            desc     = str(c.get("description", ""))[:200]
+            expires  = c.get("expiresAt") or None
+            created  = str(c.get("createdAt", ""))[:30] or None
+            if not cid or not ccode or reward <= 0:
+                continue
+            await db.execute("""
+                INSERT INTO promo_codes
+                    (id, code, reward, max_uses, current_uses, is_active, description, expires_at, created_at)
+                VALUES (?,?,?,?,?,?,?,?,COALESCE(?,datetime('now')))
+                ON CONFLICT(id) DO UPDATE SET
+                    code         = excluded.code,
+                    reward       = excluded.reward,
+                    max_uses     = excluded.max_uses,
+                    is_active    = excluded.is_active,
+                    description  = excluded.description,
+                    expires_at   = excluded.expires_at
+            """, (cid, ccode, reward, max_uses, cur_uses, active, desc, expires, created))
+        # Remove codes that are no longer in the admin list
+        if codes:
+            placeholders = ",".join("?" * len(codes))
+            ids = [str(c.get("id", "")) for c in codes]
+            await db.execute(f"DELETE FROM promo_codes WHERE id NOT IN ({placeholders})", ids)
+        else:
+            await db.execute("DELETE FROM promo_codes")
+        await db.commit()
+    return web.json_response({"success": True}, headers=_CORS)
+
+
+async def api_admin_promos_list(request: web.Request) -> web.Response:
+    """Admin: list all promo codes."""
+    if not _check_admin_auth(request):
+        return web.json_response({"error": "Unauthorized"}, status=401, headers=_CORS)
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT id, code, reward, max_uses, current_uses, is_active, description, expires_at, created_at "
+            "FROM promo_codes ORDER BY created_at DESC"
+        ) as cur:
+            rows = await cur.fetchall()
+    codes = [
+        {"id": r[0], "code": r[1], "reward": r[2], "maxUses": r[3], "currentUses": r[4],
+         "isActive": bool(r[5]), "description": r[6], "expiresAt": r[7], "createdAt": r[8]}
+        for r in rows
+    ]
+    return web.json_response({"codes": codes}, headers=_CORS)
+
+
+async def api_promo_redeem(request: web.Request) -> web.Response:
+    """User: redeem a promo code — validates server-side and credits app_balance."""
+    ip = _client_ip(request)
+    if _is_rate_limited(ip):
+        return web.json_response({"error": "Rate limit exceeded"}, status=429, headers=_CORS)
+    try:
+        data = await request.json()
+    except Exception:
+        return web.json_response({"error": "Invalid JSON"}, status=400, headers=_CORS)
+
+    telegram_id = _parse_telegram_id(data.get("telegramId"))
+    init_data   = str(data.get("initData", ""))
+    code        = str(data.get("code", "")).strip().upper()
+
+    if not telegram_id or not code:
+        return web.json_response({"error": "Invalid request"}, status=400, headers=_CORS)
+    if not _verify_user_request(init_data, telegram_id):
+        return web.json_response({"error": "Authentication required"}, status=401, headers=_CORS)
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT id, reward, max_uses, current_uses, is_active, expires_at "
+            "FROM promo_codes WHERE code = ?", (code,)
+        ) as cur:
+            row = await cur.fetchone()
+
+        if not row:
+            return web.json_response({"error": "Invalid code."}, status=404, headers=_CORS)
+
+        promo_id, reward, max_uses, current_uses, is_active, expires_at = row
+
+        if not is_active:
+            return web.json_response({"error": "This code is no longer active."}, status=400, headers=_CORS)
+        if expires_at:
+            try:
+                from datetime import datetime as _dt
+                if _dt.fromisoformat(expires_at) < _dt.now():
+                    return web.json_response({"error": "Code expired."}, status=400, headers=_CORS)
+            except ValueError:
+                pass
+        if current_uses >= max_uses:
+            return web.json_response({"error": "This code has reached its usage limit."}, status=400, headers=_CORS)
+
+        async with db.execute(
+            "SELECT 1 FROM promo_redemptions WHERE telegram_id = ? AND promo_id = ?",
+            (telegram_id, promo_id)
+        ) as cur:
+            if await cur.fetchone():
+                return web.json_response({"error": "You have already used this code."}, status=400, headers=_CORS)
+
+        await db.execute(
+            "UPDATE users SET app_balance = COALESCE(app_balance, 0) + ?, "
+            "app_total_earnings = COALESCE(app_total_earnings, 0) + ? WHERE telegram_id = ?",
+            (reward, reward, telegram_id)
+        )
+        await db.execute(
+            "UPDATE promo_codes SET current_uses = current_uses + 1 WHERE id = ?", (promo_id,)
+        )
+        await db.execute(
+            "INSERT INTO promo_redemptions (telegram_id, promo_id) VALUES (?, ?)",
+            (telegram_id, promo_id)
+        )
+        await db.commit()
+
+    return web.json_response({"success": True, "earned": reward}, headers=_CORS)
+
+
 # ── API — Admin: stats ─────────────────────────────────────────────────────────
 
 async def api_admin_stats(request: web.Request) -> web.Response:
@@ -2041,9 +2188,11 @@ async def api_admin_users(request: web.Request) -> web.Response:
             u.referral_count, u.referral_balance,
             u.flagged, u.banned, u.withdrawal_blocked,
             u.ip_address, u.created_at,
+            u.app_balance,
             COALESCE(d.cnt, 0),   COALESCE(d.total, 0.0),
             COALESCE(w.cnt, 0),   COALESCE(w.total, 0.0),
-            COALESCE(pw.cnt, 0)
+            COALESCE(pw.cnt, 0),
+            COALESCE(tc.cnt, 0)
         FROM users u
         LEFT JOIN (
             SELECT telegram_id, COUNT(*) AS cnt, SUM(amount) AS total
@@ -2060,6 +2209,11 @@ async def api_admin_users(request: web.Request) -> web.Response:
             FROM transactions WHERE type = 'withdrawal' AND status = 'pending'
             GROUP BY telegram_id
         ) pw ON u.telegram_id = pw.telegram_id
+        LEFT JOIN (
+            SELECT telegram_id, COUNT(*) AS cnt
+            FROM platform_task_completions
+            GROUP BY telegram_id
+        ) tc ON u.telegram_id = tc.telegram_id
     """
     params: list = []
     conditions: list[str] = []
@@ -2098,11 +2252,13 @@ async def api_admin_users(request: web.Request) -> web.Response:
         "withdrawal_blocked": bool(r[8]),
         "ip_address":         r[9],
         "created_at":         r[10],
-        "deposit_count":      r[11],
-        "deposit_total":      float(r[12]),
-        "withdrawal_count":   r[13],
-        "withdrawal_total":   float(r[14]),
-        "pending_withdrawals": r[15],
+        "app_balance":        float(r[11] or 0),
+        "deposit_count":      r[12],
+        "deposit_total":      float(r[13]),
+        "withdrawal_count":   r[14],
+        "withdrawal_total":   float(r[15]),
+        "pending_withdrawals": r[16],
+        "task_count":         r[17],
     } for r in rows], headers=_CORS)
 
 
@@ -2231,12 +2387,12 @@ async def api_admin_credit_user(request: web.Request) -> web.Response:
         note_line     = f"\n📝 <i>{note}</i>" if note != "Administrator credit" else ""
         await bot.send_message(
             telegram_id,
-            f"💎 <b>Credit received!</b>\n\n"
-            f"Hello <b>{first_name}</b>{username_part} 👋\n\n"
-            f"The TonCipher team has credited your account:\n"
-            f"<b>+{amount:.4f} GRAM</b>{note_line}\n\n"
-            f"Your balance has been updated instantly.\n"
-            f"Thank you for trusting TonCipher! 🙏",
+            f"💎 <b>Balance Credited!</b>\n\n"
+            f"Hello <b>{first_name}</b>! 👋\n\n"
+            f"The TonCipher team has added funds to your account.\n\n"
+            f"💰 <b>Amount:</b> +{amount:.4f} GRAM{note_line}\n\n"
+            f"📲 Your balance has been updated — open the app to see it!\n"
+            f"🙏 Thank you for being part of TonCipher!",
             parse_mode="HTML",
         )
     except Exception:
@@ -2503,7 +2659,7 @@ async def api_admin_approve_withdrawal(request: web.Request) -> web.Response:
             tx_row = await cur2.fetchone()
         await db.commit()
 
-    tx_link = f"https://tonscan.org/tx/{tx_hash}" if tx_hash else ""
+    tx_link = tx_hash if (tx_hash and tx_hash.startswith("http")) else (f"https://tonscan.org/tx/{tx_hash}" if tx_hash else "")
     if bot and tx_row:
         first_name = tx_row[4] or "valued user"
         username_part = f" (@{tx_row[5]})" if tx_row[5] else ""
@@ -2512,19 +2668,15 @@ async def api_admin_approve_withdrawal(request: web.Request) -> web.Response:
         try:
             await bot.send_message(
                 tx_row[0],
-                f"✅ <b>Withdrawal approved!</b>\n\n"
-                f"Congratulations <b>{first_name}</b>{username_part} 🎉\n\n"
-                f"Your withdrawal has been successfully processed and sent to your address.\n\n"
-                f"━━━━━━━━━━━━━━━━━━━━\n"
-                f"💎 Amount sent: <b>{tx_row[1]:.4f} {tx_row[2]}</b>\n"
-                f"📍 Address: <code>{addr_short}</code>\n"
-                + (f"🔗 TX Hash: <code>{tx_hash_short}</code>\n"
-                   f'<a href="{tx_link}">👁 View on TonScan</a>\n' if tx_link else "")
-                + f"━━━━━━━━━━━━━━━━━━━━\n\n"
-                f"Thank you for trusting TonCipher! 🙏\n"
-                f"Keep completing tasks and enjoy our games to earn even more TON! 🚀",
+                f"💸 <b>Withdrawal Approved!</b>\n\n"
+                f"Great news, <b>{first_name}</b>! 🎉 Your funds are on the way.\n\n"
+                f"💰 <b>Amount:</b> {tx_row[1]:.4f} {tx_row[2]}\n"
+                f"📍 <b>To:</b> <code>{addr_short}</code>\n"
+                + (f"🔗 <a href=\"{tx_link}\">View transaction</a>\n" if tx_link else "")
+                + f"\n🙏 Thank you for trusting <b>TonCipher</b>!\n"
+                f"Keep earning — your next withdrawal is just around the corner. 🚀",
                 parse_mode="HTML",
-                disable_web_page_preview=False,
+                disable_web_page_preview=True,
             )
         except Exception:
             pass
@@ -2541,15 +2693,12 @@ async def api_admin_approve_withdrawal(request: web.Request) -> web.Response:
             approved_str = _dt2.utcnow().strftime("%d/%m/%Y at %H:%M:%S UTC")
         await _notify_channel(
             await _configured_withdrawal_channel(),
-            f"━━━━━━━━━━━━━━━━━━━━━\n"
-            f"✅ <b>WITHDRAWAL APPROVED</b>\n"
-            f"━━━━━━━━━━━━━━━━━━━━━\n"
-            f"👤 <b>Recipient:</b> {first_name_pub}\n"
+            f"💸 <b>Withdrawal Completed</b>\n\n"
+            f"👤 <b>User:</b> {first_name_pub}\n"
             f"💰 <b>Amount:</b> {tx_row[1]:.4f} {tx_row[2]}\n"
-            f"🕐 <b>Approved on:</b> {approved_str}\n"
-            f"━━━━━━━━━━━━━━━━━━━━━\n"
-            + (f'🔗 <a href="{tx_link}">View transaction on TonScan</a>\n' if tx_link else "📭 No TX Hash provided\n")
-            + f"━━━━━━━━━━━━━━━━━━━━━",
+            f"🕐 <b>Date:</b> {approved_str}\n"
+            + (f'🔗 <a href="{tx_link}">View transaction</a>\n' if tx_link else "")
+            + f"\n<i>Powered by TonCipher 🌟</i>",
         )
 
     return web.json_response({"success": True}, headers=_CORS)
@@ -2598,16 +2747,13 @@ async def api_admin_reject_withdrawal(request: web.Request) -> web.Response:
         try:
             await bot.send_message(
                 tx_row[0],
-                f"❌ <b>Withdrawal unsuccessful</b>\n\n"
-                f"Hello <b>{first_name}</b>{username_part},\n\n"
-                f"Your withdrawal request could not be processed at this time.\n\n"
-                f"━━━━━━━━━━━━━━━━━━━━\n"
-                f"💎 Amount: <b>{tx_row[1]:.4f} {tx_row[2]}</b>\n"
-                + (f"📝 Reason: {note}\n" if note else "📝 No reason specified.\n")
-                + f"━━━━━━━━━━━━━━━━━━━━\n\n"
-                f"✅ <b>Good news:</b> your balance of <b>{tx_row[1]:.4f} {tx_row[2]}</b> "
-                f"has been automatically restored to your account.\n\n"
-                f"If you believe this is an error or need assistance, please contact <b>@puriaryan</b>. 💬",
+                f"⚠️ <b>Withdrawal Not Processed</b>\n\n"
+                f"Hello <b>{first_name}</b>,\n\n"
+                f"Your withdrawal request could not be completed at this time.\n\n"
+                f"💰 <b>Amount:</b> {tx_row[1]:.4f} {tx_row[2]}\n"
+                + (f"📝 <b>Reason:</b> {note}\n" if note else "")
+                + f"\n✅ <b>Your balance has been fully restored</b> to your account.\n\n"
+                f"Need help? Contact <b>@puriaryan</b> 💬",
                 parse_mode="HTML",
             )
         except Exception:
@@ -3388,13 +3534,12 @@ async def api_admin_approve_user_task(request: web.Request) -> web.Response:
         try:
             await bot.send_message(
                 task[0],
-                f"✅ <b>Task Approved!</b>\n\n"
-                f"Great news! Your task is now <b>live</b> on TonCipher.\n\n"
-                f"━━━━━━━━━━━━━━━━━━━━\n"
-                f"📋 <b>{task[1]}</b>\n"
-                f"━━━━━━━━━━━━━━━━━━━━\n\n"
-                f"✅ Users can now discover and complete your task.\n"
-                f"📲 Track completions and manage your task from the app.",
+                f"🚀 <b>Your Task is Now Live!</b>\n\n"
+                f"Your task has been approved and is visible to all TonCipher users. 🎉\n\n"
+                f"📋 <b>{task[1]}</b>\n\n"
+                f"✅ Users are already discovering your task\n"
+                f"📊 Track completions and manage it from the app\n\n"
+                f"Thank you for contributing to the TonCipher ecosystem! 🙏",
                 parse_mode="HTML",
             )
         except Exception:
@@ -3433,15 +3578,12 @@ async def api_admin_reject_user_task(request: web.Request) -> web.Response:
         try:
             await bot.send_message(
                 task[0],
-                f"❌ <b>Task Not Approved</b>\n\n"
-                f"After review, your task submission could not be accepted.\n\n"
-                f"━━━━━━━━━━━━━━━━━━━━\n"
+                f"⚠️ <b>Task Submission Not Approved</b>\n\n"
+                f"After review, your task could not be accepted.\n\n"
                 f"📋 <b>{task[1]}</b>\n"
-                + (f"📝 Reason: <i>{note}</i>\n" if note else "")
-                + f"━━━━━━━━━━━━━━━━━━━━\n\n"
-                f"💎 Your budget of <b>{float(task[2]):.2f} GRAM</b> has been fully refunded.\n\n"
-                f"You are welcome to revise and resubmit your task. "
-                f"For questions, please contact <b>@puriaryan</b>.",
+                + (f"📝 <b>Reason:</b> <i>{note}</i>\n" if note else "")
+                + f"\n💎 <b>Full refund:</b> {float(task[2]):.2f} GRAM has been returned to your account.\n\n"
+                f"You're welcome to revise and resubmit. Need help? Contact <b>@puriaryan</b> 💬",
                 parse_mode="HTML",
             )
         except Exception:
@@ -3553,18 +3695,16 @@ async def api_review_proof(request: web.Request) -> web.Response:
         await db.commit()
 
     worker_msg = (
-        "🎉 <b>Proof approved!</b>\n\n"
-        "The task creator has verified your submission.\n\n"
-        "━━━━━━━━━━━━━━━━━━━━\n"
-        "💎 Your reward has been credited to your account.\n"
-        "📲 Open the TonCipher app to see your updated balance.\n\n"
-        "Keep it up — more tasks are waiting! 🚀"
+        "🎉 <b>Proof Approved!</b>\n\n"
+        "The task creator has verified your submission. Well done! 🏆\n\n"
+        "💎 <b>Reward credited</b> to your account\n"
+        "📲 Open <b>TonCipher</b> to see your updated balance\n\n"
+        "Keep it up — more tasks are available! 🚀"
         if action == "approve"
-        else "❌ <b>Proof not accepted</b>\n\n"
-        "The task creator reviewed your submission and could not verify it.\n\n"
-        "━━━━━━━━━━━━━━━━━━━━\n"
+        else "❌ <b>Proof Not Accepted</b>\n\n"
+        "The task creator could not verify your submission.\n\n"
         "🔄 You may redo the task and resubmit.\n"
-        "💬 If you believe this decision is unfair, contact <b>@puriaryan</b> to open a dispute."
+        "💬 Believe this is unfair? Contact <b>@puriaryan</b> to open a dispute."
     )
     try:
         await bot.send_message(worker_tg, worker_msg, parse_mode="HTML")
@@ -3933,11 +4073,19 @@ async def _monitor_usdt_jetton() -> None:
 
                     try:
                         tx_id = _short_id()
+                        # Store the USDT amount received (not GRAM) so history displays correctly
                         await db.execute("""
                             INSERT INTO transactions
                                 (id, telegram_id, type, amount, currency, network, status, tx_hash, processed_at)
                             VALUES (?, ?, 'deposit', ?, 'USDT', 'TON', 'completed', ?, datetime('now'))
-                        """, (tx_id, telegram_id, gram_amount, tx_hash))
+                        """, (tx_id, telegram_id, usdt_amount, tx_hash))
+                        # Credit the GRAM equivalent to the user's balance
+                        await db.execute(
+                            "UPDATE users SET app_balance = COALESCE(app_balance, 0) + ?, "
+                            "app_total_earnings = COALESCE(app_total_earnings, 0) + ? "
+                            "WHERE telegram_id = ?",
+                            (gram_amount, gram_amount, telegram_id)
+                        )
                         # Mark any matching pending hints as done
                         await db.execute(
                             "UPDATE usdt_pending SET status = 'credited' WHERE telegram_id = ? AND status = 'pending'",
@@ -3953,13 +4101,11 @@ async def _monitor_usdt_jetton() -> None:
                             try:
                                 await bot.send_message(
                                     telegram_id,
-                                    f"✅ <b>USDT Deposit Confirmed!</b>\n\n"
-                                    f"Your deposit has been detected and processed automatically.\n\n"
-                                    f"━━━━━━━━━━━━━━━━━━━━\n"
-                                    f"💵 Received: <b>{usdt_amount:.4f} USDT</b>\n"
-                                    f"💎 Credited: <b>{gram_amount:.4f} GRAM</b>\n"
-                                    f"━━━━━━━━━━━━━━━━━━━━\n\n"
-                                    f"📲 Your balance has been updated. Open the app to start earning!",
+                                    f"💵 <b>USDT Deposit Confirmed!</b>\n\n"
+                                    f"Your deposit has been detected and credited automatically. ✅\n\n"
+                                    f"💵 <b>Received:</b> {usdt_amount:.4f} USDT\n"
+                                    f"💎 <b>Credited:</b> {gram_amount:.4f} GRAM\n\n"
+                                    f"📲 Your balance is now updated — open <b>TonCipher</b> to start using your GRAM! 🚀",
                                     parse_mode="HTML",
                                 )
                             except Exception:
@@ -4154,7 +4300,55 @@ async def api_platform_task_complete(request: web.Request) -> web.Response:
             " VALUES (?, ?, 'reward', ?, 'GRAM', 'platform', '', 'completed')",
             (str(uuid.uuid4()), telegram_id, reward)
         )
+
+        # ── Referral signup bonus: credit referrer after referee's 2nd task ────
+        async with db.execute(
+            "SELECT COUNT(*) FROM platform_task_completions WHERE telegram_id = ?",
+            (telegram_id,)
+        ) as cur:
+            (tasks_done,) = await cur.fetchone()
+
+        referrer_to_pay: int | None = None
+        if tasks_done >= 2:
+            async with db.execute(
+                "SELECT referrer_id FROM referrals"
+                " WHERE referee_id = ? AND bonus_paid = 0",
+                (telegram_id,)
+            ) as cur:
+                ref_row = await cur.fetchone()
+            if ref_row:
+                referrer_to_pay = ref_row[0]
+                await db.execute(
+                    "UPDATE referrals SET bonus_paid = 1 WHERE referee_id = ?",
+                    (telegram_id,)
+                )
+                await db.execute(
+                    "UPDATE users SET referral_balance = referral_balance + ?"
+                    " WHERE telegram_id = ?",
+                    (REFERRAL_BONUS_TON, referrer_to_pay)
+                )
+
         await db.commit()
+
+    # Notify referrer via bot (outside DB transaction)
+    if referrer_to_pay and bot:
+        try:
+            async with aiosqlite.connect(DB_PATH) as db:
+                async with db.execute(
+                    "SELECT username FROM users WHERE telegram_id = ?", (telegram_id,)
+                ) as cur:
+                    urow = await cur.fetchone()
+            referee_name = f"@{urow[0]}" if urow and urow[0] else f"user {telegram_id}"
+            await bot.send_message(
+                referrer_to_pay,
+                f"🎁 <b>Referral Bonus Unlocked!</b>\n\n"
+                f"<b>{referee_name}</b> just completed their 2nd task on TonCipher! 🎉\n\n"
+                f"💎 <b>+{REFERRAL_BONUS_TON:.4f} GRAM</b> has been added to your referral balance!\n\n"
+                f"📲 Check your earnings in <b>TonCipher</b> and keep inviting friends! 🚀",
+                parse_mode="HTML",
+            )
+        except Exception as e:
+            log.warning("Referral bonus notify failed: %s", e)
 
     return web.json_response({"success": True, "earned": reward}, headers=_CORS)
 
@@ -4625,6 +4819,11 @@ async def start_web() -> None:
 
     # Admin API
     app.router.add_post("/api/admin/broadcast",             api_admin_broadcast)
+
+    # Promo codes
+    app.router.add_get( "/api/admin/promos",       api_admin_promos_list)
+    app.router.add_post("/api/admin/promos/sync",  api_admin_promos_sync)
+    app.router.add_post("/api/promo/redeem",       api_promo_redeem)
 
     # User tasks marketplace
     app.router.add_get( "/api/tasks/stream",                    api_tasks_stream)

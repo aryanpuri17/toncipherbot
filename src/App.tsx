@@ -32,6 +32,7 @@ import { useTonConnectUI, useTonWallet } from '@tonconnect/ui-react';
 import { useDepositMonitor } from './hooks/useDepositMonitor';
 import { hadSavedBalance } from './store/appStore';
 import { processServerTransactions, syncServerTransactions, type ServerTx } from './lib/withdrawalSync';
+import { getAdminKey } from './utils/adminFetch';
 
 const MiniAppSettings: React.FC = () => {
   const { setMiniAppPage, platformConfig } = useAppStore();
@@ -501,6 +502,28 @@ export default function App() {
           }
         }
         syncUserFromApi(apiData);
+
+        // Load server-side promo codes (if admin key is available)
+        const adminKey = getAdminKey();
+        if (adminKey) {
+          fetch('/api/admin/promos', { headers: { 'X-Admin-Key': adminKey } })
+            .then(r => r.ok ? r.json() : null)
+            .then((d: { codes?: { id: string; code: string; reward: number; maxUses: number; currentUses: number; isActive: boolean; description: string; expiresAt?: string; createdAt: string }[] } | null) => {
+              if (!d?.codes) return;
+              useAppStore.setState(s => {
+                const serverIds = new Set(d.codes!.map(c => c.id));
+                const localOnly = s.promoCodes.filter(p => !serverIds.has(p.id));
+                const merged = [...d.codes!.map(c => ({
+                  id: c.id, code: c.code, reward: c.reward, maxUses: c.maxUses,
+                  currentUses: c.currentUses, isActive: c.isActive,
+                  currency: 'main' as const, description: c.description,
+                  expiresAt: c.expiresAt, createdAt: c.createdAt,
+                })), ...localOnly];
+                return { promoCodes: merged };
+              });
+            })
+            .catch(() => {});
+        }
       }
 
       // Reconcile deposit/withdrawal history: approved → completed, rejected →

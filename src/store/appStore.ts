@@ -498,6 +498,10 @@ const _savedCompleted: string[] = (() => {
   }
   catch { return _savedBalance.completedTaskIds ?? []; }
 })();
+const _savedTaskTimes: Record<string, number> = (() => {
+  try { return JSON.parse(localStorage.getItem('tc_task_times') || '{}') as Record<string, number>; }
+  catch { return {}; }
+})();
 const _savedBoosters: { multiplier: number; expiresAt: string }[] = (() => {
   try {
     const raw = JSON.parse(localStorage.getItem('tc_boosters') || '[]') as { multiplier: number; expiresAt: string }[];
@@ -694,12 +698,25 @@ const mockAdminUsers: AdminUser[] = [
 ];
 
 const _defaultReferralMilestones: ReferralMilestone[] = [
-  { id: '1', referralCount: 5, reward: 2.00, description: 'Invite 5 friends', isActive: true },
-  { id: '2', referralCount: 20, reward: 10.00, description: 'Invite 20 friends', isActive: true },
-  { id: '3', referralCount: 50, reward: 30.00, description: 'Invite 50 friends', isActive: true },
-  { id: '4', referralCount: 100, reward: 75.00, description: 'Invite 100 friends', isActive: true },
+  { id: 'ms1',  referralCount: 5,    reward: 0.05, description: 'Invite 5 friends',    isActive: true },
+  { id: 'ms2',  referralCount: 10,   reward: 0.10, description: 'Invite 10 friends',   isActive: true },
+  { id: 'ms3',  referralCount: 25,   reward: 0.25, description: 'Invite 25 friends',   isActive: true },
+  { id: 'ms4',  referralCount: 50,   reward: 0.50, description: 'Invite 50 friends',   isActive: true },
+  { id: 'ms5',  referralCount: 100,  reward: 1.00, description: 'Invite 100 friends',  isActive: true },
+  { id: 'ms6',  referralCount: 250,  reward: 2.00, description: 'Invite 250 friends',  isActive: true },
+  { id: 'ms7',  referralCount: 500,  reward: 3.00, description: 'Invite 500 friends',  isActive: true },
+  { id: 'ms8',  referralCount: 1000, reward: 5.00, description: 'Invite 1000 friends', isActive: true },
 ];
-const mockReferralMilestones: ReferralMilestone[] = _savedReferralMilestones.length > 0 ? _savedReferralMilestones : _defaultReferralMilestones;
+
+// Migrate legacy milestones (old 4-entry set with ids '1'-'4') to the new 8-entry structure
+const _isLegacyMilestones = (ms: ReferralMilestone[]) =>
+  ms.length <= 5 && ms.every(m => ['1','2','3','4','5'].includes(m.id));
+const _rawSaved = _savedReferralMilestones;
+const _migratedMilestones: ReferralMilestone[] = _isLegacyMilestones(_rawSaved) ? _defaultReferralMilestones : _rawSaved;
+if (_isLegacyMilestones(_rawSaved)) {
+  try { localStorage.setItem('tc_referral_milestones', JSON.stringify(_defaultReferralMilestones)); } catch { /* noop */ }
+}
+const mockReferralMilestones: ReferralMilestone[] = _migratedMilestones.length > 0 ? _migratedMilestones : _defaultReferralMilestones;
 
 const _savedPlatformConfig: Partial<PlatformConfig> = (() => {
   try { return JSON.parse(localStorage.getItem('tc_platform_config') ?? '{}') as Partial<PlatformConfig>; }
@@ -844,6 +861,7 @@ interface AppState {
 
   // Mini App State
   completedTaskIds: string[];
+  taskCompletionTimes: Record<string, number>; // taskId → timestamp ms when last completed
   claimedReferralMilestoneIds: string[];
   usedPromoCodeIds: string[];
   lastSyncedReferralBalance: number;
@@ -988,6 +1006,20 @@ async function pushConfigToBackend(key: string, value: unknown): Promise<void> {
   } catch { /* offline — config stays local-only */ }
 }
 
+let _promoSyncTimer: ReturnType<typeof setTimeout> | null = null;
+function _schedulePromoSync(codes: PromoCode[]) {
+  if (_promoSyncTimer) clearTimeout(_promoSyncTimer);
+  _promoSyncTimer = setTimeout(() => {
+    const adminKey = getAdminKey();
+    if (!adminKey) return;
+    fetch('/api/admin/promos/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Admin-Key': adminKey },
+      body: JSON.stringify({ codes }),
+    }).catch(() => {});
+  }, 1000);
+}
+
 export const useAppStore = create<AppState>((set, get) => ({
   currentView: 'miniapp',
   miniAppPage: 'dashboard',
@@ -996,6 +1028,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   modalOpen: null,
   modalData: null,
   completedTaskIds: _savedCompleted,
+  taskCompletionTimes: _savedTaskTimes,
 
   currentUser: mockUsers[0],
   users: mockUsers,
@@ -1134,7 +1167,13 @@ export const useAppStore = create<AppState>((set, get) => ({
   completeTask: (taskId) => {
     const state = get();
     const task = state.tasks.find(t => t.id === taskId);
-    if (!task || state.completedTaskIds.includes(taskId)) return;
+    if (!task) return;
+    if (state.completedTaskIds.includes(taskId)) {
+      // If the task has a cooldown and it has expired, allow re-completion
+      const lastTime = state.taskCompletionTimes[taskId];
+      const cooldownMs = (task.cooldownHours ?? 0) * 3600_000;
+      if (!cooldownMs || !lastTime || Date.now() - lastTime < cooldownMs) return;
+    }
     if (state.currentUser.dailyTasksCompleted >= state.platformConfig.maxDailyTasks) {
       get().addNotification({ userId: state.currentUser.id, type: 'system', title: 'Limit reached', message: `Maximum ${state.platformConfig.maxDailyTasks} tasks per day. Come back tomorrow!`, isRead: false });
       return;
@@ -1161,8 +1200,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     const referrer = state.currentUser.referredBy
       ? state.users.find(u => u.referralCode === state.currentUser.referredBy && u.id !== state.currentUser.id)
       : null;
+    const completedAt = Date.now();
     set(s => ({
-      completedTaskIds: [...s.completedTaskIds, taskId],
+      completedTaskIds: [...s.completedTaskIds.filter(id => id !== taskId), taskId],
+      taskCompletionTimes: { ...s.taskCompletionTimes, [taskId]: completedAt },
       tasks: s.tasks.map(t => t.id === taskId ? { ...t, totalCompletions: t.totalCompletions + 1 } : t),
       currentUser: { ...s.currentUser, ...updatedUser },
       users: s.users.map(u => {
@@ -1181,7 +1222,13 @@ export const useAppStore = create<AppState>((set, get) => ({
     const state = get();
     const task  = state.tasks.find(t => t.id === taskId);
     if (!task) return { success: false, error: 'Task not found' };
-    if (state.completedTaskIds.includes(taskId)) return { success: false, error: 'Already completed' };
+    if (state.completedTaskIds.includes(taskId)) {
+      const lastTime = state.taskCompletionTimes[taskId];
+      const cooldownMs = (task.cooldownHours ?? 0) * 3600_000;
+      if (!cooldownMs || !lastTime || Date.now() - lastTime < cooldownMs) {
+        return { success: false, error: 'Already completed' };
+      }
+    }
 
     const telegramId = state.currentUser.telegramId;
     // No Telegram context (local dev / mock) — fall back to client-only completion
@@ -1208,9 +1255,11 @@ export const useAppStore = create<AppState>((set, get) => ({
         return { success: false, error: body.error ?? `Error ${res.status}` };
       }
       const earned = typeof body.earned === 'number' ? body.earned : task.reward;
+      const completedAt = Date.now();
       // Apply local state — server already persisted the credit to app_balance
       set(s => ({
-        completedTaskIds: [...s.completedTaskIds, taskId],
+        completedTaskIds: [...s.completedTaskIds.filter(id => id !== taskId), taskId],
+        taskCompletionTimes: { ...s.taskCompletionTimes, [taskId]: completedAt },
         tasks: s.tasks.map(t => t.id === taskId ? { ...t, totalCompletions: t.totalCompletions + 1 } : t),
         currentUser: {
           ...s.currentUser,
@@ -1694,6 +1743,19 @@ export const useAppStore = create<AppState>((set, get) => ({
       currentUser: { ...s.currentUser, ...balanceUpdate },
       users: s.users.map(u => u.id === state.currentUser.id ? { ...u, ...balanceUpdate } : u),
     }));
+    // If running in Telegram, also credit server-side asynchronously
+    const telegramId = state.currentUser.telegramId;
+    if (telegramId) {
+      const initData = (() => {
+        try { return (window as unknown as { Telegram?: { WebApp?: { initData?: string } } }).Telegram?.WebApp?.initData ?? ''; }
+        catch { return ''; }
+      })();
+      fetch('/api/promo/redeem', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ telegramId, code: code.trim().toUpperCase(), initData }),
+      }).catch(() => {});
+    }
     get().addTransaction({ userId: state.currentUser.id, type: 'bonus', amount: earned, currency: 'TON', status: 'completed', completedAt: new Date().toISOString() });
     get().addNotification({ userId: state.currentUser.id, type: 'reward', title: 'Promo code activated! 🎉', message: `+${earned.toFixed(2)} GRAM credited via code "${promo.code}".`, isRead: false });
     return { success: true, reward: earned };
@@ -1751,9 +1813,24 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
 
-  addPromoCode: (code) => set((s) => ({ promoCodes: [...s.promoCodes, { ...code, id: generateId(), createdAt: new Date().toISOString(), currentUses: 0 }] })),
-  updatePromoCode: (id, data) => set((s) => ({ promoCodes: s.promoCodes.map(p => p.id === id ? { ...p, ...data } : p) })),
-  deletePromoCode: (id) => set((s) => ({ promoCodes: s.promoCodes.filter(p => p.id !== id) })),
+  addPromoCode: (code) => {
+    const newCode = { ...code, id: generateId(), createdAt: new Date().toISOString(), currentUses: 0 };
+    set((s) => {
+      const updated = [...s.promoCodes, newCode];
+      _schedulePromoSync(updated);
+      return { promoCodes: updated };
+    });
+  },
+  updatePromoCode: (id, data) => set((s) => {
+    const updated = s.promoCodes.map(p => p.id === id ? { ...p, ...data } : p);
+    _schedulePromoSync(updated);
+    return { promoCodes: updated };
+  }),
+  deletePromoCode: (id) => set((s) => {
+    const updated = s.promoCodes.filter(p => p.id !== id);
+    _schedulePromoSync(updated);
+    return { promoCodes: updated };
+  }),
 
   buyShopItem: (itemId) => {
     const state = get();
@@ -1818,6 +1895,7 @@ useAppStore.subscribe((state) => {
     }));
     localStorage.setItem('tc_platform_config', JSON.stringify(state.platformConfig));
     localStorage.setItem('tc_completed_tasks', JSON.stringify(state.completedTaskIds));
+    localStorage.setItem('tc_task_times', JSON.stringify(state.taskCompletionTimes));
     localStorage.setItem('tc_tasks', JSON.stringify(state.tasks.slice(-500)));
     localStorage.setItem('tc_transactions', JSON.stringify(state.transactions.slice(-300)));
     localStorage.setItem('tc_notifications', JSON.stringify(state.notifications.slice(0, 50)));

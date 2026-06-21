@@ -715,7 +715,7 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
     if (ab === null || cashedOutR.current !== null) return;
     const win = +(ab * m).toFixed(4);
     placeGameBet(ab, win);
-    recordGameResult('Crash', ab, win);
+    recordGameResult('Aviator', ab, win);
     onResult(true);
     setCashedOut(m);
     cashedOutR.current = m;
@@ -726,7 +726,7 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
     if (mb === null || cashedOut2R.current !== null) return;
     const win = +(mb * m).toFixed(4);
     placeGameBet(mb, win);
-    recordGameResult('Crash', mb, win);
+    recordGameResult('Aviator', mb, win);
     onResult(true);
     setCashedOut2(m);
     cashedOut2R.current = m;
@@ -784,7 +784,7 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
         const ab = activeBetR.current;
         if (ab !== null && cashedOutR.current === null) {
           placeGameBet(ab, 0);
-          recordGameResult('Crash', ab, 0);
+          recordGameResult('Aviator', ab, 0);
           onResult(false);
           setActiveBet(null);
           activeBetR.current = null;
@@ -792,7 +792,7 @@ const CrashLineGame: React.FC<{ onBack: () => void; streak: number; onResult: On
         const ab2 = myBet2R.current;
         if (ab2 !== null && cashedOut2R.current === null) {
           placeGameBet(ab2, 0);
-          recordGameResult('Crash', ab2, 0);
+          recordGameResult('Aviator', ab2, 0);
           onResult(false);
           setMyBet2(null);
           myBet2R.current = null;

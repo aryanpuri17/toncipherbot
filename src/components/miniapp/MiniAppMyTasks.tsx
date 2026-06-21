@@ -7,17 +7,68 @@ import {
 
 const TelegramLogo: React.FC<{ size?: number }> = ({ size = 18 }) => (
   <svg width={size} height={size} viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-    <defs><linearGradient id="tgGrad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stopColor="#2AABEE"/><stop offset="100%" stopColor="#229ED9"/></linearGradient></defs>
-    <rect width="100" height="100" rx="22" fill="url(#tgGrad)"/>
+    <defs><linearGradient id="tgGrad2" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stopColor="#2AABEE"/><stop offset="100%" stopColor="#229ED9"/></linearGradient></defs>
+    <rect width="100" height="100" rx="22" fill="url(#tgGrad2)"/>
     <path fill="white" d="M22 49l11 4 4 13 6-8 13 10 11-42-45 23zm14 5l22-14-17 19 6 9-11-14z"/>
   </svg>
 );
+const YouTubeLogo: React.FC<{ size?: number }> = ({ size = 18 }) => (
+  <svg width={size} height={size} viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+    <rect width="100" height="100" rx="22" fill="#FF0000"/>
+    <path fill="white" d="M71 36.5c-.8-3-3.2-5.4-6.2-6.2C59.5 29 50 29 50 29s-9.5 0-14.8 1.3c-3 .8-5.4 3.2-6.2 6.2C27.7 41.8 27.7 50 27.7 50s0 8.2 1.3 13.5c.8 3 3.2 5.4 6.2 6.2C40.5 71 50 71 50 71s9.5 0 14.8-1.3c3-.8 5.4-3.2 6.2-6.2 1.3-5.3 1.3-13.5 1.3-13.5s0-8.2-1.3-13.5zM44 60V40l18 10-18 10z"/>
+  </svg>
+);
+const XLogo: React.FC<{ size?: number }> = ({ size = 18 }) => (
+  <svg width={size} height={size} viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+    <rect width="100" height="100" rx="22" fill="#000000"/>
+    <path fill="white" d="M18 18h23l11.5 16.5L66 18h16L57.5 46 82 82H59L46 64.5 30 82H14l26-30.5L18 18zm8 7l38 48h8L34 25h-8zm35 0L28 75h-8l33-41.5L52 25h9z"/>
+  </svg>
+);
+const InstagramLogo: React.FC<{ size?: number }> = ({ size = 18 }) => (
+  <svg width={size} height={size} viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+    <defs><linearGradient id="ig2" x1="0%" y1="100%" x2="100%" y2="0%"><stop offset="0%" stopColor="#FFDC80"/><stop offset="25%" stopColor="#FCAF45"/><stop offset="50%" stopColor="#F77737"/><stop offset="75%" stopColor="#F56040"/><stop offset="87%" stopColor="#FD1D1D"/><stop offset="100%" stopColor="#833AB4"/></linearGradient></defs>
+    <rect width="100" height="100" rx="22" fill="url(#ig2)"/>
+    <rect x="25" y="25" width="50" height="50" rx="14" fill="none" stroke="white" strokeWidth="6"/>
+    <circle cx="50" cy="50" r="13" fill="none" stroke="white" strokeWidth="6"/>
+    <circle cx="68" cy="32" r="4" fill="white"/>
+  </svg>
+);
+const TikTokLogo: React.FC<{ size?: number }> = ({ size = 18 }) => (
+  <svg width={size} height={size} viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+    <rect width="100" height="100" rx="22" fill="#010101"/>
+    <path fill="#00f2ea" d="M57 20h-9v41a8 8 0 1 1-8-8v-9a17 17 0 1 0 17 17V37a26 26 0 0 0 15 5v-9a17 17 0 0 1-15-13z"/>
+    <path fill="#ff0050" d="M59 20h-9v41a8 8 0 1 1-8-8v-9a17 17 0 1 0 17 17V37a26 26 0 0 0 13 4v-9a17 17 0 0 1-13-12z"/>
+  </svg>
+);
+const DiscordLogo: React.FC<{ size?: number }> = ({ size = 18 }) => (
+  <svg width={size} height={size} viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+    <rect width="100" height="100" rx="22" fill="#5865F2"/>
+    <path fill="white" d="M69 27a48 48 0 0 0-12-4l-2 4a44 44 0 0 0-10 0l-2-4a48 48 0 0 0-12 4C22 42 19 57 20 71a49 49 0 0 0 15 8l3-4a32 32 0 0 1-5-2l1-3a35 35 0 0 0 32 0l1 3a32 32 0 0 1-5 2l3 4a49 49 0 0 0 15-8c2-16-2-31-11-44zM38 62c-3 0-6-3-6-7s3-7 6-7 6 3 6 7-3 7-6 7zm24 0c-3 0-6-3-6-7s3-7 6-7 6 3 6 7-3 7-6 7z"/>
+  </svg>
+);
 
-const typeConfig: Record<string, { icon: React.ReactNode; bg: string; text: string; label: string }> = {
-  join_channel: { icon: <TelegramLogo size={18} />, bg: 'bg-blue-500/20',   text: 'text-blue-400',   label: 'Channel' },
-  join_group:   { icon: <TelegramLogo size={18} />, bg: 'bg-purple-500/20', text: 'text-purple-400', label: 'Group'   },
-  start_bot:    { icon: <TelegramLogo size={18} />, bg: 'bg-cyan-500/20',   text: 'text-cyan-400',   label: 'Bot'     },
-};
+function getTaskDisplay(url: string, type: string): { icon: React.ReactNode; bg: string; text: string; label: string } {
+  const u = (url ?? '').toLowerCase();
+  if (u.includes('youtube.com') || u.includes('youtu.be'))
+    return { icon: <YouTubeLogo size={18} />, bg: 'bg-red-500/20',    text: 'text-red-400',    label: 'YouTube' };
+  if (u.includes('twitter.com') || u.includes('x.com'))
+    return { icon: <XLogo size={18} />,       bg: 'bg-slate-500/20',  text: 'text-slate-300',  label: 'X / Twitter' };
+  if (u.includes('instagram.com'))
+    return { icon: <InstagramLogo size={18} />, bg: 'bg-pink-500/20', text: 'text-pink-400',   label: 'Instagram' };
+  if (u.includes('tiktok.com'))
+    return { icon: <TikTokLogo size={18} />,  bg: 'bg-slate-500/20',  text: 'text-slate-300',  label: 'TikTok' };
+  if (u.includes('discord.gg') || u.includes('discord.com'))
+    return { icon: <DiscordLogo size={18} />, bg: 'bg-indigo-500/20', text: 'text-indigo-400', label: 'Discord' };
+  const typeMap: Record<string, { icon: React.ReactNode; bg: string; text: string; label: string }> = {
+    join_channel: { icon: <TelegramLogo size={18} />, bg: 'bg-blue-500/20',    text: 'text-blue-400',   label: 'Channel'  },
+    join_group:   { icon: <TelegramLogo size={18} />, bg: 'bg-purple-500/20',  text: 'text-purple-400', label: 'Group'    },
+    start_bot:    { icon: <TelegramLogo size={18} />, bg: 'bg-cyan-500/20',    text: 'text-cyan-400',   label: 'Bot'      },
+    watch_video:  { icon: <YouTubeLogo size={18} />,  bg: 'bg-red-500/20',     text: 'text-red-400',    label: 'Video'    },
+    social:       { icon: <XLogo size={18} />,        bg: 'bg-orange-500/20',  text: 'text-orange-400', label: 'Social'   },
+    special:      { icon: <span style={{fontSize:14}}>⭐</span>, bg: 'bg-amber-500/20', text: 'text-amber-400', label: 'Special' },
+  };
+  return typeMap[type] ?? { icon: <TelegramLogo size={18} />, bg: 'bg-blue-500/20', text: 'text-blue-400', label: 'Task' };
+}
 
 interface PendingProof {
   id: number;
@@ -402,7 +453,7 @@ export const MiniAppMyTasks: React.FC = () => {
       ) : (
         <div className="space-y-3">
           {tasks.map(task => {
-            const cfg       = typeConfig[task.type] ?? typeConfig.join_channel;
+            const cfg       = getTaskDisplay(task.targetUrl, task.type);
             const remaining = task.maxCompletions - task.completions;
             const isFull    = remaining <= 0;
             const progress  = task.maxCompletions > 0 ? Math.min(task.completions / task.maxCompletions, 1) : 0;
