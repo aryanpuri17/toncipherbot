@@ -775,26 +775,24 @@ async def init_db() -> None:
                 await db.execute(f"ALTER TABLE {tbl} ADD COLUMN {col} {defn}")
             except Exception:
                 pass
-        # One-time migration: revoke welcome bonuses and drop the table
+        # One-time migration: revoke welcome bonuses (-1 GRAM from every user)
         try:
             async with db.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name='welcome_bonus_claims'"
+                "SELECT value FROM platform_config WHERE key = 'welcome_bonus_revoked_v2'"
             ) as cur:
-                tbl_exists = await cur.fetchone()
-            if tbl_exists:
-                async with db.execute("SELECT telegram_id, reward FROM welcome_bonus_claims") as cur:
-                    claims = await cur.fetchall()
-                affected = 0
-                for row in claims:
-                    uid, reward = int(row[0]), float(row[1] or 0)
-                    if reward > 0:
-                        await db.execute(
-                            "UPDATE users SET app_balance = MAX(0, COALESCE(app_balance, 0) - ?) WHERE telegram_id = ?",
-                            (reward, uid),
-                        )
-                        affected += 1
+                already_done = await cur.fetchone()
+            if not already_done:
+                # Subtract 1 GRAM from every user who has a balance (floor at 0)
+                await db.execute(
+                    "UPDATE users SET app_balance = MAX(0, COALESCE(app_balance, 0) - 1.0)"
+                    " WHERE COALESCE(app_balance, 0) > 0"
+                )
+                # Also clean up the old claims table if it still exists
                 await db.execute("DROP TABLE IF EXISTS welcome_bonus_claims")
-                log.info("Welcome bonus migration: revoked from %d users, table dropped", affected)
+                await db.execute(
+                    "INSERT OR REPLACE INTO platform_config (key, value) VALUES ('welcome_bonus_revoked_v2', '1')"
+                )
+                log.info("Welcome bonus migration v2: -1 GRAM applied to all users with balance > 0")
         except Exception as e:
             log.warning("Welcome bonus migration failed (non-fatal): %s", e)
 
