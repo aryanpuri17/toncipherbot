@@ -1754,6 +1754,14 @@ async def api_deposit_record(request: web.Request) -> web.Response:
 
 # ── Auto-withdrawal: sign & broadcast a TON transfer via pytoniq ──────────────
 
+def _ton_friendly_addr(raw: str) -> str | None:
+    """Convert raw 0:hex TON address → user-friendly UQ... format (non-bounceable)."""
+    try:
+        from tonsdk.utils import Address as TonAddress  # type: ignore[import]
+        return TonAddress(raw).to_string(True, True, False)
+    except Exception:
+        return None
+
 async def _send_ton_transfer(to_address: str, amount_gram: float) -> str | None:
     """Sign and broadcast a TON transfer via TonCenter HTTP API (HTTPS/443 only).
 
@@ -2123,6 +2131,13 @@ async def api_withdrawal_create(request: web.Request) -> web.Response:
 
     from datetime import datetime as _dt
     now_str = _dt.utcnow().strftime("%d/%m/%Y at %H:%M UTC")
+    friendly_addr = _ton_friendly_addr(address)
+    addr_line = (
+        f"📬 <b>Send to (copy):</b>\n<code>{friendly_addr}</code>\n"
+        f"📌 <b>Raw:</b> <code>{address}</code>\n"
+        if friendly_addr else
+        f"📬 <b>Address:</b>\n<code>{address}</code>\n"
+    )
     admin_msg = (
         f"💸 <b>New Withdrawal Request</b>\n\n"
         f"👤 <b>{fname}</b>"
@@ -2131,7 +2146,7 @@ async def api_withdrawal_create(request: web.Request) -> web.Response:
         f"💰 <b>Amount:</b> {amount:.4f} GRAM\n"
         f"🌐 <b>Network:</b> {network}\n"
         f"🏷 <b>Fee:</b> {fee} GRAM\n\n"
-        f"📬 <b>Address:</b>\n<code>{address}</code>\n\n"
+        + addr_line + "\n"
         f"{risk_line}\n\n"
         f"🔖 <b>Ref:</b> <code>{tx_id[:18]}…</code>\n"
         f"🕐 <b>Date:</b> {now_str}"
