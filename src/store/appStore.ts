@@ -544,7 +544,7 @@ const _savedReferralMilestones: ReferralMilestone[] = (() => {
 const mockUsers: User[] = [
   {
     id: '1', telegramId: 0, username: 'you', firstName: 'You', lastName: '',
-    balanceMain: _savedBalance.balanceMain ?? 1.0, totalEarnings: _savedBalance.totalEarnings ?? 0, todayEarnings: _savedBalance.todayEarnings ?? 0, tasksCompleted: _savedBalance.tasksCompleted ?? 0, taskCredits: _savedBalance.taskCredits ?? 0,
+    balanceMain: _savedBalance.balanceMain ?? 0, totalEarnings: _savedBalance.totalEarnings ?? 0, todayEarnings: _savedBalance.todayEarnings ?? 0, tasksCompleted: _savedBalance.tasksCompleted ?? 0, taskCredits: _savedBalance.taskCredits ?? 0,
     referralCount: 0, referralDailyCount: 0, loginStreak: _savedBalance.loginStreak ?? 0, referralCode: 'START00',
     riskScore: 0, status: 'active', createdAt: new Date().toISOString(), lastActive: new Date().toISOString(),
     withdrawalBlocked: false, verificationStatus: 'none',
@@ -667,7 +667,7 @@ const mockWelcomeSteps: WelcomeStep[] = [
   { id: '2', order: 2, type: 'mandatory_join', content: 'Join our mandatory channels to continue', isRequired: true, isActive: true },
   { id: '3', order: 3, type: 'referral_check', content: 'Do you have a referral code?', isRequired: false, isActive: true },
   { id: '4', order: 4, type: 'wallet_create', content: 'Creating your wallet...', isRequired: true, isActive: true },
-  { id: '5', order: 5, type: 'bonus', content: 'Here is your welcome bonus!', isRequired: false, isActive: true, bonus: 1.00 },
+  { id: '5', order: 5, type: 'bonus', content: 'Here is your welcome bonus!', isRequired: false, isActive: false, bonus: 0 },
 ];
 
 const mockWithdrawalRules: WithdrawalRule[] = [
